@@ -3,7 +3,7 @@
 
 import { useMemo, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Users, CheckCircle, History, AlertTriangle, Filter, Search } from "lucide-react"
+import { Users, CheckCircle, History, AlertTriangle, Filter, Search, X } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -78,29 +78,29 @@ export default function OfficerPerformancePage() {
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 p-6 space-y-6 shadow-2xl border-slate-200" align="end">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-slate-900 text-lg">Staff Filters</h3>
+            <PopoverContent className="w-[320px] p-0 shadow-2xl border-slate-200 overflow-hidden bg-white" align="end">
+              <div className="p-6 pb-0 flex items-center justify-between">
+                <h3 className="font-bold text-[#101828] text-2xl tracking-tight">Staff Filters</h3>
                 {(selectedBranches.length > 0 || selectedOfficers.length > 0) && (
-                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 text-[11px] font-bold text-primary uppercase tracking-wider px-2 hover:bg-primary/5">
+                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 text-[11px] font-bold text-primary hover:bg-primary/5 uppercase tracking-widest px-2">
                     Clear
                   </Button>
                 )}
               </div>
               
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Institutional Unit</Label>
-                  <div className="grid gap-3">
+              <div className="p-6 space-y-8">
+                <div className="space-y-5">
+                  <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Institutional Unit</Label>
+                  <div className="grid gap-4">
                     {BRANCH_OPTIONS.map((branch) => (
-                      <div key={branch} className="flex items-center space-x-3 group cursor-pointer" onClick={() => toggleBranch(branch)}>
+                      <div key={branch} className="flex items-center space-x-4 group cursor-pointer" onClick={() => toggleBranch(branch)}>
                         <Checkbox 
                           id={`branch-${branch}`} 
                           checked={selectedBranches.includes(branch)}
                           onCheckedChange={() => toggleBranch(branch)}
-                          className="rounded-full h-5 w-5 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground transition-all"
+                          className="rounded-full h-6 w-6 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground transition-all duration-200"
                         />
-                        <Label htmlFor={`branch-${branch}`} className="text-sm font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
+                        <Label htmlFor={`branch-${branch}`} className="text-[15px] font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
                           {branch}
                         </Label>
                       </div>
@@ -108,21 +108,21 @@ export default function OfficerPerformancePage() {
                   </div>
                 </div>
 
-                <Separator className="bg-slate-100" />
+                <Separator className="bg-slate-100/80" />
 
-                <div className="space-y-4">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Individual Specialist</Label>
-                  <ScrollArea className="h-[140px] pr-4">
-                    <div className="grid gap-3">
+                <div className="space-y-5">
+                  <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Individual Specialist</Label>
+                  <ScrollArea className="h-[180px] -mr-2 pr-4">
+                    <div className="grid gap-4">
                       {OFFICER_NAMES.map((name) => (
-                        <div key={name} className="flex items-center space-x-3 group cursor-pointer" onClick={() => toggleOfficer(name)}>
+                        <div key={name} className="flex items-center space-x-4 group cursor-pointer" onClick={() => toggleOfficer(name)}>
                           <Checkbox 
                             id={`officer-${name}`} 
                             checked={selectedOfficers.includes(name)}
                             onCheckedChange={() => toggleOfficer(name)}
-                            className="rounded-full h-5 w-5 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground transition-all"
+                            className="rounded-full h-6 w-6 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground transition-all duration-200"
                           />
-                          <Label htmlFor={`officer-${name}`} className="text-sm font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
+                          <Label htmlFor={`officer-${name}`} className="text-[15px] font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
                             {name}
                           </Label>
                         </div>
