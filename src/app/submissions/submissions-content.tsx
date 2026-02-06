@@ -30,8 +30,18 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmission[] }) {
+  const { toast } = useToast();
+
+  const handleDownloadBundle = (caseId: string) => {
+    toast({
+      title: "Generating Bundle",
+      description: `Compiling institutional PDF pack for Case ${caseId}...`,
+    });
+  };
+
   const getStatusBadge = (sub: KYCSubmission) => {
     const status = sub.status;
     const isResubmitted = sub.isResubmitted && (status === 'Pending' || status === 'In Review');
@@ -121,23 +131,26 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
                       <MoreVertical className="h-4 w-4 text-slate-400 group-hover:text-slate-600" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52 p-2">
-                    <DropdownMenuLabel className="text-xs uppercase tracking-widest text-slate-400 font-bold mb-1">Case Options</DropdownMenuLabel>
+                  <DropdownMenuContent align="end" className="w-64 p-2">
+                    <DropdownMenuLabel className="text-[11px] uppercase tracking-widest text-slate-400 font-bold mb-1 px-3">Case Options</DropdownMenuLabel>
                     <DropdownMenuItem asChild className="rounded-md focus:bg-primary/5 focus:text-primary cursor-pointer">
-                      <Link href={`/submissions/${sub.id}`} className="flex items-center gap-2.5 font-bold py-2">
+                      <Link href={`/submissions/${sub.id}`} className="flex items-center gap-3 font-bold py-3 px-3">
                         <Eye className="w-4 h-4" />
                         Open Case File
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="rounded-md focus:bg-primary/5 cursor-pointer py-2">
-                      <div className="flex items-center gap-2.5 font-medium">
+                    <DropdownMenuItem 
+                      onClick={() => handleDownloadBundle(sub.id)}
+                      className="rounded-md focus:bg-primary/5 cursor-pointer py-3 px-3"
+                    >
+                      <div className="flex items-center gap-3 font-medium text-slate-700">
                         <FileDown className="w-4 h-4 text-slate-500" />
                         Download PDF Bundle
                       </div>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="my-1" />
-                    <DropdownMenuItem className="text-destructive focus:bg-destructive/5 focus:text-destructive rounded-md cursor-pointer py-2">
-                      <div className="flex items-center gap-2.5 font-medium">
+                    <DropdownMenuItem className="text-destructive focus:bg-destructive/5 focus:text-destructive rounded-md cursor-pointer py-3 px-3">
+                      <div className="flex items-center gap-3 font-medium">
                         <AlertCircle className="w-4 h-4" />
                         Cancel Submission
                       </div>
