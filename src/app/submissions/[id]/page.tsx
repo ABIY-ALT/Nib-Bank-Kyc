@@ -29,14 +29,15 @@ import {
   ShieldAlert,
   ArrowLeft,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestore, useDoc, useCollection } from "@/firebase";
-import { doc, updateDoc, collection, setDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, setDoc, increment } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 import { KYCSubmission, Document } from "@/lib/kyc-data";
@@ -142,6 +143,10 @@ export default function SubmissionDetails() {
       remarks: remarks || submission.remarks || "", 
     };
 
+    if (action === 'Amended') {
+      updateData.amendmentCycles = increment(1);
+    }
+
     if (['Approved', 'Amended', 'Rejected', 'Escalated'].includes(action)) {
       updateData.reviewedBy = user.name;
       updateData.reviewedAt = new Date().toISOString();
@@ -200,6 +205,12 @@ export default function SubmissionDetails() {
               }>
                 {submission.status === 'Amended' ? 'Action Required' : submission.status}
               </Badge>
+              {submission.amendmentCycles && submission.amendmentCycles > 0 && (
+                <Badge variant="secondary" className="bg-slate-100 text-slate-600 flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3" />
+                  Cycle {submission.amendmentCycles}
+                </Badge>
+              )}
             </div>
             <p className="text-muted-foreground font-medium">{submission.customerName} • {submission.branch} Branch</p>
           </div>
@@ -213,7 +224,6 @@ export default function SubmissionDetails() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
-          {/* ESCALATION ALERT FOR SENIOR MANAGEMENT */}
           {isEscalated && (
             <Alert className="bg-purple-50 border-purple-200 text-purple-900 shadow-sm">
               <ShieldAlert className="h-5 w-5 text-purple-600" />
@@ -229,7 +239,7 @@ export default function SubmissionDetails() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-2xl font-bold text-slate-900">Amendment Request Details</CardTitle>
                 <CardDescription className="text-slate-500 font-medium">
-                  Respond to the KYC Officer's request for submission ID: {submission.id}.
+                  Respond to the KYC Officer's request for submission ID: {submission.id}. This is amendment cycle #{submission.amendmentCycles || 1}.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-8 pt-4">
@@ -368,11 +378,13 @@ export default function SubmissionDetails() {
               <div className="grid gap-3 text-xs text-slate-500">
                 <div className="flex items-center gap-2"><User className="w-3.5 h-3.5" /> Originator: {submission.submittedBy}</div>
                 <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5" /> Created: {new Date(submission.submittedAt).toLocaleString()}</div>
+                {submission.amendmentCycles && submission.amendmentCycles > 0 && (
+                  <div className="flex items-center gap-2 text-orange-600 font-bold"><RefreshCw className="w-3.5 h-3.5" /> Total Amendment Cycles: {submission.amendmentCycles}</div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {/* ACTION PANEL FOR KYC OFFICERS (Escalation Phase) */}
           {isKYCOfficer && (submission.status === 'Pending' || submission.status === 'In Review') && (
             <Card className="border-primary/20 shadow-xl">
               <CardHeader>
@@ -395,7 +407,6 @@ export default function SubmissionDetails() {
             </Card>
           )}
 
-          {/* ACTION PANEL FOR SUPERVISORS (Deciding Escalated Cases) */}
           {isSupervisor && isEscalated && (
             <Card className="border-purple-200 bg-purple-50/30 shadow-xl">
               <CardHeader>

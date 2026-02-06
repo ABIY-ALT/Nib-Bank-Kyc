@@ -21,7 +21,8 @@
         "entityType": { 
           "type": "string",
           "enum": ["individual", "corporate", "sme", "ngo"]
-        }
+        },
+        "amendmentCycles": { "type": "integer", "description": "Count of times the case was sent back for amendments." }
       },
       "required": ["customerName", "branch", "status", "submittedBy"]
     },

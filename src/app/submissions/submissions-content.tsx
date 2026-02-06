@@ -1,3 +1,4 @@
+
 "use client"
 
 import { KYCSubmission } from "@/lib/kyc-data";
@@ -17,7 +18,8 @@ import {
   FileDown,
   History,
   AlertCircle,
-  Clock
+  Clock,
+  RefreshCw
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -92,7 +94,14 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
           ) : submissions.map((sub) => (
             <TableRow key={sub.id} className="group hover:bg-slate-50/50 transition-colors border-slate-100">
               <TableCell className="font-bold text-primary tabular-nums tracking-tighter">
-                {sub.id}
+                <div className="flex flex-col gap-1">
+                  <span>{sub.id}</span>
+                  {sub.amendmentCycles && sub.amendmentCycles > 0 && (
+                    <div className="flex items-center gap-1 text-[9px] text-orange-600 font-black uppercase">
+                      <RefreshCw className="w-2 h-2" /> Cycle {sub.amendmentCycles}
+                    </div>
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 <div className="flex flex-col gap-0.5">

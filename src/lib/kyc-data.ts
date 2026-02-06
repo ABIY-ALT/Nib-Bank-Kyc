@@ -1,3 +1,4 @@
+
 export type SubmissionStatus = 
   | 'Pending' 
   | 'In Review' 
@@ -37,6 +38,7 @@ export interface KYCSubmission {
   isResubmitted?: boolean;
   resubmittedAt?: string;
   entityType?: string;
+  amendmentCycles?: number;
 }
 
 export const MOCK_SUBMISSIONS: KYCSubmission[] = [];
