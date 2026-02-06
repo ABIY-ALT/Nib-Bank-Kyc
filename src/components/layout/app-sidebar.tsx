@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -21,7 +20,8 @@ import {
   ShieldAlert,
   Search,
   Filter,
-  FileBarChart
+  FileBarChart,
+  Globe
 } from "lucide-react"
 
 import {
@@ -236,6 +236,16 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
+                      {isAdmin && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/system'}>
+                            <Link href="/reports/system">
+                              <Globe className="w-4 h-4 mr-2 text-primary" />
+                              <span>System-wide</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
                       {(isDirector || isAdmin) && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}>
