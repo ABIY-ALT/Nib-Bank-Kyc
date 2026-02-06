@@ -17,7 +17,6 @@ import {
   History,
   Map,
   ChevronDown,
-  UserPlus,
   ShieldAlert
 } from "lucide-react"
 
@@ -31,7 +30,6 @@ import {
   SidebarMenuItem,
   SidebarGroup,
   SidebarGroupLabel,
-  SidebarGroupContent,
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton
@@ -172,7 +170,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel>Performance</SidebarGroupLabel>
             <SidebarMenu>
-              {(isBranchMgr || isDirector || isDistDir) && (
+              {(isBranchMgr || isDirector || isDistDir || isAdmin) && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === '/performance/branch'} tooltip="Branch Performance">
                     <Link href="/performance/branch">
@@ -182,7 +180,7 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {(isSupervisor || isDirector) && (
+              {(isSupervisor || isDirector || isAdmin) && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === '/performance/officer'} tooltip="Officer Performance">
                     <Link href="/performance/officer">
@@ -192,7 +190,7 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {(isDirector || isDistDir) && (
+              {(isDirector || isDistDir || isAdmin) && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === '/performance/district'} tooltip="District Performance">
                     <Link href="/performance/district">
