@@ -62,6 +62,13 @@ const DOCUMENT_TYPES = [
   { id: "other", label: "Other Document" },
 ];
 
+const ENTITY_CLASSIFICATIONS = [
+  { id: "individual", label: "Individual" },
+  { id: "corporate", label: "Corporate" },
+  { id: "sme", label: "SME (Small/Medium Enterprise)" },
+  { id: "ngo", label: "NGO (Non-Profit Organization)" },
+];
+
 export default function NewSubmission() {
   const router = useRouter();
   const { toast } = useToast();
@@ -168,8 +175,11 @@ export default function NewSubmission() {
               <Select value={entityType} onValueChange={setEntityType}>
                 <SelectTrigger className="h-11"><SelectValue placeholder="Select classification" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="individual">Individual</SelectItem>
-                  <SelectItem value="corporate">Corporate</SelectItem>
+                  {ENTITY_CLASSIFICATIONS.map((classification) => (
+                    <SelectItem key={classification.id} value={classification.id}>
+                      {classification.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

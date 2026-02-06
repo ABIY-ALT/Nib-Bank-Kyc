@@ -18,7 +18,10 @@
           "enum": ["Pending", "In Review", "Amended", "Approved", "Escalated", "Rejected"] 
         },
         "remarks": { "type": "string" },
-        "entityType": { "type": "string" }
+        "entityType": { 
+          "type": "string",
+          "enum": ["individual", "corporate", "sme", "ngo"]
+        }
       },
       "required": ["customerName", "branch", "status", "submittedBy"]
     },
