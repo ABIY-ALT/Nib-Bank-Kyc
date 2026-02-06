@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useAuth } from "@/lib/auth-mock";
@@ -15,7 +14,8 @@ import {
   AlertCircle, 
   ArrowUpRight,
   TrendingUp,
-  History
+  History,
+  ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
