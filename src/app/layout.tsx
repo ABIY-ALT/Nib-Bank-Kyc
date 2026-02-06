@@ -1,8 +1,10 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import {SidebarProvider} from '@/components/ui/sidebar';
 import {AppSidebar} from '@/components/layout/app-sidebar';
 import {Toaster} from '@/components/ui/toaster';
+import {FirebaseClientProvider} from '@/firebase/client-provider';
 
 export const metadata: Metadata = {
   title: 'KYC Flow - Secure Identity Verification',
@@ -22,17 +24,19 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased bg-background">
-        <SidebarProvider>
-          <div className="flex min-h-screen w-full">
-            <AppSidebar />
-            <main className="flex-1 overflow-y-auto">
-              <div className="p-4 md:p-8 max-w-7xl mx-auto">
-                {children}
-              </div>
-            </main>
-          </div>
-          <Toaster />
-        </SidebarProvider>
+        <FirebaseClientProvider>
+          <SidebarProvider>
+            <div className="flex min-h-screen w-full">
+              <AppSidebar />
+              <main className="flex-1 overflow-y-auto">
+                <div className="p-4 md:p-8 max-w-7xl mx-auto">
+                  {children}
+                </div>
+              </main>
+            </div>
+            <Toaster />
+          </SidebarProvider>
+        </FirebaseClientProvider>
       </body>
     </html>
   );
