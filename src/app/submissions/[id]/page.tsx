@@ -22,7 +22,8 @@ import {
   AlertTriangle,
   Download,
   ExternalLink,
-  MessageSquare
+  MessageSquare,
+  Upload
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,44 +58,58 @@ export default function SubmissionDetails() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
-  // Auto-set status to 'In Review' when an officer/reviewer opens it
+  // Auto-set status to 'In Review' when an officer opens a 'Pending' case
   useEffect(() => {
     const canReview = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
     if (submission && submission.status === 'Pending' && canReview && submissionRef) {
       updateDoc(submissionRef, { 
         status: 'In Review',
         lastUpdated: serverTimestamp() 
-      }).catch(err => console.error("Auto-update to In Review failed", err));
+      }).catch(err => console.error("Auto-review update failed", err));
     }
   }, [submission, user.role, submissionRef]);
 
   if (subLoading) return <div className="p-12 text-center text-muted-foreground">Loading submission details...</div>;
   if (!submission) return <div className="p-12 text-center">Submission not found.</div>;
 
+  const isOwner = submission.submittedBy === user.name;
   const canAction = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
+  const isAmended = submission.status === 'Amended';
 
   const handleAction = (action: string) => {
     if (!submissionRef || !db) return;
+
+    // Requirement: Must provide remarks when requesting an amendment
+    if (action === 'Amended' && !remarks.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Remarks Required",
+        description: "Please specify what needs to be amended so the Branch Officer can fix it.",
+      });
+      return;
+    }
+
     setLoading(true);
 
-    const updateData = {
+    const updateData: any = {
       status: action,
       remarks: remarks || submission.remarks || "", 
       lastUpdated: serverTimestamp(),
     };
 
+    // If a branch officer is responding to an amendment
+    if (action === 'Pending' && isAmended && isOwner) {
+       updateData.isResubmitted = true;
+       updateData.resubmittedAt = serverTimestamp();
+    }
+
     updateDoc(submissionRef, updateData)
       .then(() => {
         toast({
-          title: "Action Successful",
-          description: `Submission ${submission.id} has been set to ${action}.`,
+          title: "Status Updated",
+          description: `Submission ${submission.id} is now ${action}.`,
         });
-        // Redirect back to the queue or my submissions based on context
-        if (action === 'Approved' || action === 'Rejected') {
-           router.push('/submissions/queue');
-        } else {
-           router.push('/submissions');
-        }
+        router.push(canAction ? '/submissions/queue' : '/submissions/my');
       })
       .catch(async (error) => {
         const permissionError = new FirestorePermissionError({
@@ -105,13 +120,6 @@ export default function SubmissionDetails() {
         errorEmitter.emit('permission-error', permissionError);
         setLoading(false);
       });
-  };
-
-  const downloadDoc = (doc: Document) => {
-    toast({
-      title: "Downloading File",
-      description: `Starting download for ${doc.name}...`,
-    });
   };
 
   return (
@@ -165,7 +173,7 @@ export default function SubmissionDetails() {
                     </div>
                     <div className="flex items-center gap-2">
                        <Badge variant="outline" className="text-[10px] h-5 uppercase">{doc.type}</Badge>
-                       <Button variant="ghost" size="icon" onClick={() => downloadDoc(doc)}>
+                       <Button variant="ghost" size="icon" onClick={() => toast({ title: "Download", description: `Downloading ${doc.name}...` })}>
                          <Download className="w-4 h-4" />
                        </Button>
                        <Button variant="ghost" size="icon" asChild>
@@ -184,11 +192,11 @@ export default function SubmissionDetails() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Submission Remarks</CardTitle>
+              <CardTitle>Submission Remarks / History</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="bg-accent/5 p-4 rounded-lg border italic text-sm">
-                {submission.remarks || "No remarks provided."}
+                {submission.remarks || "No current remarks."}
               </div>
             </CardContent>
           </Card>
@@ -226,7 +234,7 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {canAction && (
+          {canAction && submission.status !== 'Approved' && submission.status !== 'Rejected' && (
             <Card className="border-primary/20 bg-slate-50/50 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg">Workflow Action</CardTitle>
@@ -239,7 +247,7 @@ export default function SubmissionDetails() {
                     Review Remarks
                   </label>
                   <Textarea 
-                    placeholder="Enter your justification or amendment details..." 
+                    placeholder="Enter justification, amendment details, or internal notes..." 
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
                     className="bg-background min-h-[100px] text-sm"
@@ -285,6 +293,26 @@ export default function SubmissionDetails() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {isOwner && isAmended && (
+             <Card className="border-orange-200 bg-orange-50/30">
+               <CardHeader>
+                 <CardTitle className="text-lg text-orange-800">Action Required</CardTitle>
+                 <CardDescription>This submission requires your correction.</CardDescription>
+               </CardHeader>
+               <CardContent className="space-y-4">
+                 <p className="text-sm text-orange-900 font-medium">Please review the remarks and upload the missing documents.</p>
+                 <Button 
+                   className="w-full bg-orange-600 hover:bg-orange-700"
+                   onClick={() => handleAction('Pending')}
+                   disabled={loading}
+                 >
+                   <Upload className="w-4 h-4 mr-2" />
+                   Mark as Corrected
+                 </Button>
+               </CardContent>
+             </Card>
           )}
         </div>
       </div>
