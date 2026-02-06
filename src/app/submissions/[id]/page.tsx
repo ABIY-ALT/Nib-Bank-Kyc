@@ -30,7 +30,10 @@ import {
   ArrowLeft,
   AlertCircle,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  Check,
+  Search,
+  Flag
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +53,7 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 const DOCUMENT_TYPES = [
   { id: "id_card", label: "ID Card / National ID" },
@@ -187,6 +191,43 @@ export default function SubmissionDetails() {
     });
     router.back();
   };
+
+  // Workflow Status Logic
+  const steps = [
+    {
+      title: "Document Uploaded",
+      description: `${documents?.length || 0} document(s) uploaded by branch`,
+      date: new Date(submission.submittedAt).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+      status: "completed",
+      icon: Check
+    },
+    {
+      title: "Under Review",
+      description: submission.status === 'Pending' || submission.status === 'In Review' ? "Currently in queue" : "Initial review finished",
+      status: ["Pending", "In Review", "Amended", "Approved", "Rejected", "Escalated"].includes(submission.status) ? 
+              (["Pending", "In Review"].includes(submission.status) ? "active" : "completed") : "upcoming",
+      icon: Search,
+      subBadge: submission.status === 'In Review' ? "Reviewing" : null
+    },
+    {
+      title: "Amendment Cycle",
+      description: submission.amendmentCycles && submission.amendmentCycles > 0 ? `${submission.amendmentCycles} cycle(s) completed` : "No amendments requested",
+      status: submission.status === 'Amended' ? "active" : (submission.amendmentCycles && submission.amendmentCycles > 0 ? "completed" : "upcoming"),
+      icon: History
+    },
+    {
+      title: "Supervisor Approval",
+      description: submission.status === 'Escalated' ? "Awaiting action" : "Will be escalated if needed",
+      status: submission.status === 'Escalated' ? "active" : (["Approved", "Rejected"].includes(submission.status) && submission.reviewedBy ? "completed" : "upcoming"),
+      icon: ShieldCheck
+    },
+    {
+      title: "Completion",
+      description: ["Approved", "Rejected"].includes(submission.status) ? "Customer verification complete" : "Not started",
+      status: ["Approved", "Rejected"].includes(submission.status) ? "active" : "upcoming",
+      icon: Flag
+    }
+  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -363,6 +404,72 @@ export default function SubmissionDetails() {
         </div>
 
         <div className="space-y-6">
+          {/* WORKFLOW STATUS TRACKER */}
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b py-4">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-600">KYC Workflow Status</CardTitle>
+                <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 border rounded-full">Updated just now</span>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 pb-8">
+              <div className="relative space-y-8">
+                {/* Vertical Line */}
+                <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
+                
+                {steps.map((step, idx) => {
+                  const Icon = step.icon;
+                  const isLast = idx === steps.length - 1;
+                  
+                  return (
+                    <div key={step.title} className="relative flex gap-6 group">
+                      {/* Status Icon/Circle */}
+                      <div className={cn(
+                        "z-10 w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shrink-0",
+                        step.status === "completed" ? "bg-emerald-500 border-emerald-500 text-white" :
+                        step.status === "active" ? "bg-primary border-primary text-white shadow-lg shadow-primary/20" :
+                        "bg-white border-slate-200 text-slate-300"
+                      )}>
+                        <Icon className={cn("w-5 h-5", step.status === "active" && "animate-pulse")} />
+                      </div>
+
+                      {/* Line Connecting steps (Colored if completed) */}
+                      {!isLast && (
+                        <div className={cn(
+                          "absolute left-[19px] top-10 h-8 w-0.5 transition-colors",
+                          step.status === "completed" ? "bg-emerald-500" : "bg-slate-100"
+                        )} />
+                      )}
+
+                      <div className="space-y-1 pt-1">
+                        <div className="flex items-center gap-2">
+                          <p className={cn(
+                            "text-sm font-bold",
+                            step.status === "upcoming" ? "text-slate-400" : "text-slate-900"
+                          )}>
+                            {step.title}
+                          </p>
+                          {step.subBadge && (
+                            <Badge className="bg-primary/10 text-primary border-none text-[9px] px-1.5 h-4 font-bold">
+                              {step.subBadge}
+                            </Badge>
+                          )}
+                        </div>
+                        {step.date && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{step.date}</p>}
+                        <p className={cn(
+                          "text-xs font-medium leading-relaxed",
+                          step.status === "upcoming" ? "text-slate-300" : "text-slate-500"
+                        )}>
+                          {step.description}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="shadow-sm border-slate-200">
             <CardHeader><CardTitle className="text-lg">Customer Data</CardTitle></CardHeader>
             <CardContent className="space-y-5">
