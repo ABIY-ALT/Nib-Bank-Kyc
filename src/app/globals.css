@@ -15,7 +15,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 20%;
     
-    /* Primary / Buttons: Gold/Mustard (#B89334) */
+    /* Primary / Buttons: Gold/Mustard (#B89334) - HSL: 43 56% 46% */
     --primary: 43 56% 46%;
     --primary-foreground: 36 33% 98%;
     
@@ -25,8 +25,8 @@
     --muted: 36 10% 90%;
     --muted-foreground: 0 0% 45%;
     
-    /* Accent / Chart Sentiment: Pink (#E1306C) */
-    --accent: 340 75% 54%;
+    /* Updated Accent: Gold/Mustard (#B89334) to replace Pink */
+    --accent: 43 56% 46%;
     --accent-foreground: 36 33% 98%;
     
     --destructive: 0 84.2% 60.2%;
@@ -42,14 +42,15 @@
     --sidebar-foreground: 36 33% 98%;
     --sidebar-primary: 43 56% 46%;
     --sidebar-primary-foreground: 36 33% 98%;
-    --sidebar-accent: 26 35% 28%;
+    /* Updated Sidebar Accent to Gold/Mustard for active items */
+    --sidebar-accent: 43 56% 46%;
     --sidebar-accent-foreground: 36 33% 98%;
     --sidebar-border: 26 35% 14%;
     --sidebar-ring: 43 56% 46%;
 
     /* Charts */
     --chart-1: 43 56% 46%;
-    --chart-2: 340 75% 54%;
+    --chart-2: 43 56% 56%; /* Slightly lighter gold for contrast */
     --chart-3: 26 35% 18%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
@@ -62,19 +63,19 @@
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
+    --primary: 43 56% 46%;
     --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 340 75% 54%;
+    --accent: 43 56% 46%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --ring: 43 56% 46%;
   }
 }
 

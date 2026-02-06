@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -343,7 +342,7 @@ export default function SubmissionDetails() {
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button variant="outline" onClick={() => router.back()} className="px-8 font-bold">Cancel</Button>
                   <Button 
-                    className="bg-[#B8860B] hover:bg-[#9A6E08] text-white px-8 font-bold shadow-lg"
+                    className="bg-primary hover:bg-primary/90 text-white px-8 font-bold shadow-lg"
                     onClick={() => handleAction('Pending')}
                     disabled={newFiles.length === 0 && !remarks.trim()}
                   >
@@ -415,7 +414,7 @@ export default function SubmissionDetails() {
             <CardContent className="pt-6 pb-8">
               <div className="relative space-y-8">
                 {/* Vertical Line */}
-                <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
+                <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-sidebar-border/20" />
                 
                 {steps.map((step, idx) => {
                   const Icon = step.icon;
@@ -437,7 +436,7 @@ export default function SubmissionDetails() {
                       {!isLast && (
                         <div className={cn(
                           "absolute left-[19px] top-10 h-8 w-0.5 transition-colors",
-                          step.status === "completed" ? "bg-emerald-500" : "bg-slate-100"
+                          step.status === "completed" ? "bg-emerald-500" : "bg-sidebar-border/20"
                         )} />
                       )}
 
