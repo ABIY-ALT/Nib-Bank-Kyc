@@ -23,17 +23,35 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { Upload, FilePlus, Shield, Info, X, FileText } from "lucide-react";
-import { useFirestore, useAuth } from "@/firebase";
-import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { 
+  Upload, 
+  FilePlus, 
+  Shield, 
+  Info, 
+  X, 
+  FileText, 
+  Eye, 
+  CheckCircle2,
+  AlertCircle
+} from "lucide-react";
+import { useFirestore } from "@/firebase";
+import { collection, doc, setDoc } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 import { currentUser } from "@/lib/auth-mock";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription 
+} from "@/components/ui/dialog";
 
 interface UploadedFile {
   id: string;
   file: File;
   type: string;
+  previewUrl: string;
 }
 
 const DOCUMENT_TYPES = [
@@ -55,6 +73,7 @@ export default function NewSubmission() {
   const [customerName, setCustomerName] = useState("");
   const [entityType, setEntityType] = useState("individual");
   const [remarks, setRemarks] = useState("");
+  const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,14 +81,20 @@ export default function NewSubmission() {
       const newFiles = Array.from(e.target.files).map(file => ({
         id: Math.random().toString(36).substr(2, 9),
         file: file,
-        type: "id_card"
+        type: "id_card",
+        previewUrl: URL.createObjectURL(file)
       }));
       setUploadedFiles((prev) => [...prev, ...newFiles]);
     }
   };
 
   const removeFile = (id: string) => {
-    setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
+    setUploadedFiles((prev) => {
+      const filtered = prev.filter((f) => f.id !== id);
+      const removed = prev.find(f => f.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return filtered;
+    });
   };
 
   const handleTypeChange = (id: string, newType: string) => {
@@ -110,23 +135,25 @@ export default function NewSubmission() {
     };
 
     setDoc(submissionRef, submissionData)
-      .then(() => {
-        // In a real app, we'd upload files to Storage and save refs here.
-        // For this prototype, we'll just simulate the document sub-collection records.
-        uploadedFiles.forEach(file => {
+      .then(async () => {
+        // Parallel document creation
+        const docPromises = uploadedFiles.map(file => {
           const docRef = doc(collection(submissionRef, "documents"));
-          setDoc(docRef, {
+          return setDoc(docRef, {
             id: docRef.id,
             name: file.file.name,
             type: file.type,
             uploadedAt: new Date().toISOString(),
-            url: "#" // Mock URL
+            url: "#", // Mock URL for prototype
+            status: 'Current'
           });
         });
 
+        await Promise.all(docPromises);
+
         toast({
           title: "Submission Created",
-          description: `KYC request ${submissionId} has been submitted successfully.`,
+          description: `Case ${submissionId} has been successfully sent to the Review Queue.`,
         });
         router.push('/submissions/my');
       })
@@ -142,62 +169,71 @@ export default function NewSubmission() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">New KYC Submission</h1>
-        <p className="text-muted-foreground">Submit a new customer for identity verification.</p>
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-primary font-headline">New KYC Submission</h1>
+          <p className="text-muted-foreground mt-2">Create a secure identity verification package for a new customer.</p>
+        </div>
+        <div className="bg-primary/5 p-3 rounded-full">
+          <Shield className="w-8 h-8 text-primary" />
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" />
-              Customer Information
+      <form onSubmit={handleSubmit} className="space-y-6 pb-12">
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="bg-slate-50/50 border-b">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              Entity Profile
             </CardTitle>
-            <CardDescription>Provide basic legal entity details.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
+          <CardContent className="grid gap-6 md:grid-cols-2 pt-6">
             <div className="space-y-2">
-              <Label htmlFor="name">Customer Full Name / Entity</Label>
+              <Label htmlFor="name" className="text-xs font-bold uppercase tracking-wider text-slate-500">Legal Name / Business Entity</Label>
               <Input 
                 id="name" 
-                placeholder="Legal Name" 
+                placeholder="Enter full legal name" 
                 required 
+                className="h-11 focus-visible:ring-primary"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="type">Entity Type</Label>
+              <Label htmlFor="type" className="text-xs font-bold uppercase tracking-wider text-slate-500">Classification</Label>
               <Select value={entityType} onValueChange={setEntityType}>
-                <SelectTrigger id="type">
-                  <SelectValue placeholder="Select type" />
+                <SelectTrigger id="type" className="h-11">
+                  <SelectValue placeholder="Select classification" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="individual">Individual</SelectItem>
-                  <SelectItem value="corporate">Corporate</SelectItem>
-                  <SelectItem value="ngo">NGO / Non-Profit</SelectItem>
-                  <SelectItem value="government">Government</SelectItem>
+                  <SelectItem value="individual">Individual / Retail</SelectItem>
+                  <SelectItem value="corporate">Corporate / SME</SelectItem>
+                  <SelectItem value="ngo">NGO / Institutional</SelectItem>
+                  <SelectItem value="government">Government / Public Body</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="branch">Originating Branch</Label>
-              <Input id="branch" value={currentUser.branch || "Headquarters"} disabled />
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Originating Branch</Label>
+              <Input value={currentUser.branch || "Headquarters"} disabled className="bg-slate-50 h-11" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Officer in Charge</Label>
+              <Input value={currentUser.name} disabled className="bg-slate-50 h-11" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FilePlus className="w-5 h-5 text-primary" />
-              Documentation
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="bg-slate-50/50 border-b">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <FilePlus className="w-5 h-5 text-accent" />
+              Documentation Bundle
             </CardTitle>
-            <CardDescription>Upload necessary verification documents and categorize them.</CardDescription>
+            <CardDescription>Upload high-resolution scans and assign compliance tags.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-6">
              <input 
                type="file" 
                className="hidden" 
@@ -209,61 +245,73 @@ export default function NewSubmission() {
              
              <div 
                onClick={triggerFileUpload}
-               className="border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-center space-y-4 hover:bg-accent/5 transition-colors cursor-pointer group"
+               className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center text-center space-y-4 hover:bg-accent/5 hover:border-accent/40 transition-all cursor-pointer group"
              >
-                <div className="bg-primary/10 p-4 rounded-full group-hover:scale-110 transition-transform">
-                  <Upload className="w-8 h-8 text-primary" />
+                <div className="bg-accent/10 p-5 rounded-full group-hover:scale-110 transition-transform duration-300">
+                  <Upload className="w-10 h-10 text-accent" />
                 </div>
                 <div>
-                  <p className="font-semibold text-lg">Click to upload files</p>
-                  <p className="text-sm text-muted-foreground">or drag and drop files here (PDF, JPG, PNG)</p>
+                  <p className="font-bold text-xl text-slate-800">Drop customer files here</p>
+                  <p className="text-sm text-slate-500 mt-1 italic">Supports PDF, JPG, and PNG (Max 10MB per file)</p>
                 </div>
-                <Button variant="outline" type="button">Select Files</Button>
+                <Button variant="outline" type="button" className="mt-2 border-slate-300">Browse Filesystem</Button>
              </div>
 
              {uploadedFiles.length > 0 && (
                <div className="space-y-4">
-                 <Label className="text-base font-semibold">Selected Documents ({uploadedFiles.length})</Label>
+                 <div className="flex items-center justify-between">
+                   <Label className="text-sm font-bold text-slate-700 uppercase tracking-tighter">Manifest ({uploadedFiles.length} Assets)</Label>
+                 </div>
                  <div className="grid gap-3">
                    {uploadedFiles.map((item) => (
-                     <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-lg bg-card shadow-sm">
-                       <div className="flex items-center gap-3 flex-1">
-                         <div className="p-2 bg-muted rounded-md">
-                           <FileText className="w-5 h-5 text-primary" />
+                     <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/30 transition-colors">
+                       <div className="flex items-center gap-4 flex-1">
+                         <div className="p-3 bg-slate-100 rounded-lg text-slate-600">
+                           <FileText className="w-6 h-6" />
                          </div>
                          <div className="flex flex-col overflow-hidden">
-                           <span className="text-sm font-medium truncate max-w-[200px] md:max-w-xs">{item.file.name}</span>
-                           <span className="text-[10px] text-muted-foreground">{(item.file.size / 1024 / 1024).toFixed(2)} MB</span>
+                           <span className="text-sm font-bold text-slate-900 truncate max-w-[200px] md:max-w-xs">{item.file.name}</span>
+                           <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">{(item.file.size / 1024 / 1024).toFixed(2)} MB</span>
                          </div>
                        </div>
                        
-                       <div className="flex items-center gap-2 w-full md:w-auto">
-                         <div className="flex-1 md:w-64">
-                           <Select 
-                             value={item.type} 
-                             onValueChange={(val) => handleTypeChange(item.id, val)}
-                           >
-                             <SelectTrigger className="h-9">
-                               <SelectValue placeholder="Select doc type" />
-                             </SelectTrigger>
-                             <SelectContent>
-                               {DOCUMENT_TYPES.map((type) => (
-                                 <SelectItem key={type.id} value={type.id}>
-                                   {type.label}
-                                 </SelectItem>
-                               ))}
-                             </SelectContent>
-                           </Select>
-                         </div>
-                         <Button 
-                           variant="ghost" 
-                           size="icon" 
-                           type="button"
-                           onClick={() => removeFile(item.id)}
-                           className="h-9 w-9 text-destructive hover:bg-destructive/10 shrink-0"
+                       <div className="flex items-center gap-3 w-full md:w-auto">
+                         <Select 
+                           value={item.type} 
+                           onValueChange={(val) => handleTypeChange(item.id, val)}
                          >
-                           <X className="w-4 h-4" />
-                         </Button>
+                           <SelectTrigger className="h-10 md:w-60 border-slate-200">
+                             <SelectValue />
+                           </SelectTrigger>
+                           <SelectContent>
+                             {DOCUMENT_TYPES.map((type) => (
+                               <SelectItem key={type.id} value={type.id}>
+                                 {type.label}
+                               </SelectItem>
+                             ))}
+                           </SelectContent>
+                         </Select>
+                         
+                         <div className="flex gap-1">
+                           <Button 
+                             variant="ghost" 
+                             size="icon" 
+                             type="button"
+                             onClick={() => setPreviewFile(item)}
+                             className="h-10 w-10 text-primary hover:bg-primary/5 rounded-full"
+                           >
+                             <Eye className="w-4 h-4" />
+                           </Button>
+                           <Button 
+                             variant="ghost" 
+                             size="icon" 
+                             type="button"
+                             onClick={() => removeFile(item.id)}
+                             className="h-10 w-10 text-destructive hover:bg-destructive/5 rounded-full"
+                           >
+                             <X className="w-4 h-4" />
+                           </Button>
+                         </div>
                        </div>
                      </div>
                    ))}
@@ -271,33 +319,65 @@ export default function NewSubmission() {
                </div>
              )}
 
-             <div className="flex gap-4 p-4 rounded-lg bg-blue-50 border border-blue-100 text-blue-800 text-sm">
-                <Info className="w-5 h-5 shrink-0" />
-                <p>Ensure all documents are clearly legible and valid for at least 6 months from today's date.</p>
+             <div className="flex gap-4 p-5 rounded-xl bg-blue-50 border border-blue-100 text-blue-800 text-sm shadow-sm ring-1 ring-blue-200/50">
+                <Info className="w-6 h-6 shrink-0 text-blue-600" />
+                <div className="space-y-1">
+                  <p className="font-bold">Compliance Reminder</p>
+                  <p className="opacity-90">Please ensure all documents are valid, signed where required, and that any photo ID clearly shows the customer's face.</p>
+                </div>
              </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Initial Remarks</CardTitle>
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="bg-slate-50/50 border-b">
+            <CardTitle className="text-xl">Originator Comments</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
              <Textarea 
-               placeholder="Add any initial observations or context for the KYC Officer..." 
-               className="min-h-[120px]" 
+               placeholder="Provide any additional context for the KYC Officer (e.g., 'Customer is a PEP' or 'Urgent for mortgage closing')..." 
+               className="min-h-[140px] focus-visible:ring-primary border-slate-200 rounded-xl" 
                value={remarks}
                onChange={(e) => setRemarks(e.target.value)}
              />
           </CardContent>
-          <CardFooter className="flex justify-end gap-3 border-t pt-6">
-            <Button variant="outline" type="button" onClick={() => router.back()}>Cancel</Button>
-            <Button type="submit" disabled={loading} className="px-8">
-              {loading ? "Submitting..." : "Submit for Review"}
-            </Button>
+          <CardFooter className="flex flex-col md:flex-row justify-between gap-4 border-t pt-8">
+            <div className="flex items-center gap-2 text-slate-400 text-xs">
+              <AlertCircle className="w-4 h-4" />
+              This submission will be audited for compliance standards.
+            </div>
+            <div className="flex gap-3 w-full md:w-auto">
+              <Button variant="outline" type="button" className="flex-1 md:flex-none px-8" onClick={() => router.back()}>Cancel</Button>
+              <Button type="submit" disabled={loading} className="flex-1 md:flex-none px-12 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+                {loading ? "Establishing Secure Connection..." : "Dispatch for Review"}
+              </Button>
+            </div>
           </CardFooter>
         </Card>
       </form>
+
+      {/* Preview Dialog */}
+      <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Document Inspection</DialogTitle>
+            <DialogDescription>{previewFile?.file.name} • {previewFile?.type.replace('_', ' ')}</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto rounded-xl border bg-slate-900 p-2 flex items-center justify-center min-h-[500px]">
+            {previewFile?.file.type.startsWith('image/') ? (
+              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
+            ) : (
+              <div className="text-center text-white space-y-4">
+                <FileText className="w-16 h-16 mx-auto opacity-50" />
+                <p>PDF Preview not available in this browser window.<br/>Please download to verify content if needed.</p>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+             <Button variant="outline" onClick={() => setPreviewFile(null)}>Close Preview</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
