@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, doc, setDoc, deleteDoc, query, orderBy } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, query, orderBy } from "firebase/firestore";
 import { 
   Table, 
   TableBody, 
@@ -22,7 +22,8 @@ import {
   Edit2, 
   Loader2,
   Building2,
-  MapPin
+  MapPin,
+  UserX
 } from "lucide-react";
 import { 
   Dialog, 
@@ -118,20 +119,22 @@ export default function UserManagementPage() {
     setIsDialogOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (!db || !confirm("Are you sure?")) return;
+  const handleDeactivate = (id: string, name: string) => {
+    if (!db || !confirm(`Are you sure you want to deactivate ${name}? Their access will be revoked immediately.`)) return;
     const userRef = doc(db, "users", id);
+    const updateData = { status: 'Inactive' };
     
-    deleteDoc(userRef)
+    updateDoc(userRef, updateData)
       .catch(async (error) => {
         const permissionError = new FirestorePermissionError({
           path: userRef.path,
-          operation: 'delete',
+          operation: 'update',
+          requestResourceData: updateData,
         });
         errorEmitter.emit('permission-error', permissionError);
       });
       
-    toast({ title: "User Deleted", description: "Account removed." });
+    toast({ title: "User Deactivated", description: "Account access has been revoked." });
   };
 
   const handleBranchChange = (branchName: string) => {
@@ -148,6 +151,7 @@ export default function UserManagementPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">User Management</h1>
+          <p className="text-muted-foreground text-lg font-medium">Control system access and assign regional roles.</p>
         </div>
         <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg">
           <UserPlus className="w-4 h-4" />
@@ -192,18 +196,20 @@ export default function UserManagementPage() {
                   <div className="text-sm font-medium">{user.branch || 'Central HQ'}</div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={user.status === 'Active' ? 'text-green-600' : 'text-slate-400'}>
+                  <Badge variant="outline" className={user.status === 'Active' ? 'text-green-600 border-green-200 bg-green-50' : 'text-slate-400 border-slate-200 bg-slate-50'}>
                     {user.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right pr-8">
                   <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary rounded-full">
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary rounded-full hover:bg-primary/5" title="Edit Profile">
                       <Edit2 className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)} className="text-destructive rounded-full">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    {user.status === 'Active' && (
+                      <Button variant="ghost" size="icon" onClick={() => handleDeactivate(user.id, user.name)} className="text-destructive rounded-full hover:bg-destructive/5" title="Deactivate User">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -215,7 +221,8 @@ export default function UserManagementPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>User Permissions</DialogTitle>
+            <DialogTitle>{editingUser ? 'Edit User Permissions' : 'Provision New User'}</DialogTitle>
+            <DialogDescription>Modify organizational mapping and system authorization.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
@@ -237,7 +244,7 @@ export default function UserManagementPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Status</Label>
+                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Account Status</Label>
                 <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val})}>
                   <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -249,7 +256,7 @@ export default function UserManagementPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Branch</Label>
+                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Assigned Branch</Label>
                 <Select value={formData.branch} onValueChange={handleBranchChange}>
                   <SelectTrigger className="h-11">
                     <SelectValue placeholder="Select Branch" />
