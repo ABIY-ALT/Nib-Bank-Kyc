@@ -27,7 +27,8 @@ import {
   FilePlus,
   X,
   ShieldAlert,
-  ArrowLeft
+  ArrowLeft,
+  AlertCircle
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,6 +46,8 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
 
 const DOCUMENT_TYPES = [
   { id: "id_card", label: "ID Card / National ID" },
@@ -207,67 +210,135 @@ export default function SubmissionDetails() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
-          <Card className="shadow-sm border-slate-200">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-xl">Verification Assets</CardTitle>
-                <CardDescription>Tagged customer documents.</CardDescription>
-              </div>
-              {isOwner && isAmended && (
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                  <FilePlus className="w-4 h-4 mr-2" /> Add Correction
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent>
-              <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} multiple />
-              <div className="space-y-4">
-                {documents?.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-all group border-slate-200">
-                      <div className="flex items-center gap-4">
-                        <FileText className="w-6 h-6 text-primary" />
-                        <div>
-                          <p className="font-bold text-slate-900">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                            {doc.type.replace('_', ' ')} • {new Date(doc.uploadedAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                         <Button variant="ghost" size="icon" asChild className="rounded-full">
-                           <a href={doc.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
-                         </Button>
-                      </div>
-                    </div>
-                ))}
-                {newFiles.map((item) => (
-                  <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border border-blue-200 bg-blue-50/30 rounded-xl">
-                    <span className="text-sm font-bold flex-1">{item.file.name}</span>
-                    <Select value={item.type} onValueChange={(val) => handleNewFileTypeChange(item.id, val)}>
-                      <SelectTrigger className="h-10 w-48 bg-white border-blue-200">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DOCUMENT_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Button variant="ghost" size="icon" onClick={() => removeNewFile(item.id)} className="text-destructive rounded-full">
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {isOwner && isAmended ? (
+            <Card className="shadow-lg border-slate-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-2xl font-bold text-slate-900">Amendment Request Details</CardTitle>
+                <CardDescription className="text-slate-500 font-medium">
+                  Respond to the KYC Officer's request for submission ID: {submission.id}.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-8 pt-4">
+                {/* OFFICER COMMENT ALERT */}
+                <Alert variant="destructive" className="bg-red-50/50 border-red-200 rounded-lg">
+                  <AlertCircle className="h-5 w-5 text-red-500" />
+                  <AlertTitle className="text-red-600 font-bold mb-1">Officer's Comment</AlertTitle>
+                  <AlertDescription className="text-red-700 font-medium italic">
+                    "{submission.remarks || "No specific comments provided."}"
+                  </AlertDescription>
+                </Alert>
 
-          <Card className="shadow-sm border-slate-200">
-            <CardHeader><CardTitle className="text-xl">Review Context</CardTitle></CardHeader>
-            <CardContent>
-              <div className="rounded-xl border p-5 bg-slate-50 text-slate-700 text-sm whitespace-pre-wrap min-h-[120px]">
-                {submission.remarks || "No additional remarks."}
-              </div>
-            </CardContent>
-          </Card>
+                {/* UPLOAD SECTION */}
+                <div className="space-y-4">
+                  <Label className="text-sm font-bold text-slate-700">Upload New Version of Document</Label>
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-slate-200 rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors group"
+                  >
+                    <Upload className="w-10 h-10 text-slate-400 mb-3 group-hover:text-primary transition-colors" />
+                    <p className="text-slate-500 font-medium text-lg">Drag & drop or click to upload</p>
+                  </div>
+                  <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} multiple />
+                  
+                  {newFiles.length > 0 && (
+                    <div className="space-y-2 pt-2">
+                      {newFiles.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg bg-white shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-5 h-5 text-primary" />
+                            <span className="text-sm font-bold text-slate-700">{item.file.name}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Select value={item.type} onValueChange={(val) => handleNewFileTypeChange(item.id, val)}>
+                              <SelectTrigger className="h-9 w-40">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {DOCUMENT_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Button variant="ghost" size="icon" onClick={() => removeNewFile(item.id)} className="h-8 w-8 text-destructive rounded-full">
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* RESPONSE COMMENT */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-700">Response Comment</Label>
+                  <Textarea 
+                    placeholder="Explain the changes you made..." 
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    className="min-h-[120px] bg-white"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button variant="outline" onClick={() => router.back()} className="px-8 font-bold">Cancel</Button>
+                  <Button 
+                    className="bg-[#B8860B] hover:bg-[#9A6E08] text-white px-8 font-bold shadow-lg"
+                    onClick={() => handleAction('Pending')}
+                    disabled={newFiles.length === 0 && !remarks.trim()}
+                  >
+                    Send Amendment Response
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-xl">Verification Assets</CardTitle>
+                    <CardDescription>Tagged customer documents.</CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {documents?.map((doc) => (
+                        <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-all group border-slate-200">
+                          <div className="flex items-center gap-4">
+                            <FileText className="w-6 h-6 text-primary" />
+                            <div>
+                              <p className="font-bold text-slate-900">{doc.name}</p>
+                              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                                {doc.type.replace('_', ' ')} • {new Date(doc.uploadedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                             <Button variant="ghost" size="icon" asChild className="rounded-full">
+                               <a href={doc.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
+                             </Button>
+                          </div>
+                        </div>
+                    ))}
+                    {documents?.length === 0 && (
+                      <div className="text-center py-12 border border-dashed rounded-xl bg-slate-50">
+                        <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">No documents uploaded yet.</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader><CardTitle className="text-xl">Review Context</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="rounded-xl border p-5 bg-slate-50 text-slate-700 text-sm whitespace-pre-wrap min-h-[120px]">
+                    {submission.remarks || "No additional remarks."}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -310,30 +381,6 @@ export default function SubmissionDetails() {
                 </div>
               </CardContent>
             </Card>
-          )}
-
-          {isOwner && isAmended && (
-             <Card className="border-orange-300 bg-orange-50/50 shadow-lg">
-               <CardHeader>
-                 <CardTitle className="text-lg text-orange-900 flex items-center gap-2">
-                   <AlertTriangle className="w-5 h-5" /> Correction Loop
-                 </CardTitle>
-               </CardHeader>
-               <CardContent className="space-y-4">
-                 <Textarea 
-                   placeholder="Summary of fixes..." 
-                   value={remarks}
-                   onChange={(e) => setRemarks(e.target.value)}
-                 />
-                 <Button 
-                   className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold h-12"
-                   onClick={() => handleAction('Pending')}
-                   disabled={newFiles.length === 0 && !remarks.trim()}
-                 >
-                   Submit Correction
-                 </Button>
-               </CardContent>
-             </Card>
           )}
         </div>
       </div>
