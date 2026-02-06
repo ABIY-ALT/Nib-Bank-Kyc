@@ -357,7 +357,7 @@ export default function SubmissionDetails() {
             <CardHeader><CardTitle className="text-lg">Customer Data</CardTitle></CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Legal Identity</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer Full Name</span>
                 <span className="text-sm font-bold text-slate-900">{submission.customerName}</span>
               </div>
               <div className="grid gap-1">

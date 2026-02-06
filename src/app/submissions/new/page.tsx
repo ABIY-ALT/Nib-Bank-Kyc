@@ -167,7 +167,7 @@ export default function NewSubmission() {
           </CardHeader>
           <CardContent className="grid gap-6 md:grid-cols-2 pt-6">
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Legal Name</Label>
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Customer Full Name</Label>
               <Input placeholder="Full legal name" required className="h-11" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
             </div>
             <div className="space-y-2">

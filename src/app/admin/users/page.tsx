@@ -219,7 +219,7 @@ export default function UserManagementPage() {
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Legal Name</Label>
+              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">User Full Name</Label>
               <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11" />
             </div>
             <div className="space-y-2">

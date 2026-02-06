@@ -221,7 +221,7 @@ export default function BranchesDistrictsPage() {
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Legal Name</Label>
+              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Branch Name</Label>
               <Input value={branchForm.name} onChange={e => setBranchForm({...branchForm, name: e.target.value})} className="h-11" />
             </div>
             <div className="grid grid-cols-2 gap-4">
