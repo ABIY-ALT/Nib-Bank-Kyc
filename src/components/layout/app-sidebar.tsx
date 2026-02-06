@@ -272,38 +272,53 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel>Administration</SidebarGroupLabel>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/admin/users'} tooltip="User Management">
-                  <Link href="/admin/users">
-                    <Users />
-                    <span>User Management</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/admin/branches'} tooltip="Branches & Districts">
-                  <Link href="/admin/branches">
-                    <Map />
-                    <span>Branches & Districts</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/admin/settings'} tooltip="System Settings">
-                  <Link href="/admin/settings">
-                    <Settings />
-                    <span>System Settings</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/admin/audit'} tooltip="Audit Log">
-                  <Link href="/admin/audit">
-                    <History />
-                    <span>Audit Log</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <Collapsible className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton tooltip="Administration">
+                      <Settings />
+                      <span>System Admin</span>
+                      <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/users'}>
+                          <Link href="/admin/users">
+                            <Users className="w-4 h-4 mr-2" />
+                            <span>User Management</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
+                          <Link href="/admin/branches">
+                            <Map className="w-4 h-4 mr-2" />
+                            <span>Branches & Districts</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
+                          <Link href="/admin/settings">
+                            <Settings className="w-4 h-4 mr-2" />
+                            <span>System Settings</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/audit'}>
+                          <Link href="/admin/audit">
+                            <History className="w-4 h-4 mr-2" />
+                            <span>Audit Log</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
             </SidebarMenu>
           </SidebarGroup>
         )}
