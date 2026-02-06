@@ -20,29 +20,24 @@ import {
   Eye,
   FileDown,
   Archive,
-  History,
   Clock,
-  X,
   Calendar as CalendarIcon
 } from "lucide-react";
 import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
-} from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuItem
+} from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 
 const STATUS_OPTIONS = [
@@ -176,96 +171,84 @@ export default function SubmissionsPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Select value={timeHorizon} onValueChange={setTimeHorizon}>
-            <SelectTrigger className="w-[180px] h-11 border-slate-200 bg-white font-bold shadow-sm">
-              <CalendarIcon className="w-4 h-4 mr-2 text-primary" />
-              <SelectValue placeholder="Time Period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Full Archive</SelectItem>
-              <SelectItem value="7d">Last 7 Days</SelectItem>
-              <SelectItem value="30d">Last 30 Days</SelectItem>
-              <SelectItem value="90d">Last 90 Days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" className="gap-2 h-11 px-6 font-bold shadow-sm border-slate-200 bg-white hover:bg-slate-50" onClick={handleExportCSV}>
-            <FileDown className="w-4 h-4 text-primary" />
-            Export Archive
+          <SelectTimeRange value={timeHorizon} onChange={setTimeHorizon} />
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
+                <Filter className="w-4 h-4 text-slate-400" />
+                Filter
+                {(selectedStatuses.length > 0 || selectedBranches.length > 0) && (
+                  <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
+                    {selectedStatuses.length + selectedBranches.length}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Institutional Filter</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer">
+                  <span>Case Status</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {STATUS_OPTIONS.map((status) => (
+                    <DropdownMenuCheckboxItem
+                      key={status.id}
+                      checked={selectedStatuses.includes(status.id)}
+                      onCheckedChange={() => toggleStatus(status.id)}
+                      className="cursor-pointer"
+                    >
+                      {status.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer">
+                  <span>Branch Location</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                  {branches.map((branch) => (
+                    <DropdownMenuCheckboxItem
+                      key={branch}
+                      checked={selectedBranches.includes(branch)}
+                      onCheckedChange={() => toggleBranch(branch)}
+                      className="cursor-pointer"
+                    >
+                      {branch}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={resetFilters} className="text-destructive font-bold cursor-pointer">
+                Reset All Filters
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button 
+            className="gap-2 h-10 px-5 bg-[#B89334] hover:bg-[#A6822D] text-white font-bold shadow-sm rounded-md transition-all active:scale-95" 
+            onClick={handleExportCSV}
+          >
+            <FileDown className="w-4 h-4" />
+            Export
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center bg-white p-4 rounded-xl border shadow-sm">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input 
-            placeholder="Search by Customer Name, Case ID, or Branch..." 
-            className="pl-10 h-11 border-slate-200" 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2 h-11 px-6 font-bold text-slate-600 border-slate-200 relative">
-              <Filter className="w-4 h-4" />
-              Advanced Filters
-              {(selectedStatuses.length > 0 || selectedBranches.length > 0) && (
-                <Badge variant="default" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-primary text-[10px] font-bold">
-                  {(selectedStatuses.length > 0 ? 1 : 0) + (selectedBranches.length > 0 ? 1 : 0)}
-                </Badge>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 p-6 space-y-6 shadow-2xl border-slate-200" align="end">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-xl tracking-tight">Archive Filters</h3>
-              {(selectedStatuses.length > 0 || selectedBranches.length > 0 || searchTerm) && (
-                <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 text-[11px] font-bold text-primary uppercase tracking-wider px-2 hover:bg-primary/5">
-                  Clear All
-                </Button>
-              )}
-            </div>
-            
-            <Separator className="bg-slate-100" />
-            
-            <div className="space-y-4">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Workflow Status</Label>
-              <div className="grid gap-3">
-                {STATUS_OPTIONS.map((status) => (
-                  <div key={status.id} className="flex items-center space-x-2">
-                    <Checkbox 
-                      id={`status-${status.id}`} 
-                      checked={selectedStatuses.includes(status.id)}
-                      onCheckedChange={() => toggleStatus(status.id)}
-                    />
-                    <Label htmlFor={`status-${status.id}`} className="text-sm font-medium cursor-pointer">{status.label}</Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <Separator className="bg-slate-100" />
-
-            <div className="space-y-4">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Originating Branch</Label>
-              <div className="grid gap-3 max-h-[200px] overflow-y-auto pr-2">
-                {branches.map((branch) => (
-                  <div key={branch} className="flex items-center space-x-2">
-                    <Checkbox 
-                      id={`branch-${branch}`} 
-                      checked={selectedBranches.includes(branch)}
-                      onCheckedChange={() => toggleBranch(branch)}
-                    />
-                    <Label htmlFor={`branch-${branch}`} className="text-sm font-medium cursor-pointer">{branch}</Label>
-                  </div>
-                ))}
-                {branches.length === 0 && <p className="text-xs text-slate-400 italic">No branches detected.</p>}
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+      <div className="relative w-full">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Input 
+          placeholder="Search by Customer Name, Case ID, or Branch..." 
+          className="pl-10 h-11 border-slate-200 bg-white shadow-sm" 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
 
       <div className="border rounded-xl bg-card overflow-hidden shadow-xl border-slate-200">
@@ -284,8 +267,8 @@ export default function SubmissionsPage() {
             {loading ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
-                  <History className="w-8 h-8 animate-spin mx-auto mb-2 text-primary" />
-                  Syncing archive...
+                  <div className="animate-spin inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full mb-2" />
+                  <p>Syncing archive...</p>
                 </TableCell>
               </TableRow>
             ) : filteredSubmissions.length === 0 ? (
@@ -323,5 +306,41 @@ export default function SubmissionsPage() {
         </Table>
       </div>
     </div>
+  );
+}
+
+function SelectTimeRange({ value, onChange }: { value: string, onChange: (val: string) => void }) {
+  const options = [
+    { value: 'all', label: 'Full Archive' },
+    { value: '7d', label: 'Last 7 Days' },
+    { value: '30d', label: 'Last 30 Days' },
+    { value: '90d', label: 'Last 90 Days' },
+  ];
+  
+  const current = options.find(o => o.value === value);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" className="h-10 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50 gap-2 min-w-[140px] justify-between">
+          <span className="flex items-center gap-2">
+            <CalendarIcon className="w-4 h-4 text-slate-400" />
+            {current?.label}
+          </span>
+          <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        {options.map(o => (
+          <DropdownMenuItem 
+            key={o.value} 
+            onClick={() => onChange(o.value)}
+            className="cursor-pointer font-medium"
+          >
+            {o.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

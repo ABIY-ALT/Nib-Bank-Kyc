@@ -3,31 +3,31 @@
 
 import { useMemo, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Users, CheckCircle, History, AlertTriangle, Filter, Search, X, FileDown, Calendar as CalendarIcon, ChevronDown, Clock, TrendingUp } from "lucide-react"
+import { 
+  Users, 
+  CheckCircle, 
+  History, 
+  AlertTriangle, 
+  Filter, 
+  FileDown, 
+  Calendar as CalendarIcon, 
+  ChevronDown, 
+} from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
-} from "@/components/ui/popover"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select"
-import { 
-  Collapsible, 
-  CollapsibleContent, 
-  CollapsibleTrigger 
-} from "@/components/ui/collapsible"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuItem
+} from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
@@ -46,9 +46,6 @@ export default function OfficerPerformancePage() {
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedOfficers, setSelectedOfficers] = useState<string[]>([]);
   const [timeRange, setTimeRange] = useState("all");
-  
-  const [isUnitOpen, setIsUnitOpen] = useState(true);
-  const [isSpecialistOpen, setIsSpecialistOpen] = useState(true);
 
   const filteredOfficers = useMemo(() => {
     return MOCK_OFFICER_METRICS.filter(o => {
@@ -96,6 +93,13 @@ export default function OfficerPerformancePage() {
     });
   };
 
+  const timeRangeLabel = {
+    all: "Full Archive",
+    "7d": "Last 7 Days",
+    "30d": "Last 30 Days",
+    "90d": "Current Quarter"
+  }[timeRange];
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -104,111 +108,91 @@ export default function OfficerPerformancePage() {
           <p className="text-muted-foreground text-lg font-medium">Detailed throughput and accuracy metrics for verification staff.</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          <Button variant="outline" className="gap-2 h-11 px-6 font-bold shadow-sm border-slate-200" onClick={handleExportCSV}>
-            <FileDown className="w-4 h-4 text-primary" />
-            Export Report
-          </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2 h-11 px-6 font-bold text-slate-600 border-slate-200 relative shadow-sm">
-                <Filter className="w-4 h-4" />
-                Filter Personnel
-                {(selectedBranches.length > 0 || selectedOfficers.length > 0 || timeRange !== 'all') && (
-                  <Badge variant="default" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-primary text-[10px] font-bold">
-                    {selectedBranches.length + selectedOfficers.length + (timeRange !== 'all' ? 1 : 0)}
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-10 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50 gap-2 min-w-[140px] justify-between">
+                <span className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4 text-slate-400" />
+                  {timeRangeLabel}
+                </span>
+                <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem onClick={() => setTimeRange("all")} className="cursor-pointer">Full Archive</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTimeRange("7d")} className="cursor-pointer">Last 7 Days</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTimeRange("30d")} className="cursor-pointer">Last 30 Days</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTimeRange("90d")} className="cursor-pointer">Current Quarter</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
+                <Filter className="w-4 h-4 text-slate-400" />
+                Filter
+                {(selectedBranches.length > 0 || selectedOfficers.length > 0) && (
+                  <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
+                    {selectedBranches.length + selectedOfficers.length}
                   </Badge>
                 )}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[340px] p-0 shadow-2xl border-slate-200 overflow-hidden bg-white" align="end">
-              <div className="p-6 pb-2 flex items-center justify-between">
-                <h3 className="font-extrabold text-slate-900 text-3xl tracking-tight font-headline">Staff Filters</h3>
-                {(selectedBranches.length > 0 || selectedOfficers.length > 0 || timeRange !== 'all') && (
-                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 text-[11px] font-bold text-primary hover:bg-primary/5 uppercase tracking-widest px-2">
-                    Clear
-                  </Button>
-                )}
-              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Personnel Scope</DropdownMenuLabel>
+              <DropdownMenuSeparator />
               
-              <div className="p-6 space-y-6">
-                <div className="space-y-4">
-                  <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Audit Period</Label>
-                  <Select value={timeRange} onValueChange={setTimeRange}>
-                    <SelectTrigger className="w-full h-12 border-primary border-2 shadow-none focus:ring-0">
-                      <div className="flex items-center gap-3">
-                        <CalendarIcon className="w-4 h-4 text-slate-400" />
-                        <SelectValue placeholder="Select Range" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Historical Data</SelectItem>
-                      <SelectItem value="7d">Last 7 Days</SelectItem>
-                      <SelectItem value="30d">Last 30 Days</SelectItem>
-                      <SelectItem value="90d">Current Quarter</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer py-3">
+                  <span>Institutional Unit</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56">
+                  {BRANCH_OPTIONS.map((branch) => (
+                    <DropdownMenuCheckboxItem
+                      key={branch}
+                      checked={selectedBranches.includes(branch)}
+                      onCheckedChange={() => toggleBranch(branch)}
+                      className="cursor-pointer py-2.5"
+                    >
+                      {branch}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
 
-                <Separator className="bg-slate-100/80" />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer py-3">
+                  <span>Individual Specialist</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56 max-h-64 overflow-y-auto">
+                  {OFFICER_NAMES.map((name) => (
+                    <DropdownMenuCheckboxItem
+                      key={name}
+                      checked={selectedOfficers.includes(name)}
+                      onCheckedChange={() => toggleOfficer(name)}
+                      className="cursor-pointer py-2.5"
+                    >
+                      {name}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={resetFilters} className="text-destructive font-bold cursor-pointer">
+                Clear All Personnel Filters
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-                <Collapsible open={isUnitOpen} onOpenChange={setIsUnitOpen} className="space-y-4">
-                  <CollapsibleTrigger className="flex items-center justify-between w-full group">
-                    <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80 cursor-pointer">Institutional Unit</Label>
-                    <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", isUnitOpen && "rotate-180")} />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-4 animate-in slide-in-from-top-1 duration-200">
-                    <div className="grid gap-4">
-                      {BRANCH_OPTIONS.map((branch) => (
-                        <div key={branch} className="flex items-center space-x-4 group cursor-pointer" onClick={() => toggleBranch(branch)}>
-                          <Checkbox 
-                            id={`branch-${branch}`} 
-                            checked={selectedBranches.includes(branch)}
-                            onCheckedChange={() => toggleBranch(branch)}
-                            className="rounded-full h-8 w-8 border-2 border-primary data-[state=checked]:bg-white data-[state=checked]:text-primary transition-all duration-200"
-                          />
-                          <Label htmlFor={`branch-${branch}`} className="text-lg font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
-                            {branch}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-
-                <Separator className="bg-slate-100/80" />
-
-                <Collapsible open={isSpecialistOpen} onOpenChange={setIsSpecialistOpen} className="space-y-4">
-                  <CollapsibleTrigger className="flex items-center justify-between w-full group">
-                    <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80 cursor-pointer">Individual Specialist</Label>
-                    <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", isSpecialistOpen && "rotate-180")} />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-4 animate-in slide-in-from-top-1 duration-200">
-                    <ScrollArea className="h-[220px] -mr-2 pr-4">
-                      <div className="grid gap-4">
-                        {OFFICER_NAMES.map((name) => (
-                          <div key={name} className="flex items-center space-x-4 group cursor-pointer" onClick={() => toggleOfficer(name)}>
-                            <Checkbox 
-                              id={`officer-${name}`} 
-                              checked={selectedOfficers.includes(name)}
-                              onCheckedChange={() => toggleOfficer(name)}
-                              className="rounded-full h-8 w-8 border-2 border-primary data-[state=checked]:bg-white data-[state=checked]:text-primary transition-all duration-200"
-                            />
-                            <Label htmlFor={`officer-${name}`} className="text-lg font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
-                              {name}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <div className="px-6 py-3.5 bg-white border border-slate-100 rounded-full shadow-sm flex items-center gap-3">
-             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-             <span className="text-sm font-bold text-slate-900">Active Dataset: {filteredOfficers.length} Officers</span>
-          </div>
+          <Button 
+            className="gap-2 h-10 px-6 bg-[#B89334] hover:bg-[#A6822D] text-white font-bold shadow-sm rounded-md transition-all active:scale-95" 
+            onClick={handleExportCSV}
+          >
+            <FileDown className="w-4 h-4" />
+            Export
+          </Button>
         </div>
       </div>
 
