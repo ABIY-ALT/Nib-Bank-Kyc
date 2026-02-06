@@ -1,3 +1,6 @@
+
+"use client"
+
 import { KYCSubmission } from "@/lib/kyc-data";
 import { 
   Table, 
@@ -29,6 +32,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
     switch (status) {
       case 'Approved': return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">{status}</Badge>;
       case 'Pending': return <Badge variant="outline">{status}</Badge>;
+      case 'In Review': return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">{status}</Badge>;
       case 'Amended': return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">{status}</Badge>;
       case 'Rejected': return <Badge variant="destructive">{status}</Badge>;
       case 'Escalated': return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">{status}</Badge>;
@@ -50,13 +54,19 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
           </TableRow>
         </TableHeader>
         <TableBody>
-          {submissions.map((sub) => (
+          {submissions.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                No submissions found in this category.
+              </TableCell>
+            </TableRow>
+          ) : submissions.map((sub) => (
             <TableRow key={sub.id}>
               <TableCell className="font-medium">{sub.id}</TableCell>
               <TableCell>
                 <div className="flex flex-col">
                   <span className="font-medium">{sub.customerName}</span>
-                  <span className="text-xs text-muted-foreground">{sub.customerId}</span>
+                  <span className="text-xs text-muted-foreground">{sub.customerId || 'N/A'}</span>
                 </div>
               </TableCell>
               <TableCell>{sub.branch}</TableCell>
@@ -77,7 +87,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
                         View Details
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer flex items-center gap-2">
+                    <DropdownMenuItem className="cursor-pointer flex items-center gap-2" onClick={() => alert('Download starting...')}>
                       <FileDown className="w-4 h-4" />
                       Download Docs
                     </DropdownMenuItem>
