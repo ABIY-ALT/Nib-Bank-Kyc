@@ -1,7 +1,8 @@
 
 import type {Metadata} from 'next';
 import './globals.css';
-import {SidebarProvider} from '@/components/ui/sidebar';
+import {SidebarProvider, SidebarTrigger} from '@/components/ui/sidebar';
+import {Separator} from '@/components/ui/separator';
 import {AppSidebar} from '@/components/layout/app-sidebar';
 import {Toaster} from '@/components/ui/toaster';
 import {FirebaseClientProvider} from '@/firebase/client-provider';
@@ -32,9 +33,15 @@ export default function RootLayout({
             <SidebarProvider>
               <div className="flex min-h-screen w-full">
                 <AppSidebar />
-                <main className="flex-1 overflow-y-auto">
-                  <div className="p-4 md:p-8 max-w-7xl mx-auto">
-                    {children}
+                <main className="flex-1 flex flex-col min-w-0">
+                  <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 bg-background/50 backdrop-blur-sm sticky top-0 z-10">
+                    <SidebarTrigger className="-ml-1" />
+                    <Separator orientation="vertical" className="mr-2 h-4" />
+                  </header>
+                  <div className="flex-1 overflow-y-auto">
+                    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+                      {children}
+                    </div>
                   </div>
                 </main>
               </div>
