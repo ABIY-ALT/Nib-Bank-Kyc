@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -19,7 +20,8 @@ import {
   ChevronDown,
   ShieldAlert,
   Search,
-  Filter
+  Filter,
+  FileBarChart
 } from "lucide-react"
 
 import {
@@ -59,6 +61,7 @@ export function AppSidebar() {
   const isAdmin = user.role === 'Admin'
 
   const canSeePerformance = isBranchMgr || isSupervisor || isDirector || isDistDir || isAdmin
+  const canSeeReports = isSupervisor || isDirector || isAdmin
 
   return (
     <Sidebar collapsible="icon">
@@ -205,6 +208,50 @@ export function AppSidebar() {
                             <Link href="/performance/officer">
                               <Users className="w-4 h-4 mr-2" />
                               <span>Officer Productivity</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
+
+        {/* REPORTING */}
+        {canSeeReports && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Audit & Reporting</SidebarGroupLabel>
+            <SidebarMenu>
+              <Collapsible defaultOpen className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton tooltip="Reports">
+                      <FileBarChart />
+                      <span>Compliance Reports</span>
+                      <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {(isDirector || isAdmin) && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}>
+                            <Link href="/reports/branch">
+                              <Building2 className="w-4 h-4 mr-2" />
+                              <span>Branch & District</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+                      {(isSupervisor || isDirector || isAdmin) && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/officer'}>
+                            <Link href="/reports/officer">
+                              <Users className="w-4 h-4 mr-2" />
+                              <span>Staff Productivity</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
