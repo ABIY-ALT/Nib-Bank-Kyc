@@ -109,7 +109,7 @@ export default function StaffAssignmentsPage() {
           <CardHeader className="bg-slate-50/50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">
               <Building2 className="w-5 h-5 text-primary" />
-              Target Location
+              Target Branch
             </CardTitle>
             <CardDescription>Select the branch you wish to manage.</CardDescription>
           </CardHeader>
@@ -132,7 +132,7 @@ export default function StaffAssignmentsPage() {
 
               {selectedBranch && (
                 <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Selected Location</span>
+                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Selected Branch</span>
                   <span className="text-lg font-black text-slate-900">{selectedBranch}</span>
                   <div className="flex items-center gap-2 mt-2">
                     <Badge variant="secondary" className="font-bold">{assignedUsers.length} Assigned Staff</Badge>
@@ -148,7 +148,7 @@ export default function StaffAssignmentsPage() {
             <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-4">
               <MapPin className="w-16 h-16 text-slate-200" />
               <div className="text-center space-y-1">
-                <p className="font-bold text-slate-900 text-xl">No Location Selected</p>
+                <p className="font-bold text-slate-900 text-xl">No Branch Selected</p>
                 <p className="text-sm text-slate-500 max-w-xs mx-auto">Please select a branch from the sidebar to begin managing staff assignments.</p>
               </div>
             </div>
