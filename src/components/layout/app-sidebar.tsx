@@ -21,7 +21,8 @@ import {
   Search,
   FileBarChart,
   Globe,
-  UserCircle
+  UserCircle,
+  Archive
 } from "lucide-react"
 
 import {
@@ -68,6 +69,8 @@ export function AppSidebar() {
   const isDistDir = user.role === 'District Director'
   const isAdmin = user.role === 'Admin'
 
+  const isReviewer = isKYCOfficer || isSupervisor || isAdmin
+  const isManagement = isDirector || isDistDir || isBranchMgr || isSupervisor || isAdmin
   const canSeePerformance = isBranchMgr || isSupervisor || isDirector || isDistDir || isAdmin
   const canSeeReports = isSupervisor || isDirector || isAdmin
 
@@ -157,12 +160,23 @@ export function AppSidebar() {
                         </SidebarMenuSubItem>
                       </>
                     )}
-                    {(isKYCOfficer || isSupervisor || isAdmin) && (
+                    {(isReviewer) && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={pathname === '/submissions/escalated'}>
                           <Link href="/submissions/escalated">
                             <ShieldAlert className="w-4 h-4 mr-2 text-destructive" />
                             <span>Escalated Cases</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {/* MASTER ARCHIVE FOR REVIEWERS AND MANAGEMENT */}
+                    {(isReviewer || isManagement) && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions'}>
+                          <Link href="/submissions">
+                            <Archive className="w-4 h-4 mr-2" />
+                            <span>Master Case Archive</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
