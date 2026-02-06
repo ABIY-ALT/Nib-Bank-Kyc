@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -150,7 +149,7 @@ export default function SubmissionDetails() {
        
        for (const file of newFiles) {
          const docRef = doc(collection(submissionRef, "documents"));
-         await setDoc(docRef, {
+         setDoc(docRef, {
            id: docRef.id,
            name: file.file.name,
            type: file.type,
@@ -164,8 +163,8 @@ export default function SubmissionDetails() {
     updateDoc(submissionRef, updateData)
       .then(() => {
         toast({
-          title: "Status Updated",
-          description: `Case moved to ${action === 'Amended' ? 'Action Required' : action}.`,
+          title: action === 'Pending' ? "Correction Resubmitted" : "Status Updated",
+          description: action === 'Pending' ? "The case has been returned to the Review Queue." : `Case moved to ${action}.`,
         });
         router.back();
       })

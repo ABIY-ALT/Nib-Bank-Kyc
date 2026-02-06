@@ -26,8 +26,8 @@ export const MOCK_USERS: User[] = [
   { id: '7', name: 'Diana District', email: 'diana.dist@bank.com', role: 'District Director', district: 'Central' },
 ];
 
-// Defaulting to Robert Brown (Supervisor) for testing Escalated Cases and Supervisory Resolution
-export const currentUser: User = MOCK_USERS[2];
+// Defaulting to John Doe (Branch Officer) for testing the Amendment Requests and New Submission flow
+export const currentUser: User = MOCK_USERS[0];
 
 export const hasPermission = (user: User, requiredRoles: UserRole[]) => {
   return requiredRoles.includes(user.role);
