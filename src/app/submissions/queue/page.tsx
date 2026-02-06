@@ -6,13 +6,14 @@ import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, Inbox } from "lucide-react";
 
 export default function ReviewQueuePage() {
   const db = useFirestore();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Primary workspace for KYC Officers: Pending or Returning (In Review)
+  // Primary workspace for KYC Officers: Pending or In Review
+  // This automatically includes both new and resubmitted cases
   const reviewQueueQuery = useMemo(() => {
     if (!db) return null;
     return query(
@@ -37,7 +38,10 @@ export default function ReviewQueuePage() {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Review Queue</h1>
+          <div className="flex items-center gap-2">
+            <Inbox className="w-8 h-8 text-primary" />
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Review Queue</h1>
+          </div>
           <p className="text-muted-foreground text-lg">Central hub for processing new applications and returned corrections.</p>
         </div>
         <div className="relative w-full md:w-80">

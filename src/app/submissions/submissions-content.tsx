@@ -32,21 +32,22 @@ import Link from "next/link";
 export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmission[] }) {
   const getStatusBadge = (sub: KYCSubmission) => {
     const status = sub.status;
-    const isResubmitted = sub.isResubmitted && status === 'Pending';
+    const isResubmitted = sub.isResubmitted && (status === 'Pending' || status === 'In Review');
 
     switch (status) {
       case 'Approved': 
         return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-bold px-3 py-1">Approved</Badge>;
       case 'Pending': 
+      case 'In Review':
         return isResubmitted ? 
-          <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 flex items-center gap-1.5 w-fit shadow-sm font-bold px-3 py-1">
+          <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 w-fit shadow-sm font-bold px-3 py-1">
             <History className="w-3.5 h-3.5" /> Pending Review
           </Badge> : 
+          status === 'In Review' ?
+          <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-100 font-bold px-3 py-1">In Review</Badge> :
           <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" /> Pending
           </Badge>;
-      case 'In Review': 
-        return <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-100 font-bold px-3 py-1">In Review</Badge>;
       case 'Amended': 
         return (
           <Badge className="bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100 flex items-center gap-1.5 w-fit animate-pulse font-bold px-3 py-1">
@@ -84,10 +85,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
                     <History className="w-10 h-10 text-slate-300" />
                   </div>
                   <p className="font-bold text-slate-900 text-lg">No records found</p>
-                  <p className="max-w-xs mx-auto text-sm">You haven't initiated any identity verification requests yet or no records match your filters.</p>
-                  <Button asChild variant="outline" className="mt-4 border-slate-200 hover:bg-primary/5 hover:text-primary transition-colors">
-                    <Link href="/submissions/new">Create First Submission</Link>
-                  </Button>
+                  <p className="max-w-xs mx-auto text-sm">There are currently no cases in this queue.</p>
                 </div>
               </TableCell>
             </TableRow>
