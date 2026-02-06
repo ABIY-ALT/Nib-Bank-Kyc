@@ -8,6 +8,8 @@ import {Toaster} from '@/components/ui/toaster';
 import {FirebaseClientProvider} from '@/firebase/client-provider';
 import {FirebaseErrorListener} from '@/components/firebase-error-listener';
 import {AuthProvider} from '@/lib/auth-mock';
+import {ThemeProvider} from '@/components/theme-provider';
+import {ModeToggle} from '@/components/mode-toggle';
 
 export const metadata: Metadata = {
   title: 'KYC Flow - Secure Identity Verification',
@@ -20,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -29,24 +31,34 @@ export default function RootLayout({
       <body className="font-body antialiased bg-background">
         <FirebaseClientProvider>
           <AuthProvider>
-            <FirebaseErrorListener />
-            <SidebarProvider>
-              <div className="flex min-h-screen w-full">
-                <AppSidebar />
-                <main className="flex-1 flex flex-col min-w-0">
-                  <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 bg-background/50 backdrop-blur-sm sticky top-0 z-10">
-                    <SidebarTrigger className="-ml-1" />
-                    <Separator orientation="vertical" className="mr-2 h-4" />
-                  </header>
-                  <div className="flex-1 overflow-y-auto">
-                    <div className="p-4 md:p-8 max-w-7xl mx-auto">
-                      {children}
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <FirebaseErrorListener />
+              <SidebarProvider>
+                <div className="flex min-h-screen w-full">
+                  <AppSidebar />
+                  <main className="flex-1 flex flex-col min-w-0">
+                    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background/50 backdrop-blur-sm sticky top-0 z-10">
+                      <div className="flex items-center gap-2">
+                        <SidebarTrigger className="-ml-1" />
+                        <Separator orientation="vertical" className="mr-2 h-4" />
+                      </div>
+                      <ModeToggle />
+                    </header>
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="p-4 md:p-8 max-w-7xl mx-auto">
+                        {children}
+                      </div>
                     </div>
-                  </div>
-                </main>
-              </div>
-              <Toaster />
-            </SidebarProvider>
+                  </main>
+                </div>
+                <Toaster />
+              </SidebarProvider>
+            </ThemeProvider>
           </AuthProvider>
         </FirebaseClientProvider>
       </body>
