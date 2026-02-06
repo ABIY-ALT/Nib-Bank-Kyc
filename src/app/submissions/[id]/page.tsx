@@ -219,8 +219,8 @@ export default function SubmissionDetails() {
     {
       title: "Under Review",
       description: submission.status === 'Pending' || submission.status === 'In Review' ? "Currently in queue" : "Initial review finished",
-      status: ["Pending", "In Review", "Amended", "Approved", "Rejected", "Escalated"].includes(submission.status) ? 
-              (["Pending", "In Review"].includes(submission.status) ? "active" : "completed") : "upcoming",
+      status: ["Pending", "In Review"].includes(submission.status) ? "active" : 
+              (["Amended", "Approved", "Rejected", "Escalated"].includes(submission.status) ? "completed" : "upcoming"),
       icon: Search,
       subBadge: submission.status === 'In Review' ? "Reviewing" : null
     },
@@ -272,7 +272,12 @@ export default function SubmissionDetails() {
           </div>
         </div>
         <div className="flex gap-2">
-           <Button variant="outline" size="sm" onClick={() => toast({ title: "Bundle Generated", description: "Downloading package..." })}>
+           <Button 
+            variant="outline" 
+            size="sm" 
+            className="shadow-sm border-slate-200 bg-white hover:bg-slate-50 transition-all font-medium px-4 h-10"
+            onClick={() => toast({ title: "Bundle Generated", description: "Downloading package..." })}
+           >
             <Download className="w-4 h-4 mr-2" /> Download Pack
            </Button>
         </div>
@@ -425,14 +430,12 @@ export default function SubmissionDetails() {
 
         <div className="space-y-6">
           <Card className="shadow-lg border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b py-4">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-600">KYC Workflow Status</CardTitle>
-              </div>
+            <CardHeader className="bg-slate-50/50 border-b py-6 px-8">
+              <CardTitle className="text-lg font-bold tracking-tight text-slate-800 uppercase">KYC Workflow Status</CardTitle>
             </CardHeader>
-            <CardContent className="pt-6 pb-8">
-              <div className="relative space-y-8">
-                <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-sidebar-border/20" />
+            <CardContent className="pt-8 pb-10 px-8">
+              <div className="relative space-y-10">
+                <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
                 
                 {steps.map((step, idx) => {
                   const Icon = step.icon;
@@ -451,29 +454,29 @@ export default function SubmissionDetails() {
 
                       {!isLast && (
                         <div className={cn(
-                          "absolute left-[19px] top-10 h-8 w-0.5 transition-colors",
-                          step.status === "completed" ? "bg-emerald-500" : "bg-sidebar-border/20"
+                          "absolute left-[19px] top-10 h-10 w-0.5 transition-colors",
+                          step.status === "completed" ? "bg-emerald-500" : "bg-slate-100"
                         )} />
                       )}
 
-                      <div className="space-y-1 pt-1">
+                      <div className="space-y-1.5 pt-0.5">
                         <div className="flex items-center gap-2">
                           <p className={cn(
-                            "text-sm font-bold",
-                            step.status === "upcoming" ? "text-slate-400" : "text-slate-900"
+                            "text-base font-bold",
+                            step.status === "upcoming" ? "text-slate-300" : "text-slate-900"
                           )}>
                             {step.title}
                           </p>
                           {step.subBadge && (
-                            <Badge className="bg-primary/10 text-primary border-none text-[9px] px-1.5 h-4 font-bold">
+                            <Badge className="bg-primary/10 text-primary border-none text-[10px] px-2 h-5 font-bold uppercase tracking-wider">
                               {step.subBadge}
                             </Badge>
                           )}
                         </div>
-                        {step.date && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{step.date}</p>}
+                        {step.date && <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{step.date}</p>}
                         <p className={cn(
-                          "text-xs font-medium leading-relaxed",
-                          step.status === "upcoming" ? "text-slate-300" : "text-slate-500"
+                          "text-sm font-medium leading-relaxed",
+                          step.status === "upcoming" ? "text-slate-200" : "text-slate-500"
                         )}>
                           {step.description}
                         </p>
