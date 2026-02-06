@@ -6,6 +6,7 @@ import {AppSidebar} from '@/components/layout/app-sidebar';
 import {Toaster} from '@/components/ui/toaster';
 import {FirebaseClientProvider} from '@/firebase/client-provider';
 import {FirebaseErrorListener} from '@/components/firebase-error-listener';
+import {AuthProvider} from '@/lib/auth-mock';
 
 export const metadata: Metadata = {
   title: 'KYC Flow - Secure Identity Verification',
@@ -26,18 +27,20 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-background">
         <FirebaseClientProvider>
-          <FirebaseErrorListener />
-          <SidebarProvider>
-            <div className="flex min-h-screen w-full">
-              <AppSidebar />
-              <main className="flex-1 overflow-y-auto">
-                <div className="p-4 md:p-8 max-w-7xl mx-auto">
-                  {children}
-                </div>
-              </main>
-            </div>
-            <Toaster />
-          </SidebarProvider>
+          <AuthProvider>
+            <FirebaseErrorListener />
+            <SidebarProvider>
+              <div className="flex min-h-screen w-full">
+                <AppSidebar />
+                <main className="flex-1 overflow-y-auto">
+                  <div className="p-4 md:p-8 max-w-7xl mx-auto">
+                    {children}
+                  </div>
+                </main>
+              </div>
+              <Toaster />
+            </SidebarProvider>
+          </AuthProvider>
         </FirebaseClientProvider>
       </body>
     </html>

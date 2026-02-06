@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -6,7 +7,6 @@ import {
   FileText,
   Users,
   Building2,
-  PieChart,
   ShieldCheck,
   LogOut,
   Settings,
@@ -19,9 +19,9 @@ import {
   ChevronDown,
   ShieldAlert,
   Search,
-  Filter,
   FileBarChart,
-  Globe
+  Globe,
+  UserCircle
 } from "lucide-react"
 
 import {
@@ -43,13 +43,21 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import { currentUser } from "@/lib/auth-mock"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/lib/auth-mock"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const user = currentUser
+  const { user, loginAs, allUsers } = useAuth()
 
   // Role Checks
   const isBranchOfficer = user.role === 'Branch Officer'
@@ -279,7 +287,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel>System</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible">
+              <Collapsible defaultOpen className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Administration">
@@ -315,18 +323,38 @@ export function AppSidebar() {
         )}
       </SidebarContent>
       <SidebarFooter className="border-t p-4 bg-slate-50/50">
-        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center overflow-hidden">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold shrink-0">
-            {user.name.charAt(0)}
-          </div>
-          <div className="flex-1 overflow-hidden group-data-[collapsible=icon]:hidden">
-            <p className="text-sm font-medium leading-none truncate">{user.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate uppercase tracking-tighter mt-1">{user.role}</p>
-          </div>
-          <SidebarMenuButton size="icon" className="group-data-[collapsible=icon]:hidden">
-            <LogOut className="w-4 h-4" />
-          </SidebarMenuButton>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0 shadow-lg">
+                  {user.name.charAt(0)}
+                </div>
+                <div className="flex-1 overflow-hidden text-left">
+                  <p className="text-sm font-bold leading-tight truncate">{user.name}</p>
+                  <p className="text-[10px] text-muted-foreground truncate uppercase tracking-tighter mt-0.5">{user.role}</p>
+                </div>
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              </div>
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-64" align="end" side="top">
+            <DropdownMenuLabel className="font-bold flex items-center gap-2">
+              <UserCircle className="w-4 h-4" /> Switch Test Profile
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {allUsers.map(u => (
+              <DropdownMenuItem key={u.id} onClick={() => loginAs(u.id)} className="flex flex-col items-start gap-0.5 py-2 cursor-pointer">
+                <span className={`font-bold text-sm ${u.id === user.id ? 'text-primary' : ''}`}>{u.name}</span>
+                <span className="text-[10px] uppercase text-muted-foreground">{u.role}</span>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive font-bold cursor-pointer">
+              <LogOut className="w-4 h-4 mr-2" /> Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarFooter>
     </Sidebar>
   )

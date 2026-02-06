@@ -32,6 +32,23 @@
         "url": { "type": "string" },
         "uploadedAt": { "type": "string", "format": "date-time" }
       }
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "System user profile with role and organizational mapping.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { 
+          "type": "string", 
+          "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Director", "Admin", "Branch Manager", "District Director"] 
+        },
+        "branch": { "type": "string" },
+        "district": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] }
+      }
     }
   },
   "auth": {
@@ -45,6 +62,10 @@
     "/submissions/{submissionId}/documents/{documentId}": {
       "schema": "#/entities/Document",
       "description": "Documents uploaded for a specific submission."
+    },
+    "/users/{userId}": {
+      "schema": "#/entities/UserProfile",
+      "description": "System user profiles and permissions."
     }
   }
 }
