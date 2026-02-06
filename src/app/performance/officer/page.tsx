@@ -23,7 +23,13 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select"
+import { 
+  Collapsible, 
+  CollapsibleContent, 
+  CollapsibleTrigger 
+} from "@/components/ui/collapsible"
 import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
 const MOCK_OFFICER_METRICS = [
   { name: "Jane Smith", branch: "Downtown", processed: 85, approved: 72, amended: 10, rejected: 3, turnaround: "0.8d" },
@@ -40,6 +46,9 @@ export default function OfficerPerformancePage() {
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedOfficers, setSelectedOfficers] = useState<string[]>([]);
   const [timeRange, setTimeRange] = useState("all");
+  
+  const [isUnitOpen, setIsUnitOpen] = useState(true);
+  const [isSpecialistOpen, setIsSpecialistOpen] = useState(true);
 
   const filteredOfficers = useMemo(() => {
     return MOCK_OFFICER_METRICS.filter(o => {
@@ -111,9 +120,9 @@ export default function OfficerPerformancePage() {
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-0 shadow-2xl border-slate-200 overflow-hidden bg-white" align="end">
-              <div className="p-6 pb-0 flex items-center justify-between">
-                <h3 className="font-bold text-[#101828] text-2xl tracking-tight">Staff Filters</h3>
+            <PopoverContent className="w-[340px] p-0 shadow-2xl border-slate-200 overflow-hidden bg-white" align="end">
+              <div className="p-6 pb-2 flex items-center justify-between">
+                <h3 className="font-extrabold text-slate-900 text-3xl tracking-tight font-headline">Staff Filters</h3>
                 {(selectedBranches.length > 0 || selectedOfficers.length > 0 || timeRange !== 'all') && (
                   <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 text-[11px] font-bold text-primary hover:bg-primary/5 uppercase tracking-widest px-2">
                     Clear
@@ -121,13 +130,15 @@ export default function OfficerPerformancePage() {
                 )}
               </div>
               
-              <div className="p-6 space-y-8">
+              <div className="p-6 space-y-6">
                 <div className="space-y-4">
                   <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Audit Period</Label>
                   <Select value={timeRange} onValueChange={setTimeRange}>
-                    <SelectTrigger className="w-full h-10 border-slate-200">
-                      <CalendarIcon className="w-4 h-4 mr-2 text-slate-400" />
-                      <SelectValue placeholder="Select Range" />
+                    <SelectTrigger className="w-full h-12 border-primary border-2 shadow-none focus:ring-0">
+                      <div className="flex items-center gap-3">
+                        <CalendarIcon className="w-4 h-4 text-slate-400" />
+                        <SelectValue placeholder="Select Range" />
+                      </div>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Historical Data</SelectItem>
@@ -140,47 +151,57 @@ export default function OfficerPerformancePage() {
 
                 <Separator className="bg-slate-100/80" />
 
-                <div className="space-y-5">
-                  <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Institutional Unit</Label>
-                  <div className="grid gap-4">
-                    {BRANCH_OPTIONS.map((branch) => (
-                      <div key={branch} className="flex items-center space-x-4 group cursor-pointer" onClick={() => toggleBranch(branch)}>
-                        <Checkbox 
-                          id={`branch-${branch}`} 
-                          checked={selectedBranches.includes(branch)}
-                          onCheckedChange={() => toggleBranch(branch)}
-                          className="rounded-full h-6 w-6 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground transition-all duration-200"
-                        />
-                        <Label htmlFor={`branch-${branch}`} className="text-[15px] font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
-                          {branch}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <Separator className="bg-slate-100/80" />
-
-                <div className="space-y-5">
-                  <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Individual Specialist</Label>
-                  <ScrollArea className="h-[180px] -mr-2 pr-4">
+                <Collapsible open={isUnitOpen} onOpenChange={setIsUnitOpen} className="space-y-4">
+                  <CollapsibleTrigger className="flex items-center justify-between w-full group">
+                    <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80 cursor-pointer">Institutional Unit</Label>
+                    <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", isUnitOpen && "rotate-180")} />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-4 animate-in slide-in-from-top-1 duration-200">
                     <div className="grid gap-4">
-                      {OFFICER_NAMES.map((name) => (
-                        <div key={name} className="flex items-center space-x-4 group cursor-pointer" onClick={() => toggleOfficer(name)}>
+                      {BRANCH_OPTIONS.map((branch) => (
+                        <div key={branch} className="flex items-center space-x-4 group cursor-pointer" onClick={() => toggleBranch(branch)}>
                           <Checkbox 
-                            id={`officer-${name}`} 
-                            checked={selectedOfficers.includes(name)}
-                            onCheckedChange={() => toggleOfficer(name)}
-                            className="rounded-full h-6 w-6 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground transition-all duration-200"
+                            id={`branch-${branch}`} 
+                            checked={selectedBranches.includes(branch)}
+                            onCheckedChange={() => toggleBranch(branch)}
+                            className="rounded-full h-8 w-8 border-2 border-primary data-[state=checked]:bg-white data-[state=checked]:text-primary transition-all duration-200"
                           />
-                          <Label htmlFor={`officer-${name}`} className="text-[15px] font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
-                            {name}
+                          <Label htmlFor={`branch-${branch}`} className="text-lg font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
+                            {branch}
                           </Label>
                         </div>
                       ))}
                     </div>
-                  </ScrollArea>
-                </div>
+                  </CollapsibleContent>
+                </Collapsible>
+
+                <Separator className="bg-slate-100/80" />
+
+                <Collapsible open={isSpecialistOpen} onOpenChange={setIsSpecialistOpen} className="space-y-4">
+                  <CollapsibleTrigger className="flex items-center justify-between w-full group">
+                    <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80 cursor-pointer">Individual Specialist</Label>
+                    <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", isSpecialistOpen && "rotate-180")} />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-4 animate-in slide-in-from-top-1 duration-200">
+                    <ScrollArea className="h-[220px] -mr-2 pr-4">
+                      <div className="grid gap-4">
+                        {OFFICER_NAMES.map((name) => (
+                          <div key={name} className="flex items-center space-x-4 group cursor-pointer" onClick={() => toggleOfficer(name)}>
+                            <Checkbox 
+                              id={`officer-${name}`} 
+                              checked={selectedOfficers.includes(name)}
+                              onCheckedChange={() => toggleOfficer(name)}
+                              className="rounded-full h-8 w-8 border-2 border-primary data-[state=checked]:bg-white data-[state=checked]:text-primary transition-all duration-200"
+                            />
+                            <Label htmlFor={`officer-${name}`} className="text-lg font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
+                              {name}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
             </PopoverContent>
           </Popover>
