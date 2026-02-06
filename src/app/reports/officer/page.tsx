@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react";
@@ -24,7 +25,8 @@ import {
   History,
   CheckCircle2,
   Clock,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  FileDown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -47,6 +49,28 @@ export default function OfficerReportsPage() {
     });
   };
 
+  const handleExportXLSX = () => {
+    if (!reportData) return;
+    
+    const headers = ['Officer Name', 'Total Reviews', 'Approved', 'Amendments', 'Accuracy'];
+    const rows = reportData.map(o => [
+      o.name, o.total, o.approved, o.amended, `${o.accuracy}%`
+    ]);
+    
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `staff-performance-matrix-${new Date().toISOString().split('T')[0]}.csv`);
+    link.click();
+    
+    toast({
+      title: "Export Successful",
+      description: "Staff performance matrix has been saved to CSV.",
+    });
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -58,7 +82,7 @@ export default function OfficerReportsPage() {
           <Button variant="outline" className="gap-2" onClick={() => setReportData(null)}>
             <History className="w-4 h-4" /> Reset
           </Button>
-          <Button className="gap-2 bg-primary shadow-lg" onClick={handleGenerateReport}>
+          <Button className="gap-2 bg-primary shadow-lg font-bold" onClick={handleGenerateReport}>
             <PieChartIcon className="w-4 h-4" />
             Compile Staff Analytics
           </Button>
@@ -124,37 +148,40 @@ export default function OfficerReportsPage() {
             </Card>
           </div>
 
-          <Card className="shadow-xl border-slate-200 overflow-hidden">
-            <CardHeader className="border-b bg-slate-50/50 p-6">
+          <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
+            <CardHeader className="border-b bg-slate-50/30 p-6">
               <div className="flex justify-between items-center">
-                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-primary" /> Staff Performance Matrix
+                <CardTitle className="text-2xl font-black text-[#101828] tracking-tight flex items-center gap-3">
+                  <TrendingUp className="w-6 h-6 text-primary" /> Staff Performance Matrix
                 </CardTitle>
-                <Button variant="outline" size="sm" className="font-bold border-slate-200 bg-white">
-                  <Download className="w-4 h-4 mr-2" /> Export XLSX
+                <Button 
+                  onClick={handleExportXLSX}
+                  className="bg-primary hover:bg-primary/90 text-white font-bold h-11 px-6 shadow-md shadow-primary/20 gap-2"
+                >
+                  <FileDown className="w-5 h-5" /> Export XLSX
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
-                <TableHeader className="bg-slate-100/50">
-                  <TableRow>
-                    <TableHead className="font-bold py-4">Officer Name</TableHead>
-                    <TableHead className="font-bold">Total Reviews</TableHead>
-                    <TableHead className="font-bold text-emerald-600">Approved</TableHead>
-                    <TableHead className="font-bold text-orange-600">Amendments</TableHead>
-                    <TableHead className="text-right font-bold pr-8">Accuracy</TableHead>
+                <TableHeader className="bg-[#F9FAFB]">
+                  <TableRow className="border-b border-slate-100 hover:bg-transparent">
+                    <TableHead className="font-black py-5 text-slate-500 uppercase tracking-widest text-[11px] pl-8">Officer Name</TableHead>
+                    <TableHead className="font-black py-5 text-slate-500 uppercase tracking-widest text-[11px]">Total Reviews</TableHead>
+                    <TableHead className="font-black py-5 text-emerald-600 uppercase tracking-widest text-[11px]">Approved</TableHead>
+                    <TableHead className="font-black py-5 text-[#E67E22] uppercase tracking-widest text-[11px]">Amendments</TableHead>
+                    <TableHead className="text-right font-black py-5 text-slate-500 uppercase tracking-widest text-[11px] pr-8">Accuracy</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {reportData.map((officer) => (
-                    <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
-                      <TableCell className="font-bold text-slate-900">{officer.name}</TableCell>
-                      <TableCell className="font-medium">{officer.total}</TableCell>
-                      <TableCell className="text-emerald-700 font-bold">{officer.approved}</TableCell>
-                      <TableCell className="text-orange-700 font-bold">{officer.amended}</TableCell>
+                    <TableRow key={officer.name} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
+                      <TableCell className="font-black text-slate-900 py-6 pl-8 text-[15px]">{officer.name}</TableCell>
+                      <TableCell className="font-bold text-slate-600 text-[15px]">{officer.total}</TableCell>
+                      <TableCell className="text-emerald-600 font-black text-[15px]">{officer.approved}</TableCell>
+                      <TableCell className="text-[#E67E22] font-black text-[15px]">{officer.amended}</TableCell>
                       <TableCell className="text-right pr-8">
-                        <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 font-bold px-3">
+                        <Badge variant="secondary" className="bg-[#F0F5FF] text-[#3F51B5] border-[#D1E0FF] font-black px-4 py-1 text-[13px] rounded-full shadow-sm">
                           {officer.accuracy}%
                         </Badge>
                       </TableCell>
