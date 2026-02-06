@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react";
@@ -58,18 +59,49 @@ export default function BranchReportsPage() {
     });
   };
 
+  const handleExportCSV = () => {
+    if (!reportData) return;
+    
+    const headers = ['Case ID', 'Customer', 'Branch', 'Status', 'Date'];
+    const csvContent = [
+      headers.join(','),
+      ...reportData.map(record => 
+        [record.id, record.customerName, record.branch, record.status, record.date].map(val => `"${val}"`).join(',')
+      )
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `nib-kyc-branch-report-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Export Successful",
+      description: "Branch report has been saved to CSV.",
+    });
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Compliance Reporting</h1>
-          <p className="text-muted-foreground text-lg">Generate audit-ready analytical reports for branches and districts.</p>
+          <p className="text-muted-foreground text-lg font-medium">Generate audit-ready analytical reports for branches and districts.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => { setReportData(null); setSelectedDistrict("All Districts"); setSelectedBranch("All Branches"); }}>
+          <Button variant="outline" className="gap-2 h-11 px-6 font-bold border-slate-200 bg-white" onClick={() => { setReportData(null); setSelectedDistrict("All Districts"); setSelectedBranch("All Branches"); }}>
             <Filter className="w-4 h-4" /> Reset
           </Button>
-          <Button className="gap-2 bg-primary hover:bg-primary/90" disabled={!reportData}>
+          <Button 
+            className="gap-2 bg-primary hover:bg-primary/90 h-11 px-6 font-bold shadow-lg" 
+            disabled={!reportData}
+            onClick={handleExportCSV}
+          >
             <Download className="w-4 h-4" /> Export Report
           </Button>
         </div>
@@ -77,7 +109,7 @@ export default function BranchReportsPage() {
 
       <Card className="border-slate-200 shadow-sm">
         <CardHeader className="bg-slate-50/50 border-b">
-          <CardTitle className="text-lg flex items-center gap-2">
+          <CardTitle className="text-xl flex items-center gap-2">
             <Search className="w-5 h-5 text-primary" /> Report Parameters
           </CardTitle>
           <CardDescription>Configure the scope and filters for the data aggregation.</CardDescription>
@@ -116,14 +148,14 @@ export default function BranchReportsPage() {
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <CalendarIcon className="w-3 h-3" /> Time Horizon
               </label>
-              <Button variant="outline" className="w-full h-11 justify-start text-left font-normal" disabled>
+              <Button variant="outline" className="w-full h-11 justify-start text-left font-normal border-slate-200 bg-slate-50/50" disabled>
                 Last 30 Days (Standard Audit)
               </Button>
             </div>
           </div>
           <div className="mt-8 flex justify-end">
-            <Button size="lg" className="px-12 font-bold gap-2 shadow-lg" onClick={handleGenerateReport}>
-              <FileText className="w-4 h-4" />
+            <Button size="lg" className="px-12 h-14 font-bold gap-2 shadow-xl shadow-primary/20 bg-primary hover:bg-primary/90" onClick={handleGenerateReport}>
+              <FileText className="w-5 h-5" />
               Generate Analysis
             </Button>
           </div>
@@ -131,42 +163,42 @@ export default function BranchReportsPage() {
       </Card>
 
       {reportData && (
-        <Card className="border-slate-200 shadow-xl animate-in slide-in-from-top-4 duration-300">
-          <CardHeader className="bg-slate-900 text-white rounded-t-lg">
+        <Card className="border-slate-200 shadow-xl animate-in slide-in-from-top-4 duration-500 overflow-hidden">
+          <CardHeader className="bg-slate-900 text-white rounded-t-lg p-6">
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle className="text-2xl font-bold">Report: {selectedDistrict} / {selectedBranch}</CardTitle>
-                <p className="text-slate-400 text-sm mt-1">Generated for audit on {new Date().toLocaleDateString()}</p>
+                <CardTitle className="text-2xl font-bold tracking-tight">Report: {selectedDistrict} / {selectedBranch}</CardTitle>
+                <p className="text-slate-400 text-sm mt-1 font-medium">Generated for institutional audit on {new Date().toLocaleDateString()}</p>
               </div>
-              <Badge variant="outline" className="bg-primary/20 text-white border-primary/40 font-bold px-4">
+              <Badge variant="outline" className="bg-primary/20 text-white border-primary/40 font-bold px-4 h-8">
                 {reportData.length} Records Found
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="pt-8">
-            <div className="border rounded-xl overflow-hidden shadow-inner">
+            <div className="border rounded-xl overflow-hidden shadow-inner bg-white">
               <Table>
-                <TableHeader className="bg-slate-50">
+                <TableHeader className="bg-slate-50/80">
                   <TableRow>
-                    <TableHead className="font-bold">Case ID</TableHead>
-                    <TableHead className="font-bold">Customer</TableHead>
-                    <TableHead className="font-bold">Branch</TableHead>
-                    <TableHead className="font-bold">Status</TableHead>
-                    <TableHead className="font-bold">Date</TableHead>
+                    <TableHead className="font-bold py-4 text-slate-600">Case ID</TableHead>
+                    <TableHead className="font-bold text-slate-600">Customer Details</TableHead>
+                    <TableHead className="font-bold text-slate-600">Originating Branch</TableHead>
+                    <TableHead className="font-bold text-slate-600">Workflow Status</TableHead>
+                    <TableHead className="font-bold text-slate-600">Review Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {reportData.map((sub) => (
-                    <TableRow key={sub.id}>
-                      <TableCell className="font-bold text-primary">{sub.id}</TableCell>
-                      <TableCell className="font-medium">{sub.customerName}</TableCell>
-                      <TableCell>{sub.branch}</TableCell>
+                    <TableRow key={sub.id} className="hover:bg-slate-50 transition-colors">
+                      <TableCell className="font-bold text-primary tabular-nums">{sub.id}</TableCell>
+                      <TableCell className="font-bold text-slate-900">{sub.customerName}</TableCell>
+                      <TableCell className="font-medium text-slate-600">{sub.branch}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="font-bold text-[10px] uppercase">
+                        <Badge variant="outline" className="font-bold text-[10px] uppercase tracking-widest px-3">
                           {sub.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{sub.date}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-bold tabular-nums">{sub.date}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
