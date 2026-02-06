@@ -28,7 +28,8 @@ import {
   X,
   ShieldAlert,
   ArrowLeft,
-  AlertCircle
+  AlertCircle,
+  ShieldCheck
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -101,8 +102,9 @@ export default function SubmissionDetails() {
 
   const isOwner = submission.submittedBy === user.name;
   const isKYCOfficer = ['KYC Officer', 'Admin'].includes(user.role);
-  const isSupervisor = ['Supervisor', 'Director'].includes(user.role);
+  const isSupervisor = ['Supervisor', 'Director', 'Admin'].includes(user.role);
   const isAmended = submission.status === 'Amended';
+  const isEscalated = submission.status === 'Escalated';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -193,7 +195,8 @@ export default function SubmissionDetails() {
               <h1 className="text-3xl font-bold font-headline">{submission.id}</h1>
               <Badge variant={submission.status === 'Approved' ? 'default' : 'outline'} className={
                 submission.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
-                submission.status === 'Amended' ? 'bg-orange-100 text-orange-800' : ''
+                submission.status === 'Amended' ? 'bg-orange-100 text-orange-800' : 
+                submission.status === 'Escalated' ? 'bg-purple-100 text-purple-800 border-purple-200' : ''
               }>
                 {submission.status === 'Amended' ? 'Action Required' : submission.status}
               </Badge>
@@ -210,6 +213,17 @@ export default function SubmissionDetails() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
+          {/* ESCALATION ALERT FOR SENIOR MANAGEMENT */}
+          {isEscalated && (
+            <Alert className="bg-purple-50 border-purple-200 text-purple-900 shadow-sm">
+              <ShieldAlert className="h-5 w-5 text-purple-600" />
+              <AlertTitle className="font-bold">High-Priority Escalation</AlertTitle>
+              <AlertDescription className="font-medium">
+                This case has been flagged for senior risk assessment by a KYC Officer. Review the provided context below before making a final determination.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {isOwner && isAmended ? (
             <Card className="shadow-lg border-slate-200">
               <CardHeader className="pb-2">
@@ -219,7 +233,6 @@ export default function SubmissionDetails() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-8 pt-4">
-                {/* OFFICER COMMENT ALERT */}
                 <Alert variant="destructive" className="bg-red-50/50 border-red-200 rounded-lg">
                   <AlertCircle className="h-5 w-5 text-red-500" />
                   <AlertTitle className="text-red-600 font-bold mb-1">Officer's Comment</AlertTitle>
@@ -228,7 +241,6 @@ export default function SubmissionDetails() {
                   </AlertDescription>
                 </Alert>
 
-                {/* UPLOAD SECTION */}
                 <div className="space-y-4">
                   <Label className="text-sm font-bold text-slate-700">Upload New Version of Document</Label>
                   <div 
@@ -267,7 +279,6 @@ export default function SubmissionDetails() {
                   )}
                 </div>
 
-                {/* RESPONSE COMMENT */}
                 <div className="space-y-2">
                   <Label className="text-sm font-bold text-slate-700">Response Comment</Label>
                   <Textarea 
@@ -361,6 +372,7 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
+          {/* ACTION PANEL FOR KYC OFFICERS (Escalation Phase) */}
           {isKYCOfficer && (submission.status === 'Pending' || submission.status === 'In Review') && (
             <Card className="border-primary/20 shadow-xl">
               <CardHeader>
@@ -376,8 +388,35 @@ export default function SubmissionDetails() {
                 <div className="grid grid-cols-2 gap-2">
                   <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold">Approve</Button>
                   <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold">Request Fix</Button>
-                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] font-bold">Escalate</Button>
+                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] hover:bg-[#8B5CF6]/5 font-bold">Escalate</Button>
                   <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Reject</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ACTION PANEL FOR SUPERVISORS (Deciding Escalated Cases) */}
+          {isSupervisor && isEscalated && (
+            <Card className="border-purple-200 bg-purple-50/30 shadow-xl">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-purple-600" />
+                  Senior Decision
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Textarea 
+                  placeholder="Final managerial remarks..." 
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  className="min-h-[140px] bg-white"
+                />
+                <div className="grid grid-cols-1 gap-2">
+                  <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold w-full">Final Approval</Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] border-[#E67E22] bg-white font-bold">Send Back</Button>
+                    <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Final Reject</Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
