@@ -26,8 +26,8 @@ export const MOCK_USERS: User[] = [
   { id: '7', name: 'Diana District', email: 'diana.dist@bank.com', role: 'District Director', district: 'Central' },
 ];
 
-// Defaulting to Branch Officer for the current testing phase
-export const currentUser: User = MOCK_USERS[0];
+// Setting default to KYC Officer for testing the Review Queue
+export const currentUser: User = MOCK_USERS[1];
 
 export const hasPermission = (user: User, requiredRoles: UserRole[]) => {
   return requiredRoles.includes(user.role);
