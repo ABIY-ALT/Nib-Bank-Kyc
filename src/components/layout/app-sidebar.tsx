@@ -22,7 +22,8 @@ import {
   Globe,
   UserCircle,
   Archive,
-  ArrowRightLeft
+  ArrowRightLeft,
+  UserCog
 } from "lucide-react"
 
 import {
@@ -316,6 +317,14 @@ export function AppSidebar() {
                           <Link href="/admin/users">
                             <Users className="w-4 h-4 mr-2" />
                             <span>User Access</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/roles'}>
+                          <Link href="/admin/roles">
+                            <UserCog className="w-4 h-4 mr-2 text-primary" />
+                            <span>Assign Roles</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
