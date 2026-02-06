@@ -85,13 +85,14 @@ export default function SubmissionDetails() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
+  // Auto-set to "In Review" when a reviewer opens a pending case
   useEffect(() => {
     const canReview = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
     if (submission && submission.status === 'Pending' && canReview && submissionRef) {
       updateDoc(submissionRef, { 
         status: 'In Review',
         lastUpdated: serverTimestamp() 
-      }).catch(err => console.error("Auto-review update failed", err));
+      }).catch(err => console.debug("Auto-review update skipped or failed", err));
     }
   }, [submission, user.role, submissionRef]);
 
@@ -124,19 +125,29 @@ export default function SubmissionDetails() {
   const handleAction = async (action: string) => {
     if (!submissionRef || !db) return;
 
-    if (action === 'Amended' && !remarks.trim()) {
+    if ((action === 'Amended' || action === 'Rejected') && !remarks.trim()) {
       toast({
         variant: "destructive",
         title: "Remarks Required",
-        description: "Please specify what needs to be amended.",
+        description: `Please provide context for the ${action} action.`,
       });
       return;
     }
 
     setLoading(true);
 
-    // If correction, upload the new files metadata first
+    const updateData: any = {
+      status: action,
+      remarks: remarks || submission.remarks || "", 
+      lastUpdated: serverTimestamp(),
+    };
+
+    // If correction being submitted by owner
     if (action === 'Pending' && isAmended && isOwner) {
+       updateData.isResubmitted = true;
+       updateData.resubmittedAt = serverTimestamp();
+       
+       // Process new documents
        for (const file of newFiles) {
          const docRef = doc(collection(submissionRef, "documents"));
          await setDoc(docRef, {
@@ -150,23 +161,13 @@ export default function SubmissionDetails() {
        }
     }
 
-    const updateData: any = {
-      status: action,
-      remarks: remarks || submission.remarks || "", 
-      lastUpdated: serverTimestamp(),
-    };
-
-    if (action === 'Pending' && isAmended && isOwner) {
-       updateData.isResubmitted = true;
-       updateData.resubmittedAt = serverTimestamp();
-    }
-
     updateDoc(submissionRef, updateData)
       .then(() => {
         toast({
           title: "Status Updated",
-          description: action === 'Pending' ? "Correction submitted successfully." : `Submission marked as ${action}.`,
+          description: `Submission marked as ${action}.`,
         });
+        // Redirect back to respective queues
         router.push(canAction ? '/submissions/queue' : '/submissions/my');
       })
       .catch(async (error) => {
@@ -187,10 +188,10 @@ export default function SubmissionDetails() {
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-3xl font-bold">{submission.id}</h1>
             <Badge variant={submission.status === 'Approved' ? 'default' : 'outline'} className={
-              submission.status === 'Approved' ? 'bg-green-100 text-green-800' :
-              submission.status === 'Rejected' ? 'bg-red-100 text-red-800' :
-              submission.status === 'Amended' ? 'bg-orange-100 text-orange-800' :
-              submission.status === 'Escalated' ? 'bg-purple-100 text-purple-800' : ''
+              submission.status === 'Approved' ? 'bg-green-100 text-green-800 border-green-200' :
+              submission.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
+              submission.status === 'Amended' ? 'bg-orange-100 text-orange-800 border-orange-200' :
+              submission.status === 'Escalated' ? 'bg-purple-100 text-purple-800 border-purple-200' : ''
             }>
               {submission.status}
             </Badge>
@@ -230,25 +231,29 @@ export default function SubmissionDetails() {
                 multiple 
               />
               <div className="space-y-4">
-                {documents?.map((doc) => (
-                  <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/5 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-primary/10 p-2 rounded text-primary">
-                        <FileText className="w-6 h-6" />
+                {documents && documents.length > 0 ? (
+                  documents.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/5 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="bg-primary/10 p-2 rounded text-primary">
+                          <FileText className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{doc.name}</p>
+                          <p className="text-xs text-muted-foreground">{doc.type.toUpperCase()} • {new Date(doc.uploadedAt).toLocaleDateString()}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-sm">{doc.name}</p>
-                        <p className="text-xs text-muted-foreground">{doc.type.toUpperCase()} • {new Date(doc.uploadedAt).toLocaleDateString()}</p>
+                      <div className="flex gap-2">
+                         <Button variant="ghost" size="icon" onClick={() => toast({ title: "Download", description: `Starting download for ${doc.name}` })}><Download className="w-4 h-4" /></Button>
+                         <Button variant="ghost" size="icon" asChild>
+                           <a href={doc.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
+                         </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                       <Button variant="ghost" size="icon"><Download className="w-4 h-4" /></Button>
-                       <Button variant="ghost" size="icon" asChild>
-                         <a href={doc.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
-                       </Button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-center py-8 text-muted-foreground italic">No documents found for this submission.</p>
+                )}
                 
                 {/* Pending New Files in Amendment Mode */}
                 {newFiles.map((item) => (
@@ -283,11 +288,11 @@ export default function SubmissionDetails() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Case Remarks & History</CardTitle>
+              <CardTitle>Case History & Remarks</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg border p-4 bg-muted/30 text-sm whitespace-pre-wrap">
-                {submission.remarks || "No historical remarks provided."}
+              <div className="rounded-lg border p-4 bg-muted/30 text-sm whitespace-pre-wrap min-h-[100px]">
+                {submission.remarks || "No current remarks for this case."}
               </div>
             </CardContent>
           </Card>
@@ -295,11 +300,15 @@ export default function SubmissionDetails() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader><CardTitle>Customer Profile</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">Customer Profile</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-1">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Legal Name</span>
                 <span className="text-sm font-medium">{submission.customerName}</span>
+              </div>
+              <div className="grid gap-1">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">ID Number</span>
+                <span className="text-sm">{submission.customerId || 'N/A'}</span>
               </div>
               <div className="grid gap-1">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Originating Branch</span>
@@ -317,23 +326,23 @@ export default function SubmissionDetails() {
             <Card className="border-primary/20 bg-slate-50/50">
               <CardHeader>
                 <CardTitle className="text-lg">Workflow Action</CardTitle>
-                <CardDescription>Decide the outcome for this case.</CardDescription>
+                <CardDescription>Finalize or escalate this verification.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold flex items-center gap-1"><MessageSquare className="w-3 h-3" /> Reviewer Remarks</label>
                   <Textarea 
-                    placeholder="Provide details for your decision..." 
+                    placeholder="Enter decision rationale or amendment instructions..." 
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
-                    className="min-h-[100px] bg-white"
+                    className="min-h-[120px] bg-white"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={() => handleAction('Approved')} className="bg-[#78C49D] hover:bg-[#66B38C] text-white">Approve</Button>
-                  <Button onClick={() => handleAction('Amended')} variant="outline" className="bg-[#FFF5ED] text-[#E67E22] border-[#FDE3CF]">Amend</Button>
-                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="bg-[#F5F3FF] text-[#8B5CF6] border-[#EDE9FE]">Escalate</Button>
-                  <Button onClick={() => handleAction('Rejected')} variant="destructive" className="bg-[#F28B82] hover:bg-[#EE675C]">Reject</Button>
+                  <Button onClick={() => handleAction('Approved')} className="bg-[#78C49D] hover:bg-[#66B38C] text-white" disabled={loading}>Approve</Button>
+                  <Button onClick={() => handleAction('Amended')} variant="outline" className="bg-[#FFF5ED] text-[#E67E22] border-[#FDE3CF] hover:bg-[#FDE3CF]" disabled={loading}>Amend</Button>
+                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="bg-[#F5F3FF] text-[#8B5CF6] border-[#EDE9FE] hover:bg-[#EDE9FE]" disabled={loading}>Escalate</Button>
+                  <Button onClick={() => handleAction('Rejected')} variant="destructive" className="bg-[#F28B82] hover:bg-[#EE675C]" disabled={loading}>Reject</Button>
                 </div>
               </CardContent>
             </Card>
@@ -342,14 +351,14 @@ export default function SubmissionDetails() {
           {isOwner && isAmended && (
              <Card className="border-orange-200 bg-orange-50/30">
                <CardHeader>
-                 <CardTitle className="text-lg text-orange-800">Correction Required</CardTitle>
-                 <CardDescription>Please provide the requested documents or information.</CardDescription>
+                 <CardTitle className="text-lg text-orange-800">Branch Correction</CardTitle>
+                 <CardDescription>Address the reviewer's remarks above.</CardDescription>
                </CardHeader>
                <CardContent className="space-y-4">
                  <div className="space-y-2">
-                   <label className="text-xs font-bold text-orange-900">Branch Officer Response</label>
+                   <label className="text-xs font-bold text-orange-900">Officer Response</label>
                    <Textarea 
-                     placeholder="Explain the corrections made..." 
+                     placeholder="Detail the corrections made..." 
                      value={remarks}
                      onChange={(e) => setRemarks(e.target.value)}
                      className="bg-white"
@@ -361,7 +370,7 @@ export default function SubmissionDetails() {
                    disabled={loading || (newFiles.length === 0 && !remarks.trim())}
                  >
                    <Upload className="w-4 h-4 mr-2" />
-                   {loading ? "Submitting..." : "Submit Correction"}
+                   {loading ? "Submitting..." : "Resubmit Case"}
                  </Button>
                </CardContent>
              </Card>

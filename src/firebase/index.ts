@@ -9,7 +9,21 @@ export function initializeFirebase(): {
   firestore: Firestore;
   auth: Auth;
 } {
-  const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  let app: FirebaseApp;
+
+  if (getApps().length > 0) {
+    app = getApp();
+  } else {
+    // Ensure we don't crash if environment variables aren't yet populated.
+    // Next.js sometimes takes a moment to sync these in the development workstation.
+    const isConfigPopulated = !!firebaseConfig.apiKey && firebaseConfig.apiKey !== 'undefined';
+    
+    app = initializeApp(isConfigPopulated ? firebaseConfig : {
+      ...firebaseConfig,
+      apiKey: 'INITIALIZING', // Temporary placeholder to prevent immediate getAuth crash
+    });
+  }
+
   const firestore = getFirestore(app);
   const auth = getAuth(app);
 
