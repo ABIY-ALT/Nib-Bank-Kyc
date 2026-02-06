@@ -26,8 +26,8 @@ export const MOCK_USERS: User[] = [
   { id: '7', name: 'Diana District', email: 'diana.dist@bank.com', role: 'District Director', district: 'Central' },
 ];
 
-// Current logged in user (mocked)
-export const currentUser: User = MOCK_USERS[0];
+// Current logged in user (mocked as Admin for verification of full sidebar)
+export const currentUser: User = MOCK_USERS[4];
 
 export const hasPermission = (user: User, requiredRoles: UserRole[]) => {
   return requiredRoles.includes(user.role);
