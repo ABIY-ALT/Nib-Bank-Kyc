@@ -27,18 +27,16 @@ import {
   Upload, 
   FilePlus, 
   Shield, 
-  Info, 
   X, 
   FileText, 
   Eye, 
-  CheckCircle2,
-  AlertCircle
+  CheckCircle2
 } from "lucide-react";
 import { useFirestore, useCollection } from "@/firebase";
 import { collection, doc, setDoc, query, orderBy } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth-mock.tsx";
 import { 
   Dialog, 
   DialogContent, 
@@ -69,17 +67,12 @@ export default function NewSubmission() {
   const { toast } = useToast();
   const { user } = useAuth();
   const db = useFirestore();
-  const [loading, setLoading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [entityType, setEntityType] = useState("individual");
   const [remarks, setRemarks] = useState("");
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const { data: branches } = useCollection<{id: string, name: string}>(
-    db ? query(collection(db, "branches"), orderBy("name")) : null
-  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -106,25 +99,15 @@ export default function NewSubmission() {
     setUploadedFiles((prev) => prev.map(f => f.id === id ? { ...f, type: newType } : f));
   };
 
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!db) return;
     
     if (uploadedFiles.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Missing Documents",
-        description: "Please upload at least one verification document.",
-      });
+      toast({ variant: "destructive", title: "Missing Documents", description: "Upload at least one document." });
       return;
     }
 
-    setLoading(true);
-    
     const submissionId = `KYC-${Math.floor(1000 + Math.random() * 9000)}`;
     const submissionRef = doc(db, "submissions", submissionId);
     
@@ -141,233 +124,110 @@ export default function NewSubmission() {
     };
 
     setDoc(submissionRef, submissionData)
-      .then(async () => {
-        const docPromises = uploadedFiles.map(file => {
-          const docRef = doc(collection(submissionRef, "documents"));
-          return setDoc(docRef, {
-            id: docRef.id,
-            name: file.file.name,
-            type: file.type,
-            uploadedAt: new Date().toISOString(),
-            url: "#",
-            status: 'Current'
-          });
-        });
-
-        await Promise.all(docPromises);
-
-        toast({
-          title: "Submission Created",
-          description: `Case ${submissionId} has been successfully sent to the Review Queue.`,
-        });
-        router.push('/submissions/my');
-      })
       .catch(async (error) => {
-        const permissionError = new FirestorePermissionError({
-          path: submissionRef.path,
-          operation: 'create',
-          requestResourceData: submissionData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        setLoading(false);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: submissionRef.path, operation: 'create', requestResourceData: submissionData }));
       });
+
+    uploadedFiles.forEach(file => {
+      const docRef = doc(collection(submissionRef, "documents"));
+      setDoc(docRef, {
+        id: docRef.id,
+        name: file.file.name,
+        type: file.type,
+        uploadedAt: new Date().toISOString(),
+        url: "#",
+        status: 'Current'
+      }).catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: docRef.path, operation: 'create' }));
+      });
+    });
+
+    toast({ title: "Submission Created", description: `Case ${submissionId} dispatched.` });
+    router.push('/submissions/my');
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-primary font-headline">New KYC Submission</h1>
-          <p className="text-muted-foreground mt-2">Create a secure identity verification package for a new customer.</p>
-        </div>
-        <div className="bg-primary/5 p-3 rounded-full">
-          <Shield className="w-8 h-8 text-primary" />
-        </div>
+        <h1 className="text-4xl font-extrabold tracking-tight text-primary font-headline">New KYC Submission</h1>
+        <Shield className="w-8 h-8 text-primary" />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 pb-12">
         <Card className="border-slate-200 shadow-sm overflow-hidden">
           <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              Entity Profile
-            </CardTitle>
+            <CardTitle className="text-xl flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-600" /> Entity Profile</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-6 md:grid-cols-2 pt-6">
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-xs font-bold uppercase tracking-wider text-slate-500">Legal Name / Business Entity</Label>
-              <Input 
-                id="name" 
-                placeholder="Enter full legal name" 
-                required 
-                className="h-11 focus-visible:ring-primary"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-              />
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Legal Name</Label>
+              <Input placeholder="Full legal name" required className="h-11" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="type" className="text-xs font-bold uppercase tracking-wider text-slate-500">Classification</Label>
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Classification</Label>
               <Select value={entityType} onValueChange={setEntityType}>
-                <SelectTrigger id="type" className="h-11">
-                  <SelectValue placeholder="Select classification" />
-                </SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue placeholder="Select classification" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="individual">Individual / Retail</SelectItem>
-                  <SelectItem value="corporate">Corporate / SME</SelectItem>
-                  <SelectItem value="ngo">NGO / Institutional</SelectItem>
-                  <SelectItem value="government">Government / Public Body</SelectItem>
+                  <SelectItem value="individual">Individual</SelectItem>
+                  <SelectItem value="corporate">Corporate</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Originating Branch</Label>
-              <Input value={user.branch || "Headquarters"} disabled className="bg-slate-50 h-11" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Officer in Charge</Label>
-              <Input value={user.name} disabled className="bg-slate-50 h-11" />
-            </div>
           </CardContent>
         </Card>
 
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <FilePlus className="w-5 h-5 text-accent" />
-              Documentation Bundle
-            </CardTitle>
-            <CardDescription>Upload high-resolution scans and assign compliance tags.</CardDescription>
+            <CardTitle className="text-xl flex items-center gap-2"><FilePlus className="w-5 h-5 text-accent" /> Documentation Bundle</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
-             <input 
-               type="file" 
-               className="hidden" 
-               ref={fileInputRef} 
-               onChange={handleFileChange}
-               multiple
-               accept=".pdf,.jpg,.jpeg,.png"
-             />
-             
-             <div 
-               onClick={triggerFileUpload}
-               className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center text-center space-y-4 hover:bg-accent/5 hover:border-accent/40 transition-all cursor-pointer group"
-             >
-                <div className="bg-accent/10 p-5 rounded-full group-hover:scale-110 transition-transform duration-300">
-                  <Upload className="w-10 h-10 text-accent" />
-                </div>
-                <div>
-                  <p className="font-bold text-xl text-slate-800">Drop customer files here</p>
-                  <p className="text-sm text-slate-500 mt-1 italic">Supports PDF, JPG, and PNG (Max 10MB per file)</p>
-                </div>
-                <Button variant="outline" type="button" className="mt-2 border-slate-300">Browse Filesystem</Button>
+             <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.jpg,.jpeg,.png" />
+             <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:bg-accent/5">
+                <Upload className="w-10 h-10 text-accent mb-4" />
+                <p className="font-bold text-xl text-slate-800">Drop customer files here</p>
+                <Button variant="outline" type="button" className="mt-4">Browse Filesystem</Button>
              </div>
 
-             {uploadedFiles.length > 0 && (
-               <div className="space-y-4">
-                 <div className="flex items-center justify-between">
-                   <Label className="text-sm font-bold text-slate-700 uppercase tracking-tighter">Manifest ({uploadedFiles.length} Assets)</Label>
+             {uploadedFiles.map((item) => (
+               <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-xl bg-white shadow-sm">
+                 <div className="flex items-center gap-4 flex-1">
+                   <FileText className="w-6 h-6 text-slate-600" />
+                   <span className="text-sm font-bold truncate">{item.file.name}</span>
                  </div>
-                 <div className="grid gap-3">
-                   {uploadedFiles.map((item) => (
-                     <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/30 transition-colors">
-                       <div className="flex items-center gap-4 flex-1">
-                         <div className="p-3 bg-slate-100 rounded-lg text-slate-600">
-                           <FileText className="w-6 h-6" />
-                         </div>
-                         <div className="flex flex-col overflow-hidden">
-                           <span className="text-sm font-bold text-slate-900 truncate max-w-[200px] md:max-w-xs">{item.file.name}</span>
-                           <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">{(item.file.size / 1024 / 1024).toFixed(2)} MB</span>
-                         </div>
-                       </div>
-                       
-                       <div className="flex items-center gap-3 w-full md:w-auto">
-                         <Select 
-                           value={item.type} 
-                           onValueChange={(val) => handleTypeChange(item.id, val)}
-                         >
-                           <SelectTrigger className="h-10 md:w-60 border-slate-200">
-                             <SelectValue />
-                           </SelectTrigger>
-                           <SelectContent>
-                             {DOCUMENT_TYPES.map((type) => (
-                               <SelectItem key={type.id} value={type.id}>
-                                 {type.label}
-                               </SelectItem>
-                             ))}
-                           </SelectContent>
-                         </Select>
-                         
-                         <div className="flex gap-1">
-                           <Button 
-                             variant="ghost" 
-                             size="icon" 
-                             type="button"
-                             onClick={() => setPreviewFile(item)}
-                             className="h-10 w-10 text-primary hover:bg-primary/5 rounded-full"
-                           >
-                             <Eye className="w-4 h-4" />
-                           </Button>
-                           <Button 
-                             variant="ghost" 
-                             size="icon" 
-                             type="button"
-                             onClick={() => removeFile(item.id)}
-                             className="h-10 w-10 text-destructive hover:bg-destructive/5 rounded-full"
-                           >
-                             <X className="w-4 h-4" />
-                           </Button>
-                         </div>
-                       </div>
-                     </div>
-                   ))}
+                 <Select value={item.type} onValueChange={(val) => handleTypeChange(item.id, val)}>
+                   <SelectTrigger className="h-10 md:w-60"><SelectValue /></SelectTrigger>
+                   <SelectContent>
+                     {DOCUMENT_TYPES.map((type) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}
+                   </SelectContent>
+                 </Select>
+                 <div className="flex gap-1">
+                   <Button variant="ghost" size="icon" type="button" onClick={() => setPreviewFile(item)}><Eye className="w-4 h-4" /></Button>
+                   <Button variant="ghost" size="icon" type="button" onClick={() => removeFile(item.id)} className="text-destructive"><X className="w-4 h-4" /></Button>
                  </div>
                </div>
-             )}
+             ))}
           </CardContent>
         </Card>
 
         <Card className="border-slate-200 shadow-sm">
-          <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl">Originator Comments</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-             <Textarea 
-               placeholder="Provide any additional context for the KYC Officer..." 
-               className="min-h-[140px] focus-visible:ring-primary border-slate-200 rounded-xl" 
-               value={remarks}
-               onChange={(e) => setRemarks(e.target.value)}
-             />
+          <CardHeader><CardTitle className="text-xl">Remarks</CardTitle></CardHeader>
+          <CardContent>
+             <Textarea placeholder="Context for KYC Officer..." className="min-h-[140px]" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           </CardContent>
-          <CardFooter className="flex flex-col md:flex-row justify-between gap-4 border-t pt-8">
-            <div className="flex gap-3 w-full md:w-auto">
-              <Button variant="outline" type="button" className="flex-1 md:flex-none px-8" onClick={() => router.back()}>Cancel</Button>
-              <Button type="submit" disabled={loading} className="flex-1 md:flex-none px-12 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
-                {loading ? "Establishing Secure Connection..." : "Dispatch for Review"}
-              </Button>
-            </div>
+          <CardFooter className="flex justify-end gap-4 border-t pt-8">
+            <Button variant="outline" type="button" onClick={() => router.back()}>Cancel</Button>
+            <Button type="submit" className="px-12 bg-primary font-bold">Dispatch for Review</Button>
           </CardFooter>
         </Card>
       </form>
 
-      {/* Preview Dialog */}
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle>Document Inspection</DialogTitle>
-            <DialogDescription>{previewFile?.file.name} • {previewFile?.type.replace('_', ' ')}</DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto rounded-xl border bg-slate-900 p-2 flex items-center justify-center min-h-[500px]">
+        <DialogContent className="max-w-4xl">
+          <DialogHeader><DialogTitle>Inspection</DialogTitle></DialogHeader>
+          <div className="flex items-center justify-center min-h-[500px] bg-slate-900 rounded-xl overflow-hidden">
             {previewFile?.file.type.startsWith('image/') ? (
-              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
-            ) : (
-              <div className="text-center text-white space-y-4">
-                <FileText className="w-16 h-16 mx-auto opacity-50" />
-                <p>PDF Preview not available in this browser window.<br/>Please download to verify content if needed.</p>
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end gap-2 pt-4">
-             <Button variant="outline" onClick={() => setPreviewFile(null)}>Close Preview</Button>
+              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain" />
+            ) : <p className="text-white">PDF Preview Unavailable</p>}
           </div>
         </DialogContent>
       </Dialog>

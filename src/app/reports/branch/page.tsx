@@ -71,36 +71,30 @@ export default function BranchReportsPage() {
   const { data: submissions, loading } = useCollection<KYCSubmission>(submissionsQuery);
 
   const handleGenerateReport = () => {
-    setIsGenerating(true);
-    // Reduced delay for faster UI feedback
-    setTimeout(() => {
-      if (!submissions) {
-        setReportData([]);
-        setIsGenerating(false);
-        return;
-      }
+    if (!submissions) {
+      setReportData([]);
+      return;
+    }
 
-      let filtered = [...submissions];
+    let filtered = [...submissions];
 
-      if (selectedDistrict !== "All Districts") {
-        filtered = filtered.filter(sub => (sub as any).district === selectedDistrict);
-      }
+    if (selectedDistrict !== "All Districts") {
+      filtered = filtered.filter(sub => (sub as any).district === selectedDistrict);
+    }
 
-      if (selectedBranch !== "All Branches") {
-        filtered = filtered.filter(sub => sub.branch === selectedBranch);
-      }
+    if (selectedBranch !== "All Branches") {
+      filtered = filtered.filter(sub => sub.branch === selectedBranch);
+    }
 
-      setReportData(filtered);
-      setIsGenerating(false);
-      toast({
-        title: "Report Generated",
-        description: `Found ${filtered.length} matching records.`,
-      });
-    }, 150);
+    setReportData(filtered);
+    toast({
+      title: "Report Generated",
+      description: `Found ${filtered.length} matching records.`,
+    });
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Compliance Reporting</h1>
@@ -165,16 +159,16 @@ export default function BranchReportsPage() {
             </div>
           </div>
           <div className="mt-8 flex justify-end">
-            <Button size="lg" className="px-12 font-bold gap-2 shadow-lg" onClick={handleGenerateReport} disabled={isGenerating || loading}>
-              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              {isGenerating ? "Compiling Data..." : "Generate Analysis"}
+            <Button size="lg" className="px-12 font-bold gap-2 shadow-lg" onClick={handleGenerateReport} disabled={loading}>
+              <FileText className="w-4 h-4" />
+              Generate Analysis
             </Button>
           </div>
         </CardContent>
       </Card>
 
       {reportData && (
-        <Card className="border-slate-200 shadow-xl animate-in slide-in-from-top-4 duration-500">
+        <Card className="border-slate-200 shadow-xl animate-in slide-in-from-top-4 duration-300">
           <CardHeader className="bg-slate-900 text-white rounded-t-lg">
             <div className="flex justify-between items-center">
               <div>

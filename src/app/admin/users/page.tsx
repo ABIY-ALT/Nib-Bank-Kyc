@@ -42,7 +42,9 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { User, UserRole } from "@/lib/auth-mock";
+import { User, UserRole } from "@/lib/auth-mock.tsx";
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const ROLES: UserRole[] = [
   'Branch Officer', 
@@ -91,7 +93,7 @@ export default function UserManagementPage() {
     setIsDialogOpen(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!db) return;
     if (!formData.name || !formData.email) {
       toast({ variant: "destructive", title: "Missing Information", description: "Name and email are required." });
@@ -100,24 +102,36 @@ export default function UserManagementPage() {
 
     const userId = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
     const userRef = doc(db, "users", userId);
+    const data = { ...formData, id: userId };
 
-    try {
-      await setDoc(userRef, { ...formData, id: userId }, { merge: true });
-      toast({ title: editingUser ? "User Updated" : "User Created", description: `${formData.name}'s profile has been saved.` });
-      setIsDialogOpen(false);
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to save user profile." });
-    }
+    setDoc(userRef, data, { merge: true })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: userRef.path,
+          operation: editingUser ? 'update' : 'create',
+          requestResourceData: data,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      });
+
+    toast({ title: editingUser ? "User Updated" : "User Created", description: `${formData.name} saved.` });
+    setIsDialogOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!db || !confirm("Are you sure you want to delete this user?")) return;
-    try {
-      await deleteDoc(doc(db, "users", id));
-      toast({ title: "User Deleted", description: "The user has been removed from the system." });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete user." });
-    }
+  const handleDelete = (id: string) => {
+    if (!db || !confirm("Are you sure?")) return;
+    const userRef = doc(db, "users", id);
+    
+    deleteDoc(userRef)
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: userRef.path,
+          operation: 'delete',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      });
+      
+    toast({ title: "User Deleted", description: "Account removed." });
   };
 
   const handleBranchChange = (branchName: string) => {
@@ -130,11 +144,10 @@ export default function UserManagementPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">User Access Management</h1>
-          <p className="text-muted-foreground text-lg">Assign roles, manage branch permissions, and control system entry.</p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">User Management</h1>
         </div>
         <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg">
           <UserPlus className="w-4 h-4" />
@@ -147,9 +160,9 @@ export default function UserManagementPage() {
           <TableHeader className="bg-slate-50/50">
             <TableRow>
               <TableHead className="font-bold">Identity</TableHead>
-              <TableHead className="font-bold">Institutional Role</TableHead>
-              <TableHead className="font-bold">Organizational Mapping</TableHead>
-              <TableHead className="font-bold">Account Status</TableHead>
+              <TableHead className="font-bold">Role</TableHead>
+              <TableHead className="font-bold">Organization</TableHead>
+              <TableHead className="font-bold">Status</TableHead>
               <TableHead className="text-right font-bold pr-8">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -160,49 +173,35 @@ export default function UserManagementPage() {
               </TableRow>
             ) : users?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-20 text-center italic text-muted-foreground">No users provisioned in system.</TableCell>
+                <TableCell colSpan={5} className="py-20 text-center italic text-muted-foreground">No users provisioned.</TableCell>
               </TableRow>
             ) : users?.map((user) => (
               <TableRow key={user.id} className="hover:bg-slate-50 transition-colors">
                 <TableCell>
                   <div className="flex flex-col">
                     <span className="font-bold text-slate-900">{user.name}</span>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Mail className="w-3 h-3" /> {user.email}
-                    </span>
+                    <span className="text-xs text-muted-foreground">{user.email}</span>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="gap-1 bg-primary/5 text-primary border-primary/10 px-3 py-1 font-bold">
-                    <Shield className="w-3 h-3" />
+                  <Badge variant="secondary" className="bg-primary/5 text-primary">
                     {user.role}
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium flex items-center gap-1.5 text-slate-700">
-                      <Building2 className="w-3.5 h-3.5 text-primary/60" />
-                      {user.branch || 'Central HQ'}
-                    </div>
-                    {user.district && (
-                      <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 uppercase tracking-widest font-bold">
-                        <MapPin className="w-2.5 h-2.5" />
-                        {user.district} District
-                      </div>
-                    )}
-                  </div>
+                  <div className="text-sm font-medium">{user.branch || 'Central HQ'}</div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={`px-3 py-1 font-bold ${user.status === 'Active' ? 'text-green-600 bg-green-50 border-green-200' : 'text-slate-400 bg-slate-50'}`}>
+                  <Badge variant="outline" className={user.status === 'Active' ? 'text-green-600' : 'text-slate-400'}>
                     {user.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right pr-8">
                   <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary hover:bg-primary/5 rounded-full">
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary rounded-full">
                       <Edit2 className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)} className="text-destructive hover:bg-destructive/5 rounded-full">
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)} className="text-destructive rounded-full">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -216,17 +215,16 @@ export default function UserManagementPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">{editingUser ? 'Edit User Permissions' : 'Provision System User'}</DialogTitle>
-            <DialogDescription>Configure institutional access, roles, and branch assignments.</DialogDescription>
+            <DialogTitle>User Permissions</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Full Legal Name</Label>
-              <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Jane Doe" className="h-11" />
+              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Legal Name</Label>
+              <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11" />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Corporate Email</Label>
-              <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="jane.doe@bank.com" className="h-11" />
+              <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -239,7 +237,7 @@ export default function UserManagementPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Account Status</Label>
+                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Status</Label>
                 <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val})}>
                   <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -251,7 +249,7 @@ export default function UserManagementPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Assigned Branch</Label>
+                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Branch</Label>
                 <Select value={formData.branch} onValueChange={handleBranchChange}>
                   <SelectTrigger className="h-11">
                     <SelectValue placeholder="Select Branch" />
@@ -262,23 +260,11 @@ export default function UserManagementPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">District Oversight</Label>
-                <Select value={formData.district} onValueChange={val => setFormData({...formData, district: val})}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Select District" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Central">Central (HQ)</SelectItem>
-                    {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </div>
           <DialogFooter className="pt-6">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="h-11 font-bold px-6">Cancel</Button>
-            <Button onClick={handleSave} className="h-11 px-8 font-bold bg-primary shadow-lg">Save Access Profile</Button>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSave} className="px-8 font-bold bg-primary shadow-lg">Save Profile</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
