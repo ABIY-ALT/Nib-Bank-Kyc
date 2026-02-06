@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo } from "react";
@@ -49,7 +50,7 @@ export default function SystemWideReportsPage() {
 
   const handleGenerateReport = () => {
     setIsGenerating(true);
-    // Simulate high-level system-wide aggregation
+    // Reduced delay for faster UI feedback
     setTimeout(() => {
       if (!submissions) {
         setReportData({ total: 0, branches: {}, officers: {}, status: {} });
@@ -87,7 +88,7 @@ export default function SystemWideReportsPage() {
         title: "Institutional Audit Complete",
         description: `Successfully analyzed ${submissions.length} system-wide records across all network nodes.`,
       });
-    }, 1500);
+    }, 150);
   };
 
   const handleExport = () => {

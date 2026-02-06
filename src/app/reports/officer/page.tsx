@@ -49,7 +49,7 @@ export default function OfficerReportsPage() {
 
   const handleGenerateReport = () => {
     setIsGenerating(true);
-    // Simulate complex background processing
+    // Reduced delay for faster UI feedback
     setTimeout(() => {
       if (!submissions) {
         setReportData([]);
@@ -84,7 +84,7 @@ export default function OfficerReportsPage() {
         title: "Staff Audit Complete",
         description: `Analyzed ${submissions.length} historical verification actions across the team.`,
       });
-    }, 1200);
+    }, 150);
   };
 
   const handleExport = () => {

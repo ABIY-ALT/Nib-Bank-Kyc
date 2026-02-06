@@ -72,6 +72,7 @@ export default function BranchReportsPage() {
 
   const handleGenerateReport = () => {
     setIsGenerating(true);
+    // Reduced delay for faster UI feedback
     setTimeout(() => {
       if (!submissions) {
         setReportData([]);
@@ -95,7 +96,7 @@ export default function BranchReportsPage() {
         title: "Report Generated",
         description: `Found ${filtered.length} matching records.`,
       });
-    }, 800);
+    }, 150);
   };
 
   return (
