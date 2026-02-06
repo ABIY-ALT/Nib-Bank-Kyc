@@ -1,14 +1,9 @@
-
 "use client"
 
-import { useState, useMemo } from "react";
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, orderBy } from "firebase/firestore";
-import { KYCSubmission } from "@/lib/kyc-data";
+import { useState } from "react";
 import { 
   Card, 
   CardContent, 
-  CardDescription, 
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
@@ -28,59 +23,39 @@ import {
   Globe, 
   History,
   ShieldCheck,
-  TrendingUp,
-  Loader2,
   Building2,
   Users
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+const MOCK_SYSTEM_STATS = {
+  total: 1245,
+  approved: 980,
+  pending: 185,
+  accuracy: "97.2%",
+  branches: [
+    { name: "Downtown Branch", count: 420 },
+    { name: "Uptown Branch", count: 310 },
+    { name: "East Side", count: 285 },
+    { name: "Northern Branch", count: 230 },
+  ],
+  officers: [
+    { name: "Jane Smith", count: 340 },
+    { name: "Robert Brown", count: 310 },
+    { name: "Alice Wilson", count: 290 },
+    { name: "Local Specialist", count: 185 },
+  ]
+};
+
 export default function SystemWideReportsPage() {
   const { toast } = useToast();
-  const db = useFirestore();
   const [reportData, setReportData] = useState<any | null>(null);
 
-  const submissionsQuery = useMemo(() => {
-    if (!db) return null;
-    return query(collection(db, "submissions"), orderBy("submittedAt", "desc"));
-  }, [db]);
-
-  const { data: submissions, loading } = useCollection<KYCSubmission>(submissionsQuery);
-
   const handleGenerateReport = () => {
-    if (!submissions) {
-      setReportData({ total: 0, branches: {}, officers: {}, status: {} });
-      return;
-    }
-
-    const stats = {
-      total: submissions.length,
-      status: {} as Record<string, number>,
-      branches: {} as Record<string, number>,
-      officers: {} as Record<string, number>,
-      entities: {} as Record<string, number>
-    };
-
-    submissions.forEach(sub => {
-      stats.status[sub.status] = (stats.status[sub.status] || 0) + 1;
-      stats.branches[sub.branch] = (stats.branches[sub.branch] || 0) + 1;
-      const officer = (sub as any).reviewedBy || "Pending Review";
-      stats.officers[officer] = (stats.officers[officer] || 0) + 1;
-      const type = sub.entityType || 'Individual';
-      stats.entities[type] = (stats.entities[type] || 0) + 1;
-    });
-
-    setReportData(stats);
+    setReportData(MOCK_SYSTEM_STATS);
     toast({
       title: "Institutional Audit Complete",
-      description: `Analyzed ${submissions.length} system-wide records.`,
-    });
-  };
-
-  const handleExport = () => {
-    toast({
-      title: "Generating Master Audit File",
-      description: "Compiling full institutional bundle...",
+      description: `Analyzed 1,245 system-wide records.`,
     });
   };
 
@@ -100,7 +75,7 @@ export default function SystemWideReportsPage() {
           <Button variant="outline" className="gap-2 font-bold" onClick={() => setReportData(null)}>
             <History className="w-4 h-4" /> Reset
           </Button>
-          <Button className="gap-2 bg-primary shadow-xl font-bold" onClick={handleGenerateReport} disabled={loading}>
+          <Button className="gap-2 bg-primary shadow-xl font-bold" onClick={handleGenerateReport}>
             <ShieldCheck className="w-4 h-4" />
             Compile Master Audit
           </Button>
@@ -138,7 +113,7 @@ export default function SystemWideReportsPage() {
                  <CardTitle className="text-xs font-bold uppercase tracking-widest text-emerald-600">Approvals</CardTitle>
                </CardHeader>
                <CardContent>
-                 <span className="text-5xl font-black text-emerald-600">{reportData.status['Approved'] || 0}</span>
+                 <span className="text-5xl font-black text-emerald-600">{reportData.approved}</span>
                </CardContent>
              </Card>
              <Card className="shadow-lg border-slate-200">
@@ -146,9 +121,7 @@ export default function SystemWideReportsPage() {
                  <CardTitle className="text-xs font-bold uppercase tracking-widest text-orange-600">Pending</CardTitle>
                </CardHeader>
                <CardContent>
-                 <span className="text-5xl font-black text-orange-600">
-                   {(reportData.status['Pending'] || 0) + (reportData.status['Amended'] || 0)}
-                 </span>
+                 <span className="text-5xl font-black text-orange-600">{reportData.pending}</span>
                </CardContent>
              </Card>
              <Card className="shadow-lg border-slate-200">
@@ -156,7 +129,7 @@ export default function SystemWideReportsPage() {
                  <CardTitle className="text-xs font-bold uppercase tracking-widest text-purple-600">Accuracy</CardTitle>
                </CardHeader>
                <CardContent>
-                 <span className="text-5xl font-black text-purple-600">96.8%</span>
+                 <span className="text-5xl font-black text-purple-600">{reportData.accuracy}</span>
                </CardContent>
              </Card>
           </div>
@@ -177,11 +150,11 @@ export default function SystemWideReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {Object.entries(reportData.branches).map(([name, count]) => (
-                      <TableRow key={name}>
-                        <TableCell className="font-bold text-slate-800 py-4">{name}</TableCell>
+                    {reportData.branches.map((branch: any) => (
+                      <TableRow key={branch.name}>
+                        <TableCell className="font-bold text-slate-800 py-4">{branch.name}</TableCell>
                         <TableCell className="text-right pr-8">
-                          <Badge variant="secondary" className="font-bold px-3 py-1">{count as number}</Badge>
+                          <Badge variant="secondary" className="font-bold px-3 py-1">{branch.count}</Badge>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -205,12 +178,12 @@ export default function SystemWideReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {Object.entries(reportData.officers).map(([name, count]) => (
-                      <TableRow key={name}>
-                        <TableCell className="font-bold text-slate-800 py-4">{name}</TableCell>
+                    {reportData.officers.map((officer: any) => (
+                      <TableRow key={officer.name}>
+                        <TableCell className="font-bold text-slate-800 py-4">{officer.name}</TableCell>
                         <TableCell className="text-right pr-8">
                           <Badge variant="outline" className="font-bold border-primary/20 text-primary px-3 py-1">
-                            {count as number} Reviews
+                            {officer.count} Reviews
                           </Badge>
                         </TableCell>
                       </TableRow>
@@ -222,7 +195,7 @@ export default function SystemWideReportsPage() {
           </div>
 
           <div className="flex justify-center pt-8">
-            <Button size="lg" className="px-16 h-16 font-bold text-xl gap-3 shadow-2xl" onClick={handleExport}>
+            <Button size="lg" className="px-16 h-16 font-bold text-xl gap-3 shadow-2xl">
               <Download className="w-6 h-6" /> Export Master PDF Bundle
             </Button>
           </div>

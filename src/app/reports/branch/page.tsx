@@ -1,10 +1,6 @@
-
 "use client"
 
-import { useState, useMemo } from "react";
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
-import { KYCSubmission } from "@/lib/kyc-data";
+import { useState } from "react";
 import { 
   Card, 
   CardContent, 
@@ -35,61 +31,30 @@ import {
   Filter, 
   Calendar as CalendarIcon,
   Search,
-  Loader2,
   Building2,
   Map
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+const MOCK_REPORT_RECORDS = [
+  { id: "KYC-8291", customerName: "Global Tech Solutions", branch: "Downtown", status: "Approved", date: "2024-03-21" },
+  { id: "KYC-1022", customerName: "Sarah Jenkins", branch: "Uptown", status: "Pending", date: "2024-03-20" },
+  { id: "KYC-3341", customerName: "Marcus Thorne", branch: "Downtown", status: "Amended", date: "2024-03-19" },
+  { id: "KYC-5562", customerName: "Precision Logistics", branch: "East Side", status: "Approved", date: "2024-03-18" },
+  { id: "KYC-9901", customerName: "Elena Rodriguez", branch: "Valley Branch", status: "Escalated", date: "2024-03-17" },
+];
+
 export default function BranchReportsPage() {
   const { toast } = useToast();
-  const db = useFirestore();
   const [selectedDistrict, setSelectedDistrict] = useState("All Districts");
   const [selectedBranch, setSelectedBranch] = useState("All Branches");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [reportData, setReportData] = useState<KYCSubmission[] | null>(null);
-
-  const { data: districts } = useCollection<{id: string, name: string}>(
-    db ? query(collection(db, "districts"), orderBy("name")) : null
-  );
-
-  const { data: branches } = useCollection<{id: string, name: string, district: string}>(
-    db ? query(collection(db, "branches"), orderBy("name")) : null
-  );
-
-  const filteredBranches = useMemo(() => {
-    if (!branches) return [];
-    if (selectedDistrict === "All Districts") return branches;
-    return branches.filter(b => b.district === selectedDistrict);
-  }, [branches, selectedDistrict]);
-
-  const submissionsQuery = useMemo(() => {
-    if (!db) return null;
-    return query(collection(db, "submissions"), orderBy("submittedAt", "desc"));
-  }, [db]);
-
-  const { data: submissions, loading } = useCollection<KYCSubmission>(submissionsQuery);
+  const [reportData, setReportData] = useState<any[] | null>(null);
 
   const handleGenerateReport = () => {
-    if (!submissions) {
-      setReportData([]);
-      return;
-    }
-
-    let filtered = [...submissions];
-
-    if (selectedDistrict !== "All Districts") {
-      filtered = filtered.filter(sub => (sub as any).district === selectedDistrict);
-    }
-
-    if (selectedBranch !== "All Branches") {
-      filtered = filtered.filter(sub => sub.branch === selectedBranch);
-    }
-
-    setReportData(filtered);
+    setReportData(MOCK_REPORT_RECORDS);
     toast({
       title: "Report Generated",
-      description: `Found ${filtered.length} matching records.`,
+      description: `Found ${MOCK_REPORT_RECORDS.length} matching records.`,
     });
   };
 
@@ -104,7 +69,7 @@ export default function BranchReportsPage() {
           <Button variant="outline" className="gap-2" onClick={() => { setReportData(null); setSelectedDistrict("All Districts"); setSelectedBranch("All Branches"); }}>
             <Filter className="w-4 h-4" /> Reset
           </Button>
-          <Button className="gap-2 bg-primary hover:bg-primary/90" disabled={!reportData || reportData.length === 0}>
+          <Button className="gap-2 bg-primary hover:bg-primary/90" disabled={!reportData}>
             <Download className="w-4 h-4" /> Export Report
           </Button>
         </div>
@@ -123,13 +88,13 @@ export default function BranchReportsPage() {
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <Map className="w-3 h-3" /> Regional District
               </label>
-              <Select value={selectedDistrict} onValueChange={(val) => { setSelectedDistrict(val); setSelectedBranch("All Branches"); }}>
-                <SelectTrigger className="h-11">
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={selectedDistrict} onValueChange={setSelectedDistrict}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All Districts">All Districts</SelectItem>
-                  {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+                  <SelectItem value="Central">Central</SelectItem>
+                  <SelectItem value="Northern">Northern</SelectItem>
+                  <SelectItem value="Southern">Southern</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -138,14 +103,12 @@ export default function BranchReportsPage() {
                 <Building2 className="w-3 h-3" /> Specific Branch
               </label>
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="h-11">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All Branches">All Branches</SelectItem>
-                  {filteredBranches.map(b => (
-                    <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
-                  ))}
+                  <SelectItem value="Downtown">Downtown</SelectItem>
+                  <SelectItem value="Uptown">Uptown</SelectItem>
+                  <SelectItem value="East Side">East Side</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -159,7 +122,7 @@ export default function BranchReportsPage() {
             </div>
           </div>
           <div className="mt-8 flex justify-end">
-            <Button size="lg" className="px-12 font-bold gap-2 shadow-lg" onClick={handleGenerateReport} disabled={loading}>
+            <Button size="lg" className="px-12 font-bold gap-2 shadow-lg" onClick={handleGenerateReport}>
               <FileText className="w-4 h-4" />
               Generate Analysis
             </Button>
@@ -193,11 +156,7 @@ export default function BranchReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reportData.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-10 italic">No records found matching filters.</TableCell>
-                    </TableRow>
-                  ) : reportData.map((sub) => (
+                  {reportData.map((sub) => (
                     <TableRow key={sub.id}>
                       <TableCell className="font-bold text-primary">{sub.id}</TableCell>
                       <TableCell className="font-medium">{sub.customerName}</TableCell>
@@ -207,7 +166,7 @@ export default function BranchReportsPage() {
                           {sub.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{new Date(sub.submittedAt).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{sub.date}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
