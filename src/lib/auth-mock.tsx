@@ -26,6 +26,7 @@ export const MOCK_USERS: User[] = [
   { id: 'admin-1', name: 'System Admin', email: 'admin@bank.com', role: 'Admin', status: 'Active' },
   { id: 'branch-1', name: 'John Doe', email: 'john.branch@bank.com', role: 'Branch Officer', branch: 'Downtown', district: 'Central', status: 'Active' },
   { id: 'kyc-1', name: 'Jane Smith', email: 'jane.kyc@bank.com', role: 'KYC Officer', status: 'Active' },
+  { id: 'kyc-assigned', name: 'Local KYC Officer', email: 'local.kyc@bank.com', role: 'KYC Officer', branch: 'Downtown', district: 'Central', status: 'Active' },
   { id: 'super-1', name: 'Robert Brown', email: 'robert.super@bank.com', role: 'Supervisor', district: 'Central', status: 'Active' },
   { id: 'dir-1', name: 'Alice Wilson', email: 'alice.dir@bank.com', role: 'Director', status: 'Active' },
 ];
