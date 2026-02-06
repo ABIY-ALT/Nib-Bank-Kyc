@@ -137,6 +137,13 @@ export default function SubmissionsPage() {
     setTimeHorizon("all");
   };
 
+  const timeRangeLabel = {
+    all: "Full Archive",
+    "7d": "Last 7 Days",
+    "30d": "Last 30 Days",
+    "90d": "Last 90 Days"
+  }[timeHorizon];
+
   const getStatusBadge = (sub: KYCSubmission) => {
     const status = sub.status;
     switch (status) {
@@ -171,7 +178,23 @@ export default function SubmissionsPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <SelectTimeRange value={timeHorizon} onChange={setTimeHorizon} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-10 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50 gap-2 min-w-[140px] justify-between">
+                <span className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4 text-slate-400" />
+                  {timeRangeLabel}
+                </span>
+                <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem onClick={() => setTimeHorizon("all")} className="cursor-pointer">Full Archive</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTimeHorizon("7d")} className="cursor-pointer">Last 7 Days</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTimeHorizon("30d")} className="cursor-pointer">Last 30 Days</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTimeHorizon("90d")} className="cursor-pointer">Last 90 Days</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -185,20 +208,20 @@ export default function SubmissionsPage() {
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Institutional Filter</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer">
-                  <span>Case Status</span>
+                <DropdownMenuSubTrigger className="cursor-pointer py-3">
+                  <span>Workflow Status</span>
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
+                <DropdownMenuSubContent className="w-56">
                   {STATUS_OPTIONS.map((status) => (
                     <DropdownMenuCheckboxItem
                       key={status.id}
                       checked={selectedStatuses.includes(status.id)}
                       onCheckedChange={() => toggleStatus(status.id)}
-                      className="cursor-pointer"
+                      className="cursor-pointer py-2.5"
                     >
                       {status.label}
                     </DropdownMenuCheckboxItem>
@@ -207,16 +230,16 @@ export default function SubmissionsPage() {
               </DropdownMenuSub>
 
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer">
+                <DropdownMenuSubTrigger className="cursor-pointer py-3">
                   <span>Branch Location</span>
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                <DropdownMenuSubContent className="w-56 max-h-64 overflow-y-auto">
                   {branches.map((branch) => (
                     <DropdownMenuCheckboxItem
                       key={branch}
                       checked={selectedBranches.includes(branch)}
                       onCheckedChange={() => toggleBranch(branch)}
-                      className="cursor-pointer"
+                      className="cursor-pointer py-2.5"
                     >
                       {branch}
                     </DropdownMenuCheckboxItem>
@@ -225,14 +248,14 @@ export default function SubmissionsPage() {
               </DropdownMenuSub>
               
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={resetFilters} className="text-destructive font-bold cursor-pointer">
+              <DropdownMenuItem onClick={resetFilters} className="text-destructive font-bold cursor-pointer py-3">
                 Reset All Filters
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
           <Button 
-            className="gap-2 h-10 px-5 bg-[#B89334] hover:bg-[#A6822D] text-white font-bold shadow-sm rounded-md transition-all active:scale-95" 
+            className="gap-2 h-10 px-6 bg-[#B89334] hover:bg-[#A6822D] text-white font-bold shadow-sm rounded-md transition-all active:scale-95" 
             onClick={handleExportCSV}
           >
             <FileDown className="w-4 h-4" />
@@ -306,41 +329,5 @@ export default function SubmissionsPage() {
         </Table>
       </div>
     </div>
-  );
-}
-
-function SelectTimeRange({ value, onChange }: { value: string, onChange: (val: string) => void }) {
-  const options = [
-    { value: 'all', label: 'Full Archive' },
-    { value: '7d', label: 'Last 7 Days' },
-    { value: '30d', label: 'Last 30 Days' },
-    { value: '90d', label: 'Last 90 Days' },
-  ];
-  
-  const current = options.find(o => o.value === value);
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="h-10 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50 gap-2 min-w-[140px] justify-between">
-          <span className="flex items-center gap-2">
-            <CalendarIcon className="w-4 h-4 text-slate-400" />
-            {current?.label}
-          </span>
-          <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
-        {options.map(o => (
-          <DropdownMenuItem 
-            key={o.value} 
-            onClick={() => onChange(o.value)}
-            className="cursor-pointer font-medium"
-          >
-            {o.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

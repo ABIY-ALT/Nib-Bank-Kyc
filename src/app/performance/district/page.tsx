@@ -3,17 +3,23 @@
 
 import { useMemo, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Map, TrendingUp, Building2, AlertTriangle, BarChart3, Filter } from "lucide-react"
+import { Map, TrendingUp, Building2, AlertTriangle, BarChart3, Filter, FileDown } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
-} from "@/components/ui/popover"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuItem
+} from "@/components/ui/dropdown-menu"
+import { useToast } from "@/hooks/use-toast"
 
 const MOCK_DISTRICT_METRICS = [
   { name: "Central", branchCount: 12, volume: 450, complianceRate: 94, tier: "High" },
@@ -25,6 +31,7 @@ const MOCK_DISTRICT_METRICS = [
 const PERFORMANCE_TIERS = ["High", "Medium", "Low"];
 
 export default function DistrictPerformancePage() {
+  const { toast } = useToast();
   const [selectedTiers, setSelectedTiers] = useState<string[]>([]);
 
   const filteredDistricts = useMemo(() => {
@@ -40,6 +47,13 @@ export default function DistrictPerformancePage() {
     );
   };
 
+  const handleExportCSV = () => {
+    toast({
+      title: "District Report Exported",
+      description: "Regional performance analytics saved to CSV.",
+    });
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -48,54 +62,59 @@ export default function DistrictPerformancePage() {
           <p className="text-muted-foreground text-lg">Regional oversight of KYC efficiency and institutional compliance.</p>
         </div>
         <div className="flex gap-3 items-center">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2 h-11 px-6 font-bold text-slate-600 border-slate-200 relative shadow-sm">
-                <Filter className="w-4 h-4" />
-                Performance Tier
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
+                <Filter className="w-4 h-4 text-slate-400" />
+                Filter
                 {selectedTiers.length > 0 && (
-                  <Badge variant="default" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-primary text-[10px] font-bold">
+                  <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
                     {selectedTiers.length}
                   </Badge>
                 )}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-6 space-y-6 shadow-2xl border-slate-200" align="end">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-slate-900">Tier Filters</h3>
-                {selectedTiers.length > 0 && (
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedTiers([])} className="h-8 text-[11px] font-bold text-primary uppercase tracking-wider px-2 hover:bg-primary/5">
-                    Reset
-                  </Button>
-                )}
-              </div>
-              <div className="space-y-4">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Compliance Health</Label>
-                <div className="grid gap-3">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Compliance Health</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer py-3">
+                  <span>Performance Tier</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56">
                   {PERFORMANCE_TIERS.map((tier) => (
-                    <div key={tier} className="flex items-center space-x-2">
-                      <Checkbox 
-                        id={`tier-${tier}`} 
-                        checked={selectedTiers.includes(tier)}
-                        onCheckedChange={() => toggleTier(tier)}
-                      />
-                      <Label htmlFor={`tier-${tier}`} className="text-sm font-medium cursor-pointer">{tier} Performing</Label>
-                    </div>
+                    <DropdownMenuCheckboxItem
+                      key={tier}
+                      checked={selectedTiers.includes(tier)}
+                      onCheckedChange={() => toggleTier(tier)}
+                      className="cursor-pointer py-2.5"
+                    >
+                      {tier} Performing
+                    </DropdownMenuCheckboxItem>
                   ))}
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <Badge variant="outline" className="px-4 py-2.5 bg-white shadow-sm font-bold text-primary border-primary/20">
-            Total In View: {totalVolume}
-          </Badge>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSelectedTiers([])} className="text-destructive font-bold cursor-pointer py-3">
+                Clear Performance Filters
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button 
+            className="gap-2 h-10 px-6 bg-[#B89334] hover:bg-[#A6822D] text-white font-bold shadow-sm rounded-md transition-all active:scale-95" 
+            onClick={handleExportCSV}
+          >
+            <FileDown className="w-4 h-4" />
+            Export
+          </Button>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredDistricts.map((district) => (
           <Card key={district.name} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all duration-300">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 bg-slate-50/80 border-b pb-4 px-6">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 bg-slate-50/80 border-b pb-4 px-6 pt-6">
               <div>
                 <CardTitle className="text-xl font-bold text-slate-900">{district.name} District</CardTitle>
                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5 text-primary">Regional Operations</p>

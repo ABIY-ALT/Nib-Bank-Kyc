@@ -9,7 +9,6 @@ import {
   Clock, 
   ArrowUpRight, 
   Filter, 
-  X, 
   FileDown, 
   Calendar as CalendarIcon 
 } from "lucide-react"
@@ -17,20 +16,17 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
-} from "@/components/ui/popover"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuItem
+} from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 
 const MOCK_BRANCH_METRICS = [
@@ -81,6 +77,13 @@ export default function BranchPerformancePage() {
     });
   };
 
+  const timeRangeLabel = {
+    all: "Full Archive",
+    "7d": "Last 7 Days",
+    "30d": "Last 30 Days",
+    "90d": "Current Quarter"
+  }[timeRange];
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -89,76 +92,70 @@ export default function BranchPerformancePage() {
           <p className="text-muted-foreground text-lg">Cross-network efficiency and compliance audit trail.</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          <Button variant="outline" className="gap-2 h-11 px-6 font-bold shadow-sm border-slate-200" onClick={handleExportCSV}>
-            <FileDown className="w-4 h-4 text-primary" />
-            Export Report
-          </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2 h-11 px-6 font-bold text-slate-600 border-slate-200 relative shadow-sm">
-                <Filter className="w-4 h-4" />
-                Filter Network
-                {(selectedDistricts.length > 0 || timeRange !== 'all') && (
-                  <Badge variant="default" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-primary text-[10px] font-bold">
-                    {selectedDistricts.length + (timeRange !== 'all' ? 1 : 0)}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-10 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50 gap-2 min-w-[140px] justify-between">
+                <span className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4 text-slate-400" />
+                  {timeRangeLabel}
+                </span>
+                <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem onClick={() => setTimeRange("all")} className="cursor-pointer">Full Archive</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTimeRange("7d")} className="cursor-pointer">Last 7 Days</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTimeRange("30d")} className="cursor-pointer">Last 30 Days</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTimeRange("90d")} className="cursor-pointer">Current Quarter</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
+                <Filter className="w-4 h-4 text-slate-400" />
+                Filter
+                {selectedDistricts.length > 0 && (
+                  <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
+                    {selectedDistricts.length}
                   </Badge>
                 )}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-0 shadow-2xl border-slate-200 overflow-hidden bg-white" align="end">
-              <div className="p-6 pb-0 flex items-center justify-between">
-                <h3 className="font-bold text-[#101828] text-2xl tracking-tight">Network Filters</h3>
-                {(selectedDistricts.length > 0 || timeRange !== 'all') && (
-                  <Button variant="ghost" size="sm" onClick={() => { setSelectedDistricts([]); setTimeRange("all"); }} className="h-8 text-[11px] font-bold text-primary hover:bg-primary/5 uppercase tracking-widest px-2">
-                    Clear
-                  </Button>
-                )}
-              </div>
-              
-              <div className="p-6 space-y-8">
-                <div className="space-y-4">
-                  <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Audit Period</Label>
-                  <Select value={timeRange} onValueChange={setTimeRange}>
-                    <SelectTrigger className="w-full h-10 border-slate-200">
-                      <CalendarIcon className="w-4 h-4 mr-2 text-slate-400" />
-                      <SelectValue placeholder="Select Range" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Historical Data</SelectItem>
-                      <SelectItem value="7d">Last 7 Days</SelectItem>
-                      <SelectItem value="30d">Last 30 Days</SelectItem>
-                      <SelectItem value="90d">Current Quarter</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Regional Scope</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer py-3">
+                  <span>Regional District</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56">
+                  {DISTRICTS.map((dist) => (
+                    <DropdownMenuCheckboxItem
+                      key={dist}
+                      checked={selectedDistricts.includes(dist)}
+                      onCheckedChange={() => toggleDistrict(dist)}
+                      className="cursor-pointer py-2.5"
+                    >
+                      {dist}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSelectedDistricts([])} className="text-destructive font-bold cursor-pointer py-3">
+                Reset Geography Filters
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-                <Separator className="bg-slate-100/80" />
-
-                <div className="space-y-5">
-                  <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Regional Districts</Label>
-                  <div className="grid gap-4">
-                    {DISTRICTS.map((dist) => (
-                      <div key={dist} className="flex items-center space-x-4 group cursor-pointer" onClick={() => toggleDistrict(dist)}>
-                        <Checkbox 
-                          id={`dist-${dist}`} 
-                          checked={selectedDistricts.includes(dist)}
-                          onCheckedChange={() => toggleDistrict(dist)}
-                          className="rounded-full h-6 w-6 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground transition-all duration-200"
-                        />
-                        <Label htmlFor={`dist-${dist}`} className="text-[15px] font-bold text-slate-700 cursor-pointer group-hover:text-primary transition-colors">
-                          {dist}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <div className="px-6 py-3.5 bg-white border border-slate-100 rounded-full shadow-sm flex items-center gap-3">
-             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-             <span className="text-sm font-bold text-slate-900">Dataset Volume: {totalVolume}</span>
-          </div>
+          <Button 
+            className="gap-2 h-10 px-6 bg-[#B89334] hover:bg-[#A6822D] text-white font-bold shadow-sm rounded-md transition-all active:scale-95" 
+            onClick={handleExportCSV}
+          >
+            <FileDown className="w-4 h-4" />
+            Export
+          </Button>
         </div>
       </div>
 
