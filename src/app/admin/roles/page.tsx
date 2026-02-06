@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, updateDoc, collection, query, orderBy, setDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, query, orderBy, setDoc, deleteDoc } from "firebase/firestore";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +19,9 @@ import {
   Plus,
   Settings2,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Edit2,
+  Trash2
 } from "lucide-react";
 import { 
   Select, 
@@ -57,12 +59,20 @@ interface PermissionSet {
   canManageSystem: boolean;
 }
 
+interface DynamicRole {
+  id: string;
+  name: string;
+  permissions: PermissionSet;
+}
+
 export default function StaffRolesPage() {
   const db = useFirestore();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
+  const [isEditNameOpen, setIsEditNameOpen] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
+  const [editingRole, setEditingRole] = useState<DynamicRole | null>(null);
 
   const usersQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "users"), orderBy("name")) : null;
@@ -74,7 +84,7 @@ export default function StaffRolesPage() {
     return db ? query(collection(db, "roleDefinitions"), orderBy("name")) : null;
   }, [db]);
 
-  const { data: dynamicRoles } = useCollection<{id: string, name: string, permissions: PermissionSet}>(rolesQuery);
+  const { data: dynamicRoles } = useCollection<DynamicRole>(rolesQuery);
 
   const allRoleNames = Array.from(new Set([...DEFAULT_ROLES, ...(dynamicRoles?.map(r => r.name as UserRole) || [])]));
 
@@ -146,6 +156,44 @@ export default function StaffRolesPage() {
     toast({ title: "Role Created", description: `${newRoleName} added to registry.` });
     setIsAddRoleOpen(false);
     setNewRoleName("");
+  };
+
+  const handleUpdateRoleName = () => {
+    if (!db || !editingRole || !newRoleName.trim()) return;
+    
+    const roleRef = doc(db, "roleDefinitions", editingRole.id);
+    const updateData = { name: newRoleName };
+
+    updateDoc(roleRef, updateData)
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: roleRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      });
+
+    toast({ title: "Role Renamed", description: `Role is now called ${newRoleName}.` });
+    setIsEditNameOpen(false);
+    setEditingRole(null);
+    setNewRoleName("");
+  };
+
+  const handleDeleteRole = (role: DynamicRole) => {
+    if (!db || !confirm(`Are you sure you want to delete the "${role.name}" role? This action cannot be undone.`)) return;
+    
+    const roleRef = doc(db, "roleDefinitions", role.id);
+    deleteDoc(roleRef)
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: roleRef.path,
+          operation: 'delete',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      });
+
+    toast({ title: "Role Deleted", description: "Designation removed from registry." });
   };
 
   const filteredUsers = users?.filter(u => 
@@ -296,7 +344,7 @@ export default function StaffRolesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* Default Roles (Read Only logic for MVP, or allow overriding) */}
+                    {/* Default Roles */}
                     {DEFAULT_ROLES.map(role => (
                       <TableRow key={role} className="hover:bg-slate-50">
                         <TableCell className="font-bold text-slate-900 flex items-center gap-2">
@@ -324,10 +372,34 @@ export default function StaffRolesPage() {
 
                     {/* Dynamic Roles */}
                     {dynamicRoles?.map(role => (
-                      <TableRow key={role.id} className="bg-primary/5 hover:bg-primary/10 transition-colors">
-                        <TableCell className="font-bold text-slate-900 flex items-center gap-2">
-                          <Settings2 className="w-3.5 h-3.5 text-primary" />
-                          {role.name}
+                      <TableRow key={role.id} className="bg-primary/5 hover:bg-primary/10 transition-colors group">
+                        <TableCell className="font-bold text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <Settings2 className="w-3.5 h-3.5 text-primary" />
+                            <span>{role.name}</span>
+                            <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-primary hover:bg-primary/10"
+                                onClick={() => {
+                                  setEditingRole(role);
+                                  setNewRoleName(role.name);
+                                  setIsEditNameOpen(true);
+                                }}
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteRole(role)}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <Switch checked={role.permissions.canSubmit} onCheckedChange={() => handleTogglePermission(role.id, 'canSubmit', role.permissions.canSubmit)} />
@@ -357,6 +429,7 @@ export default function StaffRolesPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Add Role Dialog */}
       <Dialog open={isAddRoleOpen} onOpenChange={setIsAddRoleOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -377,6 +450,34 @@ export default function StaffRolesPage() {
           <DialogFooter className="pt-6">
             <Button variant="outline" onClick={() => setIsAddRoleOpen(false)}>Cancel</Button>
             <Button onClick={handleAddRole} className="font-bold px-8 shadow-lg">Initialize Role</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Role Name Dialog */}
+      <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Role Designation</DialogTitle>
+            <DialogDescription>Update the title of this institutional role.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">New Role Name</Label>
+              <Input 
+                value={newRoleName} 
+                onChange={(e) => setNewRoleName(e.target.value)}
+                className="h-11 border-primary/20 focus-visible:ring-primary"
+              />
+            </div>
+          </div>
+          <DialogFooter className="pt-6">
+            <Button variant="outline" onClick={() => {
+              setIsEditNameOpen(false);
+              setEditingRole(null);
+              setNewRoleName("");
+            }}>Cancel</Button>
+            <Button onClick={handleUpdateRoleName} className="font-bold px-8 shadow-lg">Update Designation</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
