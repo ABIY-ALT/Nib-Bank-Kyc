@@ -22,7 +22,8 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
+  Legend,
+  Tooltip
 } from "recharts";
 import { Download, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
