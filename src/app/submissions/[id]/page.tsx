@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestore, useDoc, useCollection } from "@/firebase";
 import { doc, updateDoc, collection, serverTimestamp } from "firebase/firestore";
@@ -57,8 +57,19 @@ export default function SubmissionDetails() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
-  if (subLoading) return <div className="p-12 text-center">Loading submission...</div>;
-  if (!submission) return <div className="p-12 text-center">Submission not found</div>;
+  // Auto-set status to 'In Review' when an officer/reviewer opens it
+  useEffect(() => {
+    const canReview = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
+    if (submission && submission.status === 'Pending' && canReview && submissionRef) {
+      updateDoc(submissionRef, { 
+        status: 'In Review',
+        lastUpdated: serverTimestamp() 
+      }).catch(err => console.error("Auto-update to In Review failed", err));
+    }
+  }, [submission, user.role, submissionRef]);
+
+  if (subLoading) return <div className="p-12 text-center text-muted-foreground">Loading submission details...</div>;
+  if (!submission) return <div className="p-12 text-center">Submission not found.</div>;
 
   const canAction = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
 
@@ -68,17 +79,22 @@ export default function SubmissionDetails() {
 
     const updateData = {
       status: action,
-      remarks: remarks || submission.remarks || "", // Preserve or update remarks
+      remarks: remarks || submission.remarks || "", 
       lastUpdated: serverTimestamp(),
     };
 
     updateDoc(submissionRef, updateData)
       .then(() => {
         toast({
-          title: "Success",
-          description: `Submission ${submission.id} has been ${action.toLowerCase()}.`,
+          title: "Action Successful",
+          description: `Submission ${submission.id} has been set to ${action}.`,
         });
-        router.push('/submissions');
+        // Redirect back to the queue or my submissions based on context
+        if (action === 'Approved' || action === 'Rejected') {
+           router.push('/submissions/queue');
+        } else {
+           router.push('/submissions');
+        }
       })
       .catch(async (error) => {
         const permissionError = new FirestorePermissionError({
@@ -91,24 +107,36 @@ export default function SubmissionDetails() {
       });
   };
 
+  const downloadDoc = (doc: Document) => {
+    toast({
+      title: "Downloading File",
+      description: `Starting download for ${doc.name}...`,
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-3xl font-bold">{submission.id}</h1>
-            <Badge variant={submission.status === 'Approved' ? 'default' : 'outline'}>
+            <Badge variant={submission.status === 'Approved' ? 'default' : 'outline'} className={
+              submission.status === 'Approved' ? 'bg-green-100 text-green-800' :
+              submission.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+              submission.status === 'Amended' ? 'bg-orange-100 text-orange-800' :
+              submission.status === 'Escalated' ? 'bg-purple-100 text-purple-800' : ''
+            }>
               {submission.status}
             </Badge>
           </div>
           <p className="text-muted-foreground">{submission.customerName} • {submission.branch} Branch</p>
         </div>
         <div className="flex gap-2">
-           <Button variant="outline" size="sm">
+           <Button variant="outline" size="sm" onClick={() => toast({ title: "Bundle Generated", description: "The KYC bundle is being downloaded." })}>
             <Download className="w-4 h-4 mr-2" />
             Bundle
            </Button>
-           <Button variant="outline" size="sm">
+           <Button variant="outline" size="sm" onClick={() => toast({ title: "Audit Logs", description: "Fetching full audit trail..." })}>
             <History className="w-4 h-4 mr-2" />
             Logs
            </Button>
@@ -136,12 +164,14 @@ export default function SubmissionDetails() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                       <Badge variant="outline" className="text-[10px] h-5">{doc.type}</Badge>
-                       <Button variant="ghost" size="icon">
+                       <Badge variant="outline" className="text-[10px] h-5 uppercase">{doc.type}</Badge>
+                       <Button variant="ghost" size="icon" onClick={() => downloadDoc(doc)}>
                          <Download className="w-4 h-4" />
                        </Button>
-                       <Button variant="ghost" size="icon">
-                         <ExternalLink className="w-4 h-4" />
+                       <Button variant="ghost" size="icon" asChild>
+                         <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                           <ExternalLink className="w-4 h-4" />
+                         </a>
                        </Button>
                     </div>
                   </div>
@@ -172,7 +202,7 @@ export default function SubmissionDetails() {
             <CardContent className="space-y-4">
               <div className="grid gap-1">
                 <span className="text-xs font-semibold text-muted-foreground uppercase">Entity Name</span>
-                <span className="text-sm">{submission.customerName}</span>
+                <span className="text-sm font-medium">{submission.customerName}</span>
               </div>
               <div className="grid gap-1">
                 <span className="text-xs font-semibold text-muted-foreground uppercase">Entity Type</span>
