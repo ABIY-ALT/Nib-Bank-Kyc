@@ -23,17 +23,42 @@ import {
   Download,
   ExternalLink,
   MessageSquare,
-  Upload
+  Upload,
+  FilePlus,
+  X
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestore, useDoc, useCollection } from "@/firebase";
-import { doc, updateDoc, collection, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, collection, serverTimestamp, setDoc } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 import { KYCSubmission, Document } from "@/lib/kyc-data";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+
+const DOCUMENT_TYPES = [
+  { id: "id_card", label: "ID Card / National ID" },
+  { id: "passport", label: "Passport" },
+  { id: "utility_bill", label: "Utility Bill" },
+  { id: "bank_statement", label: "Bank Statement" },
+  { id: "incorporation", label: "Certificate of Incorporation" },
+  { id: "tax_cert", label: "Tax Certificate" },
+  { id: "other", label: "Other Document" },
+];
+
+interface UploadedFile {
+  id: string;
+  file: File;
+  type: string;
+}
 
 export default function SubmissionDetails() {
   const params = useParams();
@@ -43,6 +68,8 @@ export default function SubmissionDetails() {
   const user = currentUser;
   const [remarks, setRemarks] = useState("");
   const [loading, setLoading] = useState(false);
+  const [newFiles, setNewFiles] = useState<UploadedFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const submissionRef = useMemo(() => {
     if (!db || !params.id) return null;
@@ -58,7 +85,6 @@ export default function SubmissionDetails() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
-  // Auto-set status to 'In Review' when an officer opens a 'Pending' case
   useEffect(() => {
     const canReview = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
     if (submission && submission.status === 'Pending' && canReview && submissionRef) {
@@ -76,20 +102,53 @@ export default function SubmissionDetails() {
   const canAction = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
   const isAmended = submission.status === 'Amended';
 
-  const handleAction = (action: string) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const added = Array.from(e.target.files).map(file => ({
+        id: Math.random().toString(36).substr(2, 9),
+        file: file,
+        type: "id_card"
+      }));
+      setNewFiles((prev) => [...prev, ...added]);
+    }
+  };
+
+  const removeNewFile = (id: string) => {
+    setNewFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const handleNewFileTypeChange = (id: string, newType: string) => {
+    setNewFiles((prev) => prev.map(f => f.id === id ? { ...f, type: newType } : f));
+  };
+
+  const handleAction = async (action: string) => {
     if (!submissionRef || !db) return;
 
-    // Requirement: Must provide remarks when requesting an amendment
     if (action === 'Amended' && !remarks.trim()) {
       toast({
         variant: "destructive",
         title: "Remarks Required",
-        description: "Please specify what needs to be amended so the Branch Officer can fix it.",
+        description: "Please specify what needs to be amended.",
       });
       return;
     }
 
     setLoading(true);
+
+    // If correction, upload the new files metadata first
+    if (action === 'Pending' && isAmended && isOwner) {
+       for (const file of newFiles) {
+         const docRef = doc(collection(submissionRef, "documents"));
+         await setDoc(docRef, {
+           id: docRef.id,
+           name: file.file.name,
+           type: file.type,
+           uploadedAt: new Date().toISOString(),
+           url: "#",
+           status: 'Current'
+         });
+       }
+    }
 
     const updateData: any = {
       status: action,
@@ -97,7 +156,6 @@ export default function SubmissionDetails() {
       lastUpdated: serverTimestamp(),
     };
 
-    // If a branch officer is responding to an amendment
     if (action === 'Pending' && isAmended && isOwner) {
        updateData.isResubmitted = true;
        updateData.resubmittedAt = serverTimestamp();
@@ -107,7 +165,7 @@ export default function SubmissionDetails() {
       .then(() => {
         toast({
           title: "Status Updated",
-          description: `Submission ${submission.id} is now ${action}.`,
+          description: action === 'Pending' ? "Correction submitted successfully." : `Submission marked as ${action}.`,
         });
         router.push(canAction ? '/submissions/queue' : '/submissions/my');
       })
@@ -140,13 +198,11 @@ export default function SubmissionDetails() {
           <p className="text-muted-foreground">{submission.customerName} • {submission.branch} Branch</p>
         </div>
         <div className="flex gap-2">
-           <Button variant="outline" size="sm" onClick={() => toast({ title: "Bundle Generated", description: "The KYC bundle is being downloaded." })}>
-            <Download className="w-4 h-4 mr-2" />
-            Bundle
+           <Button variant="outline" size="sm" onClick={() => toast({ title: "Bundle Generated", description: "Downloading full KYC pack..." })}>
+            <Download className="w-4 h-4 mr-2" /> Bundle
            </Button>
-           <Button variant="outline" size="sm" onClick={() => toast({ title: "Audit Logs", description: "Fetching full audit trail..." })}>
-            <History className="w-4 h-4 mr-2" />
-            Logs
+           <Button variant="outline" size="sm">
+            <History className="w-4 h-4 mr-2" /> Audit Trail
            </Button>
         </div>
       </div>
@@ -154,49 +210,84 @@ export default function SubmissionDetails() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Documents</CardTitle>
-              <CardDescription>Identity and verification documents for this submission.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Documents</CardTitle>
+                <CardDescription>Verified identity and supporting files.</CardDescription>
+              </div>
+              {isOwner && isAmended && (
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                  <FilePlus className="w-4 h-4 mr-2" /> Add File
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
+              <input 
+                type="file" 
+                className="hidden" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                multiple 
+              />
               <div className="space-y-4">
-                {documents && documents.length > 0 ? documents.map((doc) => (
+                {documents?.map((doc) => (
                   <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/5 transition-colors">
                     <div className="flex items-center gap-4">
-                      <div className="bg-primary/10 p-2 rounded">
-                        <FileText className="w-6 h-6 text-primary" />
+                      <div className="bg-primary/10 p-2 rounded text-primary">
+                        <FileText className="w-6 h-6" />
                       </div>
                       <div>
                         <p className="font-medium text-sm">{doc.name}</p>
-                        <p className="text-xs text-muted-foreground">Uploaded {new Date(doc.uploadedAt).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">{doc.type.toUpperCase()} • {new Date(doc.uploadedAt).toLocaleDateString()}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                       <Badge variant="outline" className="text-[10px] h-5 uppercase">{doc.type}</Badge>
-                       <Button variant="ghost" size="icon" onClick={() => toast({ title: "Download", description: `Downloading ${doc.name}...` })}>
-                         <Download className="w-4 h-4" />
-                       </Button>
+                    <div className="flex gap-2">
+                       <Button variant="ghost" size="icon"><Download className="w-4 h-4" /></Button>
                        <Button variant="ghost" size="icon" asChild>
-                         <a href={doc.url} target="_blank" rel="noopener noreferrer">
-                           <ExternalLink className="w-4 h-4" />
-                         </a>
+                         <a href={doc.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
                        </Button>
                     </div>
                   </div>
-                )) : (
-                  <div className="text-center py-8 text-muted-foreground">No documents found.</div>
-                )}
+                ))}
+                
+                {/* Pending New Files in Amendment Mode */}
+                {newFiles.map((item) => (
+                  <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border border-blue-200 bg-blue-50/30 rounded-lg">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="p-2 bg-blue-100 rounded text-blue-600">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{item.file.name}</span>
+                        <span className="text-xs text-blue-600 font-semibold">Ready to upload</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                      <Select value={item.type} onValueChange={(val) => handleNewFileTypeChange(item.id, val)}>
+                        <SelectTrigger className="h-9 w-40 bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DOCUMENT_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Button variant="ghost" size="icon" onClick={() => removeNewFile(item.id)} className="text-destructive">
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Submission Remarks / History</CardTitle>
+              <CardTitle>Case Remarks & History</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-accent/5 p-4 rounded-lg border italic text-sm">
-                {submission.remarks || "No current remarks."}
+              <div className="rounded-lg border p-4 bg-muted/30 text-sm whitespace-pre-wrap">
+                {submission.remarks || "No historical remarks provided."}
               </div>
             </CardContent>
           </Card>
@@ -204,92 +295,45 @@ export default function SubmissionDetails() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Customer Details</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Customer Profile</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-1">
-                <span className="text-xs font-semibold text-muted-foreground uppercase">Entity Name</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Legal Name</span>
                 <span className="text-sm font-medium">{submission.customerName}</span>
               </div>
               <div className="grid gap-1">
-                <span className="text-xs font-semibold text-muted-foreground uppercase">Entity Type</span>
-                <span className="text-sm capitalize">{submission.entityType || "N/A"}</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Originating Branch</span>
+                <span className="text-sm">{submission.branch}</span>
               </div>
               <Separator />
-              <div className="grid gap-1">
-                <span className="text-xs font-semibold text-muted-foreground uppercase">Submitted By</span>
-                <span className="text-sm flex items-center gap-2">
-                  <User className="w-3 h-3" />
-                  {submission.submittedBy}
-                </span>
-              </div>
-              <div className="grid gap-1">
-                <span className="text-xs font-semibold text-muted-foreground uppercase">Timeline</span>
-                <span className="text-sm flex items-center gap-2">
-                  <Clock className="w-3 h-3" />
-                  {new Date(submission.submittedAt).toLocaleDateString()}
-                </span>
+              <div className="grid gap-1 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2"><User className="w-3 h-3" /> Submitted by {submission.submittedBy}</div>
+                <div className="flex items-center gap-2"><Clock className="w-3 h-3" /> Received {new Date(submission.submittedAt).toLocaleString()}</div>
               </div>
             </CardContent>
           </Card>
 
           {canAction && submission.status !== 'Approved' && submission.status !== 'Rejected' && (
-            <Card className="border-primary/20 bg-slate-50/50 shadow-sm">
+            <Card className="border-primary/20 bg-slate-50/50">
               <CardHeader>
                 <CardTitle className="text-lg">Workflow Action</CardTitle>
-                <CardDescription>Review and resolve this submission.</CardDescription>
+                <CardDescription>Decide the outcome for this case.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold flex items-center gap-1 text-slate-700">
-                    <MessageSquare className="w-3 h-3" />
-                    Review Remarks
-                  </label>
+                  <label className="text-xs font-bold flex items-center gap-1"><MessageSquare className="w-3 h-3" /> Reviewer Remarks</label>
                   <Textarea 
-                    placeholder="Enter justification, amendment details, or internal notes..." 
+                    placeholder="Provide details for your decision..." 
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
-                    className="bg-background min-h-[100px] text-sm"
+                    className="min-h-[100px] bg-white"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button 
-                    variant="default" 
-                    className="bg-[#78C49D] hover:bg-[#66B38C] text-white w-full border-none shadow-sm h-11"
-                    onClick={() => handleAction('Approved')}
-                    disabled={loading}
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Approve
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="bg-[#FFF5ED] text-[#E67E22] border-[#FDE3CF] hover:bg-[#FDE3CF] w-full h-11"
-                    onClick={() => handleAction('Amended')}
-                    disabled={loading}
-                  >
-                    <AlertTriangle className="w-4 h-4 mr-2" />
-                    Amend
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="bg-[#F5F3FF] text-[#8B5CF6] border-[#EDE9FE] hover:bg-[#EDE9FE] w-full h-11"
-                    onClick={() => handleAction('Escalated')}
-                    disabled={loading}
-                  >
-                    <Clock className="w-4 h-4 mr-2" />
-                    Escalate
-                  </Button>
-                  <Button 
-                    variant="destructive" 
-                    className="bg-[#F28B82] hover:bg-[#EE675C] text-white w-full border-none shadow-sm h-11"
-                    onClick={() => handleAction('Rejected')}
-                    disabled={loading}
-                  >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Reject
-                  </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button onClick={() => handleAction('Approved')} className="bg-[#78C49D] hover:bg-[#66B38C] text-white">Approve</Button>
+                  <Button onClick={() => handleAction('Amended')} variant="outline" className="bg-[#FFF5ED] text-[#E67E22] border-[#FDE3CF]">Amend</Button>
+                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="bg-[#F5F3FF] text-[#8B5CF6] border-[#EDE9FE]">Escalate</Button>
+                  <Button onClick={() => handleAction('Rejected')} variant="destructive" className="bg-[#F28B82] hover:bg-[#EE675C]">Reject</Button>
                 </div>
               </CardContent>
             </Card>
@@ -298,18 +342,26 @@ export default function SubmissionDetails() {
           {isOwner && isAmended && (
              <Card className="border-orange-200 bg-orange-50/30">
                <CardHeader>
-                 <CardTitle className="text-lg text-orange-800">Action Required</CardTitle>
-                 <CardDescription>This submission requires your correction.</CardDescription>
+                 <CardTitle className="text-lg text-orange-800">Correction Required</CardTitle>
+                 <CardDescription>Please provide the requested documents or information.</CardDescription>
                </CardHeader>
                <CardContent className="space-y-4">
-                 <p className="text-sm text-orange-900 font-medium">Please review the remarks and upload the missing documents.</p>
+                 <div className="space-y-2">
+                   <label className="text-xs font-bold text-orange-900">Branch Officer Response</label>
+                   <Textarea 
+                     placeholder="Explain the corrections made..." 
+                     value={remarks}
+                     onChange={(e) => setRemarks(e.target.value)}
+                     className="bg-white"
+                   />
+                 </div>
                  <Button 
                    className="w-full bg-orange-600 hover:bg-orange-700"
                    onClick={() => handleAction('Pending')}
-                   disabled={loading}
+                   disabled={loading || (newFiles.length === 0 && !remarks.trim())}
                  >
                    <Upload className="w-4 h-4 mr-2" />
-                   Mark as Corrected
+                   {loading ? "Submitting..." : "Submit Correction"}
                  </Button>
                </CardContent>
              </Card>
