@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -34,11 +34,11 @@ import {
   CheckCircle2,
   AlertCircle
 } from "lucide-react";
-import { useFirestore } from "@/firebase";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { useFirestore, useCollection } from "@/firebase";
+import { collection, doc, setDoc, query, orderBy } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { currentUser } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth-mock";
 import { 
   Dialog, 
   DialogContent, 
@@ -67,6 +67,7 @@ const DOCUMENT_TYPES = [
 export default function NewSubmission() {
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useAuth();
   const db = useFirestore();
   const [loading, setLoading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -75,6 +76,10 @@ export default function NewSubmission() {
   const [remarks, setRemarks] = useState("");
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: branches } = useCollection<{id: string, name: string}>(
+    db ? query(collection(db, "branches"), orderBy("name")) : null
+  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -127,8 +132,9 @@ export default function NewSubmission() {
       id: submissionId,
       customerName,
       entityType,
-      branch: currentUser.branch || "Headquarters",
-      submittedBy: currentUser.name,
+      branch: user.branch || "Headquarters",
+      district: user.district || "Central",
+      submittedBy: user.name,
       submittedAt: new Date().toISOString(),
       status: "Pending",
       remarks,
@@ -136,7 +142,6 @@ export default function NewSubmission() {
 
     setDoc(submissionRef, submissionData)
       .then(async () => {
-        // Parallel document creation
         const docPromises = uploadedFiles.map(file => {
           const docRef = doc(collection(submissionRef, "documents"));
           return setDoc(docRef, {
@@ -144,7 +149,7 @@ export default function NewSubmission() {
             name: file.file.name,
             type: file.type,
             uploadedAt: new Date().toISOString(),
-            url: "#", // Mock URL for prototype
+            url: "#",
             status: 'Current'
           });
         });
@@ -216,11 +221,11 @@ export default function NewSubmission() {
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Originating Branch</Label>
-              <Input value={currentUser.branch || "Headquarters"} disabled className="bg-slate-50 h-11" />
+              <Input value={user.branch || "Headquarters"} disabled className="bg-slate-50 h-11" />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Officer in Charge</Label>
-              <Input value={currentUser.name} disabled className="bg-slate-50 h-11" />
+              <Input value={user.name} disabled className="bg-slate-50 h-11" />
             </div>
           </CardContent>
         </Card>
@@ -318,14 +323,6 @@ export default function NewSubmission() {
                  </div>
                </div>
              )}
-
-             <div className="flex gap-4 p-5 rounded-xl bg-blue-50 border border-blue-100 text-blue-800 text-sm shadow-sm ring-1 ring-blue-200/50">
-                <Info className="w-6 h-6 shrink-0 text-blue-600" />
-                <div className="space-y-1">
-                  <p className="font-bold">Compliance Reminder</p>
-                  <p className="opacity-90">Please ensure all documents are valid, signed where required, and that any photo ID clearly shows the customer's face.</p>
-                </div>
-             </div>
           </CardContent>
         </Card>
 
@@ -335,17 +332,13 @@ export default function NewSubmission() {
           </CardHeader>
           <CardContent className="pt-6">
              <Textarea 
-               placeholder="Provide any additional context for the KYC Officer (e.g., 'Customer is a PEP' or 'Urgent for mortgage closing')..." 
+               placeholder="Provide any additional context for the KYC Officer..." 
                className="min-h-[140px] focus-visible:ring-primary border-slate-200 rounded-xl" 
                value={remarks}
                onChange={(e) => setRemarks(e.target.value)}
              />
           </CardContent>
           <CardFooter className="flex flex-col md:flex-row justify-between gap-4 border-t pt-8">
-            <div className="flex items-center gap-2 text-slate-400 text-xs">
-              <AlertCircle className="w-4 h-4" />
-              This submission will be audited for compliance standards.
-            </div>
             <div className="flex gap-3 w-full md:w-auto">
               <Button variant="outline" type="button" className="flex-1 md:flex-none px-8" onClick={() => router.back()}>Cancel</Button>
               <Button type="submit" disabled={loading} className="flex-1 md:flex-none px-12 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">

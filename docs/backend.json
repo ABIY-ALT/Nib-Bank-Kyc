@@ -10,6 +10,7 @@
         "customerId": { "type": "string" },
         "customerName": { "type": "string" },
         "branch": { "type": "string" },
+        "district": { "type": "string" },
         "submittedBy": { "type": "string" },
         "submittedAt": { "type": "string", "format": "date-time" },
         "status": { 
@@ -49,6 +50,28 @@
         "district": { "type": "string" },
         "status": { "type": "string", "enum": ["Active", "Inactive"] }
       }
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "A physical bank branch location.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "district": { "type": "string" },
+        "code": { "type": "string" }
+      },
+      "required": ["name", "district"]
+    },
+    "District": {
+      "title": "District",
+      "description": "A regional banking district.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["name"]
     }
   },
   "auth": {
@@ -66,6 +89,14 @@
     "/users/{userId}": {
       "schema": "#/entities/UserProfile",
       "description": "System user profiles and permissions."
+    },
+    "/branches/{branchId}": {
+      "schema": "#/entities/Branch",
+      "description": "Institutional branch directory."
+    },
+    "/districts/{districtId}": {
+      "schema": "#/entities/District",
+      "description": "Regional district directory."
     }
   }
 }

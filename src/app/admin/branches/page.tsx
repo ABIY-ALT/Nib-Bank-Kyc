@@ -1,44 +1,243 @@
-import { Button } from "@/components/ui/button"
-import { Building2, Plus, MapPin } from "lucide-react"
+
+'use client';
+
+import { useState } from 'react';
+import { useFirestore, useCollection } from "@/firebase";
+import { collection, doc, setDoc, deleteDoc, query, orderBy } from "firebase/firestore";
+import { Button } from "@/components/ui/button";
+import { Building2, Plus, MapPin, Trash2, Edit2, Loader2, Globe } from "lucide-react";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+
+interface Branch {
+  id: string;
+  name: string;
+  district: string;
+  code: string;
+}
+
+interface District {
+  id: string;
+  name: string;
+}
 
 export default function BranchesDistrictsPage() {
+  const db = useFirestore();
+  const { toast } = useToast();
+  
+  const [isBranchDialogOpen, setIsBranchDialogOpen] = useState(false);
+  const [isDistrictDialogOpen, setIsDistrictDialogOpen] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const [editingDistrict, setEditingDistrict] = useState<District | null>(null);
+  
+  const [branchForm, setBranchForm] = useState<Partial<Branch>>({ name: '', district: '', code: '' });
+  const [districtForm, setDistrictForm] = useState<Partial<District>>({ name: '' });
+
+  const { data: branches, loading: branchesLoading } = useCollection<Branch>(
+    db ? query(collection(db, "branches"), orderBy("name")) : null
+  );
+
+  const { data: districts, loading: districtsLoading } = useCollection<District>(
+    db ? query(collection(db, "districts"), orderBy("name")) : null
+  );
+
+  const handleSaveBranch = async () => {
+    if (!db) return;
+    if (!branchForm.name || !branchForm.district) {
+      toast({ variant: "destructive", title: "Missing Fields", description: "Name and District are required." });
+      return;
+    }
+
+    const id = editingBranch?.id || `branch-${Date.now()}`;
+    try {
+      await setDoc(doc(db, "branches", id), { ...branchForm, id });
+      toast({ title: "Branch Saved", description: `${branchForm.name} has been updated.` });
+      setIsBranchDialogOpen(false);
+      setBranchForm({ name: '', district: '', code: '' });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to save branch." });
+    }
+  };
+
+  const handleSaveDistrict = async () => {
+    if (!db) return;
+    if (!districtForm.name) return;
+
+    const id = editingDistrict?.id || `dist-${Date.now()}`;
+    try {
+      await setDoc(doc(db, "districts", id), { ...districtForm, id });
+      toast({ title: "District Saved", description: `${districtForm.name} district added.` });
+      setIsDistrictDialogOpen(false);
+      setDistrictForm({ name: '' });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to save district." });
+    }
+  };
+
+  const handleDelete = async (coll: string, id: string) => {
+    if (!db || !confirm("Are you sure?")) return;
+    try {
+      await deleteDoc(doc(db, coll, id));
+      toast({ title: "Deleted", description: "Record removed successfully." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete." });
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Branches & Districts</h1>
-          <p className="text-muted-foreground">Configure the bank's organizational hierarchy.</p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Hierarchy</h1>
+          <p className="text-muted-foreground text-lg font-medium">Configure regions and branch network nodes.</p>
         </div>
-        <Button className="gap-2">
-          <Plus className="w-4 h-4" /> Add Branch
-        </Button>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="p-6 border rounded-lg bg-card space-y-4">
-          <div className="flex items-center gap-2 font-bold">
-            <MapPin className="w-5 h-5 text-primary" />
-            Districts
-          </div>
-          <div className="space-y-2 text-sm">
-            <div className="p-2 border rounded">Central District (Headquarters)</div>
-            <div className="p-2 border rounded">Northern District</div>
-            <div className="p-2 border rounded">Southern District</div>
-          </div>
-        </div>
-
-        <div className="p-6 border rounded-lg bg-card space-y-4">
-          <div className="flex items-center gap-2 font-bold">
-            <Building2 className="w-5 h-5 text-primary" />
-            Branches
-          </div>
-          <div className="space-y-2 text-sm">
-            <div className="p-2 border rounded">Downtown Branch (Central)</div>
-            <div className="p-2 border rounded">Uptown Branch (Central)</div>
-            <div className="p-2 border rounded">East Side Branch (Central)</div>
-          </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setEditingDistrict(null); setDistrictForm({ name: '' }); setIsDistrictDialogOpen(true); }} className="gap-2">
+            <Globe className="w-4 h-4" /> Add District
+          </Button>
+          <Button onClick={() => { setEditingBranch(null); setBranchForm({ name: '', district: '', code: '' }); setIsBranchDialogOpen(true); }} className="gap-2 shadow-lg">
+            <Plus className="w-4 h-4" /> Add Branch
+          </Button>
         </div>
       </div>
+
+      <div className="grid gap-8 md:grid-cols-3">
+        {/* DISTRICTS PANEL */}
+        <Card className="md:col-span-1 shadow-md border-slate-200">
+          <CardHeader className="bg-slate-50/50 border-b">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-primary" /> Districts
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              {districtsLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 
+               districts?.length === 0 ? <p className="text-sm text-muted-foreground italic">No districts defined.</p> :
+               districts?.map(dist => (
+                <div key={dist.id} className="flex items-center justify-between p-3 border rounded-xl hover:bg-slate-50 transition-colors group">
+                  <span className="font-bold text-slate-700">{dist.name}</span>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" onClick={() => { setEditingDistrict(dist); setDistrictForm(dist); setIsDistrictDialogOpen(true); }} className="h-8 w-8 text-primary">
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete('districts', dist.id)} className="h-8 w-8 text-destructive">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* BRANCHES PANEL */}
+        <Card className="md:col-span-2 shadow-xl border-slate-200">
+          <CardHeader className="bg-slate-50/50 border-b">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-primary" /> Branch Network
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {branchesLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto col-span-2" /> :
+               branches?.length === 0 ? <p className="text-sm text-muted-foreground italic col-span-2">No branches defined.</p> :
+               branches?.map(branch => (
+                <div key={branch.id} className="flex flex-col p-4 border rounded-2xl bg-white shadow-sm hover:border-primary/30 transition-all group relative">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h3 className="font-bold text-slate-900">{branch.name}</h3>
+                      <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{branch.district} District</p>
+                    </div>
+                    <span className="text-[10px] font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-500">{branch.code || 'NO-CODE'}</span>
+                  </div>
+                  <div className="absolute bottom-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" onClick={() => { setEditingBranch(branch); setBranchForm(branch); setIsBranchDialogOpen(true); }} className="h-8 w-8 text-primary bg-white shadow-sm border">
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete('branches', branch.id)} className="h-8 w-8 text-destructive bg-white shadow-sm border">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* BRANCH DIALOG */}
+      <Dialog open={isBranchDialogOpen} onOpenChange={setIsBranchDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingBranch ? 'Edit Branch' : 'Register New Branch'}</DialogTitle>
+            <DialogDescription>Add a physical location to the bank's organizational network.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Branch Legal Name</Label>
+              <Input value={branchForm.name} onChange={e => setBranchForm({...branchForm, name: e.target.value})} placeholder="Main Street Branch" className="h-11" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Internal Code</Label>
+                <Input value={branchForm.code} onChange={e => setBranchForm({...branchForm, code: e.target.value})} placeholder="BR-001" className="h-11" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Regional District</Label>
+                <Select value={branchForm.district} onValueChange={val => setBranchForm({...branchForm, district: val})}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Select District" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="pt-6">
+            <Button variant="outline" onClick={() => setIsBranchDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveBranch} className="shadow-lg">Save Branch Profile</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DISTRICT DIALOG */}
+      <Dialog open={isDistrictDialogOpen} onOpenChange={setIsDistrictDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Regional District</DialogTitle>
+            <DialogDescription>Define a geographical region for reporting.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">District Name</Label>
+              <Input value={districtForm.name} onChange={e => setDistrictForm({...districtForm, name: e.target.value})} placeholder="Northern Region" className="h-11" />
+            </div>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button variant="outline" onClick={() => setIsDistrictDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveDistrict}>Save Region</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
