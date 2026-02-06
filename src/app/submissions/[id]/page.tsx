@@ -142,6 +142,12 @@ export default function SubmissionDetails() {
       remarks: remarks || submission.remarks || "", 
     };
 
+    // Track who performed the action and when (for performance metrics)
+    if (['Approved', 'Amended', 'Rejected', 'Escalated'].includes(action)) {
+      updateData.reviewedBy = user.name;
+      updateData.reviewedAt = new Date().toISOString();
+    }
+
     // If correction being submitted by owner
     if (action === 'Pending' && isAmended && isOwner) {
        updateData.isResubmitted = true;

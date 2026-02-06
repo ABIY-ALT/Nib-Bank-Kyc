@@ -26,8 +26,8 @@ export const MOCK_USERS: User[] = [
   { id: '7', name: 'Diana District', email: 'diana.dist@bank.com', role: 'District Director', district: 'Central' },
 ];
 
-// Defaulting to Mike Manager (Branch Manager) for testing Performance metrics
-export const currentUser: User = MOCK_USERS[5];
+// Defaulting to Robert Brown (Supervisor) for testing Officer Performance metrics
+export const currentUser: User = MOCK_USERS[2];
 
 export const hasPermission = (user: User, requiredRoles: UserRole[]) => {
   return requiredRoles.includes(user.role);
