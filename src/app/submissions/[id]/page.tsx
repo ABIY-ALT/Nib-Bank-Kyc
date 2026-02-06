@@ -1,7 +1,7 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
-import { MOCK_SUBMISSIONS } from "@/lib/kyc-data";
 import { currentUser } from "@/lib/auth-mock";
 import { 
   Card, 
@@ -27,27 +27,68 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useFirestore, useDoc, useCollection } from "@/firebase";
+import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { errorEmitter } from "@/firebase/error-emitter";
+import { FirestorePermissionError } from "@/firebase/errors";
+import { KYCSubmission, Document, AuditLog } from "@/lib/kyc-data";
 
 export default function SubmissionDetails() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const submission = MOCK_SUBMISSIONS.find(s => s.id === params.id);
+  const db = useFirestore();
   const user = currentUser;
   const [remarks, setRemarks] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  if (!submission) return <div>Submission not found</div>;
+  const submissionRef = useMemo(() => {
+    if (!db || !params.id) return null;
+    return doc(db, "submissions", params.id as string);
+  }, [db, params.id]);
+
+  const { data: submission, loading: subLoading } = useDoc<KYCSubmission>(submissionRef);
+
+  const docsQuery = useMemo(() => {
+    if (!submissionRef) return null;
+    return collection(submissionRef, "documents");
+  }, [submissionRef]);
+
+  const { data: documents } = useCollection<Document>(docsQuery);
+
+  if (subLoading) return <div className="p-12 text-center">Loading submission...</div>;
+  if (!submission) return <div className="p-12 text-center">Submission not found</div>;
 
   const canAction = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
 
   const handleAction = (action: string) => {
-    toast({
-      title: "Success",
-      description: `Submission ${submission.id} has been ${action.toLowerCase()}.`,
-    });
-    router.push('/submissions');
+    if (!submissionRef || !db) return;
+    setLoading(true);
+
+    const updateData = {
+      status: action,
+      lastUpdated: serverTimestamp(),
+    };
+
+    updateDoc(submissionRef, updateData)
+      .then(() => {
+        toast({
+          title: "Success",
+          description: `Submission ${submission.id} has been ${action.toLowerCase()}.`,
+        });
+        router.push('/submissions');
+      })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: submissionRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        setLoading(false);
+      });
   };
 
   return (
@@ -83,7 +124,7 @@ export default function SubmissionDetails() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {submission.documents.map((doc) => (
+                {documents && documents.length > 0 ? documents.map((doc) => (
                   <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/5 transition-colors">
                     <div className="flex items-center gap-4">
                       <div className="bg-primary/10 p-2 rounded">
@@ -104,31 +145,20 @@ export default function SubmissionDetails() {
                        </Button>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-center py-8 text-muted-foreground">No documents found.</div>
+                )}
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Workflow Audit Trail</CardTitle>
+              <CardTitle>Initial Remarks</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="relative space-y-6 before:absolute before:inset-0 before:ml-5 before:h-full before:w-0.5 before:bg-muted">
-                {submission.auditLogs.map((log) => (
-                  <div key={log.id} className="relative flex gap-6">
-                    <div className="z-10 flex h-10 w-10 items-center justify-center rounded-full bg-background border ring-8 ring-background">
-                      <History className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">{log.action}</p>
-                      <p className="text-xs text-muted-foreground">by {log.performedBy} on {new Date(log.performedAt).toLocaleString()}</p>
-                      <div className="mt-2 text-sm bg-accent/5 p-3 rounded border italic">
-                        "{log.details}"
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="bg-accent/5 p-4 rounded-lg border italic">
+                {submission.remarks || "No remarks provided."}
               </div>
             </CardContent>
           </Card>
@@ -145,8 +175,8 @@ export default function SubmissionDetails() {
                 <span className="text-sm">{submission.customerName}</span>
               </div>
               <div className="grid gap-1">
-                <span className="text-xs font-semibold text-muted-foreground uppercase">Registration ID</span>
-                <span className="text-sm">{submission.customerId}</span>
+                <span className="text-xs font-semibold text-muted-foreground uppercase">Entity Type</span>
+                <span className="text-sm capitalize">{submission.entityType || "N/A"}</span>
               </div>
               <Separator />
               <div className="grid gap-1">
@@ -190,6 +220,7 @@ export default function SubmissionDetails() {
                     variant="default" 
                     className="bg-green-600 hover:bg-green-700 w-full"
                     onClick={() => handleAction('Approved')}
+                    disabled={loading}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
                     Approve
@@ -198,6 +229,7 @@ export default function SubmissionDetails() {
                     variant="outline" 
                     className="text-orange-600 border-orange-200 hover:bg-orange-50 w-full"
                     onClick={() => handleAction('Amended')}
+                    disabled={loading}
                   >
                     <AlertTriangle className="w-4 h-4 mr-2" />
                     Amend
@@ -206,6 +238,7 @@ export default function SubmissionDetails() {
                     variant="outline" 
                     className="text-purple-600 border-purple-200 hover:bg-purple-50 w-full"
                     onClick={() => handleAction('Escalated')}
+                    disabled={loading}
                   >
                     <Clock className="w-4 h-4 mr-2" />
                     Escalate
@@ -214,6 +247,7 @@ export default function SubmissionDetails() {
                     variant="destructive" 
                     className="w-full"
                     onClick={() => handleAction('Rejected')}
+                    disabled={loading}
                   >
                     <XCircle className="w-4 h-4 mr-2" />
                     Reject

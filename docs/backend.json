@@ -1,0 +1,50 @@
+
+{
+  "entities": {
+    "KYCSubmission": {
+      "title": "KYC Submission",
+      "description": "A customer identity verification request.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "branch": { "type": "string" },
+        "submittedBy": { "type": "string" },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "status": { 
+          "type": "string", 
+          "enum": ["Pending", "In Review", "Amended", "Approved", "Escalated", "Rejected"] 
+        },
+        "remarks": { "type": "string" },
+        "entityType": { "type": "string" }
+      },
+      "required": ["customerName", "branch", "status", "submittedBy"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "A document associated with a KYC submission.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "url": { "type": "string" },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["google.com"]
+  },
+  "firestore": {
+    "/submissions/{submissionId}": {
+      "schema": "#/entities/KYCSubmission",
+      "description": "Top-level collection of all KYC submissions."
+    },
+    "/submissions/{submissionId}/documents/{documentId}": {
+      "schema": "#/entities/Document",
+      "description": "Documents uploaded for a specific submission."
+    }
+  }
+}

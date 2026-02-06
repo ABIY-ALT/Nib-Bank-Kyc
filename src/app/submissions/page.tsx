@@ -1,4 +1,8 @@
-import { MOCK_SUBMISSIONS } from "@/lib/kyc-data";
+
+"use client"
+
+import { useFirestore, useCollection } from "@/firebase";
+import { collection, query, orderBy } from "firebase/firestore";
 import { 
   Table, 
   TableBody, 
@@ -26,9 +30,28 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
+import { useMemo, useState } from "react";
+import { KYCSubmission } from "@/lib/kyc-data";
 
 export default function SubmissionsPage() {
-  const submissions = MOCK_SUBMISSIONS;
+  const db = useFirestore();
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const allSubmissionsQuery = useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, "submissions"), orderBy("submittedAt", "desc"));
+  }, [db]);
+
+  const { data: submissions, loading } = useCollection<KYCSubmission>(allSubmissionsQuery);
+
+  const filteredSubmissions = useMemo(() => {
+    if (!submissions) return [];
+    return submissions.filter(s => 
+      s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.branch.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [submissions, searchTerm]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -57,7 +80,12 @@ export default function SubmissionsPage() {
       <div className="flex gap-4 items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search customers, IDs, or branches..." className="pl-10" />
+          <Input 
+            placeholder="Search customers, IDs, or branches..." 
+            className="pl-10" 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
         <Button variant="outline" className="gap-2">
           <Filter className="w-4 h-4" />
@@ -78,7 +106,15 @@ export default function SubmissionsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {submissions.map((sub) => (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading submissions...</TableCell>
+              </TableRow>
+            ) : filteredSubmissions.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No submissions found.</TableCell>
+              </TableRow>
+            ) : filteredSubmissions.map((sub) => (
               <TableRow key={sub.id}>
                 <TableCell className="font-medium">{sub.id}</TableCell>
                 <TableCell>

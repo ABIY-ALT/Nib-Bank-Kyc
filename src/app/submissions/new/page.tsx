@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useRef } from "react";
@@ -23,6 +24,11 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Upload, FilePlus, Shield, Info, X, FileText } from "lucide-react";
+import { useFirestore, useAuth } from "@/firebase";
+import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { errorEmitter } from "@/firebase/error-emitter";
+import { FirestorePermissionError } from "@/firebase/errors";
+import { currentUser } from "@/lib/auth-mock";
 
 interface UploadedFile {
   id: string;
@@ -43,8 +49,12 @@ const DOCUMENT_TYPES = [
 export default function NewSubmission() {
   const router = useRouter();
   const { toast } = useToast();
+  const db = useFirestore();
   const [loading, setLoading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [customerName, setCustomerName] = useState("");
+  const [entityType, setEntityType] = useState("individual");
+  const [remarks, setRemarks] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,7 +62,7 @@ export default function NewSubmission() {
       const newFiles = Array.from(e.target.files).map(file => ({
         id: Math.random().toString(36).substr(2, 9),
         file: file,
-        type: "id_card" // Default type
+        type: "id_card"
       }));
       setUploadedFiles((prev) => [...prev, ...newFiles]);
     }
@@ -70,8 +80,10 @@ export default function NewSubmission() {
     fileInputRef.current?.click();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!db) return;
+    
     if (uploadedFiles.length === 0) {
       toast({
         variant: "destructive",
@@ -82,14 +94,51 @@ export default function NewSubmission() {
     }
 
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      toast({
-        title: "Submission Created",
-        description: "Your KYC request has been submitted for review.",
+    
+    const submissionId = `KYC-${Math.floor(1000 + Math.random() * 9000)}`;
+    const submissionRef = doc(db, "submissions", submissionId);
+    
+    const submissionData = {
+      id: submissionId,
+      customerName,
+      entityType,
+      branch: currentUser.branch || "Headquarters",
+      submittedBy: currentUser.name,
+      submittedAt: new Date().toISOString(),
+      status: "Pending",
+      remarks,
+    };
+
+    setDoc(submissionRef, submissionData)
+      .then(() => {
+        // In a real app, we'd upload files to Storage and save refs here.
+        // For this prototype, we'll just simulate the document sub-collection records.
+        uploadedFiles.forEach(file => {
+          const docRef = doc(collection(submissionRef, "documents"));
+          setDoc(docRef, {
+            id: docRef.id,
+            name: file.file.name,
+            type: file.type,
+            uploadedAt: new Date().toISOString(),
+            url: "#" // Mock URL
+          });
+        });
+
+        toast({
+          title: "Submission Created",
+          description: `KYC request ${submissionId} has been submitted successfully.`,
+        });
+        router.push('/submissions/my');
+      })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: submissionRef.path,
+          operation: 'create',
+          requestResourceData: submissionData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        setLoading(false);
       });
-      router.push('/submissions/my');
-    }, 1500);
   };
 
   return (
@@ -111,11 +160,17 @@ export default function NewSubmission() {
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="name">Customer Full Name / Entity</Label>
-              <Input id="name" placeholder="Legal Name" required />
+              <Input 
+                id="name" 
+                placeholder="Legal Name" 
+                required 
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="type">Entity Type</Label>
-              <Select defaultValue="individual">
+              <Select value={entityType} onValueChange={setEntityType}>
                 <SelectTrigger id="type">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -129,7 +184,7 @@ export default function NewSubmission() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="branch">Originating Branch</Label>
-              <Input id="branch" value="Downtown" disabled />
+              <Input id="branch" value={currentUser.branch || "Headquarters"} disabled />
             </div>
           </CardContent>
         </Card>
@@ -228,7 +283,12 @@ export default function NewSubmission() {
             <CardTitle>Initial Remarks</CardTitle>
           </CardHeader>
           <CardContent>
-             <Textarea placeholder="Add any initial observations or context for the KYC Officer..." className="min-h-[120px]" />
+             <Textarea 
+               placeholder="Add any initial observations or context for the KYC Officer..." 
+               className="min-h-[120px]" 
+               value={remarks}
+               onChange={(e) => setRemarks(e.target.value)}
+             />
           </CardContent>
           <CardFooter className="flex justify-end gap-3 border-t pt-6">
             <Button variant="outline" type="button" onClick={() => router.back()}>Cancel</Button>
