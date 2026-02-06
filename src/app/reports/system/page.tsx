@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react";
@@ -24,8 +25,17 @@ import {
   History,
   ShieldCheck,
   Building2,
-  Users
+  Users,
+  Calendar as CalendarIcon,
+  FileDown
 } from "lucide-react";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 const MOCK_SYSTEM_STATS = {
@@ -50,12 +60,48 @@ const MOCK_SYSTEM_STATS = {
 export default function SystemWideReportsPage() {
   const { toast } = useToast();
   const [reportData, setReportData] = useState<any | null>(null);
+  const [dateRange, setDateRange] = useState("Last 30 Days");
 
   const handleGenerateReport = () => {
     setReportData(MOCK_SYSTEM_STATS);
     toast({
       title: "Institutional Audit Complete",
-      description: `Analyzed 1,245 system-wide records.`,
+      description: `Analyzed 1,245 system-wide records for ${dateRange}.`,
+    });
+  };
+
+  const handleExportCSV = () => {
+    if (!reportData) return;
+    
+    const headers = ['Category', 'Value'];
+    const dataRows = [
+      ['Total Volume', reportData.total],
+      ['Approvals', reportData.approved],
+      ['Pending', reportData.pending],
+      ['Accuracy', reportData.accuracy]
+    ];
+    
+    reportData.branches.forEach((b: any) => dataRows.push([`Branch: ${b.name}`, b.count]));
+    reportData.officers.forEach((o: any) => dataRows.push([`Officer: ${o.name}`, o.count]));
+    
+    const csvContent = [headers.join(','), ...dataRows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `nib-kyc-global-audit-${new Date().toISOString().split('T')[0]}.csv`);
+    link.click();
+    
+    toast({
+      title: "CSV Export Successful",
+      description: "Institutional dataset has been exported for analysis.",
+    });
+  };
+
+  const handleExportPDF = () => {
+    toast({
+      title: "Generating Master PDF Bundle",
+      description: "Compiling institutional audit records into a secure PDF package...",
     });
   };
 
@@ -72,6 +118,18 @@ export default function SystemWideReportsPage() {
           <p className="text-muted-foreground text-lg font-medium">Master institutional oversight of all branches and specialized staff.</p>
         </div>
         <div className="flex gap-2">
+          <Select value={dateRange} onValueChange={setDateRange}>
+            <SelectTrigger className="w-[180px] h-10 border-slate-200">
+              <CalendarIcon className="w-4 h-4 mr-2 text-slate-400" />
+              <SelectValue placeholder="Date Range" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Last 7 Days">Last 7 Days</SelectItem>
+              <SelectItem value="Last 30 Days">Last 30 Days</SelectItem>
+              <SelectItem value="Last 90 Days">Last 90 Days</SelectItem>
+              <SelectItem value="All Time">All Time (Master)</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="outline" className="gap-2 font-bold" onClick={() => setReportData(null)}>
             <History className="w-4 h-4" /> Reset
           </Button>
@@ -136,10 +194,13 @@ export default function SystemWideReportsPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <Card className="shadow-xl border-slate-200 overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b p-6">
+              <CardHeader className="bg-slate-50/50 border-b p-6 flex flex-row items-center justify-between">
                 <CardTitle className="text-xl font-bold flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-primary" /> Branch Network
                 </CardTitle>
+                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-primary font-bold">
+                  <FileDown className="w-4 h-4 mr-2" /> CSV
+                </Button>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -164,10 +225,13 @@ export default function SystemWideReportsPage() {
             </Card>
 
             <Card className="shadow-xl border-slate-200 overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b p-6">
+              <CardHeader className="bg-slate-50/50 border-b p-6 flex flex-row items-center justify-between">
                 <CardTitle className="text-xl font-bold flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary" /> Officer Throughput
                 </CardTitle>
+                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-primary font-bold">
+                  <FileDown className="w-4 h-4 mr-2" /> CSV
+                </Button>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -195,7 +259,7 @@ export default function SystemWideReportsPage() {
           </div>
 
           <div className="flex justify-center pt-8">
-            <Button size="lg" className="px-16 h-16 font-bold text-xl gap-3 shadow-2xl">
+            <Button size="lg" className="px-16 h-16 font-bold text-xl gap-3 shadow-2xl" onClick={handleExportPDF}>
               <Download className="w-6 h-6" /> Export Master PDF Bundle
             </Button>
           </div>
