@@ -58,6 +58,8 @@ export function AppSidebar() {
   const isDistDir = user.role === 'District Director'
   const isAdmin = user.role === 'Admin'
 
+  const canSeePerformance = isBranchMgr || isSupervisor || isDirector || isDistDir || isAdmin
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b h-16 flex items-center px-4">
@@ -162,11 +164,11 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* PERFORMANCE */}
-        {(isBranchMgr || isSupervisor || isDirector || isAdmin) && (
+        {canSeePerformance && (
           <SidebarGroup>
             <SidebarGroupLabel>Management</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible">
+              <Collapsible defaultOpen className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Oversight">
@@ -177,22 +179,36 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/performance/branch'}>
-                          <Link href="/performance/branch">
-                            <Building2 className="w-4 h-4 mr-2" />
-                            <span>Branch Metrics</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
-                          <Link href="/performance/officer">
-                            <Users className="w-4 h-4 mr-2" />
-                            <span>Officer Productivity</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                      {(isDirector || isDistDir || isAdmin) && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/performance/district'}>
+                            <Link href="/performance/district">
+                              <Map className="w-4 h-4 mr-2" />
+                              <span>District Metrics</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+                      {(isBranchMgr || isDirector || isAdmin) && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/performance/branch'}>
+                            <Link href="/performance/branch">
+                              <Building2 className="w-4 h-4 mr-2" />
+                              <span>Branch Metrics</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+                      {(isSupervisor || isDirector || isAdmin) && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
+                            <Link href="/performance/officer">
+                              <Users className="w-4 h-4 mr-2" />
+                              <span>Officer Productivity</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
