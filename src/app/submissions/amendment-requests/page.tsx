@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useFirestore, useCollection } from "@/firebase";
@@ -10,7 +9,7 @@ import { KYCSubmission } from "@/lib/kyc-data";
 export default function AmendmentRequestsPage() {
   const db = useFirestore();
 
-  // "Amendment Requests" show cases where the KYC Officer has requested changes (status == 'Amended')
+  // "Action Required" cases for Branch Officers
   const amendmentRequestQuery = useMemo(() => {
     if (!db) return null;
     return query(
@@ -25,11 +24,11 @@ export default function AmendmentRequestsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Amendment Requests</h1>
-        <p className="text-muted-foreground">Active requests for additional documentation or information from KYC Officers.</p>
+        <h1 className="text-3xl font-bold">Action Required</h1>
+        <p className="text-muted-foreground">Cases returned by KYC Officers for additional documentation or clarification.</p>
       </div>
       {loading ? (
-        <div className="p-12 text-center text-muted-foreground">Loading requests...</div>
+        <div className="p-12 text-center text-muted-foreground">Loading actions...</div>
       ) : (
         <SubmissionsPageContent submissions={submissions || []} />
       )}

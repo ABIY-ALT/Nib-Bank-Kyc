@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useFirestore, useCollection } from "@/firebase";
@@ -10,6 +9,7 @@ import { KYCSubmission } from "@/lib/kyc-data";
 export default function ReviewQueuePage() {
   const db = useFirestore();
 
+  // Primary workspace for KYC Officers: Pending or Returning (In Review)
   const reviewQueueQuery = useMemo(() => {
     if (!db) return null;
     return query(
@@ -24,8 +24,8 @@ export default function ReviewQueuePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Review Queue</h1>
-        <p className="text-muted-foreground">Manage and process pending KYC verification requests.</p>
+        <h1 className="text-3xl font-bold">KYC Review Queue</h1>
+        <p className="text-muted-foreground">Manage and process new verification requests and returned corrections.</p>
       </div>
       {loading ? (
         <div className="p-12 text-center text-muted-foreground">Loading queue...</div>

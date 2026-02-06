@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -25,7 +24,8 @@ import {
   MessageSquare,
   Upload,
   FilePlus,
-  X
+  X,
+  ShieldAlert
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -85,14 +85,13 @@ export default function SubmissionDetails() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
-  // Auto-set to "In Review" when a reviewer opens a pending case
+  // Auto-set to "In Review" when a KYC Officer opens a pending case
   useEffect(() => {
     const canReview = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
-    if (submission && submission.status === 'Pending' && canReview && submissionRef) {
+    if (submission && (submission.status === 'Pending') && canReview && submissionRef) {
       updateDoc(submissionRef, { 
         status: 'In Review',
-        lastUpdated: serverTimestamp() 
-      }).catch(err => console.debug("Auto-review update skipped or failed", err));
+      }).catch(() => {});
     }
   }, [submission, user.role, submissionRef]);
 
@@ -100,7 +99,8 @@ export default function SubmissionDetails() {
   if (!submission) return <div className="p-12 text-center">Submission not found.</div>;
 
   const isOwner = submission.submittedBy === user.name;
-  const canAction = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
+  const isKYCOfficer = user.role === 'KYC Officer' || user.role === 'Admin';
+  const isSupervisor = user.role === 'Supervisor' || user.role === 'Director';
   const isAmended = submission.status === 'Amended';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,11 +125,11 @@ export default function SubmissionDetails() {
   const handleAction = async (action: string) => {
     if (!submissionRef || !db) return;
 
-    if ((action === 'Amended' || action === 'Rejected') && !remarks.trim()) {
+    if ((action === 'Amended' || action === 'Rejected' || action === 'Escalated') && !remarks.trim()) {
       toast({
         variant: "destructive",
         title: "Remarks Required",
-        description: `Please provide context for the ${action} action.`,
+        description: `Please provide context for the ${action === 'Amended' ? 'Amendment Request' : action}.`,
       });
       return;
     }
@@ -139,15 +139,13 @@ export default function SubmissionDetails() {
     const updateData: any = {
       status: action,
       remarks: remarks || submission.remarks || "", 
-      lastUpdated: serverTimestamp(),
     };
 
     // If correction being submitted by owner
     if (action === 'Pending' && isAmended && isOwner) {
        updateData.isResubmitted = true;
-       updateData.resubmittedAt = serverTimestamp();
+       updateData.resubmittedAt = new Date().toISOString();
        
-       // Process new documents
        for (const file of newFiles) {
          const docRef = doc(collection(submissionRef, "documents"));
          await setDoc(docRef, {
@@ -164,11 +162,10 @@ export default function SubmissionDetails() {
     updateDoc(submissionRef, updateData)
       .then(() => {
         toast({
-          title: "Status Updated",
-          description: `Submission marked as ${action}.`,
+          title: "Submission Updated",
+          description: `Case marked as ${action === 'Amended' ? 'Action Required' : action}.`,
         });
-        // Redirect back to respective queues
-        router.push(canAction ? '/submissions/queue' : '/submissions/my');
+        router.back();
       })
       .catch(async (error) => {
         const permissionError = new FirestorePermissionError({
@@ -191,16 +188,18 @@ export default function SubmissionDetails() {
               submission.status === 'Approved' ? 'bg-green-100 text-green-800 border-green-200' :
               submission.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
               submission.status === 'Amended' ? 'bg-orange-100 text-orange-800 border-orange-200' :
-              submission.status === 'Escalated' ? 'bg-purple-100 text-purple-800 border-purple-200' : ''
+              submission.status === 'Escalated' ? 'bg-purple-100 text-purple-800 border-purple-200' : 
+              submission.status === 'In Review' ? 'bg-blue-100 text-blue-800 border-blue-200' : ''
             }>
-              {submission.status}
+              {submission.status === 'Amended' ? 'Action Required' : 
+               (submission.isResubmitted && submission.status === 'Pending' ? 'Pending Review' : submission.status)}
             </Badge>
           </div>
           <p className="text-muted-foreground">{submission.customerName} • {submission.branch} Branch</p>
         </div>
         <div className="flex gap-2">
-           <Button variant="outline" size="sm" onClick={() => toast({ title: "Bundle Generated", description: "Downloading full KYC pack..." })}>
-            <Download className="w-4 h-4 mr-2" /> Bundle
+           <Button variant="outline" size="sm" onClick={() => toast({ title: "Bundle Generated", description: "Downloading KYC Pack..." })}>
+            <Download className="w-4 h-4 mr-2" /> Download Pack
            </Button>
            <Button variant="outline" size="sm">
             <History className="w-4 h-4 mr-2" /> Audit Trail
@@ -213,12 +212,12 @@ export default function SubmissionDetails() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Documents</CardTitle>
-                <CardDescription>Verified identity and supporting files.</CardDescription>
+                <CardTitle>Verification Documents</CardTitle>
+                <CardDescription>Click to view or download document files.</CardDescription>
               </div>
               {isOwner && isAmended && (
                 <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                  <FilePlus className="w-4 h-4 mr-2" /> Add File
+                  <FilePlus className="w-4 h-4 mr-2" /> Add Corrected File
                 </Button>
               )}
             </CardHeader>
@@ -233,18 +232,18 @@ export default function SubmissionDetails() {
               <div className="space-y-4">
                 {documents && documents.length > 0 ? (
                   documents.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/5 transition-colors">
+                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/5 transition-colors group">
                       <div className="flex items-center gap-4">
-                        <div className="bg-primary/10 p-2 rounded text-primary">
+                        <div className="bg-primary/5 p-2 rounded text-primary group-hover:bg-primary/10 transition-colors">
                           <FileText className="w-6 h-6" />
                         </div>
                         <div>
                           <p className="font-medium text-sm">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground">{doc.type.toUpperCase()} • {new Date(doc.uploadedAt).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground">{doc.type.toUpperCase()} • Received {new Date(doc.uploadedAt).toLocaleDateString()}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
-                         <Button variant="ghost" size="icon" onClick={() => toast({ title: "Download", description: `Starting download for ${doc.name}` })}><Download className="w-4 h-4" /></Button>
+                         <Button variant="ghost" size="icon" onClick={() => toast({ title: "Download", description: `Downloading ${doc.name}` })}><Download className="w-4 h-4" /></Button>
                          <Button variant="ghost" size="icon" asChild>
                            <a href={doc.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
                          </Button>
@@ -252,7 +251,7 @@ export default function SubmissionDetails() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-center py-8 text-muted-foreground italic">No documents found for this submission.</p>
+                  <p className="text-center py-8 text-muted-foreground italic">No documents currently uploaded.</p>
                 )}
                 
                 {/* Pending New Files in Amendment Mode */}
@@ -264,7 +263,7 @@ export default function SubmissionDetails() {
                       </div>
                       <div className="flex flex-col">
                         <span className="text-sm font-medium">{item.file.name}</span>
-                        <span className="text-xs text-blue-600 font-semibold">Ready to upload</span>
+                        <span className="text-xs text-blue-600 font-semibold italic">Ready for resubmission</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 w-full md:w-auto">
@@ -288,11 +287,11 @@ export default function SubmissionDetails() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Case History & Remarks</CardTitle>
+              <CardTitle>Submission Remarks</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg border p-4 bg-muted/30 text-sm whitespace-pre-wrap min-h-[100px]">
-                {submission.remarks || "No current remarks for this case."}
+              <div className="rounded-lg border p-4 bg-muted/20 text-sm whitespace-pre-wrap min-h-[120px]">
+                {submission.remarks || "No additional remarks provided for this submission."}
               </div>
             </CardContent>
           </Card>
@@ -300,80 +299,118 @@ export default function SubmissionDetails() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader><CardTitle className="text-lg">Customer Profile</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">Customer Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-1">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Legal Name</span>
-                <span className="text-sm font-medium">{submission.customerName}</span>
+                <span className="text-sm font-semibold">{submission.customerName}</span>
               </div>
               <div className="grid gap-1">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase">ID Number</span>
-                <span className="text-sm">{submission.customerId || 'N/A'}</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Entity Type</span>
+                <span className="text-sm capitalize">{submission.entityType || 'Individual'}</span>
               </div>
               <div className="grid gap-1">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Originating Branch</span>
                 <span className="text-sm">{submission.branch}</span>
               </div>
               <Separator />
-              <div className="grid gap-1 text-xs text-muted-foreground">
+              <div className="grid gap-2 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2"><User className="w-3 h-3" /> Submitted by {submission.submittedBy}</div>
                 <div className="flex items-center gap-2"><Clock className="w-3 h-3" /> Received {new Date(submission.submittedAt).toLocaleString()}</div>
+                {submission.isResubmitted && (
+                  <div className="flex items-center gap-2 text-primary font-medium">
+                    <History className="w-3 h-3" /> Resubmitted {new Date(submission.resubmittedAt!).toLocaleString()}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {canAction && submission.status !== 'Approved' && submission.status !== 'Rejected' && (
-            <Card className="border-primary/20 bg-slate-50/50">
+          {/* KYC Officer Actions */}
+          {isKYCOfficer && (submission.status === 'Pending' || submission.status === 'In Review') && (
+            <Card className="border-primary/20 shadow-lg">
               <CardHeader>
-                <CardTitle className="text-lg">Workflow Action</CardTitle>
-                <CardDescription>Finalize or escalate this verification.</CardDescription>
+                <CardTitle className="text-lg">KYC Reviewer Actions</CardTitle>
+                <CardDescription>Conduct review and select outcome.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold flex items-center gap-1"><MessageSquare className="w-3 h-3" /> Reviewer Remarks</label>
                   <Textarea 
-                    placeholder="Enter decision rationale or amendment instructions..." 
+                    placeholder="Provide specific reasons for approval, amendment, or rejection..." 
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
-                    className="min-h-[120px] bg-white"
+                    className="min-h-[120px] bg-white border-primary/20 focus-visible:ring-primary"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={() => handleAction('Approved')} className="bg-[#78C49D] hover:bg-[#66B38C] text-white" disabled={loading}>Approve</Button>
-                  <Button onClick={() => handleAction('Amended')} variant="outline" className="bg-[#FFF5ED] text-[#E67E22] border-[#FDE3CF] hover:bg-[#FDE3CF]" disabled={loading}>Amend</Button>
-                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="bg-[#F5F3FF] text-[#8B5CF6] border-[#EDE9FE] hover:bg-[#EDE9FE]" disabled={loading}>Escalate</Button>
-                  <Button onClick={() => handleAction('Rejected')} variant="destructive" className="bg-[#F28B82] hover:bg-[#EE675C]" disabled={loading}>Reject</Button>
+                  <Button onClick={() => handleAction('Approved')} className="bg-[#78C49D] hover:bg-[#66B38C] text-white font-bold" disabled={loading}>Approve</Button>
+                  <Button onClick={() => handleAction('Amended')} variant="outline" className="bg-[#FFF5ED] text-[#E67E22] border-[#FDE3CF] hover:bg-[#FDE3CF] font-bold" disabled={loading}>Amend</Button>
+                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="bg-[#F5F3FF] text-[#8B5CF6] border-[#EDE9FE] hover:bg-[#EDE9FE] font-bold" disabled={loading}>Escalate</Button>
+                  <Button onClick={() => handleAction('Rejected')} variant="destructive" className="bg-[#F28B82] hover:bg-[#EE675C] font-bold" disabled={loading}>Reject</Button>
                 </div>
               </CardContent>
             </Card>
           )}
 
+          {/* Branch Officer Amendment/Resubmission */}
           {isOwner && isAmended && (
-             <Card className="border-orange-200 bg-orange-50/30">
+             <Card className="border-orange-300 bg-orange-50 shadow-md">
                <CardHeader>
-                 <CardTitle className="text-lg text-orange-800">Branch Correction</CardTitle>
-                 <CardDescription>Address the reviewer's remarks above.</CardDescription>
+                 <CardTitle className="text-lg text-orange-900 flex items-center gap-2">
+                   <AlertTriangle className="w-5 h-5" />
+                   Branch Correction
+                 </CardTitle>
+                 <CardDescription className="text-orange-700">Please address the reviewer's instructions above.</CardDescription>
                </CardHeader>
                <CardContent className="space-y-4">
                  <div className="space-y-2">
                    <label className="text-xs font-bold text-orange-900">Officer Response</label>
                    <Textarea 
-                     placeholder="Detail the corrections made..." 
+                     placeholder="Detail the corrections made or documents added..." 
                      value={remarks}
                      onChange={(e) => setRemarks(e.target.value)}
-                     className="bg-white"
+                     className="bg-white border-orange-200"
                    />
                  </div>
                  <Button 
-                   className="w-full bg-orange-600 hover:bg-orange-700"
+                   className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold"
                    onClick={() => handleAction('Pending')}
                    disabled={loading || (newFiles.length === 0 && !remarks.trim())}
                  >
                    <Upload className="w-4 h-4 mr-2" />
-                   {loading ? "Submitting..." : "Resubmit Case"}
+                   {loading ? "Processing..." : "Submit Corrections"}
                  </Button>
                </CardContent>
              </Card>
+          )}
+
+          {/* Supervisor Resolution for Escalated Cases */}
+          {isSupervisor && submission.status === 'Escalated' && (
+            <Card className="border-purple-300 bg-purple-50 shadow-lg">
+               <CardHeader>
+                 <CardTitle className="text-lg text-purple-900 flex items-center gap-2">
+                   <ShieldAlert className="w-5 h-5" />
+                   Supervisor Oversight
+                 </CardTitle>
+                 <CardDescription className="text-purple-700">Final resolution for escalated case.</CardDescription>
+               </CardHeader>
+               <CardContent className="space-y-4">
+                 <div className="space-y-2">
+                   <label className="text-xs font-bold text-purple-900">Resolution Remarks</label>
+                   <Textarea 
+                     placeholder="Final decision rationale..." 
+                     value={remarks}
+                     onChange={(e) => setRemarks(e.target.value)}
+                     className="bg-white border-purple-200"
+                   />
+                 </div>
+                 <div className="grid grid-cols-2 gap-2">
+                    <Button onClick={() => handleAction('Approved')} className="bg-[#78C49D] hover:bg-[#66B38C] text-white font-bold">Resolve: Approve</Button>
+                    <Button onClick={() => handleAction('Rejected')} variant="destructive" className="bg-[#F28B82] hover:bg-[#EE675C] font-bold">Resolve: Reject</Button>
+                 </div>
+               </CardContent>
+            </Card>
           )}
         </div>
       </div>

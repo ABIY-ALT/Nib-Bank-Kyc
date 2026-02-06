@@ -83,14 +83,14 @@ export function AppSidebar() {
 
         {/* SUBMISSIONS */}
         <SidebarGroup>
-          <SidebarGroupLabel>Workflow</SidebarGroupLabel>
+          <SidebarGroupLabel>Workflows</SidebarGroupLabel>
           <SidebarMenu>
             <Collapsible defaultOpen className="group/collapsible">
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip="Submissions">
+                  <SidebarMenuButton tooltip="Identity Verification">
                     <FileText />
-                    <span>Submissions</span>
+                    <span>Identity Verification</span>
                     <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
@@ -102,7 +102,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/new'}>
                             <Link href="/submissions/new">
                               <PlusCircle className="w-4 h-4 mr-2" />
-                              <span>New Submission</span>
+                              <span>Create Submission</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -111,6 +111,14 @@ export function AppSidebar() {
                             <Link href="/submissions/my">
                               <Inbox className="w-4 h-4 mr-2" />
                               <span>My Submissions</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>
+                            <Link href="/submissions/amendment-requests">
+                              <AlertCircle className="w-4 h-4 mr-2 text-orange-600" />
+                              <span>Action Required</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -129,8 +137,8 @@ export function AppSidebar() {
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
                             <Link href="/submissions/amendments">
-                              <Filter className="w-4 h-4 mr-2" />
-                              <span>Amendment Review</span>
+                              <History className="w-4 h-4 mr-2" />
+                              <span>Resubmitted Cases</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -146,16 +154,6 @@ export function AppSidebar() {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {(isBranchOfficer || isKYCOfficer || isAdmin) && (
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>
-                          <Link href="/submissions/amendment-requests">
-                            <History className="w-4 h-4 mr-2" />
-                            <span>Amendment Requests</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    )}
                   </SidebarMenuSub>
                 </CollapsibleContent>
               </SidebarMenuItem>
@@ -164,120 +162,56 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* PERFORMANCE */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Performance</SidebarGroupLabel>
-          <SidebarMenu>
-            <Collapsible className="group/collapsible">
-              <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip="Performance">
-                    <BarChart3 />
-                    <span>Performance</span>
-                    <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarMenuSub>
-                    {(isBranchMgr || isDirector || isDistDir || isAdmin) && (
+        {(isBranchMgr || isSupervisor || isDirector || isAdmin) && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Management</SidebarGroupLabel>
+            <SidebarMenu>
+              <Collapsible className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton tooltip="Oversight">
+                      <BarChart3 />
+                      <span>Performance & Oversight</span>
+                      <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={pathname === '/performance/branch'}>
                           <Link href="/performance/branch">
                             <Building2 className="w-4 h-4 mr-2" />
-                            <span>Branch Performance</span>
+                            <span>Branch Metrics</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
-                    )}
-                    {(isSupervisor || isDirector || isAdmin) && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
                           <Link href="/performance/officer">
                             <Users className="w-4 h-4 mr-2" />
-                            <span>Officer Performance</span>
+                            <span>Officer Productivity</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
-                    )}
-                    {(isDirector || isDistDir || isAdmin) && (
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/performance/district'}>
-                          <Link href="/performance/district">
-                            <Map className="w-4 h-4 mr-2" />
-                            <span>District Performance</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    )}
-                  </SidebarMenuSub>
-                </CollapsibleContent>
-              </SidebarMenuItem>
-            </Collapsible>
-          </SidebarMenu>
-        </SidebarGroup>
-
-        {/* REPORTS */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Reports</SidebarGroupLabel>
-          <SidebarMenu>
-            <Collapsible className="group/collapsible">
-              <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip="Reports">
-                    <PieChart />
-                    <span>Analytics</span>
-                    <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarMenuSub>
-                    {(isKYCOfficer || isSupervisor || isDirector || isDistDir || isAdmin) && (
-                      <>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}>
-                            <Link href="/reports/branch">
-                              <Map className="w-4 h-4 mr-2" />
-                              <span>Branch/District Reports</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/officer'}>
-                            <Link href="/reports/officer">
-                              <Users className="w-4 h-4 mr-2" />
-                              <span>Officer Reports</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </>
-                    )}
-                    {isAdmin && (
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/reports/system'}>
-                          <Link href="/reports/system">
-                            <LayoutDashboard className="w-4 h-4 mr-2 text-accent" />
-                            <span>System-wide Reports</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    )}
-                  </SidebarMenuSub>
-                </CollapsibleContent>
-              </SidebarMenuItem>
-            </Collapsible>
-          </SidebarMenu>
-        </SidebarGroup>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
 
         {/* ADMINISTRATION */}
         {isAdmin && (
           <SidebarGroup>
-            <SidebarGroupLabel>Administration</SidebarGroupLabel>
+            <SidebarGroupLabel>System</SidebarGroupLabel>
             <SidebarMenu>
               <Collapsible className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Administration">
                       <Settings />
-                      <span>System Admin</span>
+                      <span>Administration</span>
                       <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
@@ -287,23 +221,7 @@ export function AppSidebar() {
                         <SidebarMenuSubButton asChild isActive={pathname === '/admin/users'}>
                           <Link href="/admin/users">
                             <Users className="w-4 h-4 mr-2" />
-                            <span>User Management</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
-                          <Link href="/admin/branches">
-                            <Map className="w-4 h-4 mr-2" />
-                            <span>Branches & Districts</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
-                          <Link href="/admin/settings">
-                            <Settings className="w-4 h-4 mr-2" />
-                            <span>System Settings</span>
+                            <span>User Access</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
@@ -311,7 +229,7 @@ export function AppSidebar() {
                         <SidebarMenuSubButton asChild isActive={pathname === '/admin/audit'}>
                           <Link href="/admin/audit">
                             <History className="w-4 h-4 mr-2" />
-                            <span>Audit Log</span>
+                            <span>Audit Logs</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
@@ -323,7 +241,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter className="border-t p-4">
+      <SidebarFooter className="border-t p-4 bg-slate-50/50">
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center overflow-hidden">
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold shrink-0">
             {user.name.charAt(0)}
