@@ -22,7 +22,8 @@ import {
   FileBarChart,
   Globe,
   UserCircle,
-  Archive
+  Archive,
+  ArrowRightLeft
 } from "lucide-react"
 
 import {
@@ -101,7 +102,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Workflows</SidebarGroupLabel>
           <SidebarMenu>
-            <Collapsible className="group/collapsible">
+            <Collapsible className="group/collapsible" defaultOpen={false}>
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton tooltip="Identity Verification">
@@ -170,7 +171,6 @@ export function AppSidebar() {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {/* MASTER ARCHIVE FOR REVIEWERS AND MANAGEMENT */}
                     {(isReviewer || isManagement) && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={pathname === '/submissions'}>
@@ -193,7 +193,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel>Management</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible">
+              <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Oversight">
@@ -247,7 +247,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel>Audit & Reporting</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible">
+              <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Reports">
@@ -301,7 +301,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel>System</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible">
+              <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Administration">
@@ -317,6 +317,14 @@ export function AppSidebar() {
                           <Link href="/admin/users">
                             <Users className="w-4 h-4 mr-2" />
                             <span>User Access</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/assignments'}>
+                          <Link href="/admin/assignments">
+                            <ArrowRightLeft className="w-4 h-4 mr-2 text-primary" />
+                            <span>Staff Assignments</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
