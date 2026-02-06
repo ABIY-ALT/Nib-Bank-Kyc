@@ -1,20 +1,44 @@
+
 "use client"
 
+import { useMemo, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Map, TrendingUp, Building2, AlertTriangle, BarChart3 } from "lucide-react"
+import { Map, TrendingUp, Building2, AlertTriangle, BarChart3, Filter } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Button } from "@/components/ui/button"
+import { 
+  Popover, 
+  PopoverContent, 
+  PopoverTrigger 
+} from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 
 const MOCK_DISTRICT_METRICS = [
-  { name: "Central", branchCount: 12, volume: 450, complianceRate: 94 },
-  { name: "Northern", branchCount: 8, volume: 320, complianceRate: 88 },
-  { name: "Southern", branchCount: 10, volume: 280, complianceRate: 91 },
-  { name: "Eastern", branchCount: 6, volume: 190, complianceRate: 85 },
+  { name: "Central", branchCount: 12, volume: 450, complianceRate: 94, tier: "High" },
+  { name: "Northern", branchCount: 8, volume: 320, complianceRate: 88, tier: "Medium" },
+  { name: "Southern", branchCount: 10, volume: 280, complianceRate: 91, tier: "High" },
+  { name: "Eastern", branchCount: 6, volume: 190, complianceRate: 85, tier: "Medium" },
 ];
 
+const PERFORMANCE_TIERS = ["High", "Medium", "Low"];
+
 export default function DistrictPerformancePage() {
-  const districtMetrics = MOCK_DISTRICT_METRICS;
-  const totalVolume = districtMetrics.reduce((acc, d) => acc + d.volume, 0);
+  const [selectedTiers, setSelectedTiers] = useState<string[]>([]);
+
+  const filteredDistricts = useMemo(() => {
+    if (selectedTiers.length === 0) return MOCK_DISTRICT_METRICS;
+    return MOCK_DISTRICT_METRICS.filter(d => selectedTiers.includes(d.tier));
+  }, [selectedTiers]);
+
+  const totalVolume = filteredDistricts.reduce((acc, d) => acc + d.volume, 0);
+
+  const toggleTier = (tier: string) => {
+    setSelectedTiers(prev => 
+      prev.includes(tier) ? prev.filter(t => t !== tier) : [...prev, tier]
+    );
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -23,18 +47,53 @@ export default function DistrictPerformancePage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">District Performance</h1>
           <p className="text-muted-foreground text-lg">Regional oversight of KYC efficiency and institutional compliance.</p>
         </div>
-        <div className="flex gap-3">
-          <Badge variant="outline" className="px-4 py-1.5 bg-white shadow-sm font-bold text-primary border-primary/20">
-            Total Districts: {districtMetrics.length}
-          </Badge>
-          <Badge variant="outline" className="px-4 py-1.5 bg-white shadow-sm font-bold text-slate-600">
-            Total Network Volume: {totalVolume}
+        <div className="flex gap-3 items-center">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2 h-11 px-6 font-bold text-slate-600 border-slate-200 relative shadow-sm">
+                <Filter className="w-4 h-4" />
+                Performance Tier
+                {selectedTiers.length > 0 && (
+                  <Badge variant="default" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-primary text-[10px] font-bold">
+                    {selectedTiers.length}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-6 space-y-6 shadow-2xl border-slate-200" align="end">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-slate-900">Tier Filters</h3>
+                {selectedTiers.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedTiers([])} className="h-8 text-[11px] font-bold text-primary uppercase tracking-wider px-2 hover:bg-primary/5">
+                    Reset
+                  </Button>
+                )}
+              </div>
+              <div className="space-y-4">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Compliance Health</Label>
+                <div className="grid gap-3">
+                  {PERFORMANCE_TIERS.map((tier) => (
+                    <div key={tier} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={`tier-${tier}`} 
+                        checked={selectedTiers.includes(tier)}
+                        onCheckedChange={() => toggleTier(tier)}
+                      />
+                      <Label htmlFor={`tier-${tier}`} className="text-sm font-medium cursor-pointer">{tier} Performing</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Badge variant="outline" className="px-4 py-2.5 bg-white shadow-sm font-bold text-primary border-primary/20">
+            Total In View: {totalVolume}
           </Badge>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {districtMetrics.map((district) => (
+        {filteredDistricts.map((district) => (
           <Card key={district.name} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 bg-slate-50/80 border-b pb-4 px-6">
               <div>
@@ -71,7 +130,7 @@ export default function DistrictPerformancePage() {
                     <Building2 className="w-3.5 h-3.5 text-slate-400" />
                     Coverage Efficiency
                   </span>
-                  <span className="text-primary font-bold">High</span>
+                  <span className="text-primary font-bold">{district.tier}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs font-bold text-slate-600">
                   <span className="flex items-center gap-2">
@@ -84,6 +143,11 @@ export default function DistrictPerformancePage() {
             </CardContent>
           </Card>
         ))}
+        {filteredDistricts.length === 0 && (
+          <div className="col-span-full py-20 text-center bg-slate-50 border-2 border-dashed rounded-3xl text-muted-foreground font-medium italic">
+            No regional data matches the selected criteria.
+          </div>
+        )}
       </div>
 
       <Card className="border-primary/20 bg-slate-900 text-white shadow-2xl overflow-hidden relative">
@@ -102,7 +166,7 @@ export default function DistrictPerformancePage() {
             </div>
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Active Districts</p>
-              <p className="text-5xl font-extrabold text-primary">{districtMetrics.length}</p>
+              <p className="text-5xl font-extrabold text-primary">{filteredDistricts.length}</p>
             </div>
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">System Health</p>
@@ -112,5 +176,5 @@ export default function DistrictPerformancePage() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

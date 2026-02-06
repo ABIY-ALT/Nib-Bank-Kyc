@@ -1,19 +1,44 @@
+
 "use client"
 
+import { useMemo, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Users, CheckCircle, History, AlertTriangle } from "lucide-react"
+import { Users, CheckCircle, History, AlertTriangle, Filter } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { 
+  Popover, 
+  PopoverContent, 
+  PopoverTrigger 
+} from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 
 const MOCK_OFFICER_METRICS = [
-  { name: "Jane Smith", processed: 85, approved: 72, amended: 10, rejected: 3, turnaround: "0.8d" },
-  { name: "Robert Brown", processed: 76, approved: 60, amended: 12, rejected: 4, turnaround: "1.2d" },
-  { name: "Alice Wilson", processed: 64, approved: 58, amended: 4, rejected: 2, turnaround: "1.1d" },
-  { name: "Local Officer", processed: 42, approved: 35, amended: 5, rejected: 2, turnaround: "0.9d" },
+  { name: "Jane Smith", branch: "Downtown", processed: 85, approved: 72, amended: 10, rejected: 3, turnaround: "0.8d" },
+  { name: "Robert Brown", branch: "Uptown", processed: 76, approved: 60, amended: 12, rejected: 4, turnaround: "1.2d" },
+  { name: "Alice Wilson", branch: "Downtown", processed: 64, approved: 58, amended: 4, rejected: 2, turnaround: "1.1d" },
+  { name: "Local Officer", branch: "East Side", processed: 42, approved: 35, amended: 5, rejected: 2, turnaround: "0.9d" },
 ];
 
+const BRANCH_OPTIONS = ["Downtown", "Uptown", "East Side", "Valley Branch"];
+
 export default function OfficerPerformancePage() {
-  const officerMetrics = MOCK_OFFICER_METRICS;
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
+
+  const filteredOfficers = useMemo(() => {
+    if (selectedBranches.length === 0) return MOCK_OFFICER_METRICS;
+    return MOCK_OFFICER_METRICS.filter(o => selectedBranches.includes(o.branch));
+  }, [selectedBranches]);
+
+  const totalReviews = filteredOfficers.reduce((acc, o) => acc + o.processed, 0);
+
+  const toggleBranch = (branch: string) => {
+    setSelectedBranches(prev => 
+      prev.includes(branch) ? prev.filter(b => b !== branch) : [...prev, branch]
+    );
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -22,22 +47,60 @@ export default function OfficerPerformancePage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Officer Productivity</h1>
           <p className="text-muted-foreground text-lg">Detailed throughput and accuracy metrics for verification staff.</p>
         </div>
-        <div className="flex gap-2">
-          <Badge variant="outline" className="px-4 py-1 bg-white shadow-sm">
-            Total Reviews: {officerMetrics.reduce((acc, o) => acc + o.processed, 0)}
+        <div className="flex gap-3 items-center">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2 h-11 px-6 font-bold text-slate-600 border-slate-200 relative shadow-sm">
+                <Filter className="w-4 h-4" />
+                Filter by Branch
+                {selectedBranches.length > 0 && (
+                  <Badge variant="default" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-primary text-[10px] font-bold">
+                    {selectedBranches.length}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-6 space-y-6 shadow-2xl border-slate-200" align="end">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-slate-900">Staff Filters</h3>
+                {selectedBranches.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedBranches([])} className="h-8 text-[11px] font-bold text-primary uppercase tracking-wider px-2 hover:bg-primary/5">
+                    Clear
+                  </Button>
+                )}
+              </div>
+              <div className="space-y-4">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Institutional Unit</Label>
+                <div className="grid gap-3">
+                  {BRANCH_OPTIONS.map((branch) => (
+                    <div key={branch} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={`branch-${branch}`} 
+                        checked={selectedBranches.includes(branch)}
+                        onCheckedChange={() => toggleBranch(branch)}
+                      />
+                      <Label htmlFor={`branch-${branch}`} className="text-sm font-medium cursor-pointer">{branch}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Badge variant="outline" className="px-4 py-2.5 bg-white shadow-sm font-bold border-slate-200">
+            Total Reviews: {totalReviews}
           </Badge>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {officerMetrics.map((officer) => {
+        {filteredOfficers.map((officer) => {
           const approvalRate = Math.round((officer.approved / officer.processed) * 100);
           return (
             <Card key={officer.name} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 bg-slate-50/80 border-b pb-4 px-6">
                 <div>
                   <CardTitle className="text-xl font-bold text-slate-900">{officer.name}</CardTitle>
-                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">KYC Specialist</p>
+                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">{officer.branch} Office</p>
                 </div>
                 <div className="p-2.5 bg-white rounded-xl border shadow-sm text-primary">
                   <Users className="w-5 h-5" />
@@ -85,7 +148,12 @@ export default function OfficerPerformancePage() {
             </Card>
           );
         })}
+        {filteredOfficers.length === 0 && (
+          <div className="col-span-full py-20 text-center bg-slate-50 border-2 border-dashed rounded-3xl text-muted-foreground font-medium">
+            No officer performance data matches your filter selection.
+          </div>
+        )}
       </div>
     </div>
-  );
+  )
 }
