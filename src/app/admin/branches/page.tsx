@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useFirestore, useCollection } from "@/firebase";
 import { collection, doc, setDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
-import { Building2, Plus, MapPin, Trash2, Edit2, Loader2, Globe } from "lucide-react";
+import { Building2, Plus, MapPin, Trash2, Edit2, Loader2, Globe, AlertCircle } from "lucide-react";
 import { 
   Dialog, 
   DialogContent, 
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 interface Branch {
   id: string;
@@ -78,12 +79,15 @@ export default function BranchesDistrictsPage() {
 
   const handleSaveDistrict = async () => {
     if (!db) return;
-    if (!districtForm.name) return;
+    if (!districtForm.name) {
+      toast({ variant: "destructive", title: "Missing Name", description: "District name is required." });
+      return;
+    }
 
     const id = editingDistrict?.id || `dist-${Date.now()}`;
     try {
       await setDoc(doc(db, "districts", id), { ...districtForm, id });
-      toast({ title: "District Saved", description: `${districtForm.name} district added.` });
+      toast({ title: "District Saved", description: `${districtForm.name} district defined.` });
       setIsDistrictDialogOpen(false);
       setDistrictForm({ name: '' });
     } catch (e) {
@@ -92,7 +96,7 @@ export default function BranchesDistrictsPage() {
   };
 
   const handleDelete = async (coll: string, id: string) => {
-    if (!db || !confirm("Are you sure?")) return;
+    if (!db || !confirm("Are you sure? This may affect users mapped to this node.")) return;
     try {
       await deleteDoc(doc(db, coll, id));
       toast({ title: "Deleted", description: "Record removed successfully." });
@@ -106,7 +110,7 @@ export default function BranchesDistrictsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Hierarchy</h1>
-          <p className="text-muted-foreground text-lg font-medium">Configure regions and branch network nodes.</p>
+          <p className="text-muted-foreground text-lg font-medium">Manage regional districts and branch network infrastructure.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => { setEditingDistrict(null); setDistrictForm({ name: '' }); setIsDistrictDialogOpen(true); }} className="gap-2">
@@ -120,7 +124,7 @@ export default function BranchesDistrictsPage() {
 
       <div className="grid gap-8 md:grid-cols-3">
         {/* DISTRICTS PANEL */}
-        <Card className="md:col-span-1 shadow-md border-slate-200">
+        <Card className="md:col-span-1 shadow-md border-slate-200 h-fit">
           <CardHeader className="bg-slate-50/50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">
               <MapPin className="w-5 h-5 text-primary" /> Districts
@@ -129,10 +133,18 @@ export default function BranchesDistrictsPage() {
           <CardContent className="pt-6">
             <div className="space-y-3">
               {districtsLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 
-               districts?.length === 0 ? <p className="text-sm text-muted-foreground italic">No districts defined.</p> :
+               districts?.length === 0 ? (
+                <div className="text-center py-8">
+                  <Globe className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground italic">No districts defined.</p>
+                </div>
+               ) :
                districts?.map(dist => (
-                <div key={dist.id} className="flex items-center justify-between p-3 border rounded-xl hover:bg-slate-50 transition-colors group">
-                  <span className="font-bold text-slate-700">{dist.name}</span>
+                <div key={dist.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-all group bg-white shadow-sm">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-slate-700">{dist.name}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Region ID: {dist.id.split('-').pop()}</span>
+                  </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="icon" onClick={() => { setEditingDistrict(dist); setDistrictForm(dist); setIsDistrictDialogOpen(true); }} className="h-8 w-8 text-primary">
                       <Edit2 className="w-3.5 h-3.5" />
@@ -155,19 +167,37 @@ export default function BranchesDistrictsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
+            {districts?.length === 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-6">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                <p className="text-sm text-amber-800 font-medium">Please define at least one <strong>District</strong> before registering branches.</p>
+              </div>
+            )}
+            
             <div className="grid gap-4 sm:grid-cols-2">
               {branchesLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto col-span-2" /> :
-               branches?.length === 0 ? <p className="text-sm text-muted-foreground italic col-span-2">No branches defined.</p> :
+               branches?.length === 0 ? (
+                <div className="text-center py-20 col-span-2">
+                  <Building2 className="w-12 h-12 text-slate-100 mx-auto mb-4" />
+                  <p className="text-slate-400 font-medium">No active branches in system.</p>
+                </div>
+               ) :
                branches?.map(branch => (
-                <div key={branch.id} className="flex flex-col p-4 border rounded-2xl bg-white shadow-sm hover:border-primary/30 transition-all group relative">
+                <div key={branch.id} className="flex flex-col p-5 border rounded-2xl bg-white shadow-sm hover:border-primary/30 transition-all group relative">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <h3 className="font-bold text-slate-900">{branch.name}</h3>
-                      <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{branch.district} District</p>
+                      <h3 className="font-bold text-slate-900 text-lg leading-tight">{branch.name}</h3>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Badge variant="outline" className="text-[10px] font-bold text-primary border-primary/10 uppercase tracking-widest bg-primary/5">
+                          {branch.district} District
+                        </Badge>
+                        <Badge variant="secondary" className="text-[9px] font-bold bg-slate-100 text-slate-500 uppercase">
+                          {branch.code || 'NO-CODE'}
+                        </Badge>
+                      </div>
                     </div>
-                    <span className="text-[10px] font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-500">{branch.code || 'NO-CODE'}</span>
                   </div>
-                  <div className="absolute bottom-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="icon" onClick={() => { setEditingBranch(branch); setBranchForm(branch); setIsBranchDialogOpen(true); }} className="h-8 w-8 text-primary bg-white shadow-sm border">
                       <Edit2 className="w-3.5 h-3.5" />
                     </Button>
@@ -214,7 +244,7 @@ export default function BranchesDistrictsPage() {
           </div>
           <DialogFooter className="pt-6">
             <Button variant="outline" onClick={() => setIsBranchDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveBranch} className="shadow-lg">Save Branch Profile</Button>
+            <Button onClick={handleSaveBranch} className="shadow-lg px-8 font-bold">Save Branch Profile</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -223,8 +253,8 @@ export default function BranchesDistrictsPage() {
       <Dialog open={isDistrictDialogOpen} onOpenChange={setIsDistrictDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Regional District</DialogTitle>
-            <DialogDescription>Define a geographical region for reporting.</DialogDescription>
+            <DialogTitle>{editingDistrict ? 'Modify Region' : 'Define Regional District'}</DialogTitle>
+            <DialogDescription>Create a geographical cluster for branch reporting and compliance.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
@@ -232,9 +262,9 @@ export default function BranchesDistrictsPage() {
               <Input value={districtForm.name} onChange={e => setDistrictForm({...districtForm, name: e.target.value})} placeholder="Northern Region" className="h-11" />
             </div>
           </div>
-          <DialogFooter className="pt-4">
+          <DialogFooter className="pt-6">
             <Button variant="outline" onClick={() => setIsDistrictDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveDistrict}>Save Region</Button>
+            <Button onClick={handleSaveDistrict} className="font-bold">Save Region</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

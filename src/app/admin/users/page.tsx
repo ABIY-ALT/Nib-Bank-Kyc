@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useFirestore, useCollection } from "@/firebase";
 import { collection, doc, setDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 import { 
@@ -16,7 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   UserPlus, 
-  MoreHorizontal, 
   Mail, 
   Shield, 
   Trash2, 
@@ -59,7 +58,6 @@ export default function UserManagementPage() {
   const db = useFirestore();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
   const [formData, setFormData] = useState<Partial<User>>({
     name: '',
@@ -72,6 +70,14 @@ export default function UserManagementPage() {
 
   const { data: users, loading } = useCollection<User>(
     db ? query(collection(db, "users"), orderBy("name")) : null
+  );
+
+  const { data: branches } = useCollection<{id: string, name: string, district: string}>(
+    db ? query(collection(db, "branches"), orderBy("name")) : null
+  );
+
+  const { data: districts } = useCollection<{id: string, name: string}>(
+    db ? query(collection(db, "districts"), orderBy("name")) : null
   );
 
   const handleOpenDialog = (user?: User) => {
@@ -106,15 +112,21 @@ export default function UserManagementPage() {
 
   const handleDelete = async (id: string) => {
     if (!db || !confirm("Are you sure you want to delete this user?")) return;
-    setIsDeleting(true);
     try {
       await deleteDoc(doc(db, "users", id));
       toast({ title: "User Deleted", description: "The user has been removed from the system." });
     } catch (e) {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete user." });
-    } finally {
-      setIsDeleting(false);
     }
+  };
+
+  const handleBranchChange = (branchName: string) => {
+    const selectedBranch = branches?.find(b => b.name === branchName);
+    setFormData({
+      ...formData,
+      branch: branchName,
+      district: selectedBranch?.district || formData.district
+    });
   };
 
   return (
@@ -168,8 +180,8 @@ export default function UserManagementPage() {
                 </TableCell>
                 <TableCell>
                   <div className="space-y-1">
-                    <div className="text-sm font-medium flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                    <div className="text-sm font-medium flex items-center gap-1.5 text-slate-700">
+                      <Building2 className="w-3.5 h-3.5 text-primary/60" />
                       {user.branch || 'Central HQ'}
                     </div>
                     {user.district && (
@@ -187,10 +199,10 @@ export default function UserManagementPage() {
                 </TableCell>
                 <TableCell className="text-right pr-8">
                   <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary hover:bg-primary/5">
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary hover:bg-primary/5 rounded-full">
                       <Edit2 className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)} className="text-destructive hover:bg-destructive/5">
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)} className="text-destructive hover:bg-destructive/5 rounded-full">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -240,16 +252,32 @@ export default function UserManagementPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Assigned Branch</Label>
-                <Input value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})} placeholder="Downtown" className="h-11" />
+                <Select value={formData.branch} onValueChange={handleBranchChange}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Select Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Central HQ">Central HQ</SelectItem>
+                    {branches?.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">District Oversight</Label>
-                <Input value={formData.district} onChange={e => setFormData({...formData, district: e.target.value})} placeholder="Central" className="h-11" />
+                <Select value={formData.district} onValueChange={val => setFormData({...formData, district: val})}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Select District" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Central">Central (HQ)</SelectItem>
+                    {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
           <DialogFooter className="pt-6">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="h-11 font-bold">Cancel</Button>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="h-11 font-bold px-6">Cancel</Button>
             <Button onClick={handleSave} className="h-11 px-8 font-bold bg-primary shadow-lg">Save Access Profile</Button>
           </DialogFooter>
         </DialogContent>
