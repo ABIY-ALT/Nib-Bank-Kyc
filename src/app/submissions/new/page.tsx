@@ -30,10 +30,11 @@ import {
   X, 
   FileText, 
   Eye, 
-  CheckCircle2
+  CheckCircle2,
+  Download
 } from "lucide-react";
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, doc, setDoc, query, orderBy } from "firebase/firestore";
+import { useFirestore } from "@/firebase";
+import { collection, doc, setDoc } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 import { useAuth } from "@/lib/auth-mock.tsx";
@@ -198,24 +199,32 @@ export default function NewSubmission() {
                 <Button variant="outline" type="button" className="mt-4">Browse Filesystem</Button>
              </div>
 
-             {uploadedFiles.map((item) => (
-               <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-xl bg-white shadow-sm">
-                 <div className="flex items-center gap-4 flex-1">
-                   <FileText className="w-6 h-6 text-slate-600" />
-                   <span className="text-sm font-bold truncate">{item.file.name}</span>
+             <div className="space-y-3">
+               {uploadedFiles.map((item) => (
+                 <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all">
+                   <div className="flex items-center gap-4 flex-1">
+                     <FileText className="w-6 h-6 text-slate-400" />
+                     <span className="text-sm font-bold truncate text-slate-700">{item.file.name}</span>
+                   </div>
+                   <div className="flex items-center gap-4 w-full md:w-auto">
+                     <Select value={item.type} onValueChange={(val) => handleTypeChange(item.id, val)}>
+                       <SelectTrigger className="h-10 w-full md:w-60 bg-slate-50/50"><SelectValue /></SelectTrigger>
+                       <SelectContent>
+                         {DOCUMENT_TYPES.map((type) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}
+                       </SelectContent>
+                     </Select>
+                     <div className="flex gap-2">
+                       <Button variant="ghost" size="icon" type="button" onClick={() => setPreviewFile(item)} className="h-10 w-10 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
+                         <Eye className="w-5 h-5" />
+                       </Button>
+                       <Button variant="ghost" size="icon" type="button" onClick={() => removeFile(item.id)} className="h-10 w-10 text-red-500 hover:bg-red-50 rounded-full">
+                         <X className="w-5 h-5" />
+                       </Button>
+                     </div>
+                   </div>
                  </div>
-                 <Select value={item.type} onValueChange={(val) => handleTypeChange(item.id, val)}>
-                   <SelectTrigger className="h-10 md:w-60"><SelectValue /></SelectTrigger>
-                   <SelectContent>
-                     {DOCUMENT_TYPES.map((type) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}
-                   </SelectContent>
-                 </Select>
-                 <div className="flex gap-1">
-                   <Button variant="ghost" size="icon" type="button" onClick={() => setPreviewFile(item)}><Eye className="w-4 h-4" /></Button>
-                   <Button variant="ghost" size="icon" type="button" onClick={() => removeFile(item.id)} className="text-destructive"><X className="w-4 h-4" /></Button>
-                 </div>
-               </div>
-             ))}
+               ))}
+             </div>
           </CardContent>
         </Card>
 
@@ -232,12 +241,40 @@ export default function NewSubmission() {
       </form>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader><DialogTitle>Inspection</DialogTitle></DialogHeader>
-          <div className="flex items-center justify-center min-h-[500px] bg-slate-900 rounded-xl overflow-hidden">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
+          <DialogHeader className="p-6 bg-slate-900 text-white flex-row items-center justify-between space-y-0">
+            <div>
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                {previewFile?.file.name}
+              </DialogTitle>
+              <DialogDescription className="text-slate-400 mt-1">
+                Document Inspection • {previewFile?.file.type}
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 bg-slate-800 flex items-center justify-center min-h-[500px]">
             {previewFile?.file.type.startsWith('image/') ? (
-              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain" />
-            ) : <p className="text-white">PDF Preview Unavailable</p>}
+              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
+            ) : previewFile?.file.type === 'application/pdf' ? (
+              <iframe src={previewFile.previewUrl} className="w-full h-[70vh] border-none" title="PDF Preview" />
+            ) : (
+              <div className="text-white flex flex-col items-center gap-6 p-12 text-center">
+                <div className="p-8 bg-slate-700 rounded-full">
+                  <FileText className="w-20 h-20 text-slate-500" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold">Preview Not Supported</p>
+                  <p className="text-slate-400">Direct visualization for this file type is unavailable in-browser.</p>
+                </div>
+                <Button asChild variant="outline" className="text-white border-white/20 hover:bg-white/10 h-12 px-8 font-bold">
+                  <a href={previewFile?.previewUrl} download={previewFile?.file.name}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download to Inspect
+                  </a>
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -32,7 +33,8 @@ import {
   RefreshCw,
   Check,
   Search,
-  Flag
+  Flag,
+  Eye
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -53,6 +55,13 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription 
+} from "@/components/ui/dialog";
 
 const DOCUMENT_TYPES = [
   { id: "id_card", label: "ID Card / National ID" },
@@ -68,6 +77,7 @@ interface UploadedFile {
   id: string;
   file: File;
   type: string;
+  previewUrl: string;
 }
 
 export default function SubmissionDetails() {
@@ -78,6 +88,7 @@ export default function SubmissionDetails() {
   const { user } = useAuth();
   const [remarks, setRemarks] = useState("");
   const [newFiles, setNewFiles] = useState<UploadedFile[]>([]);
+  const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const submissionRef = useMemo(() => {
@@ -115,14 +126,20 @@ export default function SubmissionDetails() {
       const added = Array.from(e.target.files).map(file => ({
         id: Math.random().toString(36).substr(2, 9),
         file: file,
-        type: "id_card"
+        type: "id_card",
+        previewUrl: URL.createObjectURL(file)
       }));
       setNewFiles((prev) => [...prev, ...added]);
     }
   };
 
   const removeNewFile = (id: string) => {
-    setNewFiles((prev) => prev.filter((f) => f.id !== id));
+    setNewFiles((prev) => {
+      const filtered = prev.filter((f) => f.id !== id);
+      const removed = prev.find(f => f.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return filtered;
+    });
   };
 
   const handleNewFileTypeChange = (id: string, newType: string) => {
@@ -191,7 +208,6 @@ export default function SubmissionDetails() {
     router.back();
   };
 
-  // Workflow Status Logic
   const steps = [
     {
       title: "Document Uploaded",
@@ -279,7 +295,7 @@ export default function SubmissionDetails() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-2xl font-bold text-slate-900">Amendment Request Details</CardTitle>
                 <CardDescription className="text-slate-500 font-medium">
-                  Respond to the KYC Officer's request for submission ID: {submission.id}. This is amendment cycle #{submission.amendmentCycles || 1}.
+                  Respond to the KYC Officer's request for submission ID: {submission.id}.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-8 pt-4">
@@ -303,25 +319,30 @@ export default function SubmissionDetails() {
                   <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} multiple />
                   
                   {newFiles.length > 0 && (
-                    <div className="space-y-2 pt-2">
+                    <div className="space-y-3 pt-2">
                       {newFiles.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg bg-white shadow-sm">
-                          <div className="flex items-center gap-3">
-                            <FileText className="w-5 h-5 text-primary" />
+                        <div key={item.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all">
+                          <div className="flex items-center gap-3 flex-1">
+                            <FileText className="w-5 h-5 text-slate-400" />
                             <span className="text-sm font-bold text-slate-700">{item.file.name}</span>
                           </div>
                           <div className="flex items-center gap-3">
                             <Select value={item.type} onValueChange={(val) => handleNewFileTypeChange(item.id, val)}>
-                              <SelectTrigger className="h-9 w-40">
+                              <SelectTrigger className="h-9 w-40 bg-slate-50/50">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 {DOCUMENT_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
                               </SelectContent>
                             </Select>
-                            <Button variant="ghost" size="icon" onClick={() => removeNewFile(item.id)} className="h-8 w-8 text-destructive rounded-full">
-                              <X className="w-4 h-4" />
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => setPreviewFile(item)} className="h-9 w-9 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => removeNewFile(item.id)} className="h-9 w-9 text-red-500 hover:bg-red-50 rounded-full">
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -403,17 +424,14 @@ export default function SubmissionDetails() {
         </div>
 
         <div className="space-y-6">
-          {/* WORKFLOW STATUS TRACKER */}
           <Card className="shadow-lg border-slate-200 overflow-hidden">
             <CardHeader className="bg-slate-50/50 border-b py-4">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-600">KYC Workflow Status</CardTitle>
-                <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 border rounded-full">Updated just now</span>
               </div>
             </CardHeader>
             <CardContent className="pt-6 pb-8">
               <div className="relative space-y-8">
-                {/* Vertical Line */}
                 <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-sidebar-border/20" />
                 
                 {steps.map((step, idx) => {
@@ -422,7 +440,6 @@ export default function SubmissionDetails() {
                   
                   return (
                     <div key={step.title} className="relative flex gap-6 group">
-                      {/* Status Icon/Circle */}
                       <div className={cn(
                         "z-10 w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shrink-0",
                         step.status === "completed" ? "bg-emerald-500 border-emerald-500 text-white" :
@@ -432,7 +449,6 @@ export default function SubmissionDetails() {
                         <Icon className={cn("w-5 h-5", step.status === "active" && "animate-pulse")} />
                       </div>
 
-                      {/* Line Connecting steps (Colored if completed) */}
                       {!isLast && (
                         <div className={cn(
                           "absolute left-[19px] top-10 h-8 w-0.5 transition-colors",
@@ -540,6 +556,45 @@ export default function SubmissionDetails() {
           )}
         </div>
       </div>
+
+      <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
+          <DialogHeader className="p-6 bg-slate-900 text-white flex-row items-center justify-between space-y-0">
+            <div>
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                {previewFile?.file.name}
+              </DialogTitle>
+              <DialogDescription className="text-slate-400 mt-1">
+                Document Inspection • {previewFile?.file.type}
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 bg-slate-800 flex items-center justify-center min-h-[500px]">
+            {previewFile?.file.type.startsWith('image/') ? (
+              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
+            ) : previewFile?.file.type === 'application/pdf' ? (
+              <iframe src={previewFile.previewUrl} className="w-full h-[70vh] border-none" title="PDF Preview" />
+            ) : (
+              <div className="text-white flex flex-col items-center gap-6 p-12 text-center">
+                <div className="p-8 bg-slate-700 rounded-full">
+                  <FileText className="w-20 h-20 text-slate-500" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold">Preview Not Supported</p>
+                  <p className="text-slate-400">Direct visualization for this file type is unavailable in-browser.</p>
+                </div>
+                <Button asChild variant="outline" className="text-white border-white/20 hover:bg-white/10 h-12 px-8 font-bold">
+                  <a href={previewFile?.previewUrl} download={previewFile?.file.name}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download to Inspect
+                  </a>
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
