@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -22,15 +22,41 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { Upload, FilePlus, Shield, Info } from "lucide-react";
+import { Upload, FilePlus, Shield, Info, X, FileText } from "lucide-react";
 
 export default function NewSubmission() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files);
+      setFiles((prev) => [...prev, ...newFiles]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (files.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Missing Documents",
+        description: "Please upload at least one verification document.",
+      });
+      return;
+    }
+
     setLoading(true);
     // Simulate API call
     setTimeout(() => {
@@ -93,8 +119,20 @@ export default function NewSubmission() {
             <CardDescription>Upload necessary verification documents.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-             <div className="border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-center space-y-4 hover:bg-accent/5 transition-colors cursor-pointer">
-                <div className="bg-primary/10 p-4 rounded-full">
+             <input 
+               type="file" 
+               className="hidden" 
+               ref={fileInputRef} 
+               onChange={handleFileChange}
+               multiple
+               accept=".pdf,.jpg,.jpeg,.png"
+             />
+             
+             <div 
+               onClick={triggerFileUpload}
+               className="border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-center space-y-4 hover:bg-accent/5 transition-colors cursor-pointer group"
+             >
+                <div className="bg-primary/10 p-4 rounded-full group-hover:scale-110 transition-transform">
                   <Upload className="w-8 h-8 text-primary" />
                 </div>
                 <div>
@@ -103,6 +141,34 @@ export default function NewSubmission() {
                 </div>
                 <Button variant="outline" type="button">Select Files</Button>
              </div>
+
+             {files.length > 0 && (
+               <div className="space-y-2">
+                 <Label>Selected Documents ({files.length})</Label>
+                 <div className="grid gap-2">
+                   {files.map((file, index) => (
+                     <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                       <div className="flex items-center gap-3">
+                         <FileText className="w-5 h-5 text-muted-foreground" />
+                         <div className="flex flex-col">
+                           <span className="text-sm font-medium truncate max-w-[200px] md:max-w-md">{file.name}</span>
+                           <span className="text-[10px] text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                         </div>
+                       </div>
+                       <Button 
+                         variant="ghost" 
+                         size="icon" 
+                         type="button"
+                         onClick={() => removeFile(index)}
+                         className="h-8 w-8 text-destructive"
+                       >
+                         <X className="w-4 h-4" />
+                       </Button>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             )}
 
              <div className="flex gap-4 p-4 rounded-lg bg-blue-50 border border-blue-100 text-blue-800 text-sm">
                 <Info className="w-5 h-5 shrink-0" />
