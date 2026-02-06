@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useFirestore, useCollection } from "@/firebase";
@@ -7,11 +6,13 @@ import { currentUser } from "@/lib/auth-mock";
 import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function MySubmissionsPage() {
   const db = useFirestore();
   const user = currentUser;
 
+  // Stable query for current user's submissions
   const mySubmissionsQuery = useMemo(() => {
     if (!db) return null;
     return query(
@@ -24,13 +25,21 @@ export default function MySubmissionsPage() {
   const { data: submissions, loading } = useCollection<KYCSubmission>(mySubmissionsQuery);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">My Submissions</h1>
-        <p className="text-muted-foreground">Track identity verification requests you initiated.</p>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
+          My Submissions
+        </h1>
+        <p className="text-muted-foreground text-lg">
+          Detailed history of KYC verification requests initiated by you.
+        </p>
       </div>
+
       {loading ? (
-        <div className="p-12 text-center text-muted-foreground">Loading submissions...</div>
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+        </div>
       ) : (
         <SubmissionsPageContent submissions={submissions || []} />
       )}
