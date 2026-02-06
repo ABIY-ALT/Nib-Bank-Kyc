@@ -3,7 +3,7 @@
 
 import { useMemo, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Users, CheckCircle, History, AlertTriangle, Filter, Search, X } from "lucide-react"
+import { Users, CheckCircle, History, AlertTriangle, Filter, Search, X, FileDown, Calendar as CalendarIcon, ChevronDown, Clock, TrendingUp } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,14 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select"
+import { useToast } from "@/hooks/use-toast"
 
 const MOCK_OFFICER_METRICS = [
   { name: "Jane Smith", branch: "Downtown", processed: 85, approved: 72, amended: 10, rejected: 3, turnaround: "0.8d" },
@@ -28,8 +36,10 @@ const BRANCH_OPTIONS = ["Downtown", "Uptown", "East Side", "Valley Branch"];
 const OFFICER_NAMES = MOCK_OFFICER_METRICS.map(o => o.name);
 
 export default function OfficerPerformancePage() {
+  const { toast } = useToast();
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedOfficers, setSelectedOfficers] = useState<string[]>([]);
+  const [timeRange, setTimeRange] = useState("all");
 
   const filteredOfficers = useMemo(() => {
     return MOCK_OFFICER_METRICS.filter(o => {
@@ -38,8 +48,6 @@ export default function OfficerPerformancePage() {
       return matchesBranch && matchesOfficer;
     });
   }, [selectedBranches, selectedOfficers]);
-
-  const totalReviews = filteredOfficers.reduce((acc, o) => acc + o.processed, 0);
 
   const toggleBranch = (branch: string) => {
     setSelectedBranches(prev => 
@@ -56,6 +64,27 @@ export default function OfficerPerformancePage() {
   const resetFilters = () => {
     setSelectedBranches([]);
     setSelectedOfficers([]);
+    setTimeRange("all");
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Officer', 'Branch', 'Processed', 'Approved', 'Amended', 'Rejected', 'Turnaround'];
+    const rows = filteredOfficers.map(o => [
+      o.name, o.branch, o.processed, o.approved, o.amended, o.rejected, o.turnaround
+    ]);
+    
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `officer-productivity-${timeRange}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.click();
+    
+    toast({
+      title: "Productivity Report Exported",
+      description: `Data for ${filteredOfficers.length} officers has been saved to CSV.`,
+    });
   };
 
   return (
@@ -63,17 +92,21 @@ export default function OfficerPerformancePage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Officer Productivity</h1>
-          <p className="text-muted-foreground text-lg">Detailed throughput and accuracy metrics for verification staff.</p>
+          <p className="text-muted-foreground text-lg font-medium">Detailed throughput and accuracy metrics for verification staff.</p>
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex flex-wrap gap-3 items-center">
+          <Button variant="outline" className="gap-2 h-11 px-6 font-bold shadow-sm border-slate-200" onClick={handleExportCSV}>
+            <FileDown className="w-4 h-4 text-primary" />
+            Export Report
+          </Button>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="gap-2 h-11 px-6 font-bold text-slate-600 border-slate-200 relative shadow-sm">
                 <Filter className="w-4 h-4" />
                 Filter Personnel
-                {(selectedBranches.length > 0 || selectedOfficers.length > 0) && (
+                {(selectedBranches.length > 0 || selectedOfficers.length > 0 || timeRange !== 'all') && (
                   <Badge variant="default" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-primary text-[10px] font-bold">
-                    {selectedBranches.length + selectedOfficers.length}
+                    {selectedBranches.length + selectedOfficers.length + (timeRange !== 'all' ? 1 : 0)}
                   </Badge>
                 )}
               </Button>
@@ -81,7 +114,7 @@ export default function OfficerPerformancePage() {
             <PopoverContent className="w-[320px] p-0 shadow-2xl border-slate-200 overflow-hidden bg-white" align="end">
               <div className="p-6 pb-0 flex items-center justify-between">
                 <h3 className="font-bold text-[#101828] text-2xl tracking-tight">Staff Filters</h3>
-                {(selectedBranches.length > 0 || selectedOfficers.length > 0) && (
+                {(selectedBranches.length > 0 || selectedOfficers.length > 0 || timeRange !== 'all') && (
                   <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 text-[11px] font-bold text-primary hover:bg-primary/5 uppercase tracking-widest px-2">
                     Clear
                   </Button>
@@ -89,6 +122,24 @@ export default function OfficerPerformancePage() {
               </div>
               
               <div className="p-6 space-y-8">
+                <div className="space-y-4">
+                  <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Audit Period</Label>
+                  <Select value={timeRange} onValueChange={setTimeRange}>
+                    <SelectTrigger className="w-full h-10 border-slate-200">
+                      <CalendarIcon className="w-4 h-4 mr-2 text-slate-400" />
+                      <SelectValue placeholder="Select Range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Historical Data</SelectItem>
+                      <SelectItem value="7d">Last 7 Days</SelectItem>
+                      <SelectItem value="30d">Last 30 Days</SelectItem>
+                      <SelectItem value="90d">Current Quarter</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Separator className="bg-slate-100/80" />
+
                 <div className="space-y-5">
                   <Label className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400/80">Institutional Unit</Label>
                   <div className="grid gap-4">
@@ -133,9 +184,10 @@ export default function OfficerPerformancePage() {
               </div>
             </PopoverContent>
           </Popover>
-          <Badge variant="outline" className="px-4 py-2.5 bg-white shadow-sm font-bold border-slate-200 text-primary">
-            Active Dataset: {filteredOfficers.length} Officers
-          </Badge>
+          <div className="px-6 py-3.5 bg-white border border-slate-100 rounded-full shadow-sm flex items-center gap-3">
+             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+             <span className="text-sm font-bold text-slate-900">Active Dataset: {filteredOfficers.length} Officers</span>
+          </div>
         </div>
       </div>
 
@@ -143,51 +195,54 @@ export default function OfficerPerformancePage() {
         {filteredOfficers.map((officer) => {
           const approvalRate = Math.round((officer.approved / officer.processed) * 100);
           return (
-            <Card key={officer.name} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all duration-300 hover:shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 bg-slate-50/80 border-b pb-4 px-6">
+            <Card key={officer.name} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all duration-300 hover:shadow-xl bg-white">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 px-6 pt-6">
                 <div>
-                  <CardTitle className="text-xl font-bold text-slate-900">{officer.name}</CardTitle>
-                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">{officer.branch} Office</p>
+                  <CardTitle className="text-2xl font-black text-slate-900 tracking-tight">{officer.name}</CardTitle>
+                  <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-0.5">{officer.branch} Office</p>
                 </div>
-                <div className="p-2.5 bg-white rounded-xl border shadow-sm text-primary group-hover:bg-primary group-hover:text-white transition-colors duration-300">
-                  <Users className="w-5 h-5" />
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 group-hover:bg-primary/5 group-hover:text-primary transition-all duration-300">
+                  <Users className="w-6 h-6" />
                 </div>
               </CardHeader>
-              <CardContent className="pt-8 px-6 space-y-6 pb-8">
-                <div className="grid grid-cols-2 gap-6">
+              <CardContent className="pt-6 px-6 space-y-8 pb-8">
+                <div className="grid grid-cols-2 gap-8">
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cases Processed</p>
-                    <p className="text-3xl font-bold text-slate-900">{officer.processed}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Cases Processed</p>
+                    <p className="text-4xl font-bold text-slate-900 tracking-tighter">{officer.processed}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Avg. Turnaround</p>
-                    <p className="text-3xl font-bold text-blue-600">{officer.turnaround}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Avg. Turnaround</p>
+                    <p className="text-4xl font-bold text-blue-600 tracking-tighter">{officer.turnaround}</p>
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="flex justify-between text-xs font-bold text-slate-600">
-                    <span className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Approval Accuracy</span>
-                    <span className="text-emerald-600">{approvalRate}%</span>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-700">
+                    <span className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-500" />
+                      Approval Accuracy
+                    </span>
+                    <span className="text-emerald-600 font-black">{approvalRate}%</span>
                   </div>
-                  <Progress value={approvalRate} className="h-2 bg-slate-100" />
+                  <Progress value={approvalRate} className="h-2.5 bg-slate-100" />
                 </div>
 
-                <div className="pt-6 border-t border-slate-100 grid grid-cols-2 gap-y-4">
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                <div className="pt-8 border-t border-slate-50 grid grid-cols-2 gap-y-6">
+                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
                     <div className="w-2 h-2 rounded-full bg-emerald-500" />
                     {officer.approved} Approved
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
                     <div className="w-2 h-2 rounded-full bg-orange-500" />
                     {officer.amended} Amendments
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                    <History className="w-3.5 h-3.5 text-indigo-500" />
+                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                    <History className="w-4 h-4 text-indigo-400" />
                     {officer.processed} Cycles
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                    <AlertTriangle className="w-4 h-4 text-red-500" />
                     {officer.rejected} Rejections
                   </div>
                 </div>

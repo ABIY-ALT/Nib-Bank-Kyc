@@ -10,7 +10,7 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from "@/components/ui/table";
+} from "@/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,12 +86,12 @@ export default function SubmissionsPage() {
       const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(s.status);
       const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(s.branch);
       
-      // Simulated time horizon check
       const subDate = new Date(s.submittedAt);
       const now = new Date();
       let matchesTime = true;
       if (timeHorizon === '7d') matchesTime = (now.getTime() - subDate.getTime()) <= (7 * 24 * 60 * 60 * 1000);
       if (timeHorizon === '30d') matchesTime = (now.getTime() - subDate.getTime()) <= (30 * 24 * 60 * 60 * 1000);
+      if (timeHorizon === '90d') matchesTime = (now.getTime() - subDate.getTime()) <= (90 * 24 * 60 * 60 * 1000);
 
       return matchesSearch && matchesStatus && matchesBranch && matchesTime;
     });
@@ -114,7 +114,7 @@ export default function SubmissionsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-kyc-master-archive-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `nib-kyc-archive-${timeHorizon}-${new Date().toISOString().split('T')[0]}.csv`);
     link.click();
     
     toast({
@@ -175,10 +175,24 @@ export default function SubmissionsPage() {
             <p className="text-muted-foreground text-lg font-medium">Historical directory of all network submissions.</p>
           </div>
         </div>
-        <Button variant="outline" className="gap-2 font-bold shadow-sm" onClick={handleExportCSV}>
-          <FileDown className="w-4 h-4" />
-          Export Master List
-        </Button>
+        <div className="flex gap-2">
+          <Select value={timeHorizon} onValueChange={setTimeHorizon}>
+            <SelectTrigger className="w-[180px] h-11 border-slate-200 bg-white font-bold shadow-sm">
+              <CalendarIcon className="w-4 h-4 mr-2 text-primary" />
+              <SelectValue placeholder="Time Period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Full Archive</SelectItem>
+              <SelectItem value="7d">Last 7 Days</SelectItem>
+              <SelectItem value="30d">Last 30 Days</SelectItem>
+              <SelectItem value="90d">Last 90 Days</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" className="gap-2 h-11 px-6 font-bold shadow-sm border-slate-200 bg-white hover:bg-slate-50" onClick={handleExportCSV}>
+            <FileDown className="w-4 h-4 text-primary" />
+            Export Archive
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-center bg-white p-4 rounded-xl border shadow-sm">
@@ -197,35 +211,21 @@ export default function SubmissionsPage() {
             <Button variant="outline" className="gap-2 h-11 px-6 font-bold text-slate-600 border-slate-200 relative">
               <Filter className="w-4 h-4" />
               Advanced Filters
-              {(selectedStatuses.length > 0 || selectedBranches.length > 0 || timeHorizon !== 'all') && (
+              {(selectedStatuses.length > 0 || selectedBranches.length > 0) && (
                 <Badge variant="default" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-primary text-[10px] font-bold">
-                  {(selectedStatuses.length > 0 ? 1 : 0) + (selectedBranches.length > 0 ? 1 : 0) + (timeHorizon !== 'all' ? 1 : 0)}
+                  {(selectedStatuses.length > 0 ? 1 : 0) + (selectedBranches.length > 0 ? 1 : 0)}
                 </Badge>
               )}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80 p-6 space-y-6 shadow-2xl border-slate-200" align="end">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900">Archive Filters</h3>
-              {(selectedStatuses.length > 0 || selectedBranches.length > 0 || searchTerm || timeHorizon !== 'all') && (
+              <h3 className="font-bold text-slate-900 text-xl tracking-tight">Archive Filters</h3>
+              {(selectedStatuses.length > 0 || selectedBranches.length > 0 || searchTerm) && (
                 <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 text-[11px] font-bold text-primary uppercase tracking-wider px-2 hover:bg-primary/5">
                   Clear All
                 </Button>
               )}
-            </div>
-
-            <div className="space-y-4">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Time Horizon</Label>
-              <Select value={timeHorizon} onValueChange={setTimeHorizon}>
-                <SelectTrigger className="w-full h-9">
-                  <SelectValue placeholder="Select period" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Records</SelectItem>
-                  <SelectItem value="7d">Last 7 Days</SelectItem>
-                  <SelectItem value="30d">Last 30 Days</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             
             <Separator className="bg-slate-100" />
