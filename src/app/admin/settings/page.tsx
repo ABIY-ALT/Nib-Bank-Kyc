@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useFirestore, useDoc, useCollection } from "@/firebase";
+import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
 import { doc, setDoc, updateDoc, collection, query, orderBy } from "firebase/firestore";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -17,7 +17,6 @@ import {
   Clock, 
   Building2, 
   UserPlus, 
-  Check, 
   X,
   Users
 } from "lucide-react";
@@ -45,22 +44,30 @@ export default function SystemSettingsPage() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   
-  // Settings State
-  const settingsRef = db ? doc(db, "settings", "global") : null;
+  const settingsRef = useMemoFirebase(() => {
+    return db ? doc(db, "settings", "global") : null;
+  }, [db]);
+
   const { data: remoteSettings, loading: fetchLoading } = useDoc<GlobalSettings>(settingsRef);
+  
   const [localSettings, setLocalSettings] = useState<GlobalSettings>({
     autoEscalation: true,
     strictSla: true
   });
 
-  // Assignment Tool State
   const [selectedBranch, setSelectedBranch] = useState<string>("");
-  const { data: branches } = useCollection<{id: string, name: string}>(
-    db ? query(collection(db, "branches"), orderBy("name")) : null
-  );
-  const { data: allUsers, loading: usersLoading } = useCollection<User>(
-    db ? query(collection(db, "users"), orderBy("name")) : null
-  );
+
+  const branchesQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "branches"), orderBy("name")) : null;
+  }, [db]);
+
+  const { data: branches } = useCollection<{id: string, name: string}>(branchesQuery);
+
+  const usersQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "users"), orderBy("name")) : null;
+  }, [db]);
+
+  const { data: allUsers } = useCollection<User>(usersQuery);
 
   useEffect(() => {
     if (remoteSettings) {
@@ -137,7 +144,6 @@ export default function SystemSettingsPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        {/* WORKFLOW POLICIES */}
         <Card className="shadow-lg border-slate-200 h-fit">
           <CardHeader className="bg-slate-50/50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">
@@ -183,7 +189,6 @@ export default function SystemSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* REGIONAL MAPPING */}
         <Card className="shadow-xl border-slate-200">
           <CardHeader className="bg-slate-50/50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">

@@ -2,16 +2,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useFirestore, useCollection } from "@/firebase";
+import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, doc, setDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
-import { Building2, Plus, MapPin, Trash2, Edit2, Loader2, Globe, AlertCircle } from "lucide-react";
+import { Building2, Plus, MapPin, Trash2, Edit2, Loader2, Globe } from "lucide-react";
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -53,13 +52,17 @@ export default function BranchesDistrictsPage() {
   const [branchForm, setBranchForm] = useState<Partial<Branch>>({ name: '', district: '', code: '' });
   const [districtForm, setDistrictForm] = useState<Partial<District>>({ name: '' });
 
-  const { data: branches, loading: branchesLoading } = useCollection<Branch>(
-    db ? query(collection(db, "branches"), orderBy("name")) : null
-  );
+  const branchesQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "branches"), orderBy("name")) : null;
+  }, [db]);
 
-  const { data: districts, loading: districtsLoading } = useCollection<District>(
-    db ? query(collection(db, "districts"), orderBy("name")) : null
-  );
+  const { data: branches, loading: branchesLoading } = useCollection<Branch>(branchesQuery);
+
+  const districtsQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "districts"), orderBy("name")) : null;
+  }, [db]);
+
+  const { data: districts, loading: districtsLoading } = useCollection<District>(districtsQuery);
 
   const handleSaveBranch = () => {
     if (!db) return;
@@ -147,7 +150,6 @@ export default function BranchesDistrictsPage() {
       </div>
 
       <div className="grid gap-8 md:grid-cols-3">
-        {/* DISTRICTS PANEL */}
         <Card className="md:col-span-1 shadow-md border-slate-200 h-fit">
           <CardHeader className="bg-slate-50/50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">
@@ -177,7 +179,6 @@ export default function BranchesDistrictsPage() {
           </CardContent>
         </Card>
 
-        {/* BRANCHES PANEL */}
         <Card className="md:col-span-2 shadow-xl border-slate-200">
           <CardHeader className="bg-slate-50/50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">
@@ -213,7 +214,6 @@ export default function BranchesDistrictsPage() {
         </Card>
       </div>
 
-      {/* BRANCH DIALOG */}
       <Dialog open={isBranchDialogOpen} onOpenChange={setIsBranchDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -249,7 +249,6 @@ export default function BranchesDistrictsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* DISTRICT DIALOG */}
       <Dialog open={isDistrictDialogOpen} onOpenChange={setIsDistrictDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
