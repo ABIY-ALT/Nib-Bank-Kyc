@@ -24,22 +24,46 @@ import {
 } from "@/components/ui/select";
 import { Upload, FilePlus, Shield, Info, X, FileText } from "lucide-react";
 
+interface UploadedFile {
+  id: string;
+  file: File;
+  type: string;
+}
+
+const DOCUMENT_TYPES = [
+  { id: "id_card", label: "ID Card / National ID" },
+  { id: "passport", label: "Passport" },
+  { id: "utility_bill", label: "Utility Bill" },
+  { id: "bank_statement", label: "Bank Statement" },
+  { id: "incorporation", label: "Certificate of Incorporation" },
+  { id: "tax_cert", label: "Tax Certificate" },
+  { id: "other", label: "Other Document" },
+];
+
 export default function NewSubmission() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      setFiles((prev) => [...prev, ...newFiles]);
+      const newFiles = Array.from(e.target.files).map(file => ({
+        id: Math.random().toString(36).substr(2, 9),
+        file: file,
+        type: "id_card" // Default type
+      }));
+      setUploadedFiles((prev) => [...prev, ...newFiles]);
     }
   };
 
-  const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+  const removeFile = (id: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const handleTypeChange = (id: string, newType: string) => {
+    setUploadedFiles((prev) => prev.map(f => f.id === id ? { ...f, type: newType } : f));
   };
 
   const triggerFileUpload = () => {
@@ -48,7 +72,7 @@ export default function NewSubmission() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (files.length === 0) {
+    if (uploadedFiles.length === 0) {
       toast({
         variant: "destructive",
         title: "Missing Documents",
@@ -64,7 +88,7 @@ export default function NewSubmission() {
         title: "Submission Created",
         description: "Your KYC request has been submitted for review.",
       });
-      router.push('/submissions');
+      router.push('/submissions/my');
     }, 1500);
   };
 
@@ -116,7 +140,7 @@ export default function NewSubmission() {
               <FilePlus className="w-5 h-5 text-primary" />
               Documentation
             </CardTitle>
-            <CardDescription>Upload necessary verification documents.</CardDescription>
+            <CardDescription>Upload necessary verification documents and categorize them.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
              <input 
@@ -142,28 +166,50 @@ export default function NewSubmission() {
                 <Button variant="outline" type="button">Select Files</Button>
              </div>
 
-             {files.length > 0 && (
-               <div className="space-y-2">
-                 <Label>Selected Documents ({files.length})</Label>
-                 <div className="grid gap-2">
-                   {files.map((file, index) => (
-                     <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-card">
-                       <div className="flex items-center gap-3">
-                         <FileText className="w-5 h-5 text-muted-foreground" />
-                         <div className="flex flex-col">
-                           <span className="text-sm font-medium truncate max-w-[200px] md:max-w-md">{file.name}</span>
-                           <span className="text-[10px] text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+             {uploadedFiles.length > 0 && (
+               <div className="space-y-4">
+                 <Label className="text-base font-semibold">Selected Documents ({uploadedFiles.length})</Label>
+                 <div className="grid gap-3">
+                   {uploadedFiles.map((item) => (
+                     <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-lg bg-card shadow-sm">
+                       <div className="flex items-center gap-3 flex-1">
+                         <div className="p-2 bg-muted rounded-md">
+                           <FileText className="w-5 h-5 text-primary" />
+                         </div>
+                         <div className="flex flex-col overflow-hidden">
+                           <span className="text-sm font-medium truncate max-w-[200px] md:max-w-xs">{item.file.name}</span>
+                           <span className="text-[10px] text-muted-foreground">{(item.file.size / 1024 / 1024).toFixed(2)} MB</span>
                          </div>
                        </div>
-                       <Button 
-                         variant="ghost" 
-                         size="icon" 
-                         type="button"
-                         onClick={() => removeFile(index)}
-                         className="h-8 w-8 text-destructive"
-                       >
-                         <X className="w-4 h-4" />
-                       </Button>
+                       
+                       <div className="flex items-center gap-2 w-full md:w-auto">
+                         <div className="flex-1 md:w-64">
+                           <Select 
+                             value={item.type} 
+                             onValueChange={(val) => handleTypeChange(item.id, val)}
+                           >
+                             <SelectTrigger className="h-9">
+                               <SelectValue placeholder="Select doc type" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               {DOCUMENT_TYPES.map((type) => (
+                                 <SelectItem key={type.id} value={type.id}>
+                                   {type.label}
+                                 </SelectItem>
+                               ))}
+                             </SelectContent>
+                           </Select>
+                         </div>
+                         <Button 
+                           variant="ghost" 
+                           size="icon" 
+                           type="button"
+                           onClick={() => removeFile(item.id)}
+                           className="h-9 w-9 text-destructive hover:bg-destructive/10 shrink-0"
+                         >
+                           <X className="w-4 h-4" />
+                         </Button>
+                       </div>
                      </div>
                    ))}
                  </div>
@@ -186,7 +232,7 @@ export default function NewSubmission() {
           </CardContent>
           <CardFooter className="flex justify-end gap-3 border-t pt-6">
             <Button variant="outline" type="button" onClick={() => router.back()}>Cancel</Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading} className="px-8">
               {loading ? "Submitting..." : "Submit for Review"}
             </Button>
           </CardFooter>
