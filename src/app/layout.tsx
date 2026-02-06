@@ -1,4 +1,3 @@
-
 import type {Metadata} from 'next';
 import './globals.css';
 import {SidebarProvider, SidebarTrigger} from '@/components/ui/sidebar';
@@ -12,7 +11,7 @@ import {ThemeProvider} from '@/components/theme-provider';
 import {ModeToggle} from '@/components/mode-toggle';
 
 export const metadata: Metadata = {
-  title: 'KYC Flow - Secure Identity Verification',
+  title: 'Nib Kyc - Secure Identity Verification',
   description: 'Identity verification and submission management system.',
 };
 

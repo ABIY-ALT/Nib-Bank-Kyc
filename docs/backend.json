@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "KYCSubmission": {
@@ -79,7 +78,7 @@
     },
     "SystemSettings": {
       "title": "System Settings",
-      "description": "Global configuration for the KYC Flow system.",
+      "description": "Global configuration for the Nib Kyc system.",
       "type": "object",
       "properties": {
         "autoEscalation": { "type": "boolean" },

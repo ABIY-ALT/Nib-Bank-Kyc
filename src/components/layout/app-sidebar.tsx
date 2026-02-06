@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -80,7 +79,7 @@ export function AppSidebar() {
       <SidebarHeader className="border-b h-16 flex items-center px-4">
         <div className="flex items-center gap-2 font-bold text-primary">
           <ShieldCheck className="w-8 h-8 shrink-0" />
-          <span className="group-data-[collapsible=icon]:hidden truncate">KYC Flow</span>
+          <span className="group-data-[collapsible=icon]:hidden truncate">Nib Kyc</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
