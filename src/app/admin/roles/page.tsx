@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -12,7 +13,8 @@ import {
   ShieldCheck, 
   Search,
   UserCog,
-  ShieldAlert
+  ShieldAlert,
+  UserCheck
 } from "lucide-react";
 import { 
   Select, 
@@ -101,18 +103,18 @@ export default function StaffRolesPage() {
       <Card className="shadow-xl border-slate-200 overflow-hidden">
         <CardHeader className="bg-slate-50/50 border-b">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
+            <div className="space-y-1">
               <CardTitle className="text-xl flex items-center gap-2">
                 <UserCog className="w-5 h-5 text-primary" />
                 Staff Role Assignments
               </CardTitle>
               <CardDescription>Update permissions for all institutional personnel.</CardDescription>
             </div>
-            <div className="relative w-full md:w-64">
+            <div className="relative w-full md:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input 
                 placeholder="Search by name or role..." 
-                className="pl-9 h-11" 
+                className="pl-9 h-11 border-primary/20 focus-visible:ring-primary" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -144,7 +146,8 @@ export default function StaffRolesPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">
+                    <Badge variant="secondary" className="bg-primary/5 text-primary font-bold flex items-center gap-1.5 w-fit">
+                      <UserCheck className="w-3 h-3" />
                       {u.role}
                     </Badge>
                   </TableCell>
@@ -159,7 +162,7 @@ export default function StaffRolesPage() {
                         value={u.role} 
                         onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.name)}
                       >
-                        <SelectTrigger className="w-[180px] h-9">
+                        <SelectTrigger className="w-[200px] h-10 border-primary/20">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -174,9 +177,14 @@ export default function StaffRolesPage() {
               ))}
               {filteredUsers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-20 text-center italic text-muted-foreground">
-                    <ShieldAlert className="w-12 h-12 mx-auto mb-3 text-slate-200" />
-                    No staff members found matching your search.
+                  <TableCell colSpan={4} className="py-24 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <ShieldAlert className="w-16 h-16 text-slate-200" />
+                      <div className="space-y-1">
+                        <p className="font-bold text-slate-900 text-lg">No results found</p>
+                        <p className="text-sm text-muted-foreground">No staff members found matching your search.</p>
+                      </div>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}
