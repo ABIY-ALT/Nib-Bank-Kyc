@@ -23,7 +23,7 @@ import {
   Pie,
   Cell,
   Legend,
-  Tooltip
+  Tooltip as RechartsTooltip
 } from "recharts";
 import { Download, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -117,7 +117,7 @@ export default function ReportsPage() {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <RechartsTooltip />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>

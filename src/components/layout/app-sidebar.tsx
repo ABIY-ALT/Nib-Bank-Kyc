@@ -9,8 +9,16 @@ import {
   PieChart,
   ShieldCheck,
   LogOut,
-  ChevronRight,
-  Settings
+  Settings,
+  PlusCircle,
+  Inbox,
+  AlertCircle,
+  BarChart3,
+  History,
+  Map,
+  ChevronDown,
+  UserPlus,
+  ShieldAlert
 } from "lucide-react"
 
 import {
@@ -23,8 +31,16 @@ import {
   SidebarMenuItem,
   SidebarGroup,
   SidebarGroupLabel,
-  SidebarGroupContent
+  SidebarGroupContent,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton
 } from "@/components/ui/sidebar"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { currentUser } from "@/lib/auth-mock"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -33,81 +49,247 @@ export function AppSidebar() {
   const pathname = usePathname()
   const user = currentUser
 
-  const navigation = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Submissions', href: '/submissions', icon: FileText },
-    { name: 'Reports', href: '/reports', icon: PieChart },
-  ]
+  // Role Checks
+  const isBranchOfficer = user.role === 'Branch Officer'
+  const isKYCOfficer = user.role === 'KYC Officer'
+  const isSupervisor = user.role === 'Supervisor'
+  const isBranchMgr = user.role === 'Branch Manager'
+  const isDirector = user.role === 'Director'
+  const isDistDir = user.role === 'District Director'
+  const isAdmin = user.role === 'Admin'
 
-  const adminNav = [
-    { name: 'User Management', href: '/admin/users', icon: Users },
-    { name: 'Branch Management', href: '/admin/branches', icon: Building2 },
-    { name: 'Audit Logs', href: '/admin/audit', icon: ShieldCheck },
-  ]
+  // Aggregate Permissions
+  const canSeePerformance = isBranchMgr || isSupervisor || isDirector || isDistDir || isAdmin
+  const canSeeReports = isBranchMgr || isSupervisor || isDirector || isDistDir || isAdmin
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b h-16 flex items-center px-6">
+      <SidebarHeader className="border-b h-16 flex items-center px-4">
         <div className="flex items-center gap-2 font-bold text-primary">
-          <ShieldCheck className="w-8 h-8" />
-          <span className="group-data-[collapsible=icon]:hidden">KYC Flow</span>
+          <ShieldCheck className="w-8 h-8 shrink-0" />
+          <span className="group-data-[collapsible=icon]:hidden truncate">KYC Flow</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
+        {/* DASHBOARD */}
         <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
-          <SidebarGroupContent>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
+                <Link href="/">
+                  <LayoutDashboard />
+                  <span>Dashboard</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        {/* SUBMISSIONS */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Submissions</SidebarGroupLabel>
+          <SidebarMenu>
+            <Collapsible defaultOpen className="group/collapsible">
+              <SidebarMenuItem>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton tooltip="Submissions">
+                    <FileText />
+                    <span>Workflow</span>
+                    <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <SidebarMenuSub>
+                    {isBranchOfficer && (
+                      <>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/new'}>
+                            <Link href="/submissions/new">
+                              <PlusCircle className="w-4 h-4 mr-2" />
+                              <span>New Submission</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/my'}>
+                            <Link href="/submissions/my">
+                              <Inbox className="w-4 h-4 mr-2" />
+                              <span>My Submissions</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </>
+                    )}
+                    {isKYCOfficer && (
+                      <>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/queue'}>
+                            <Link href="/submissions/queue">
+                              <Inbox className="w-4 h-4 mr-2" />
+                              <span>Review Queue</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
+                            <Link href="/submissions/amendments">
+                              <AlertCircle className="w-4 h-4 mr-2" />
+                              <span>Amendment Review</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </>
+                    )}
+                    {(isKYCOfficer || isSupervisor) && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions/escalated'}>
+                          <Link href="/submissions/escalated">
+                            <ShieldAlert className="w-4 h-4 mr-2 text-destructive" />
+                            <span>Escalated Cases</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {(isBranchOfficer || isKYCOfficer) && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>
+                          <Link href="/submissions/amendment-requests">
+                            <History className="w-4 h-4 mr-2" />
+                            <span>Amendment Requests</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              </SidebarMenuItem>
+            </Collapsible>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        {/* PERFORMANCE */}
+        {canSeePerformance && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Performance</SidebarGroupLabel>
             <SidebarMenu>
-              {navigation.map((item) => (
-                <SidebarMenuItem key={item.name}>
-                  <SidebarMenuButton 
-                    asChild 
-                    isActive={pathname === item.href}
-                    tooltip={item.name}
-                  >
-                    <Link href={item.href}>
-                      <item.icon />
-                      <span>{item.name}</span>
+              {(isBranchMgr || isDirector || isDistDir) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === '/performance/branch'} tooltip="Branch Performance">
+                    <Link href="/performance/branch">
+                      <Building2 />
+                      <span>Branch Performance</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              ))}
+              )}
+              {(isSupervisor || isDirector) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === '/performance/officer'} tooltip="Officer Performance">
+                    <Link href="/performance/officer">
+                      <Users />
+                      <span>Officer Performance</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              {(isDirector || isDistDir) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === '/performance/district'} tooltip="District Performance">
+                    <Link href="/performance/district">
+                      <Map />
+                      <span>District Performance</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+          </SidebarGroup>
+        )}
 
-        {user.role === 'Admin' && (
+        {/* REPORTS */}
+        {canSeeReports && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Analytics</SidebarGroupLabel>
+            <SidebarMenu>
+               <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/reports/branch'} tooltip="Branch/District Reports">
+                  <Link href="/reports/branch">
+                    <PieChart />
+                    <span>Branch/District Reports</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/reports/officer'} tooltip="Officer Reports">
+                  <Link href="/reports/officer">
+                    <BarChart3 />
+                    <span>Officer Reports</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === '/reports/system'} tooltip="System-wide Reports">
+                    <Link href="/reports/system">
+                      <LayoutDashboard className="text-accent" />
+                      <span>System-wide Reports</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
+
+        {/* ADMINISTRATION */}
+        {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>Administration</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {adminNav.map((item) => (
-                  <SidebarMenuItem key={item.name}>
-                    <SidebarMenuButton 
-                      asChild 
-                      isActive={pathname === item.href}
-                      tooltip={item.name}
-                    >
-                      <Link href={item.href}>
-                        <item.icon />
-                        <span>{item.name}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/admin/users'} tooltip="User Management">
+                  <Link href="/admin/users">
+                    <Users />
+                    <span>User Management</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/admin/branches'} tooltip="Branches & Districts">
+                  <Link href="/admin/branches">
+                    <Map />
+                    <span>Branches & Districts</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/admin/settings'} tooltip="System Settings">
+                  <Link href="/admin/settings">
+                    <Settings />
+                    <span>System Settings</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/admin/audit'} tooltip="Audit Log">
+                  <Link href="/admin/audit">
+                    <History />
+                    <span>Audit Log</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
           </SidebarGroup>
         )}
       </SidebarContent>
       <SidebarFooter className="border-t p-4">
-        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center overflow-hidden">
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold shrink-0">
             {user.name.charAt(0)}
           </div>
           <div className="flex-1 overflow-hidden group-data-[collapsible=icon]:hidden">
             <p className="text-sm font-medium leading-none truncate">{user.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{user.role}</p>
+            <p className="text-[10px] text-muted-foreground truncate uppercase tracking-tighter mt-1">{user.role}</p>
           </div>
           <SidebarMenuButton size="icon" className="group-data-[collapsible=icon]:hidden">
             <LogOut className="w-4 h-4" />
