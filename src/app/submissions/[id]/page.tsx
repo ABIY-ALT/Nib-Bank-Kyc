@@ -24,16 +24,15 @@ import {
   ExternalLink,
   MessageSquare
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestore, useDoc, useCollection } from "@/firebase";
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, collection, serverTimestamp } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { KYCSubmission, Document, AuditLog } from "@/lib/kyc-data";
+import { KYCSubmission, Document } from "@/lib/kyc-data";
 
 export default function SubmissionDetails() {
   const params = useParams();
@@ -69,6 +68,7 @@ export default function SubmissionDetails() {
 
     const updateData = {
       status: action,
+      remarks: remarks || submission.remarks || "", // Preserve or update remarks
       lastUpdated: serverTimestamp(),
     };
 
@@ -154,10 +154,10 @@ export default function SubmissionDetails() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Initial Remarks</CardTitle>
+              <CardTitle>Submission Remarks</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-accent/5 p-4 rounded-lg border italic">
+              <div className="bg-accent/5 p-4 rounded-lg border italic text-sm">
                 {submission.remarks || "No remarks provided."}
               </div>
             </CardContent>
@@ -197,14 +197,14 @@ export default function SubmissionDetails() {
           </Card>
 
           {canAction && (
-            <Card className="border-primary/20 bg-primary/5">
+            <Card className="border-primary/20 bg-slate-50/50 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg">Workflow Action</CardTitle>
                 <CardDescription>Review and resolve this submission.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold flex items-center gap-1">
+                  <label className="text-xs font-bold flex items-center gap-1 text-slate-700">
                     <MessageSquare className="w-3 h-3" />
                     Review Remarks
                   </label>
@@ -212,13 +212,13 @@ export default function SubmissionDetails() {
                     placeholder="Enter your justification or amendment details..." 
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
-                    className="bg-background min-h-[100px]"
+                    className="bg-background min-h-[100px] text-sm"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <Button 
                     variant="default" 
-                    className="bg-green-600 hover:bg-green-700 w-full"
+                    className="bg-[#78C49D] hover:bg-[#66B38C] text-white w-full border-none shadow-sm h-11"
                     onClick={() => handleAction('Approved')}
                     disabled={loading}
                   >
@@ -227,7 +227,7 @@ export default function SubmissionDetails() {
                   </Button>
                   <Button 
                     variant="outline" 
-                    className="text-orange-600 border-orange-200 hover:bg-orange-50 w-full"
+                    className="bg-[#FFF5ED] text-[#E67E22] border-[#FDE3CF] hover:bg-[#FDE3CF] w-full h-11"
                     onClick={() => handleAction('Amended')}
                     disabled={loading}
                   >
@@ -236,7 +236,7 @@ export default function SubmissionDetails() {
                   </Button>
                   <Button 
                     variant="outline" 
-                    className="text-purple-600 border-purple-200 hover:bg-purple-50 w-full"
+                    className="bg-[#F5F3FF] text-[#8B5CF6] border-[#EDE9FE] hover:bg-[#EDE9FE] w-full h-11"
                     onClick={() => handleAction('Escalated')}
                     disabled={loading}
                   >
@@ -245,7 +245,7 @@ export default function SubmissionDetails() {
                   </Button>
                   <Button 
                     variant="destructive" 
-                    className="w-full"
+                    className="bg-[#F28B82] hover:bg-[#EE675C] text-white w-full border-none shadow-sm h-11"
                     onClick={() => handleAction('Rejected')}
                     disabled={loading}
                   >
