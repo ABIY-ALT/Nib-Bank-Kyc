@@ -307,6 +307,22 @@ export function AppSidebar() {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                       <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
+                          <Link href="/admin/branches">
+                            <Building2 className="w-4 h-4 mr-2" />
+                            <span>Branches & Districts</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
+                          <Link href="/admin/settings">
+                            <Settings className="w-4 h-4 mr-2" />
+                            <span>System Settings</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={pathname === '/admin/audit'}>
                           <Link href="/admin/audit">
                             <History className="w-4 h-4 mr-2" />

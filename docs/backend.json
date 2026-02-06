@@ -72,6 +72,17 @@
         "name": { "type": "string" }
       },
       "required": ["name"]
+    },
+    "SystemSettings": {
+      "title": "System Settings",
+      "description": "Global configuration for the KYC Flow system.",
+      "type": "object",
+      "properties": {
+        "autoEscalation": { "type": "boolean" },
+        "strictSla": { "type": "boolean" },
+        "lastUpdated": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      }
     }
   },
   "auth": {
@@ -97,6 +108,10 @@
     "/districts/{districtId}": {
       "schema": "#/entities/District",
       "description": "Regional district directory."
+    },
+    "/settings/{settingId}": {
+      "schema": "#/entities/SystemSettings",
+      "description": "Global system configurations."
     }
   }
 }
