@@ -78,10 +78,6 @@ export default function NewSubmission() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="regId">Registration / Tax ID</Label>
-              <Input id="regId" placeholder="e.g. TAX-123456" required />
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="branch">Originating Branch</Label>
               <Input id="branch" value="Downtown" disabled />
             </div>
