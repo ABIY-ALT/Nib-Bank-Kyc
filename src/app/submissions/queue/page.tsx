@@ -16,7 +16,6 @@ export default function ReviewQueuePage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Primary workspace for KYC Officers: Pending or In Review
   const reviewQueueQuery = useMemo(() => {
     if (!db) return null;
     return query(
@@ -33,7 +32,6 @@ export default function ReviewQueuePage() {
     
     let filtered = [...submissions];
 
-    // Branch assignment filtering for Localized KYC Officers
     if (user.role === 'KYC Officer' && user.branch && user.branch !== 'Central HQ') {
       filtered = filtered.filter(sub => sub.branch === user.branch);
     }
@@ -65,11 +63,11 @@ export default function ReviewQueuePage() {
             )}
           </div>
         </div>
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input 
             placeholder="Search queue by name or ID..." 
-            className="pl-10 h-11 border-slate-200 focus-visible:ring-primary shadow-sm"
+            className="pl-11 h-12 rounded-full border-2 border-primary focus-visible:ring-primary/20 bg-white shadow-sm font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
