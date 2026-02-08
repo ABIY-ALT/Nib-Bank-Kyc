@@ -231,7 +231,7 @@ export default function SubmissionsPage() {
 
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-pointer py-3">
-                  <span>Branch Location</span>
+                  <span>Branch Name</span>
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="w-56 max-h-64 overflow-y-auto">
                   {branches.map((branch) => (
@@ -280,7 +280,7 @@ export default function SubmissionsPage() {
             <TableRow>
               <TableHead className="font-bold text-slate-600 w-[120px] py-4">Case ID</TableHead>
               <TableHead className="font-bold text-slate-600">Customer Details</TableHead>
-              <TableHead className="font-bold text-slate-600">Branch Location</TableHead>
+              <TableHead className="font-bold text-slate-600">Branch Name</TableHead>
               <TableHead className="font-bold text-slate-600">Workflow Status</TableHead>
               <TableHead className="font-bold text-slate-600">Submitted On</TableHead>
               <TableHead className="text-right font-bold text-slate-600 pr-8">Actions</TableHead>

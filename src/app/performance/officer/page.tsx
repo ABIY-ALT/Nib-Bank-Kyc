@@ -11,7 +11,6 @@ import {
   Filter, 
   FileDown, 
   Calendar as CalendarIcon, 
-  ChevronDown, 
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -29,7 +28,6 @@ import {
   DropdownMenuItem
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
 
 const MOCK_OFFICER_METRICS = [
   { name: "Jane Smith", branch: "Downtown", processed: 85, approved: 72, amended: 10, rejected: 3, turnaround: "0.8d" },
@@ -145,7 +143,7 @@ export default function OfficerPerformancePage() {
               
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-pointer py-3">
-                  <span>Institutional Unit</span>
+                  <span>Branch Name</span>
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="w-56">
                   {BRANCH_OPTIONS.map((branch) => (
