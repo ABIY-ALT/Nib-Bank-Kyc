@@ -17,7 +17,7 @@ export interface User {
   name: string;
   email: string;
   phoneNumber?: string;
-  role: UserRole;
+  role?: UserRole; // Optional because users are registered before role assignment
   branch?: string;
   district?: string;
   status?: string;
