@@ -141,18 +141,17 @@ export default function UserManagementPage() {
         toast({ variant: "destructive", title: "District Required", description: "District Directors must be mapped to a region." });
         return;
       }
-      
-      // Note: KYC Officer validation for branches is removed here, as they are mapped in Staff Assignments later.
     }
 
     const userId = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
     const userRef = doc(db, "users", userId);
     
+    // Sanitize data to remove undefined values for Firestore
     const data: any = {
       id: userId,
-      name: formData.name,
-      email: formData.email,
-      phoneNumber: formData.phoneNumber,
+      name: formData.name || "",
+      email: formData.email || "",
+      phoneNumber: formData.phoneNumber || "",
       status: formData.status || 'Active',
       role: formData.role || null,
       branch: formData.branch || null,
@@ -297,8 +296,8 @@ export default function UserManagementPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md max-h-[95vh] flex flex-col p-0 overflow-hidden">
-          <DialogHeader className="p-6 pb-2">
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl">
+          <DialogHeader className="p-6 border-b shrink-0">
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               {editingUser ? <ShieldCheck className="w-6 h-6 text-[#B89334]" /> : <UserPlus className="w-6 h-6 text-[#B89334]" />}
               {editingUser ? 'Configure Access' : 'Register New User'}
@@ -310,31 +309,29 @@ export default function UserManagementPage() {
             </DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1 px-6">
-            <div className="space-y-6 pt-4 pb-6">
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
+            <div className="space-y-8">
               {/* Identity Section */}
-              <div className="space-y-4 p-4 rounded-xl bg-slate-50 border border-slate-200 shadow-inner">
+              <div className="space-y-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Legal Name</Label>
-                  <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 bg-white border-slate-200" placeholder="e.g. Michael Smith" />
+                  <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 bg-white border-slate-200 focus:ring-primary" placeholder="e.g. Michael Smith" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Phone (Login ID)</Label>
-                    <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white border-slate-200" placeholder="09..." />
+                    <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white border-slate-200 focus:ring-primary" placeholder="09..." />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Corporate Email</Label>
-                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white border-slate-200" placeholder="name@bank.com" />
+                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white border-slate-200 focus:ring-primary" placeholder="name@bank.com" />
                   </div>
                 </div>
               </div>
 
               {/* Institutional Assignment Section (Visible for existing users) */}
               {editingUser && (
-                <div className="space-y-6 animate-in slide-in-from-top-2 duration-300">
-                  <Separator />
-                  
+                <div className="space-y-8">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1">
@@ -364,16 +361,20 @@ export default function UserManagementPage() {
                   </div>
 
                   {formData.role && (
-                    <div className="space-y-4 pt-2 animate-in fade-in duration-500">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-1 flex items-center gap-2">
-                        Jurisdictional Mapping Required
-                      </Label>
+                    <div className="space-y-6 pt-2 animate-in fade-in duration-500">
+                      <div className="flex items-center gap-2">
+                        <Separator className="flex-1" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">
+                          Jurisdictional Mapping Required
+                        </span>
+                        <Separator className="flex-1" />
+                      </div>
 
                       {showDistrictField && (
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Assigned Regional District</Label>
+                          <Label className="text-sm font-bold text-slate-700">Assigned Regional District</Label>
                           <Select value={formData.district || ""} onValueChange={val => setFormData({...formData, district: val, branch: ''})}>
-                            <SelectTrigger className="h-11 border-slate-200"><SelectValue placeholder="Select Region" /></SelectTrigger>
+                            <SelectTrigger className="h-11 border-slate-200 bg-white"><SelectValue placeholder="Select Region" /></SelectTrigger>
                             <SelectContent>
                               {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
                             </SelectContent>
@@ -383,9 +384,9 @@ export default function UserManagementPage() {
 
                       {showSingleBranchField && (
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Primary Branch Node</Label>
+                          <Label className="text-sm font-bold text-slate-700">Primary Branch Node</Label>
                           <Select value={formData.branch || ""} onValueChange={val => setFormData({...formData, branch: val})} disabled={!formData.district}>
-                            <SelectTrigger className="h-11 border-slate-200"><SelectValue placeholder="Select Node" /></SelectTrigger>
+                            <SelectTrigger className="h-11 border-slate-200 bg-white"><SelectValue placeholder="Select Node" /></SelectTrigger>
                             <SelectContent>
                               {branches?.filter(b => b.district === formData.district).map(b => (
                                 <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
@@ -396,18 +397,18 @@ export default function UserManagementPage() {
                       )}
 
                       {isKYCOfficer && (
-                        <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-3">
+                        <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 space-y-4 shadow-sm">
                           <div className="flex items-center gap-2 text-primary">
-                            <Settings2 className="w-4 h-4" />
+                            <Settings2 className="w-5 h-5" />
                             <span className="text-xs font-bold uppercase tracking-wider">Multi-Branch Portfolio</span>
                           </div>
-                          <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                          <p className="text-[12px] text-slate-600 font-medium leading-relaxed">
                             Jurisdictional mapping for KYC Officers is managed centrally in the **Staff Assignments** workspace to ensure balanced portfolio distribution.
                           </p>
-                          <Button asChild variant="outline" size="sm" className="w-full h-9 font-bold text-primary border-primary/20 hover:bg-primary/5 gap-2">
+                          <Button asChild variant="outline" size="sm" className="w-full h-10 font-bold text-primary border-primary/20 hover:bg-primary/5 gap-2">
                             <Link href="/admin/assignments">
                               Go to Staff Assignments
-                              <ArrowRight className="w-3 h-3" />
+                              <ArrowRight className="w-4 h-4" />
                             </Link>
                           </Button>
                         </div>
@@ -417,13 +418,13 @@ export default function UserManagementPage() {
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
 
-          <DialogFooter className="p-6 pt-4 border-t bg-slate-50/50">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="px-6 font-bold">Cancel</Button>
+          <DialogFooter className="p-6 border-t bg-slate-50 shrink-0">
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
             <Button 
               onClick={handleSave} 
-              className="px-8 font-black bg-[#B89334] hover:bg-[#A6822D] text-white shadow-xl h-11"
+              className="px-8 font-black bg-[#B89334] hover:bg-[#A6822D] text-white shadow-xl h-11 min-w-[180px]"
             >
               {editingUser ? 'Update Assignment' : 'Complete Registration'}
             </Button>
