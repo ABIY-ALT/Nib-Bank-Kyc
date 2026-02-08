@@ -36,7 +36,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
@@ -199,7 +198,7 @@ export default function StaffRolesPage() {
   const filteredUsers = users?.filter(u => 
     u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.role.toLowerCase().includes(searchTerm.toLowerCase())
+    u.role?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
   if (loading) {
@@ -210,6 +209,25 @@ export default function StaffRolesPage() {
       </div>
     );
   }
+
+  const PermissionIconToggle = ({ 
+    enabled, 
+    onClick 
+  }: { 
+    enabled: boolean; 
+    onClick: () => void 
+  }) => (
+    <button 
+      onClick={onClick}
+      className="focus:outline-none transition-all active:scale-90 p-1 hover:bg-slate-100 rounded-full group/toggle"
+    >
+      {enabled ? (
+        <CheckCircle2 className="w-5 h-5 mx-auto text-emerald-500" />
+      ) : (
+        <XCircle className="w-5 h-5 mx-auto text-slate-300 group-hover/toggle:text-slate-400" />
+      )}
+    </button>
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -282,10 +300,16 @@ export default function StaffRolesPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="bg-primary/5 text-primary font-bold flex items-center gap-1.5 w-fit">
-                          <UserCheck className="w-3 h-3" />
-                          {u.role}
-                        </Badge>
+                        {u.role ? (
+                          <Badge variant="secondary" className="bg-primary/5 text-primary font-bold flex items-center gap-1.5 w-fit">
+                            <UserCheck className="w-3 h-3" />
+                            {u.role}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 font-bold">
+                            Awaiting Assignment
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
@@ -299,7 +323,7 @@ export default function StaffRolesPage() {
                             onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.name)}
                           >
                             <SelectTrigger className="w-[200px] h-10 border-primary/20">
-                              <SelectValue />
+                              <SelectValue placeholder="Select Role" />
                             </SelectTrigger>
                             <SelectContent>
                               {allRoleNames.map(role => (
@@ -402,22 +426,40 @@ export default function StaffRolesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch checked={role.permissions.canSubmit} onCheckedChange={() => handleTogglePermission(role.id, 'canSubmit', role.permissions.canSubmit)} />
+                          <PermissionIconToggle 
+                            enabled={role.permissions.canSubmit} 
+                            onClick={() => handleTogglePermission(role.id, 'canSubmit', role.permissions.canSubmit)} 
+                          />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch checked={role.permissions.canReview} onCheckedChange={() => handleTogglePermission(role.id, 'canReview', role.permissions.canReview)} />
+                          <PermissionIconToggle 
+                            enabled={role.permissions.canReview} 
+                            onClick={() => handleTogglePermission(role.id, 'canReview', role.permissions.canReview)} 
+                          />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch checked={role.permissions.canSupervise} onCheckedChange={() => handleTogglePermission(role.id, 'canSupervise', role.permissions.canSupervise)} />
+                          <PermissionIconToggle 
+                            enabled={role.permissions.canSupervise} 
+                            onClick={() => handleTogglePermission(role.id, 'canSupervise', role.permissions.canSupervise)} 
+                          />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch checked={role.permissions.canViewReports} onCheckedChange={() => handleTogglePermission(role.id, 'canViewReports', role.permissions.canViewReports)} />
+                          <PermissionIconToggle 
+                            enabled={role.permissions.canViewReports} 
+                            onClick={() => handleTogglePermission(role.id, 'canViewReports', role.permissions.canViewReports)} 
+                          />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch checked={role.permissions.canManageUsers} onCheckedChange={() => handleTogglePermission(role.id, 'canManageUsers', role.permissions.canManageUsers)} />
+                          <PermissionIconToggle 
+                            enabled={role.permissions.canManageUsers} 
+                            onClick={() => handleTogglePermission(role.id, 'canManageUsers', role.permissions.canManageUsers)} 
+                          />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch checked={role.permissions.canManageSystem} onCheckedChange={() => handleTogglePermission(role.id, 'canManageSystem', role.permissions.canManageSystem)} />
+                          <PermissionIconToggle 
+                            enabled={role.permissions.canManageSystem} 
+                            onClick={() => handleTogglePermission(role.id, 'canManageSystem', role.permissions.canManageSystem)} 
+                          />
                         </TableCell>
                       </TableRow>
                     ))}
