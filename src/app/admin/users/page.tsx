@@ -27,7 +27,8 @@ import {
   UserCheck,
   X,
   ShieldCheck,
-  Layers
+  Layers,
+  ArrowRight
 } from "lucide-react";
 import { 
   Dialog, 
@@ -53,6 +54,7 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import Link from 'next/link';
 
 const ROLES: UserRole[] = [
   'Branch Officer', 
@@ -123,7 +125,7 @@ export default function UserManagementPage() {
       return;
     }
 
-    // Role-based validation for existing users or when role is being assigned
+    // Role-based validation
     if (editingUser || formData.role) {
       if (!formData.role) {
         toast({ variant: "destructive", title: "Role Required", description: "Please assign an institutional role." });
@@ -135,21 +137,17 @@ export default function UserManagementPage() {
         return;
       }
 
-      if (formData.role === 'KYC Officer' && (!formData.assignedBranches || formData.assignedBranches.length === 0)) {
-        toast({ variant: "destructive", title: "Portfolio Required", description: "KYC Officers must be mapped to at least one branch portfolio." });
-        return;
-      }
-
       if (formData.role === 'District Director' && !formData.district) {
         toast({ variant: "destructive", title: "District Required", description: "District Directors must be mapped to a region." });
         return;
       }
+      
+      // Note: KYC Officer validation for branches is removed here, as they are mapped in Staff Assignments later.
     }
 
     const userId = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
     const userRef = doc(db, "users", userId);
     
-    // Sanitize data: Firestore does not accept undefined
     const data: any = {
       id: userId,
       name: formData.name,
@@ -184,17 +182,9 @@ export default function UserManagementPage() {
     toast({ title: "User Deactivated" });
   };
 
-  const handleToggleAssignedBranch = (branchName: string) => {
-    const current = formData.assignedBranches || [];
-    const updated = current.includes(branchName) 
-      ? current.filter(b => b !== branchName)
-      : [...current, branchName];
-    setFormData({ ...formData, assignedBranches: updated });
-  };
-
   const showSingleBranchField = formData.role && ['Branch Officer', 'Branch Manager'].includes(formData.role);
-  const showMultiBranchField = formData.role === 'KYC Officer';
   const showDistrictField = formData.role && ['Branch Officer', 'Branch Manager', 'District Director'].includes(formData.role);
+  const isKYCOfficer = formData.role === 'KYC Officer';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -405,29 +395,21 @@ export default function UserManagementPage() {
                         </div>
                       )}
 
-                      {showMultiBranchField && (
-                        <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Authorized Branch Portfolios</Label>
-                          <div className="border rounded-xl p-3 bg-slate-50 border-slate-200">
-                            <ScrollArea className="h-48">
-                              <div className="grid grid-cols-1 gap-2.5">
-                                {branches?.map(b => (
-                                  <div key={b.id} className="flex items-center space-x-3 p-2 rounded-lg bg-white border border-slate-100 shadow-sm hover:border-primary/20 transition-all">
-                                    <Checkbox 
-                                      id={`branch-${b.id}`} 
-                                      checked={formData.assignedBranches?.includes(b.name)}
-                                      onCheckedChange={() => handleToggleAssignedBranch(b.name)}
-                                    />
-                                    <label htmlFor={`branch-${b.id}`} className="text-xs font-bold text-slate-700 cursor-pointer flex-1 flex justify-between items-center">
-                                      {b.name}
-                                      <Badge variant="outline" className="text-[8px] h-3.5 bg-slate-50 text-slate-400 border-slate-200 uppercase">{b.district}</Badge>
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
-                            </ScrollArea>
+                      {isKYCOfficer && (
+                        <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-3">
+                          <div className="flex items-center gap-2 text-primary">
+                            <Settings2 className="w-4 h-4" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Multi-Branch Portfolio</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground italic mt-1 font-medium">Select all branches this KYC Officer is authorized to review and approve.</p>
+                          <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                            Jurisdictional mapping for KYC Officers is managed centrally in the **Staff Assignments** workspace to ensure balanced portfolio distribution.
+                          </p>
+                          <Button asChild variant="outline" size="sm" className="w-full h-9 font-bold text-primary border-primary/20 hover:bg-primary/5 gap-2">
+                            <Link href="/admin/assignments">
+                              Go to Staff Assignments
+                              <ArrowRight className="w-3 h-3" />
+                            </Link>
+                          </Button>
                         </div>
                       )}
                     </div>
