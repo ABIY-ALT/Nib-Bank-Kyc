@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -16,7 +17,6 @@ import {
   X,
   Search,
   MapPin,
-  ArrowRightLeft,
   ShieldAlert,
   SearchCheck
 } from "lucide-react";
@@ -52,10 +52,20 @@ export default function StaffAssignmentsPage() {
 
   const { data: allUsers, loading: usersLoading } = useCollection<User>(usersQuery);
 
-  const handleAssignUser = (userId: string, branchName: string) => {
+  const handleToggleBranchAssignment = (user: User, branchName: string, isAdding: boolean) => {
     if (!db) return;
-    const userRef = doc(db, "users", userId);
-    const updateData = { branch: branchName };
+    const userRef = doc(db, "users", user.id);
+    
+    let updatedBranches = user.assignedBranches || [];
+    if (isAdding) {
+      if (!updatedBranches.includes(branchName)) {
+        updatedBranches = [...updatedBranches, branchName];
+      }
+    } else {
+      updatedBranches = updatedBranches.filter(b => b !== branchName);
+    }
+
+    const updateData = { assignedBranches: updatedBranches };
 
     updateDoc(userRef, updateData)
       .catch(async (error) => {
@@ -68,22 +78,23 @@ export default function StaffAssignmentsPage() {
       });
 
     toast({
-      title: "Specialist Reassigned",
-      description: `KYC verification mapping updated to ${branchName || 'Central HQ'}.`,
+      title: isAdding ? "Coverage Assigned" : "Coverage Revoked",
+      description: `${user.name}'s portfolio updated for ${branchName}.`,
     });
   };
 
-  // Filter only for KYC Officers as requested
+  // Filter for KYC Officers assigned to this specific selected branch
   const assignedUsers = allUsers?.filter(u => 
     u.role === 'KYC Officer' && 
-    u.branch === selectedBranch && 
+    u.assignedBranches?.includes(selectedBranch) && 
     selectedBranch !== ""
   ) || [];
 
+  // Filter for KYC Officers NOT at this branch but eligible for assignment
   const unassignedUsers = allUsers?.filter(u => {
     const isKYCOfficer = u.role === 'KYC Officer';
     const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const isNotAtSelected = u.branch !== selectedBranch;
+    const isNotAtSelected = !u.assignedBranches?.includes(selectedBranch);
     const isActive = u.status !== 'Inactive';
     return isKYCOfficer && matchesSearch && isNotAtSelected && isActive;
   }) || [];
@@ -107,7 +118,7 @@ export default function StaffAssignmentsPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Specialist Coverage</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Manage the geographic distribution of KYC Officers for document verification.</p>
+          <p className="text-muted-foreground text-lg font-medium">Manage multi-branch portfolios for verification specialists.</p>
         </div>
       </div>
 
@@ -151,7 +162,7 @@ export default function StaffAssignmentsPage() {
                 <div className="flex gap-2 text-amber-800">
                   <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
                   <p className="text-xs font-medium leading-relaxed">
-                    <strong>Coverage Protocol:</strong> KYC Officers reassigned here will immediately gain authority to approve/reject cases submitted within this jurisdiction.
+                    <strong>Portfolio Protocol:</strong> Specialists can cover multiple branches. Adding a branch here will expand their verification queue without removing existing assignments.
                   </p>
                 </div>
               </div>
@@ -193,14 +204,17 @@ export default function StaffAssignmentsPage() {
                             </div>
                             <div className="flex flex-col">
                               <span className="text-sm font-bold text-slate-900">{u.name}</span>
-                              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Verification Specialist</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Verification Specialist</span>
+                                <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white">{u.assignedBranches?.length} Branches Covered</Badge>
+                              </div>
                             </div>
                           </div>
                           <Button 
                             variant="ghost" 
                             size="sm" 
                             className="text-destructive font-bold opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => handleAssignUser(u.id, "Central HQ")}
+                            onClick={() => handleToggleBranchAssignment(u, selectedBranch, false)}
                           >
                             <X className="w-4 h-4 mr-2" />
                             Revoke Authority
@@ -222,7 +236,7 @@ export default function StaffAssignmentsPage() {
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
                       <CardTitle className="text-xl">Network Specialist Registry</CardTitle>
-                      <CardDescription>Reassign authorized KYC Officers to {selectedBranch}.</CardDescription>
+                      <CardDescription>Add authorized KYC Officers to cover {selectedBranch}.</CardDescription>
                     </div>
                     <div className="relative w-full md:w-64">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -246,10 +260,15 @@ export default function StaffAssignmentsPage() {
                             </div>
                             <div className="flex flex-col">
                               <span className="text-sm font-bold text-slate-900">{u.name}</span>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap max-w-xs">
                                 <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">KYC Specialist</span>
                                 <span className="text-slate-200 text-xs">•</span>
-                                <Badge variant="outline" className="text-[9px] h-4 font-bold bg-white">{u.branch || 'Central HQ'}</Badge>
+                                {u.assignedBranches?.map(b => (
+                                  <Badge key={b} variant="outline" className="text-[9px] h-4 font-bold bg-white">{b}</Badge>
+                                ))}
+                                {(!u.assignedBranches || u.assignedBranches.length === 0) && (
+                                  <Badge variant="outline" className="text-[9px] h-4 font-bold bg-white italic">Unmapped</Badge>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -257,16 +276,16 @@ export default function StaffAssignmentsPage() {
                             variant="outline" 
                             size="sm" 
                             className="font-bold border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
-                            onClick={() => handleAssignUser(u.id, selectedBranch)}
+                            onClick={() => handleToggleBranchAssignment(u, selectedBranch, true)}
                           >
                             <UserPlus className="w-4 h-4 mr-2" />
-                            Assign Coverage
+                            Add to Coverage
                           </Button>
                         </div>
                       ))}
                       {unassignedUsers.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground italic">
-                          No other specialists available for reassignment.
+                          No other specialists available for assignment.
                         </div>
                       )}
                     </div>

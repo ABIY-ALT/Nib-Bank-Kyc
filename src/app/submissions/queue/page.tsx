@@ -1,5 +1,5 @@
 
-"use client"
+'use client';
 
 import { useFirestore, useCollection } from "@/firebase";
 import { collection, query, where, orderBy } from "firebase/firestore";
@@ -19,9 +19,8 @@ export default function ReviewQueuePage() {
   const reviewQueueQuery = useMemo(() => {
     if (!db) return null;
     
-    // Strict Branch Filtering for Officers
-    // Admins and Global Supervisors can see everything, but local officers are restricted
-    const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role);
+    // Admins and Global Supervisors can see everything
+    const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role || '');
     
     if (isGlobalReviewer) {
       return query(
@@ -31,13 +30,22 @@ export default function ReviewQueuePage() {
       );
     }
 
-    return query(
-      collection(db, "submissions"),
-      where("status", "in", ["Pending", "In Review"]),
-      where("branch", "==", user.branch || "Central HQ"),
-      orderBy("submittedAt", "desc")
-    );
-  }, [db, user.role, user.branch]);
+    // Local KYC Officers are restricted to their assigned portfolio of branches
+    // Note: Firestore 'in' queries support up to 30 values.
+    const assigned = user.assignedBranches || [];
+    
+    if (assigned.length > 0) {
+      return query(
+        collection(db, "submissions"),
+        where("status", "in", ["Pending", "In Review"]),
+        where("branch", "in", assigned),
+        orderBy("submittedAt", "desc")
+      );
+    }
+
+    // Fallback: If no branches assigned, return nothing
+    return null;
+  }, [db, user.role, user.assignedBranches]);
 
   const { data: submissions, loading } = useCollection<KYCSubmission>(reviewQueueQuery);
 
@@ -51,7 +59,7 @@ export default function ReviewQueuePage() {
     );
   }, [submissions, searchTerm]);
 
-  const isLocalized = !['Admin', 'Director', 'Supervisor'].includes(user.role) && user.branch;
+  const isLocalized = !['Admin', 'Director', 'Supervisor'].includes(user.role || '') && (user.assignedBranches?.length || 0) > 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -66,10 +74,10 @@ export default function ReviewQueuePage() {
             {isLocalized && (
               <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
                 <MapPin className="w-3 h-3" />
-                {user.branch} Jurisdiction
+                Portfolio Coverage ({user.assignedBranches?.length} Branches)
               </Badge>
             )}
-            {!isLocalized && (
+            {!isLocalized && ['Admin', 'Director', 'Supervisor'].includes(user.role || '') && (
               <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
                 <ShieldCheck className="w-3 h-3" />
                 Global Oversight

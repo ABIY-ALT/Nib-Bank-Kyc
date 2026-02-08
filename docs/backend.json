@@ -51,7 +51,12 @@
           "type": "string", 
           "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Director", "Admin", "Branch Manager", "District Director"] 
         },
-        "branch": { "type": "string" },
+        "branch": { "type": "string", "description": "Primary branch for branch-based roles." },
+        "assignedBranches": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "List of branches authorized for KYC Officers."
+        },
         "district": { "type": "string" },
         "status": { "type": "string", "enum": ["Active", "Inactive"] }
       }
