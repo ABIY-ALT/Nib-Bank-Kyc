@@ -137,7 +137,19 @@ export default function UserManagementPage() {
 
     const userId = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
     const userRef = doc(db, "users", userId);
-    const data = { ...formData, id: userId };
+    
+    // Sanitize data object to avoid sending 'undefined' to Firestore
+    const data: any = {
+      id: userId,
+      name: formData.name,
+      email: formData.email,
+      phoneNumber: formData.phoneNumber,
+      status: formData.status || 'Active'
+    };
+
+    if (formData.role) data.role = formData.role;
+    if (formData.branch) data.branch = formData.branch;
+    if (formData.district) data.district = formData.district;
 
     setDoc(userRef, data, { merge: true })
       .catch(async (error) => {
@@ -322,7 +334,7 @@ export default function UserManagementPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Phone Number (Login ID)</Label>
-                <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white" placeholder="+1 (555) 000-0000" />
+                <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white" placeholder="0912345678" />
               </div>
             </div>
 
