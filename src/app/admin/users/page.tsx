@@ -307,8 +307,8 @@ export default function UserManagementPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[95vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-2">
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               {editingUser ? <ShieldCheck className="w-6 h-6 text-[#B89334]" /> : <UserPlus className="w-6 h-6 text-[#B89334]" />}
               {editingUser ? 'Configure Access' : 'Register New User'}
@@ -319,121 +319,125 @@ export default function UserManagementPage() {
                 : 'Initial identity registration. Role and branch mapping can be assigned after registration.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-6 pt-4">
-            {/* Identity Section */}
-            <div className="space-y-4 p-4 rounded-xl bg-slate-50 border border-slate-200 shadow-inner">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Legal Name</Label>
-                <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 bg-white border-slate-200" placeholder="e.g. Michael Smith" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+          
+          <ScrollArea className="flex-1 px-6">
+            <div className="space-y-6 pt-4 pb-6">
+              {/* Identity Section */}
+              <div className="space-y-4 p-4 rounded-xl bg-slate-50 border border-slate-200 shadow-inner">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Phone (Login ID)</Label>
-                  <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white border-slate-200" placeholder="09..." />
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Legal Name</Label>
+                  <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 bg-white border-slate-200" placeholder="e.g. Michael Smith" />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Corporate Email</Label>
-                  <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white border-slate-200" placeholder="name@bank.com" />
-                </div>
-              </div>
-            </div>
-
-            {/* Institutional Assignment Section (Visible for existing users) */}
-            {editingUser && (
-              <div className="space-y-6 animate-in slide-in-from-top-2 duration-300">
-                <Separator />
-                
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1">
-                      <Layers className="w-3 h-3" /> System Role
-                    </Label>
-                    <Select value={formData.role || ""} onValueChange={val => setFormData({...formData, role: val as UserRole})}>
-                      <SelectTrigger className="h-11 border-primary/30 bg-primary/5 focus:ring-primary">
-                        <SelectValue placeholder="Assign Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ROLES.map(role => <SelectItem key={role} value={role} className="font-bold">{role}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Phone (Login ID)</Label>
+                    <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white border-slate-200" placeholder="09..." />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Staff Status</Label>
-                    <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val})}>
-                      <SelectTrigger className="h-11 border-slate-200">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Active" className="text-green-600 font-bold">Active</SelectItem>
-                        <SelectItem value="Inactive" className="text-slate-400 font-bold">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Corporate Email</Label>
+                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white border-slate-200" placeholder="name@bank.com" />
                   </div>
                 </div>
-
-                {formData.role && (
-                  <div className="space-y-4 pt-2 animate-in fade-in duration-500">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-1 flex items-center gap-2">
-                      Jurisdictional Mapping Required
-                    </Label>
-
-                    {showDistrictField && (
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-slate-700">Assigned Regional District</Label>
-                        <Select value={formData.district || ""} onValueChange={val => setFormData({...formData, district: val, branch: ''})}>
-                          <SelectTrigger className="h-11 border-slate-200"><SelectValue placeholder="Select Region" /></SelectTrigger>
-                          <SelectContent>
-                            {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    {showSingleBranchField && (
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-slate-700">Primary Branch Node</Label>
-                        <Select value={formData.branch || ""} onValueChange={val => setFormData({...formData, branch: val})} disabled={!formData.district}>
-                          <SelectTrigger className="h-11 border-slate-200"><SelectValue placeholder="Select Node" /></SelectTrigger>
-                          <SelectContent>
-                            {branches?.filter(b => b.district === formData.district).map(b => (
-                              <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    {showMultiBranchField && (
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-slate-700">Authorized Branch Portfolios</Label>
-                        <div className="border rounded-xl p-3 bg-slate-50 border-slate-200">
-                          <ScrollArea className="h-40">
-                            <div className="grid grid-cols-1 gap-2.5">
-                              {branches?.map(b => (
-                                <div key={b.id} className="flex items-center space-x-3 p-2 rounded-lg bg-white border border-slate-100 shadow-sm hover:border-primary/20 transition-all">
-                                  <Checkbox 
-                                    id={`branch-${b.id}`} 
-                                    checked={formData.assignedBranches?.includes(b.name)}
-                                    onCheckedChange={() => handleToggleAssignedBranch(b.name)}
-                                  />
-                                  <label htmlFor={`branch-${b.id}`} className="text-xs font-bold text-slate-700 cursor-pointer flex-1 flex justify-between items-center">
-                                    {b.name}
-                                    <Badge variant="outline" className="text-[8px] h-3.5 bg-slate-50 text-slate-400 border-slate-200 uppercase">{b.district}</Badge>
-                                  </label>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground italic mt-1 font-medium">Select all branches this KYC Officer is authorized to review and approve.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
-            )}
-          </div>
-          <DialogFooter className="pt-8 border-t mt-6">
+
+              {/* Institutional Assignment Section (Visible for existing users) */}
+              {editingUser && (
+                <div className="space-y-6 animate-in slide-in-from-top-2 duration-300">
+                  <Separator />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1">
+                        <Layers className="w-3 h-3" /> System Role
+                      </Label>
+                      <Select value={formData.role || ""} onValueChange={val => setFormData({...formData, role: val as UserRole})}>
+                        <SelectTrigger className="h-11 border-primary/30 bg-primary/5 focus:ring-primary">
+                          <SelectValue placeholder="Assign Role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ROLES.map(role => <SelectItem key={role} value={role} className="font-bold">{role}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Staff Status</Label>
+                      <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val})}>
+                        <SelectTrigger className="h-11 border-slate-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Active" className="text-green-600 font-bold">Active</SelectItem>
+                          <SelectItem value="Inactive" className="text-slate-400 font-bold">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {formData.role && (
+                    <div className="space-y-4 pt-2 animate-in fade-in duration-500">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-1 flex items-center gap-2">
+                        Jurisdictional Mapping Required
+                      </Label>
+
+                      {showDistrictField && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Assigned Regional District</Label>
+                          <Select value={formData.district || ""} onValueChange={val => setFormData({...formData, district: val, branch: ''})}>
+                            <SelectTrigger className="h-11 border-slate-200"><SelectValue placeholder="Select Region" /></SelectTrigger>
+                            <SelectContent>
+                              {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {showSingleBranchField && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Primary Branch Node</Label>
+                          <Select value={formData.branch || ""} onValueChange={val => setFormData({...formData, branch: val})} disabled={!formData.district}>
+                            <SelectTrigger className="h-11 border-slate-200"><SelectValue placeholder="Select Node" /></SelectTrigger>
+                            <SelectContent>
+                              {branches?.filter(b => b.district === formData.district).map(b => (
+                                <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {showMultiBranchField && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Authorized Branch Portfolios</Label>
+                          <div className="border rounded-xl p-3 bg-slate-50 border-slate-200">
+                            <ScrollArea className="h-48">
+                              <div className="grid grid-cols-1 gap-2.5">
+                                {branches?.map(b => (
+                                  <div key={b.id} className="flex items-center space-x-3 p-2 rounded-lg bg-white border border-slate-100 shadow-sm hover:border-primary/20 transition-all">
+                                    <Checkbox 
+                                      id={`branch-${b.id}`} 
+                                      checked={formData.assignedBranches?.includes(b.name)}
+                                      onCheckedChange={() => handleToggleAssignedBranch(b.name)}
+                                    />
+                                    <label htmlFor={`branch-${b.id}`} className="text-xs font-bold text-slate-700 cursor-pointer flex-1 flex justify-between items-center">
+                                      {b.name}
+                                      <Badge variant="outline" className="text-[8px] h-3.5 bg-slate-50 text-slate-400 border-slate-200 uppercase">{b.district}</Badge>
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground italic mt-1 font-medium">Select all branches this KYC Officer is authorized to review and approve.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="p-6 pt-4 border-t bg-slate-50/50">
             <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="px-6 font-bold">Cancel</Button>
             <Button 
               onClick={handleSave} 
