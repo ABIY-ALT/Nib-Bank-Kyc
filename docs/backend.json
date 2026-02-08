@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "KYCSubmission": {
@@ -84,7 +85,17 @@
         "autoEscalation": { "type": "boolean" },
         "strictSla": { "type": "boolean" },
         "lastUpdated": { "type": "string", "format": "date-time" },
-        "updatedBy": { "type": "string" }
+        "updatedBy": { "type": "string" },
+        "documentTypes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" }
+            }
+          }
+        }
       }
     }
   },

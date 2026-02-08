@@ -31,9 +31,10 @@ import {
   FileText, 
   Eye, 
   CheckCircle2,
-  Download
+  Download,
+  Loader2
 } from "lucide-react";
-import { useFirestore } from "@/firebase";
+import { useFirestore, useDoc, useMemoFirebase } from "@/firebase";
 import { collection, doc, setDoc } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
@@ -53,7 +54,14 @@ interface UploadedFile {
   previewUrl: string;
 }
 
-const DOCUMENT_TYPES = [
+const ENTITY_CLASSIFICATIONS = [
+  { id: "individual", label: "Individual" },
+  { id: "corporate", label: "Corporate" },
+  { id: "sme", label: "SME (Small/Medium Enterprise)" },
+  { id: "ngo", label: "NGO (Non-Profit Organization)" },
+];
+
+const DEFAULT_DOC_TYPES = [
   { id: "id_card", label: "ID Card / National ID" },
   { id: "passport", label: "Passport" },
   { id: "utility_bill", label: "Utility Bill" },
@@ -61,13 +69,6 @@ const DOCUMENT_TYPES = [
   { id: "incorporation", label: "Certificate of Incorporation" },
   { id: "tax_cert", label: "Tax Certificate" },
   { id: "other", label: "Other Document" },
-];
-
-const ENTITY_CLASSIFICATIONS = [
-  { id: "individual", label: "Individual" },
-  { id: "corporate", label: "Corporate" },
-  { id: "sme", label: "SME (Small/Medium Enterprise)" },
-  { id: "ngo", label: "NGO (Non-Profit Organization)" },
 ];
 
 export default function NewSubmission() {
@@ -82,12 +83,22 @@ export default function NewSubmission() {
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const settingsRef = useMemoFirebase(() => {
+    return db ? doc(db, "settings", "global") : null;
+  }, [db]);
+
+  const { data: settings, loading: settingsLoading } = useDoc<{ documentTypes: { id: string, label: string }[] }>(settingsRef);
+
+  const documentTypes = useMemo(() => {
+    return settings?.documentTypes || DEFAULT_DOC_TYPES;
+  }, [settings]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files).map(file => ({
         id: Math.random().toString(36).substr(2, 9),
         file: file,
-        type: "id_card",
+        type: documentTypes[0]?.id || "id_card",
         previewUrl: URL.createObjectURL(file)
       }));
       setUploadedFiles((prev) => [...prev, ...newFiles]);
@@ -200,6 +211,7 @@ export default function NewSubmission() {
              </div>
 
              <div className="space-y-3">
+               {settingsLoading && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Fetching classifications...</div>}
                {uploadedFiles.map((item) => (
                  <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all">
                    <div className="flex items-center gap-4 flex-1">
@@ -210,7 +222,7 @@ export default function NewSubmission() {
                      <Select value={item.type} onValueChange={(val) => handleTypeChange(item.id, val)}>
                        <SelectTrigger className="h-10 w-full md:w-60 bg-slate-50/50"><SelectValue /></SelectTrigger>
                        <SelectContent>
-                         {DOCUMENT_TYPES.map((type) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}
+                         {documentTypes.map((type) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}
                        </SelectContent>
                      </Select>
                      <div className="flex gap-2">

@@ -34,13 +34,14 @@ import {
   Check,
   Search,
   Flag,
-  Eye
+  Eye,
+  Loader2
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { useFirestore, useDoc, useCollection } from "@/firebase";
+import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
 import { doc, updateDoc, collection, setDoc, increment } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
@@ -63,7 +64,7 @@ import {
   DialogDescription 
 } from "@/components/ui/dialog";
 
-const DOCUMENT_TYPES = [
+const DEFAULT_DOC_TYPES = [
   { id: "id_card", label: "ID Card / National ID" },
   { id: "passport", label: "Passport" },
   { id: "utility_bill", label: "Utility Bill" },
@@ -91,14 +92,24 @@ export default function SubmissionDetails() {
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const submissionRef = useMemo(() => {
+  const submissionRef = useMemoFirebase(() => {
     if (!db || !params.id) return null;
     return doc(db, "submissions", params.id as string);
   }, [db, params.id]);
 
   const { data: submission, loading: subLoading } = useDoc<KYCSubmission>(submissionRef);
 
-  const docsQuery = useMemo(() => {
+  const settingsRef = useMemoFirebase(() => {
+    return db ? doc(db, "settings", "global") : null;
+  }, [db]);
+
+  const { data: settings } = useDoc<{ documentTypes: { id: string, label: string }[] }>(settingsRef);
+
+  const documentTypes = useMemo(() => {
+    return settings?.documentTypes || DEFAULT_DOC_TYPES;
+  }, [settings]);
+
+  const docsQuery = useMemoFirebase(() => {
     if (!submissionRef) return null;
     return collection(submissionRef, "documents");
   }, [submissionRef]);
@@ -126,7 +137,7 @@ export default function SubmissionDetails() {
       const added = Array.from(e.target.files).map(file => ({
         id: Math.random().toString(36).substr(2, 9),
         file: file,
-        type: "id_card",
+        type: documentTypes[0]?.id || "id_card",
         previewUrl: URL.createObjectURL(file)
       }));
       setNewFiles((prev) => [...prev, ...added]);
@@ -337,7 +348,7 @@ export default function SubmissionDetails() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {DOCUMENT_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
+                                {documentTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
                               </SelectContent>
                             </Select>
                             <div className="flex gap-1">
