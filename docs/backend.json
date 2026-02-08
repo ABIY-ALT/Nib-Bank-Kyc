@@ -46,6 +46,7 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "email": { "type": "string" },
+        "phoneNumber": { "type": "string" },
         "role": { 
           "type": "string", 
           "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Director", "Admin", "Branch Manager", "District Director"] 

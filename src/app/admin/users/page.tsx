@@ -23,7 +23,8 @@ import {
   Loader2,
   Building2,
   MapPin,
-  UserX
+  UserX,
+  Phone
 } from "lucide-react";
 import { 
   Dialog, 
@@ -65,6 +66,7 @@ export default function UserManagementPage() {
   const [formData, setFormData] = useState<Partial<User>>({
     name: '',
     email: '',
+    phoneNumber: '',
     role: 'Branch Officer',
     status: 'Active',
     branch: '',
@@ -89,15 +91,27 @@ export default function UserManagementPage() {
       setFormData(user);
     } else {
       setEditingUser(null);
-      setFormData({ name: '', email: '', role: 'Branch Officer', status: 'Active', branch: '', district: '' });
+      setFormData({ 
+        name: '', 
+        email: '', 
+        phoneNumber: '', 
+        role: 'Branch Officer', 
+        status: 'Active', 
+        branch: '', 
+        district: '' 
+      });
     }
     setIsDialogOpen(true);
   };
 
   const handleSave = () => {
     if (!db) return;
-    if (!formData.name || !formData.email) {
-      toast({ variant: "destructive", title: "Missing Information", description: "Name and email are required." });
+    if (!formData.name || !formData.email || !formData.phoneNumber) {
+      toast({ 
+        variant: "destructive", 
+        title: "Missing Information", 
+        description: "Name, email, and phone number are required for institutional mapping." 
+      });
       return;
     }
 
@@ -115,7 +129,7 @@ export default function UserManagementPage() {
         errorEmitter.emit('permission-error', permissionError);
       });
 
-    toast({ title: editingUser ? "User Updated" : "User Created", description: `${formData.name} saved.` });
+    toast({ title: editingUser ? "User Updated" : "User Created", description: `${formData.name} saved with login access.` });
     setIsDialogOpen(false);
   };
 
@@ -153,7 +167,7 @@ export default function UserManagementPage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">User Management</h1>
           <p className="text-muted-foreground text-lg font-medium">Control system access and assign regional roles.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg">
+        <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg font-bold">
           <UserPlus className="w-4 h-4" />
           Provision New User
         </Button>
@@ -164,6 +178,7 @@ export default function UserManagementPage() {
           <TableHeader className="bg-slate-50/50">
             <TableRow>
               <TableHead className="font-bold">Identity</TableHead>
+              <TableHead className="font-bold">Contact Info</TableHead>
               <TableHead className="font-bold">Role</TableHead>
               <TableHead className="font-bold">Organization</TableHead>
               <TableHead className="font-bold">Status</TableHead>
@@ -173,22 +188,29 @@ export default function UserManagementPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></TableCell>
+                <TableCell colSpan={6} className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></TableCell>
               </TableRow>
             ) : users?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-20 text-center italic text-muted-foreground">No users provisioned.</TableCell>
+                <TableCell colSpan={6} className="py-20 text-center italic text-muted-foreground">No users provisioned.</TableCell>
               </TableRow>
             ) : users?.map((user) => (
               <TableRow key={user.id} className="hover:bg-slate-50 transition-colors">
                 <TableCell>
+                  <span className="font-bold text-slate-900">{user.name}</span>
+                </TableCell>
+                <TableCell>
                   <div className="flex flex-col">
-                    <span className="font-bold text-slate-900">{user.name}</span>
-                    <span className="text-xs text-muted-foreground">{user.email}</span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Mail className="w-3 h-3" /> {user.email}
+                    </span>
+                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1 mt-0.5">
+                      <Phone className="w-3 h-3" /> {user.phoneNumber || 'No Phone Registered'}
+                    </span>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="bg-primary/5 text-primary">
+                  <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">
                     {user.role}
                   </Badge>
                 </TableCell>
@@ -196,7 +218,7 @@ export default function UserManagementPage() {
                   <div className="text-sm font-medium">{user.branch || 'Central HQ'}</div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={user.status === 'Active' ? 'text-green-600 border-green-200 bg-green-50' : 'text-slate-400 border-slate-200 bg-slate-50'}>
+                  <Badge variant="outline" className={user.status === 'Active' ? 'text-green-600 border-green-200 bg-green-50 font-bold' : 'text-slate-400 border-slate-200 bg-slate-50 font-bold'}>
                     {user.status}
                   </Badge>
                 </TableCell>
@@ -227,17 +249,21 @@ export default function UserManagementPage() {
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">User Full Name</Label>
-              <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11" />
+              <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 border-slate-200" placeholder="e.g. Michael Smith" />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Corporate Email</Label>
-              <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11" />
+              <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 border-slate-200" placeholder="name@bank.com" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Phone Number (Login ID)</Label>
+              <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 border-slate-200" placeholder="+1 (555) 000-0000" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">System Role</Label>
                 <Select value={formData.role} onValueChange={val => setFormData({...formData, role: val as UserRole})}>
-                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 border-slate-200"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ROLES.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
                   </SelectContent>
@@ -246,7 +272,7 @@ export default function UserManagementPage() {
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Account Status</Label>
                 <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val})}>
-                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 border-slate-200"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Active">Active</SelectItem>
                     <SelectItem value="Inactive">Inactive</SelectItem>
@@ -254,11 +280,11 @@ export default function UserManagementPage() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Assigned Branch</Label>
                 <Select value={formData.branch} onValueChange={handleBranchChange}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 border-slate-200">
                     <SelectValue placeholder="Select Branch" />
                   </SelectTrigger>
                   <SelectContent>
@@ -270,8 +296,8 @@ export default function UserManagementPage() {
             </div>
           </div>
           <DialogFooter className="pt-6">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} className="px-8 font-bold bg-primary shadow-lg">Save Profile</Button>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="px-6">Cancel</Button>
+            <Button onClick={handleSave} className="px-8 font-bold bg-[#B89334] hover:bg-[#A6822D] text-white shadow-lg">Save Profile</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
