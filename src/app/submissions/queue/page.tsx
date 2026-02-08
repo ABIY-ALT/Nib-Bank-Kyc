@@ -7,7 +7,7 @@ import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2, Inbox, MapPin } from "lucide-react";
+import { Search, Loader2, Inbox, MapPin, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 
@@ -18,32 +18,40 @@ export default function ReviewQueuePage() {
 
   const reviewQueueQuery = useMemo(() => {
     if (!db) return null;
+    
+    // Strict Branch Filtering for Officers
+    // Admins and Global Supervisors can see everything, but local officers are restricted
+    const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role);
+    
+    if (isGlobalReviewer) {
+      return query(
+        collection(db, "submissions"),
+        where("status", "in", ["Pending", "In Review"]),
+        orderBy("submittedAt", "desc")
+      );
+    }
+
     return query(
       collection(db, "submissions"),
       where("status", "in", ["Pending", "In Review"]),
+      where("branch", "==", user.branch || "Central HQ"),
       orderBy("submittedAt", "desc")
     );
-  }, [db]);
+  }, [db, user.role, user.branch]);
 
   const { data: submissions, loading } = useCollection<KYCSubmission>(reviewQueueQuery);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     
-    let filtered = [...submissions];
-
-    if (user.role === 'KYC Officer' && user.branch && user.branch !== 'Central HQ') {
-      filtered = filtered.filter(sub => sub.branch === user.branch);
-    }
-
     const term = searchTerm.toLowerCase();
-    return filtered.filter(sub => 
+    return submissions.filter(sub => 
       sub.customerName.toLowerCase().includes(term) || 
       sub.id.toLowerCase().includes(term)
     );
-  }, [submissions, searchTerm, user.branch, user.role]);
+  }, [submissions, searchTerm]);
 
-  const isLocalized = user.role === 'KYC Officer' && user.branch && user.branch !== 'Central HQ';
+  const isLocalized = !['Admin', 'Director', 'Supervisor'].includes(user.role) && user.branch;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -56,9 +64,15 @@ export default function ReviewQueuePage() {
           <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground text-lg">Central hub for processing new applications.</p>
             {isLocalized && (
-              <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3">
+              <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
                 <MapPin className="w-3 h-3" />
-                {user.branch} Only
+                {user.branch} Jurisdiction
+              </Badge>
+            )}
+            {!isLocalized && (
+              <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
+                <ShieldCheck className="w-3 h-3" />
+                Global Oversight
               </Badge>
             )}
           </div>
@@ -77,7 +91,7 @@ export default function ReviewQueuePage() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="font-medium">Synchronizing queue...</p>
+          <p className="font-medium">Synchronizing jurisdictional queue...</p>
         </div>
       ) : (
         <SubmissionsPageContent submissions={filteredSubmissions || []} />
