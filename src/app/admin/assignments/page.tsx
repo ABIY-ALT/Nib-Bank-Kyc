@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -18,7 +17,8 @@ import {
   Search,
   MapPin,
   ArrowRightLeft,
-  ShieldAlert
+  ShieldAlert,
+  SearchCheck
 } from "lucide-react";
 import { 
   Select, 
@@ -68,18 +68,24 @@ export default function StaffAssignmentsPage() {
       });
 
     toast({
-      title: "Staff Reassigned",
-      description: `Personnel mapping updated to ${branchName || 'Central HQ'}. Access rights adjusted instantly.`,
+      title: "Specialist Reassigned",
+      description: `KYC verification mapping updated to ${branchName || 'Central HQ'}.`,
     });
   };
 
-  const assignedUsers = allUsers?.filter(u => u.branch === selectedBranch && selectedBranch !== "") || [];
+  // Filter only for KYC Officers as requested
+  const assignedUsers = allUsers?.filter(u => 
+    u.role === 'KYC Officer' && 
+    u.branch === selectedBranch && 
+    selectedBranch !== ""
+  ) || [];
+
   const unassignedUsers = allUsers?.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         u.role.toLowerCase().includes(searchTerm.toLowerCase());
+    const isKYCOfficer = u.role === 'KYC Officer';
+    const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase());
     const isNotAtSelected = u.branch !== selectedBranch;
     const isActive = u.status !== 'Inactive';
-    return matchesSearch && isNotAtSelected && isActive;
+    return isKYCOfficer && matchesSearch && isNotAtSelected && isActive;
   }) || [];
 
   if (branchesLoading || usersLoading) {
@@ -97,11 +103,11 @@ export default function StaffAssignmentsPage() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
-              <ArrowRightLeft className="w-6 h-6" />
+              <SearchCheck className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Staff Assignments</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Specialist Coverage</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Manage geographic staff distribution and temporary coverage reassignments.</p>
+          <p className="text-muted-foreground text-lg font-medium">Manage the geographic distribution of KYC Officers for document verification.</p>
         </div>
       </div>
 
@@ -110,14 +116,14 @@ export default function StaffAssignmentsPage() {
           <CardHeader className="bg-slate-50/50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">
               <Building2 className="w-5 h-5 text-primary" />
-              Target Branch
+              Jurisdiction Node
             </CardTitle>
-            <CardDescription>Select the branch to manage or reassign staff for coverage.</CardDescription>
+            <CardDescription>Select a branch to manage its assigned verification specialists.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Branch Selection</Label>
+                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Branch Name</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                   <SelectTrigger className="h-11">
                     <SelectValue placeholder="Select branch..." />
@@ -136,7 +142,7 @@ export default function StaffAssignmentsPage() {
                   <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Active Mapping</span>
                   <span className="text-lg font-black text-slate-900">{selectedBranch}</span>
                   <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="secondary" className="font-bold">{assignedUsers.length} Authorized Personnel</Badge>
+                    <Badge variant="secondary" className="font-bold">{assignedUsers.length} Active KYC Officers</Badge>
                   </div>
                 </div>
               )}
@@ -145,7 +151,7 @@ export default function StaffAssignmentsPage() {
                 <div className="flex gap-2 text-amber-800">
                   <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
                   <p className="text-xs font-medium leading-relaxed">
-                    <strong>Coverage Protocol:</strong> Reassigning a KYC Officer here will instantly grant them access to this branch&apos;s cases while revoking access to their previous branch.
+                    <strong>Coverage Protocol:</strong> KYC Officers reassigned here will immediately gain authority to approve/reject cases submitted within this jurisdiction.
                   </p>
                 </div>
               </div>
@@ -159,7 +165,7 @@ export default function StaffAssignmentsPage() {
               <MapPin className="w-16 h-16 text-slate-200" />
               <div className="text-center space-y-1">
                 <p className="font-bold text-slate-900 text-xl">No Branch Selected</p>
-                <p className="text-sm text-slate-500 max-w-xs mx-auto">Please select a branch from the sidebar to begin managing staff or arranging temporary coverage.</p>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto">Please select a branch to begin managing specialist coverage and verification assignments.</p>
               </div>
             </div>
           ) : (
@@ -170,9 +176,9 @@ export default function StaffAssignmentsPage() {
                     <div>
                       <CardTitle className="text-xl flex items-center gap-2">
                         <Users className="w-5 h-5 text-primary" />
-                        Current Authorized Staff
+                        Mapped KYC Officers
                       </CardTitle>
-                      <CardDescription>Personnel with active access to {selectedBranch}.</CardDescription>
+                      <CardDescription>Specialists currently authorized for {selectedBranch}.</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
@@ -187,7 +193,7 @@ export default function StaffAssignmentsPage() {
                             </div>
                             <div className="flex flex-col">
                               <span className="text-sm font-bold text-slate-900">{u.name}</span>
-                              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">{u.role}</span>
+                              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Verification Specialist</span>
                             </div>
                           </div>
                           <Button 
@@ -197,13 +203,13 @@ export default function StaffAssignmentsPage() {
                             onClick={() => handleAssignUser(u.id, "Central HQ")}
                           >
                             <X className="w-4 h-4 mr-2" />
-                            Revoke Access
+                            Revoke Authority
                           </Button>
                         </div>
                       ))}
                       {assignedUsers.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground italic">
-                          No staff currently mapped to this location.
+                          No specialists currently mapped to this node.
                         </div>
                       )}
                     </div>
@@ -215,13 +221,13 @@ export default function StaffAssignmentsPage() {
                 <CardHeader className="bg-slate-50/50 border-b">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
-                      <CardTitle className="text-xl">Network Personnel Directory</CardTitle>
-                      <CardDescription>Assign or reassign specialists to {selectedBranch}.</CardDescription>
+                      <CardTitle className="text-xl">Network Specialist Registry</CardTitle>
+                      <CardDescription>Reassign authorized KYC Officers to {selectedBranch}.</CardDescription>
                     </div>
                     <div className="relative w-full md:w-64">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <Input 
-                        placeholder="Search personnel..." 
+                        placeholder="Search specialists..." 
                         className="pl-9 h-9" 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -241,7 +247,7 @@ export default function StaffAssignmentsPage() {
                             <div className="flex flex-col">
                               <span className="text-sm font-bold text-slate-900">{u.name}</span>
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">{u.role}</span>
+                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">KYC Specialist</span>
                                 <span className="text-slate-200 text-xs">•</span>
                                 <Badge variant="outline" className="text-[9px] h-4 font-bold bg-white">{u.branch || 'Central HQ'}</Badge>
                               </div>
@@ -254,13 +260,13 @@ export default function StaffAssignmentsPage() {
                             onClick={() => handleAssignUser(u.id, selectedBranch)}
                           >
                             <UserPlus className="w-4 h-4 mr-2" />
-                            Map to Branch
+                            Assign Coverage
                           </Button>
                         </div>
                       ))}
                       {unassignedUsers.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground italic">
-                          No other staff available for reassignment.
+                          No other specialists available for reassignment.
                         </div>
                       )}
                     </div>
