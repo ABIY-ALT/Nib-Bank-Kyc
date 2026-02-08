@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -18,7 +17,8 @@ import {
   Search,
   MapPin,
   ShieldAlert,
-  SearchCheck
+  SearchCheck,
+  ChevronDown
 } from "lucide-react";
 import { 
   Select, 
@@ -32,6 +32,11 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export default function StaffAssignmentsPage() {
   const db = useFirestore();
@@ -206,7 +211,34 @@ export default function StaffAssignmentsPage() {
                               <span className="text-sm font-bold text-slate-900">{u.name}</span>
                               <div className="flex items-center gap-2">
                                 <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Verification Specialist</span>
-                                <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white">{u.assignedBranches?.length} Branches Covered</Badge>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="flex items-center hover:opacity-80 transition-opacity focus:outline-none">
+                                      <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white border-primary/30 text-primary font-bold cursor-pointer">
+                                        {u.assignedBranches?.length || 0} Branches Covered
+                                      </Badge>
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-64 p-4 shadow-2xl border-slate-200 bg-white" side="top" align="start">
+                                    <div className="space-y-3">
+                                      <div className="flex items-center gap-2 border-b pb-2">
+                                        <Building2 className="w-3.5 h-3.5 text-primary" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Active Portfolio</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {u.assignedBranches && u.assignedBranches.length > 0 ? (
+                                          u.assignedBranches.map(branch => (
+                                            <Badge key={branch} variant="secondary" className="text-[10px] font-bold bg-slate-100 text-slate-700 border-none">
+                                              {branch}
+                                            </Badge>
+                                          ))
+                                        ) : (
+                                          <span className="text-[10px] italic text-slate-400">No branches mapped.</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
                               </div>
                             </div>
                           </div>
@@ -263,12 +295,34 @@ export default function StaffAssignmentsPage() {
                               <div className="flex items-center gap-2 flex-wrap max-w-xs">
                                 <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">KYC Specialist</span>
                                 <span className="text-slate-200 text-xs">•</span>
-                                {u.assignedBranches?.map(b => (
-                                  <Badge key={b} variant="outline" className="text-[9px] h-4 font-bold bg-white">{b}</Badge>
-                                ))}
-                                {(!u.assignedBranches || u.assignedBranches.length === 0) && (
-                                  <Badge variant="outline" className="text-[9px] h-4 font-bold bg-white italic">Unmapped</Badge>
-                                )}
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="flex items-center hover:opacity-80 transition-opacity focus:outline-none">
+                                      <Badge variant="outline" className="text-[9px] h-4 font-bold bg-white cursor-pointer hover:border-primary/50 transition-colors">
+                                        {u.assignedBranches?.length || 0} Assignments
+                                      </Badge>
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-64 p-4 shadow-2xl border-slate-200 bg-white" side="top" align="start">
+                                    <div className="space-y-3">
+                                      <div className="flex items-center gap-2 border-b pb-2">
+                                        <MapPin className="w-3.5 h-3.5 text-primary" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Current Node Coverage</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {u.assignedBranches && u.assignedBranches.length > 0 ? (
+                                          u.assignedBranches.map(branch => (
+                                            <Badge key={branch} variant="secondary" className="text-[10px] font-bold bg-primary/5 text-primary border-primary/10">
+                                              {branch}
+                                            </Badge>
+                                          ))
+                                        ) : (
+                                          <span className="text-[10px] italic text-slate-400">Unmapped</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
                               </div>
                             </div>
                           </div>
