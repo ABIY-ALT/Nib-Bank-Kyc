@@ -118,7 +118,7 @@ export default function SubmissionDetails() {
   const { data: documents } = useCollection<Document>(docsQuery);
 
   useEffect(() => {
-    const isReviewer = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role);
+    const isReviewer = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role || '');
     if (submission && (submission.status === 'Pending') && isReviewer && submissionRef && !submission.isResubmitted) {
       updateDoc(submissionRef, { status: 'In Review' }).catch(() => {});
     }
@@ -128,8 +128,8 @@ export default function SubmissionDetails() {
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
   const isOwner = submission.submittedBy === user.name;
-  const isKYCOfficer = ['KYC Officer', 'Admin'].includes(user.role);
-  const isSupervisor = ['Supervisor', 'Director', 'Admin'].includes(user.role);
+  const isKYCOfficer = ['KYC Officer', 'Admin'].includes(user.role || '');
+  const isSupervisor = ['Supervisor', 'Director', 'Admin'].includes(user.role || '');
   const isAmended = submission.status === 'Amended';
   const isEscalated = submission.status === 'Escalated';
 
@@ -221,7 +221,6 @@ export default function SubmissionDetails() {
   };
 
   const openPreview = (doc: Document) => {
-    // Check type or extension for PDF
     const isPdf = doc.name.toLowerCase().endsWith('.pdf') || doc.type === 'application/pdf';
     setPreviewFile({
       id: doc.id,
@@ -442,9 +441,6 @@ export default function SubmissionDetails() {
                                <a href={doc.url === '#' ? '#' : doc.url} download={doc.name} onClick={() => doc.url === '#' && toast({ title: "Mock Download", description: "This is a placeholder link for demo purposes." })}>
                                  <Download className="w-4 h-4" />
                                </a>
-                             </Button>
-                             <Button variant="ghost" size="icon" asChild className="rounded-full">
-                               <a href={doc.url === '#' ? '#' : doc.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
                              </Button>
                           </div>
                         </div>
