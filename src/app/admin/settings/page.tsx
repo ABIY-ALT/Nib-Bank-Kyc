@@ -18,12 +18,13 @@ import {
   Clock,
   Plus,
   Trash2,
-  FileText
+  FileText,
+  Users
 } from "lucide-react";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-interface DocType {
+interface ConfigItem {
   id: string;
   label: string;
 }
@@ -35,10 +36,11 @@ interface GlobalSettings {
   slaHours: number;
   lastUpdated?: string;
   updatedBy?: string;
-  documentTypes?: DocType[];
+  documentTypes?: ConfigItem[];
+  entityTypes?: ConfigItem[];
 }
 
-const DEFAULT_DOC_TYPES: DocType[] = [
+const DEFAULT_DOC_TYPES: ConfigItem[] = [
   { id: "id_card", label: "ID Card / National ID" },
   { id: "passport", label: "Passport" },
   { id: "utility_bill", label: "Utility Bill" },
@@ -46,6 +48,13 @@ const DEFAULT_DOC_TYPES: DocType[] = [
   { id: "incorporation", label: "Certificate of Incorporation" },
   { id: "tax_cert", label: "Tax Certificate" },
   { id: "other", label: "Other Document" },
+];
+
+const DEFAULT_ENTITY_TYPES: ConfigItem[] = [
+  { id: "individual", label: "Individual" },
+  { id: "corporate", label: "Corporate" },
+  { id: "sme", label: "SME (Small/Medium Enterprise)" },
+  { id: "ngo", label: "NGO (Non-Profit Organization)" },
 ];
 
 export default function SystemSettingsPage() {
@@ -64,10 +73,12 @@ export default function SystemSettingsPage() {
     escalationHours: 72,
     strictSla: true,
     slaHours: 24,
-    documentTypes: DEFAULT_DOC_TYPES
+    documentTypes: DEFAULT_DOC_TYPES,
+    entityTypes: DEFAULT_ENTITY_TYPES
   });
 
   const [newDocLabel, setNewDocLabel] = useState("");
+  const [newEntityLabel, setNewEntityLabel] = useState("");
 
   useEffect(() => {
     if (remoteSettings) {
@@ -75,7 +86,8 @@ export default function SystemSettingsPage() {
         ...remoteSettings,
         escalationHours: remoteSettings.escalationHours ?? 72,
         slaHours: remoteSettings.slaHours ?? 24,
-        documentTypes: remoteSettings.documentTypes || DEFAULT_DOC_TYPES
+        documentTypes: remoteSettings.documentTypes || DEFAULT_DOC_TYPES,
+        entityTypes: remoteSettings.entityTypes || DEFAULT_ENTITY_TYPES
       });
     }
   }, [remoteSettings]);
@@ -101,7 +113,7 @@ export default function SystemSettingsPage() {
 
     toast({
       title: "Configuration Saved",
-      description: "System policies and classification registry updated.",
+      description: "System policies and classification registries updated.",
     });
   };
 
@@ -118,9 +130,27 @@ export default function SystemSettingsPage() {
     setNewDocLabel("");
   };
 
+  const handleAddEntityType = () => {
+    if (!newEntityLabel.trim()) return;
+    const newId = newEntityLabel.toLowerCase().replace(/\s+/g, '_');
+    if (localSettings.entityTypes?.some(t => t.id === newId)) {
+      toast({ variant: "destructive", title: "Duplicate Entry", description: "This entity classification already exists." });
+      return;
+    }
+
+    const updatedTypes = [...(localSettings.entityTypes || []), { id: newId, label: newEntityLabel }];
+    setLocalSettings({ ...localSettings, entityTypes: updatedTypes });
+    setNewEntityLabel("");
+  };
+
   const handleRemoveDocType = (id: string) => {
     const updatedTypes = localSettings.documentTypes?.filter(t => t.id !== id) || [];
     setLocalSettings({ ...localSettings, documentTypes: updatedTypes });
+  };
+
+  const handleRemoveEntityType = (id: string) => {
+    const updatedTypes = localSettings.entityTypes?.filter(t => t.id !== id) || [];
+    setLocalSettings({ ...localSettings, entityTypes: updatedTypes });
   };
 
   if (fetchLoading) {
@@ -208,44 +238,85 @@ export default function SystemSettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg border-slate-200 h-fit">
-          <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" />
-              Document Classification Registry
-            </CardTitle>
-            <CardDescription>Manage the list of acceptable file types for KYC submissions.</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex gap-2">
-              <Input 
-                placeholder="New classification name (e.g. Utility Bill)" 
-                value={newDocLabel}
-                onChange={(e) => setNewDocLabel(e.target.value)}
-                className="h-10"
-              />
-              <Button size="icon" onClick={handleAddDocType} className="shrink-0">
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
+        <div className="space-y-8">
+          <Card className="shadow-lg border-slate-200">
+            <CardHeader className="bg-slate-50/50 border-b">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Users className="w-5 h-5 text-primary" />
+                Entity Classification Registry
+              </CardTitle>
+              <CardDescription>Manage the list of customer entity types (e.g. Individual, Corporate).</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="New entity type (e.g. Partnership)" 
+                  value={newEntityLabel}
+                  onChange={(e) => setNewEntityLabel(e.target.value)}
+                  className="h-10"
+                />
+                <Button size="icon" onClick={handleAddEntityType} className="shrink-0">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
 
-            <div className="grid gap-2">
-              {localSettings.documentTypes?.map((type) => (
-                <div key={type.id} className="flex items-center justify-between p-3 border rounded-lg bg-white group hover:border-primary/30 transition-all">
-                  <span className="text-sm font-medium text-slate-700">{type.label}</span>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => handleRemoveDocType(type.id)}
-                    className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              <div className="grid gap-2">
+                {localSettings.entityTypes?.map((type) => (
+                  <div key={type.id} className="flex items-center justify-between p-3 border rounded-lg bg-white group hover:border-primary/30 transition-all">
+                    <span className="text-sm font-medium text-slate-700">{type.label}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleRemoveEntityType(type.id)}
+                      className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-slate-200">
+            <CardHeader className="bg-slate-50/50 border-b">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                Document Classification Registry
+              </CardTitle>
+              <CardDescription>Manage the list of acceptable file types for KYC submissions.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="New document type (e.g. Utility Bill)" 
+                  value={newDocLabel}
+                  onChange={(e) => setNewDocLabel(e.target.value)}
+                  className="h-10"
+                />
+                <Button size="icon" onClick={handleAddDocType} className="shrink-0">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="grid gap-2">
+                {localSettings.documentTypes?.map((type) => (
+                  <div key={type.id} className="flex items-center justify-between p-3 border rounded-lg bg-white group hover:border-primary/30 transition-all">
+                    <span className="text-sm font-medium text-slate-700">{type.label}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleRemoveDocType(type.id)}
+                      className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <div className="pt-4 border-t flex items-center justify-end max-w-none">

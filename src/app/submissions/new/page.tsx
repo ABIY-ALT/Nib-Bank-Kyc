@@ -54,7 +54,7 @@ interface UploadedFile {
   previewUrl: string;
 }
 
-const ENTITY_CLASSIFICATIONS = [
+const DEFAULT_ENTITY_TYPES = [
   { id: "individual", label: "Individual" },
   { id: "corporate", label: "Corporate" },
   { id: "sme", label: "SME (Small/Medium Enterprise)" },
@@ -78,7 +78,7 @@ export default function NewSubmission() {
   const db = useFirestore();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [customerName, setCustomerName] = useState("");
-  const [entityType, setEntityType] = useState("individual");
+  const [entityType, setEntityType] = useState("");
   const [remarks, setRemarks] = useState("");
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,11 +87,23 @@ export default function NewSubmission() {
     return db ? doc(db, "settings", "global") : null;
   }, [db]);
 
-  const { data: settings, loading: settingsLoading } = useDoc<{ documentTypes: { id: string, label: string }[] }>(settingsRef);
+  const { data: settings, loading: settingsLoading } = useDoc<{ 
+    documentTypes: { id: string, label: string }[],
+    entityTypes: { id: string, label: string }[]
+  }>(settingsRef);
 
   const documentTypes = useMemo(() => {
     return settings?.documentTypes || DEFAULT_DOC_TYPES;
   }, [settings]);
+
+  const entityClassifications = useMemo(() => {
+    const list = settings?.entityTypes || DEFAULT_ENTITY_TYPES;
+    // Set initial value once settings load
+    if (list.length > 0 && !entityType) {
+      setEntityType(list[0].id);
+    }
+    return list;
+  }, [settings, entityType]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -187,9 +199,11 @@ export default function NewSubmission() {
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Classification</Label>
               <Select value={entityType} onValueChange={setEntityType}>
-                <SelectTrigger className="h-11"><SelectValue placeholder="Select classification" /></SelectTrigger>
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Select classification" />
+                </SelectTrigger>
                 <SelectContent>
-                  {ENTITY_CLASSIFICATIONS.map((classification) => (
+                  {entityClassifications.map((classification) => (
                     <SelectItem key={classification.id} value={classification.id}>
                       {classification.label}
                     </SelectItem>

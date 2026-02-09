@@ -18,10 +18,7 @@
           "enum": ["Pending", "In Review", "Amended", "Approved", "Escalated", "Rejected"] 
         },
         "remarks": { "type": "string" },
-        "entityType": { 
-          "type": "string",
-          "enum": ["individual", "corporate", "sme", "ngo"]
-        },
+        "entityType": { "type": "string" },
         "amendmentCycles": { "type": "integer", "description": "Count of times the case was sent back for amendments." }
       },
       "required": ["customerName", "branch", "status", "submittedBy"]
@@ -95,6 +92,16 @@
         "lastUpdated": { "type": "string", "format": "date-time" },
         "updatedBy": { "type": "string" },
         "documentTypes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" }
+            }
+          }
+        },
+        "entityTypes": {
           "type": "array",
           "items": {
             "type": "object",
