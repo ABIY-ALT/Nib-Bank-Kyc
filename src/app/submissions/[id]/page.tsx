@@ -139,7 +139,7 @@ export default function SubmissionDetails() {
       const added = Array.from(e.target.files).map(file => ({
         id: Math.random().toString(36).substr(2, 9),
         file: file,
-        type: documentTypes[0]?.id || "id_card",
+        type: "", // Placeholder required
         previewUrl: URL.createObjectURL(file)
       }));
       setNewFiles((prev) => [...prev, ...added]);
@@ -161,6 +161,13 @@ export default function SubmissionDetails() {
 
   const handleAction = (action: string) => {
     if (!submissionRef || !db) return;
+
+    if (action === 'Pending' && isAmended && isOwner) {
+      if (newFiles.some(f => !f.type)) {
+        toast({ variant: "destructive", title: "Classification Required", description: "Select a document type for all uploaded corrections." });
+        return;
+      }
+    }
 
     if ((action === 'Amended' || action === 'Rejected' || action === 'Escalated') && !remarks.trim()) {
       toast({
@@ -365,7 +372,7 @@ export default function SubmissionDetails() {
                           <div className="flex items-center gap-3">
                             <Select value={item.type} onValueChange={(val) => handleNewFileTypeChange(item.id, val)}>
                               <SelectTrigger className="h-9 w-40 bg-slate-50/50">
-                                <SelectValue />
+                                <SelectValue placeholder="Select file type" />
                               </SelectTrigger>
                               <SelectContent>
                                 {documentTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
