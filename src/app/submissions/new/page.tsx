@@ -204,10 +204,10 @@ export default function NewSubmission() {
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
              <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.jpg,.jpeg,.png" />
-             <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:bg-accent/5">
+             <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:bg-accent/5 transition-all">
                 <Upload className="w-10 h-10 text-accent mb-4" />
                 <p className="font-bold text-xl text-slate-800">Drop customer files here</p>
-                <Button variant="outline" type="button" className="mt-4">Browse Filesystem</Button>
+                <Button variant="outline" type="button" className="mt-4 font-bold border-accent/20 text-accent hover:bg-accent/5">Browse Filesystem</Button>
              </div>
 
              <div className="space-y-3">
@@ -215,8 +215,13 @@ export default function NewSubmission() {
                {uploadedFiles.map((item) => (
                  <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all">
                    <div className="flex items-center gap-4 flex-1">
-                     <FileText className="w-6 h-6 text-slate-400" />
-                     <span className="text-sm font-bold truncate text-slate-700">{item.file.name}</span>
+                     <div className="p-2 bg-slate-100 rounded-lg">
+                       <FileText className="w-6 h-6 text-slate-400" />
+                     </div>
+                     <div className="flex flex-col">
+                       <span className="text-sm font-bold truncate text-slate-700 max-w-[200px]">{item.file.name}</span>
+                       <span className="text-[10px] text-muted-foreground uppercase font-bold">{(item.file.size / 1024).toFixed(1)} KB</span>
+                     </div>
                    </div>
                    <div className="flex items-center gap-4 w-full md:w-auto">
                      <Select value={item.type} onValueChange={(val) => handleTypeChange(item.id, val)}>
@@ -225,9 +230,14 @@ export default function NewSubmission() {
                          {documentTypes.map((type) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}
                        </SelectContent>
                      </Select>
-                     <div className="flex gap-2">
+                     <div className="flex gap-1">
                        <Button variant="ghost" size="icon" type="button" onClick={() => setPreviewFile(item)} className="h-10 w-10 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
                          <Eye className="w-5 h-5" />
+                       </Button>
+                       <Button variant="ghost" size="icon" asChild className="h-10 w-10 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
+                         <a href={item.previewUrl} download={item.file.name}>
+                           <Download className="w-5 h-5" />
+                         </a>
                        </Button>
                        <Button variant="ghost" size="icon" type="button" onClick={() => removeFile(item.id)} className="h-10 w-10 text-red-500 hover:bg-red-50 rounded-full">
                          <X className="w-5 h-5" />
@@ -243,41 +253,48 @@ export default function NewSubmission() {
         <Card className="border-slate-200 shadow-sm">
           <CardHeader><CardTitle className="text-xl">Remarks</CardTitle></CardHeader>
           <CardContent>
-             <Textarea placeholder="Context for KYC Officer..." className="min-h-[140px]" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+             <Textarea placeholder="Provide internal context for the KYC Officer (optional)..." className="min-h-[140px]" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           </CardContent>
           <CardFooter className="flex justify-end gap-4 border-t pt-8">
-            <Button variant="outline" type="button" onClick={() => router.back()}>Cancel</Button>
-            <Button type="submit" className="px-12 bg-primary font-bold">Dispatch for Review</Button>
+            <Button variant="outline" type="button" onClick={() => router.back()} className="px-8 h-11 font-bold">Cancel</Button>
+            <Button type="submit" className="px-12 h-11 bg-primary font-bold shadow-lg">Dispatch for Review</Button>
           </CardFooter>
         </Card>
       </form>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
-          <DialogHeader className="p-6 bg-slate-900 text-white flex-row items-center justify-between space-y-0">
+          <DialogHeader className="p-6 bg-slate-900 text-white flex flex-row items-center justify-between space-y-0">
             <div>
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" />
                 {previewFile?.file.name}
               </DialogTitle>
               <DialogDescription className="text-slate-400 mt-1">
-                Document Inspection • {previewFile?.file.type}
+                Document Inspection • {previewFile?.file.type || 'Unknown Type'}
               </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2 mr-8">
+              <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20 h-9 font-bold">
+                <a href={previewFile?.previewUrl} download={previewFile?.file.name}>
+                  <Download className="w-4 h-4 mr-2" /> Download
+                </a>
+              </Button>
             </div>
           </DialogHeader>
           <div className="flex-1 bg-slate-800 flex items-center justify-center min-h-[500px]">
-            {previewFile?.file.type.startsWith('image/') ? (
-              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
-            ) : previewFile?.file.type === 'application/pdf' ? (
+            {previewFile?.file.type === 'application/pdf' ? (
               <iframe src={previewFile.previewUrl} className="w-full h-[70vh] border-none" title="PDF Preview" />
+            ) : previewFile?.file.type.startsWith('image/') ? (
+              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
             ) : (
               <div className="text-white flex flex-col items-center gap-6 p-12 text-center">
                 <div className="p-8 bg-slate-700 rounded-full">
                   <FileText className="w-20 h-20 text-slate-500" />
                 </div>
                 <div className="space-y-2">
-                  <p className="text-2xl font-bold">Preview Not Supported</p>
-                  <p className="text-slate-400">Direct visualization for this file type is unavailable in-browser.</p>
+                  <p className="text-2xl font-bold">Preview Unavailable</p>
+                  <p className="text-slate-400">Visualization for this file type is not supported in-browser.</p>
                 </div>
                 <Button asChild variant="outline" className="text-white border-white/20 hover:bg-white/10 h-12 px-8 font-bold">
                   <a href={previewFile?.previewUrl} download={previewFile?.file.name}>

@@ -74,11 +74,12 @@ const DEFAULT_DOC_TYPES = [
   { id: "other", label: "Other Document" },
 ];
 
-interface UploadedFile {
+interface PreviewDoc {
   id: string;
-  file: File;
+  name: string;
   type: string;
-  previewUrl: string;
+  url: string;
+  isPdf?: boolean;
 }
 
 export default function SubmissionDetails() {
@@ -88,8 +89,8 @@ export default function SubmissionDetails() {
   const db = useFirestore();
   const { user } = useAuth();
   const [remarks, setRemarks] = useState("");
-  const [newFiles, setNewFiles] = useState<UploadedFile[]>([]);
-  const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
+  const [newFiles, setNewFiles] = useState<any[]>([]);
+  const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const submissionRef = useMemoFirebase(() => {
@@ -217,6 +218,16 @@ export default function SubmissionDetails() {
       description: `Case moved to ${action}.`,
     });
     router.back();
+  };
+
+  const openPreview = (doc: Document) => {
+    setPreviewFile({
+      id: doc.id,
+      name: doc.name,
+      type: doc.type,
+      url: doc.url === '#' ? 'https://picsum.photos/seed/doc/1200/1600' : doc.url,
+      isPdf: doc.name.toLowerCase().endsWith('.pdf')
+    });
   };
 
   const steps = [
@@ -352,8 +363,19 @@ export default function SubmissionDetails() {
                               </SelectContent>
                             </Select>
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" onClick={() => setPreviewFile(item)} className="h-9 w-9 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
+                              <Button variant="ghost" size="icon" onClick={() => setPreviewFile({
+                                id: item.id,
+                                name: item.file.name,
+                                type: item.type,
+                                url: item.previewUrl,
+                                isPdf: item.file.type === 'application/pdf'
+                              })} className="h-9 w-9 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
                                 <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" asChild className="h-9 w-9 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
+                                <a href={item.previewUrl} download={item.file.name}>
+                                  <Download className="w-4 h-4" />
+                                </a>
                               </Button>
                               <Button variant="ghost" size="icon" onClick={() => removeNewFile(item.id)} className="h-9 w-9 text-red-500 hover:bg-red-50 rounded-full">
                                 <X className="w-4 h-4" />
@@ -394,7 +416,7 @@ export default function SubmissionDetails() {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl">Verification Assets</CardTitle>
-                    <CardDescription>Tagged customer documents.</CardDescription>
+                    <CardDescription>Tagged customer documents available for review.</CardDescription>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -411,8 +433,16 @@ export default function SubmissionDetails() {
                             </div>
                           </div>
                           <div className="flex gap-2">
+                             <Button variant="ghost" size="icon" onClick={() => openPreview(doc)} className="rounded-full text-slate-500 hover:text-primary hover:bg-primary/5">
+                               <Eye className="w-4 h-4" />
+                             </Button>
+                             <Button variant="ghost" size="icon" asChild className="rounded-full text-slate-500 hover:text-primary hover:bg-primary/5">
+                               <a href={doc.url === '#' ? '#' : doc.url} download={doc.name} onClick={() => doc.url === '#' && toast({ title: "Mock Download", description: "This is a placeholder link for demo purposes." })}>
+                                 <Download className="w-4 h-4" />
+                               </a>
+                             </Button>
                              <Button variant="ghost" size="icon" asChild className="rounded-full">
-                               <a href={doc.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
+                               <a href={doc.url === '#' ? '#' : doc.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
                              </Button>
                           </div>
                         </div>
@@ -573,38 +603,29 @@ export default function SubmissionDetails() {
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
-          <DialogHeader className="p-6 bg-slate-900 text-white flex-row items-center justify-between space-y-0">
+          <DialogHeader className="p-6 bg-slate-900 text-white flex flex-row items-center justify-between space-y-0">
             <div>
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" />
-                {previewFile?.file.name}
+                {previewFile?.name}
               </DialogTitle>
               <DialogDescription className="text-slate-400 mt-1">
-                Document Inspection • {previewFile?.file.type}
+                Document Inspection • {previewFile?.isPdf ? 'application/pdf' : 'image/preview'}
               </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2 mr-8">
+              <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20 h-9 font-bold">
+                <a href={previewFile?.url} download={previewFile?.name}>
+                  <Download className="w-4 h-4 mr-2" /> Download
+                </a>
+              </Button>
             </div>
           </DialogHeader>
           <div className="flex-1 bg-slate-800 flex items-center justify-center min-h-[500px]">
-            {previewFile?.file.type.startsWith('image/') ? (
-              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
-            ) : previewFile?.file.type === 'application/pdf' ? (
-              <iframe src={previewFile.previewUrl} className="w-full h-[70vh] border-none" title="PDF Preview" />
+            {previewFile?.isPdf ? (
+              <iframe src={previewFile.url} className="w-full h-[70vh] border-none" title="PDF Preview" />
             ) : (
-              <div className="text-white flex flex-col items-center gap-6 p-12 text-center">
-                <div className="p-8 bg-slate-700 rounded-full">
-                  <FileText className="w-20 h-20 text-slate-500" />
-                </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-bold">Preview Not Supported</p>
-                  <p className="text-slate-400">Direct visualization for this file type is unavailable in-browser.</p>
-                </div>
-                <Button asChild variant="outline" className="text-white border-white/20 hover:bg-white/10 h-12 px-8 font-bold">
-                  <a href={previewFile?.previewUrl} download={previewFile?.file.name}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download to Inspect
-                  </a>
-                </Button>
-              </div>
+              <img src={previewFile?.url} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
             )}
           </div>
         </DialogContent>
