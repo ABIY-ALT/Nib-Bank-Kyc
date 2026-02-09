@@ -19,14 +19,32 @@ import {
   Plus,
   Trash2,
   FileText,
-  Users
+  Users,
+  Megaphone,
+  AlertTriangle,
+  Info
 } from "lucide-react";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { Textarea } from '@/components/ui/textarea';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 
 interface ConfigItem {
   id: string;
   label: string;
+}
+
+interface Guideline {
+  id: string;
+  title: string;
+  description: string;
+  type: 'alert' | 'info';
 }
 
 interface GlobalSettings {
@@ -38,6 +56,7 @@ interface GlobalSettings {
   updatedBy?: string;
   documentTypes?: ConfigItem[];
   entityTypes?: ConfigItem[];
+  guidelines?: Guideline[];
 }
 
 const DEFAULT_DOC_TYPES: ConfigItem[] = [
@@ -57,6 +76,11 @@ const DEFAULT_ENTITY_TYPES: ConfigItem[] = [
   { id: "ngo", label: "NGO (Non-Profit Organization)" },
 ];
 
+const DEFAULT_GUIDELINES: Guideline[] = [
+  { id: "risk-alert", title: "High-Risk Alert", description: "Enhanced Due Diligence (EDD) is now required for all corporate entities in the industrial sector.", type: 'alert' },
+  { id: "sla-info", title: "SLA Enforcement", description: "All \"Action Required\" items must be addressed within 24 hours to maintain branch performance rankings.", type: 'info' }
+];
+
 export default function SystemSettingsPage() {
   const db = useFirestore();
   const { toast } = useToast();
@@ -74,11 +98,18 @@ export default function SystemSettingsPage() {
     strictSla: true,
     slaHours: 24,
     documentTypes: DEFAULT_DOC_TYPES,
-    entityTypes: DEFAULT_ENTITY_TYPES
+    entityTypes: DEFAULT_ENTITY_TYPES,
+    guidelines: DEFAULT_GUIDELINES
   });
 
   const [newDocLabel, setNewDocLabel] = useState("");
   const [newEntityLabel, setNewEntityLabel] = useState("");
+  
+  const [newGuideline, setNewGuideline] = useState<Partial<Guideline>>({
+    title: "",
+    description: "",
+    type: 'info'
+  });
 
   useEffect(() => {
     if (remoteSettings) {
@@ -87,7 +118,8 @@ export default function SystemSettingsPage() {
         escalationHours: remoteSettings.escalationHours ?? 72,
         slaHours: remoteSettings.slaHours ?? 24,
         documentTypes: remoteSettings.documentTypes || DEFAULT_DOC_TYPES,
-        entityTypes: remoteSettings.entityTypes || DEFAULT_ENTITY_TYPES
+        entityTypes: remoteSettings.entityTypes || DEFAULT_ENTITY_TYPES,
+        guidelines: remoteSettings.guidelines || DEFAULT_GUIDELINES
       });
     }
   }, [remoteSettings]);
@@ -113,7 +145,7 @@ export default function SystemSettingsPage() {
 
     toast({
       title: "Configuration Saved",
-      description: "System policies and classification registries updated.",
+      description: "System policies, registries, and guidelines updated.",
     });
   };
 
@@ -143,6 +175,24 @@ export default function SystemSettingsPage() {
     setNewEntityLabel("");
   };
 
+  const handleAddGuideline = () => {
+    if (!newGuideline.title?.trim() || !newGuideline.description?.trim()) {
+      toast({ variant: "destructive", title: "Missing Fields", description: "Title and description are required for guidelines." });
+      return;
+    }
+
+    const id = `guide-${Date.now()}`;
+    const updated = [...(localSettings.guidelines || []), { 
+      id, 
+      title: newGuideline.title, 
+      description: newGuideline.description, 
+      type: newGuideline.type as 'alert' | 'info' 
+    }];
+    
+    setLocalSettings({ ...localSettings, guidelines: updated });
+    setNewGuideline({ title: "", description: "", type: 'info' });
+  };
+
   const handleRemoveDocType = (id: string) => {
     const updatedTypes = localSettings.documentTypes?.filter(t => t.id !== id) || [];
     setLocalSettings({ ...localSettings, documentTypes: updatedTypes });
@@ -151,6 +201,11 @@ export default function SystemSettingsPage() {
   const handleRemoveEntityType = (id: string) => {
     const updatedTypes = localSettings.entityTypes?.filter(t => t.id !== id) || [];
     setLocalSettings({ ...localSettings, entityTypes: updatedTypes });
+  };
+
+  const handleRemoveGuideline = (id: string) => {
+    const updated = localSettings.guidelines?.filter(g => g.id !== id) || [];
+    setLocalSettings({ ...localSettings, guidelines: updated });
   };
 
   if (fetchLoading) {
@@ -173,70 +228,152 @@ export default function SystemSettingsPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <Card className="shadow-lg border-slate-200">
-          <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-primary" />
-              Workflow Automation
-            </CardTitle>
-            <CardDescription>Define institutional SLA and escalation rules.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6 pt-6">
-            <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4 group hover:border-primary/30 transition-all">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-orange-600" />
-                    <Label className="text-base font-bold">Auto-escalation Policy</Label>
+        <div className="space-y-8">
+          <Card className="shadow-lg border-slate-200">
+            <CardHeader className="bg-slate-50/50 border-b">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-primary" />
+                Workflow Automation
+              </CardTitle>
+              <CardDescription>Define institutional SLA and escalation rules.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-6">
+              <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4 group hover:border-primary/30 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-orange-600" />
+                      <Label className="text-base font-bold">Auto-escalation Policy</Label>
+                    </div>
+                    <p className="text-[12px] text-muted-foreground font-medium">Escalate cases pending for over {localSettings.escalationHours} hours.</p>
                   </div>
-                  <p className="text-[12px] text-muted-foreground font-medium">Escalate cases pending for over {localSettings.escalationHours} hours.</p>
-                </div>
-                <Switch 
-                  checked={localSettings.autoEscalation} 
-                  onCheckedChange={(val) => setLocalSettings({...localSettings, autoEscalation: val})}
-                />
-              </div>
-              {localSettings.autoEscalation && (
-                <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed animate-in slide-in-from-top-2 duration-300">
-                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Escalation Window (Hours)</Label>
-                  <Input 
-                    type="number" 
-                    className="w-24 h-9 font-bold bg-slate-50 border-primary/20" 
-                    value={localSettings.escalationHours} 
-                    onChange={(e) => setLocalSettings({...localSettings, escalationHours: parseInt(e.target.value) || 0})}
+                  <Switch 
+                    checked={localSettings.autoEscalation} 
+                    onCheckedChange={(val) => setLocalSettings({...localSettings, autoEscalation: val})}
                   />
                 </div>
-              )}
-            </div>
+                {localSettings.autoEscalation && (
+                  <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed animate-in slide-in-from-top-2 duration-300">
+                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Escalation Window (Hours)</Label>
+                    <Input 
+                      type="number" 
+                      className="w-24 h-9 font-bold bg-slate-50 border-primary/20" 
+                      value={localSettings.escalationHours} 
+                      onChange={(e) => setLocalSettings({...localSettings, escalationHours: parseInt(e.target.value) || 0})}
+                    />
+                  </div>
+                )}
+              </div>
 
-            <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4 group hover:border-primary/30 transition-all">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <Label className="text-base font-bold">Strict SLA Enforcement</Label>
+              <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4 group hover:border-primary/30 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <Label className="text-base font-bold">Strict SLA Enforcement</Label>
+                    </div>
+                    <p className="text-[12px] text-muted-foreground font-medium">Require supervisor remarks for cases exceeding {localSettings.slaHours} hours.</p>
                   </div>
-                  <p className="text-[12px] text-muted-foreground font-medium">Require supervisor remarks for cases exceeding {localSettings.slaHours} hours.</p>
-                </div>
-                <Switch 
-                  checked={localSettings.strictSla} 
-                  onCheckedChange={(val) => setLocalSettings({...localSettings, strictSla: val})}
-                />
-              </div>
-              {localSettings.strictSla && (
-                <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed animate-in slide-in-from-top-2 duration-300">
-                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">SLA Deadline (Hours)</Label>
-                  <Input 
-                    type="number" 
-                    className="w-24 h-9 font-bold bg-slate-50 border-primary/20" 
-                    value={localSettings.slaHours} 
-                    onChange={(e) => setLocalSettings({...localSettings, slaHours: parseInt(e.target.value) || 0})}
+                  <Switch 
+                    checked={localSettings.strictSla} 
+                    onCheckedChange={(val) => setLocalSettings({...localSettings, strictSla: val})}
                   />
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                {localSettings.strictSla && (
+                  <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed animate-in slide-in-from-top-2 duration-300">
+                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">SLA Deadline (Hours)</Label>
+                    <Input 
+                      type="number" 
+                      className="w-24 h-9 font-bold bg-slate-50 border-primary/20" 
+                      value={localSettings.slaHours} 
+                      onChange={(e) => setLocalSettings({...localSettings, slaHours: parseInt(e.target.value) || 0})}
+                    />
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-slate-200">
+            <CardHeader className="bg-slate-50/50 border-b">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-primary" />
+                System Guidelines
+              </CardTitle>
+              <CardDescription>Manage the bulletins shown on the main dashboard.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              <div className="space-y-4 p-4 border rounded-xl bg-slate-50/50">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Alert Title</Label>
+                    <Input 
+                      placeholder="e.g. Policy Update" 
+                      value={newGuideline.title}
+                      onChange={(e) => setNewGuideline({...newGuideline, title: e.target.value})}
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Alert Description</Label>
+                    <Textarea 
+                      placeholder="Institutional update details..." 
+                      value={newGuideline.description}
+                      onChange={(e) => setNewGuideline({...newGuideline, description: e.target.value})}
+                      className="bg-white min-h-[80px]"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1 space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Alert Type</Label>
+                      <Select 
+                        value={newGuideline.type} 
+                        onValueChange={(val) => setNewGuideline({...newGuideline, type: val as 'alert' | 'info'})}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="alert" className="font-bold text-orange-600">High-Risk Alert (Gold)</SelectItem>
+                          <SelectItem value="info" className="font-bold text-blue-600">General Update (Blue)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={handleAddGuideline} className="mt-6 gap-2">
+                      <Plus className="w-4 h-4" /> Add Bulletin
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {localSettings.guidelines?.map((guide) => (
+                  <div key={guide.id} className="flex items-start justify-between p-4 border rounded-xl bg-white group hover:border-primary/30 transition-all">
+                    <div className="flex gap-3">
+                      {guide.type === 'alert' ? (
+                        <AlertTriangle className="w-5 h-5 text-orange-600 shrink-0" />
+                      ) : (
+                        <Info className="w-5 h-5 text-blue-600 shrink-0" />
+                      )}
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold text-slate-900">{guide.title}</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{guide.description}</p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleRemoveGuideline(guide.id)}
+                      className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="space-y-8">
           <Card className="shadow-lg border-slate-200">

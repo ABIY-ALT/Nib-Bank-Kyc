@@ -110,6 +110,18 @@
               "label": { "type": "string" }
             }
           }
+        },
+        "guidelines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "type": { "type": "string", "enum": ["alert", "info"] }
+            }
+          }
         }
       }
     }

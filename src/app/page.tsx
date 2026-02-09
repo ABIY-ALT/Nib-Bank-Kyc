@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from "@/lib/auth-mock";
@@ -15,22 +16,30 @@ import {
   ArrowUpRight,
   TrendingUp,
   History,
-  ShieldCheck
+  ShieldCheck,
+  Info
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where, orderBy, limit } from "firebase/firestore";
+import { useFirestore, useCollection, useDoc, useMemoFirebase } from "@/firebase";
+import { collection, query, where, orderBy, limit, doc } from "firebase/firestore";
 import { useMemo } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
+
+interface Guideline {
+  id: string;
+  title: string;
+  description: string;
+  type: 'alert' | 'info';
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
   const db = useFirestore();
 
   // Dashboard context: Branch portal for officers, Global portal for management
-  const isManagement = ['Admin', 'Director', 'Supervisor', 'District Director'].includes(user.role);
+  const isManagement = ['Admin', 'Director', 'Supervisor', 'District Director'].includes(user.role || '');
 
   const dashboardQuery = useMemo(() => {
     if (!db) return null;
@@ -49,7 +58,13 @@ export default function Dashboard() {
     );
   }, [db, user.branch, isManagement]);
 
-  const { data: recentSubmissions, loading } = useCollection<KYCSubmission>(dashboardQuery);
+  const { data: recentSubmissions, loading: submissionsLoading } = useCollection<KYCSubmission>(dashboardQuery);
+
+  const settingsRef = useMemoFirebase(() => {
+    return db ? doc(db, "settings", "global") : null;
+  }, [db]);
+
+  const { data: settings } = useDoc<{ guidelines?: Guideline[] }>(settingsRef);
 
   const stats = [
     { label: isManagement ? 'Global Submissions' : 'My Branch Submissions', value: recentSubmissions?.length.toString() || '0', icon: History, color: 'text-blue-600' },
@@ -98,7 +113,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
-              {loading ? (
+              {submissionsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
                   <History className="w-4 h-4 animate-spin" /> Syncing records...
                 </div>
@@ -144,20 +159,33 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="pt-6">
              <div className="space-y-4">
-                <div className="flex gap-4 p-5 rounded-2xl border bg-accent/5 border-accent/20">
-                  <ShieldCheck className="w-6 h-6 text-accent shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-bold text-slate-900">High-Risk Alert</p>
-                    <p className="text-slate-600 leading-relaxed mt-1 font-medium">Enhanced Due Diligence (EDD) is now required for all corporate entities in the industrial sector.</p>
+                {settings?.guidelines && settings.guidelines.length > 0 ? (
+                  settings.guidelines.map((guide) => (
+                    <div 
+                      key={guide.id} 
+                      className={`flex gap-4 p-5 rounded-2xl border ${
+                        guide.type === 'alert' 
+                          ? 'bg-accent/5 border-accent/20' 
+                          : 'bg-blue-50 border-blue-100'
+                      }`}
+                    >
+                      {guide.type === 'alert' ? (
+                        <ShieldCheck className="w-6 h-6 text-accent shrink-0" />
+                      ) : (
+                        <Clock className="w-6 h-6 text-blue-600 shrink-0" />
+                      )}
+                      <div className="text-sm">
+                        <p className="font-bold text-slate-900">{guide.title}</p>
+                        <p className="text-slate-600 leading-relaxed mt-1 font-medium">{guide.description}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10 text-muted-foreground italic">
+                    <Info className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">No guidelines published.</p>
                   </div>
-                </div>
-                <div className="flex gap-4 p-5 rounded-2xl border bg-blue-50 border-blue-100">
-                  <Clock className="w-6 h-6 text-blue-600 shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-bold text-slate-900">SLA Enforcement</p>
-                    <p className="text-slate-600 leading-relaxed mt-1 font-medium">All "Action Required" items must be addressed within 24 hours to maintain branch performance rankings.</p>
-                  </div>
-                </div>
+                )}
              </div>
           </CardContent>
         </Card>
