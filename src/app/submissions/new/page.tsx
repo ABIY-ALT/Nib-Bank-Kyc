@@ -165,6 +165,8 @@ export default function NewSubmission() {
     router.push('/submissions/my');
   };
 
+  const isPdf = previewFile?.file.type === 'application/pdf' || previewFile?.file.name.toLowerCase().endsWith('.pdf');
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
@@ -259,37 +261,52 @@ export default function NewSubmission() {
             <Button variant="outline" type="button" onClick={() => router.back()} className="px-8 h-11 font-bold">Cancel</Button>
             <Button type="submit" className="px-12 h-11 bg-primary font-bold shadow-lg">Dispatch for Review</Button>
           </CardFooter>
-        </Card>
-      </form>
+        </form>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
-          <DialogHeader className="p-6 bg-slate-900 text-white flex flex-row items-center justify-between space-y-0">
-            <div>
-              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-[#1a1a1a]">
+          <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between space-y-0 border-b border-white/5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/20 rounded-lg">
                 <FileText className="w-5 h-5 text-primary" />
-                {previewFile?.file.name}
-              </DialogTitle>
-              <DialogDescription className="text-slate-400 mt-1">
-                Document Inspection • {previewFile?.file.type || 'Unknown Type'}
-              </DialogDescription>
+              </div>
+              <div className="flex flex-col">
+                <DialogTitle className="text-base font-bold text-slate-100">
+                  {previewFile?.file.name}
+                </DialogTitle>
+                <DialogDescription className="text-slate-400 text-[10px] uppercase font-black tracking-widest mt-0.5">
+                  Document Inspection • {isPdf ? 'application/pdf' : 'image/preview'}
+                </DialogDescription>
+              </div>
             </div>
             <div className="flex items-center gap-2 mr-8">
-              <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20 h-9 font-bold">
+              <Button asChild variant="outline" size="sm" className="bg-white/5 border-white/10 text-white hover:bg-white/10 h-9 font-bold px-4">
                 <a href={previewFile?.previewUrl} download={previewFile?.file.name}>
-                  <Download className="w-4 h-4 mr-2" /> Download
+                  <Download className="w-4 h-4 mr-2" /> Download Original
                 </a>
               </Button>
             </div>
           </DialogHeader>
-          <div className="flex-1 bg-slate-800 flex items-center justify-center min-h-[500px]">
-            {previewFile?.file.type === 'application/pdf' ? (
-              <iframe src={previewFile.previewUrl} className="w-full h-[70vh] border-none" title="PDF Preview" />
+          <div className="flex-1 bg-[#121212] overflow-hidden flex flex-col">
+            {isPdf ? (
+              <div className="w-full h-full flex flex-col">
+                <iframe 
+                  src={`${previewFile?.previewUrl}#toolbar=1&navpanes=1&scrollbar=1`} 
+                  className="w-full h-full border-none" 
+                  title="PDF Preview"
+                />
+              </div>
             ) : previewFile?.file.type.startsWith('image/') ? (
-              <img src={previewFile.previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
+              <div className="w-full h-full overflow-auto flex items-center justify-center p-8">
+                <img 
+                  src={previewFile?.previewUrl} 
+                  alt="Preview" 
+                  className="max-w-full max-h-full object-contain shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-sm"
+                />
+              </div>
             ) : (
-              <div className="text-white flex flex-col items-center gap-6 p-12 text-center">
-                <div className="p-8 bg-slate-700 rounded-full">
+              <div className="text-white flex flex-col items-center gap-6 p-12 text-center h-full justify-center">
+                <div className="p-8 bg-white/5 rounded-full">
                   <FileText className="w-20 h-20 text-slate-500" />
                 </div>
                 <div className="space-y-2">

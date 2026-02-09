@@ -221,12 +221,14 @@ export default function SubmissionDetails() {
   };
 
   const openPreview = (doc: Document) => {
+    // Check type or extension for PDF
+    const isPdf = doc.name.toLowerCase().endsWith('.pdf') || doc.type === 'application/pdf';
     setPreviewFile({
       id: doc.id,
       name: doc.name,
       type: doc.type,
       url: doc.url === '#' ? 'https://picsum.photos/seed/doc/1200/1600' : doc.url,
-      isPdf: doc.name.toLowerCase().endsWith('.pdf')
+      isPdf: isPdf
     });
   };
 
@@ -351,7 +353,7 @@ export default function SubmissionDetails() {
                         <div key={item.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all">
                           <div className="flex items-center gap-3 flex-1">
                             <FileText className="w-5 h-5 text-slate-400" />
-                            <span className="text-sm font-bold text-slate-700">{item.file.name}</span>
+                            <span className="text-sm font-bold truncate text-slate-700 max-w-[200px]">{item.file.name}</span>
                           </div>
                           <div className="flex items-center gap-3">
                             <Select value={item.type} onValueChange={(val) => handleNewFileTypeChange(item.id, val)}>
@@ -368,7 +370,7 @@ export default function SubmissionDetails() {
                                 name: item.file.name,
                                 type: item.type,
                                 url: item.previewUrl,
-                                isPdf: item.file.type === 'application/pdf'
+                                isPdf: item.file.type === 'application/pdf' || item.file.name.toLowerCase().endsWith('.pdf')
                               })} className="h-9 w-9 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
                                 <Eye className="w-4 h-4" />
                               </Button>
@@ -602,30 +604,50 @@ export default function SubmissionDetails() {
       </div>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
-          <DialogHeader className="p-6 bg-slate-900 text-white flex flex-row items-center justify-between space-y-0">
-            <div>
-              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-[#1a1a1a]">
+          <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between space-y-0 border-b border-white/5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/20 rounded-lg">
                 <FileText className="w-5 h-5 text-primary" />
-                {previewFile?.name}
-              </DialogTitle>
-              <DialogDescription className="text-slate-400 mt-1">
-                Document Inspection • {previewFile?.isPdf ? 'application/pdf' : 'image/preview'}
-              </DialogDescription>
+              </div>
+              <div className="flex flex-col">
+                <DialogTitle className="text-base font-bold text-slate-100">
+                  {previewFile?.name}
+                </DialogTitle>
+                <DialogDescription className="text-slate-400 text-[10px] uppercase font-black tracking-widest mt-0.5">
+                  Document Inspection • {previewFile?.isPdf ? 'application/pdf' : 'image/preview'}
+                </DialogDescription>
+              </div>
             </div>
             <div className="flex items-center gap-2 mr-8">
-              <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20 h-9 font-bold">
+              <Button asChild variant="outline" size="sm" className="bg-white/5 border-white/10 text-white hover:bg-white/10 h-9 font-bold px-4">
                 <a href={previewFile?.url} download={previewFile?.name}>
-                  <Download className="w-4 h-4 mr-2" /> Download
+                  <Download className="w-4 h-4 mr-2" /> Download Original
                 </a>
               </Button>
             </div>
           </DialogHeader>
-          <div className="flex-1 bg-slate-800 flex items-center justify-center min-h-[500px]">
+          <div className="flex-1 bg-[#121212] overflow-hidden flex flex-col">
             {previewFile?.isPdf ? (
-              <iframe src={previewFile.url} className="w-full h-[70vh] border-none" title="PDF Preview" />
+              <div className="w-full h-full flex flex-col">
+                <iframe 
+                  src={`${previewFile.url}#toolbar=1&navpanes=1&scrollbar=1`} 
+                  className="w-full h-full border-none" 
+                  title="PDF Preview"
+                />
+              </div>
             ) : (
-              <img src={previewFile?.url} alt="Preview" className="max-w-full max-h-[70vh] object-contain shadow-2xl" />
+              <div className="w-full h-full overflow-auto flex items-center justify-center p-8">
+                <img 
+                  src={previewFile?.url} 
+                  alt="Preview" 
+                  className="max-w-full max-h-full object-contain shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-sm"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = 'https://placehold.co/1200x1600/222/white?text=Preview+Error';
+                  }}
+                />
+              </div>
             )}
           </div>
         </DialogContent>
