@@ -168,6 +168,7 @@ export default function NewSubmission() {
       submittedAt: new Date().toISOString(),
       status: "Pending",
       remarks,
+      isResubmitted: false,
     };
 
     setDoc(submissionRef, submissionData)

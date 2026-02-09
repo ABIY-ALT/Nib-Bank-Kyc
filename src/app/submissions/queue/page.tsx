@@ -26,12 +26,12 @@ export default function ReviewQueuePage() {
       return query(
         collection(db, "submissions"),
         where("status", "in", ["Pending", "In Review"]),
+        where("isResubmitted", "==", false),
         orderBy("submittedAt", "desc")
       );
     }
 
     // Local KYC Officers are restricted to their assigned portfolio of branches
-    // Note: Firestore 'in' queries support up to 30 values.
     const assigned = user.assignedBranches || [];
     
     if (assigned.length > 0) {
@@ -39,11 +39,11 @@ export default function ReviewQueuePage() {
         collection(db, "submissions"),
         where("status", "in", ["Pending", "In Review"]),
         where("branch", "in", assigned),
+        where("isResubmitted", "==", false),
         orderBy("submittedAt", "desc")
       );
     }
 
-    // Fallback: If no branches assigned, return nothing
     return null;
   }, [db, user.role, user.assignedBranches]);
 
@@ -70,7 +70,7 @@ export default function ReviewQueuePage() {
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Review Queue</h1>
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-muted-foreground text-lg">Central hub for processing new applications.</p>
+            <p className="text-muted-foreground text-lg">Central hub for processing initial applications.</p>
             {isLocalized && (
               <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
                 <MapPin className="w-3 h-3" />
