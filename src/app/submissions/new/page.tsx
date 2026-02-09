@@ -279,8 +279,8 @@ export default function NewSubmission() {
       </form>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-[#1a1a1a]">
-          <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between space-y-0 border-b border-white/5">
+        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-[#1a1a1a] [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10 [&>button]:h-10 [&>button]:w-10 [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full">
+          <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between space-y-0 border-b border-white/5 pr-14">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/20 rounded-lg">
                 <FileText className="w-5 h-5 text-primary" />
@@ -294,7 +294,7 @@ export default function NewSubmission() {
                 </DialogDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2 mr-8">
+            <div className="flex items-center gap-2">
               <Button asChild variant="outline" size="sm" className="bg-white/5 border-white/10 text-white hover:bg-white/10 h-9 font-bold px-4">
                 <a href={previewFile?.previewUrl} download={previewFile?.file.name}>
                   <Download className="w-4 h-4 mr-2" /> Download Original
