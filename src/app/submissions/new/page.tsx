@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -34,8 +34,8 @@ import {
   Download,
   Loader2
 } from "lucide-react";
-import { useFirestore, useDoc, useMemoFirebase } from "@/firebase";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
+import { collection, doc, setDoc, query, where, limit } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 import { useAuth } from "@/lib/auth-mock.tsx";
@@ -83,6 +83,14 @@ export default function NewSubmission() {
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch branch details to get the institutional code for Case ID generation
+  const branchQuery = useMemoFirebase(() => {
+    if (!db || !user.branch) return null;
+    return query(collection(db, "branches"), where("name", "==", user.branch), limit(1));
+  }, [db, user.branch]);
+
+  const { data: branchData } = useCollection<{code: string}>(branchQuery);
+
   const settingsRef = useMemoFirebase(() => {
     return db ? doc(db, "settings", "global") : null;
   }, [db]);
@@ -98,7 +106,6 @@ export default function NewSubmission() {
 
   const entityClassifications = useMemo(() => {
     const list = settings?.entityTypes || DEFAULT_ENTITY_TYPES;
-    // Set initial value once settings load
     if (list.length > 0 && !entityType) {
       setEntityType(list[0].id);
     }
@@ -110,7 +117,7 @@ export default function NewSubmission() {
       const newFiles = Array.from(e.target.files).map(file => ({
         id: Math.random().toString(36).substr(2, 9),
         file: file,
-        type: "", // Forces user to select type
+        type: "", // Empty default forces selection
         previewUrl: URL.createObjectURL(file)
       }));
       setUploadedFiles((prev) => [...prev, ...newFiles]);
@@ -144,7 +151,11 @@ export default function NewSubmission() {
       return;
     }
 
-    const submissionId = `KYC-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Generate Case Number: [BRANCH_CODE]-KYC-[RANDOM]
+    const branchCode = branchData?.[0]?.code || user.branch?.substring(0, 3).toUpperCase() || "GEN";
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const submissionId = `${branchCode}-KYC-${randomSuffix}`;
+    
     const submissionRef = doc(db, "submissions", submissionId);
     
     const submissionData = {
@@ -161,7 +172,11 @@ export default function NewSubmission() {
 
     setDoc(submissionRef, submissionData)
       .catch(async (error) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: submissionRef.path, operation: 'create', requestResourceData: submissionData }));
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+          path: submissionRef.path, 
+          operation: 'create', 
+          requestResourceData: submissionData 
+        }));
       });
 
     uploadedFiles.forEach(file => {
