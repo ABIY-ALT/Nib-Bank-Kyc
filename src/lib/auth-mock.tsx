@@ -25,12 +25,69 @@ export interface User {
 }
 
 export const MOCK_USERS: User[] = [
-  { id: 'admin-1', name: 'System Admin', email: 'admin@bank.com', phoneNumber: '+1234567890', role: 'Admin', status: 'Active' },
-  { id: 'branch-1', name: 'John Doe', email: 'john.branch@bank.com', phoneNumber: '+1234567891', role: 'Branch Officer', branch: 'Downtown', district: 'Central', status: 'Active' },
-  { id: 'kyc-1', name: 'Jane Smith', email: 'jane.kyc@bank.com', phoneNumber: '+1234567892', role: 'KYC Officer', assignedBranches: ['Downtown', 'Uptown'], status: 'Active' },
-  { id: 'kyc-assigned', name: 'Local KYC Officer', email: 'local.kyc@bank.com', phoneNumber: '+1234567893', role: 'KYC Officer', assignedBranches: ['Downtown'], status: 'Active' },
-  { id: 'super-1', name: 'Robert Brown', email: 'robert.super@bank.com', phoneNumber: '+1234567894', role: 'Supervisor', district: 'Central', status: 'Active' },
-  { id: 'dir-1', name: 'Alice Wilson', email: 'alice.dir@bank.com', phoneNumber: '+1234567895', role: 'Director', status: 'Active' },
+  { 
+    id: 'admin-1', 
+    name: 'System Admin', 
+    email: 'admin@bank.com', 
+    phoneNumber: '+1234567890', 
+    role: 'Admin', 
+    status: 'Active' 
+  },
+  { 
+    id: 'branch-1', 
+    name: 'John Doe', 
+    email: 'john.branch@bank.com', 
+    phoneNumber: '+1234567891', 
+    role: 'Branch Officer', 
+    branch: 'Downtown', 
+    district: 'Central', 
+    status: 'Active' 
+  },
+  { 
+    id: 'mgr-1', 
+    name: 'Mike Manager', 
+    email: 'mike.mgr@bank.com', 
+    phoneNumber: '+1234567896', 
+    role: 'Branch Manager', 
+    branch: 'Downtown', 
+    district: 'Central', 
+    status: 'Active' 
+  },
+  { 
+    id: 'kyc-1', 
+    name: 'Jane Smith', 
+    email: 'jane.kyc@bank.com', 
+    phoneNumber: '+1234567892', 
+    role: 'KYC Officer', 
+    assignedBranches: ['Downtown', 'Uptown'], 
+    status: 'Active' 
+  },
+  { 
+    id: 'super-1', 
+    name: 'Robert Brown', 
+    email: 'robert.super@bank.com', 
+    phoneNumber: '+1234567894', 
+    role: 'Supervisor', 
+    district: 'Central', 
+    status: 'Active' 
+  },
+  { 
+    id: 'dist-dir-1', 
+    name: 'David District', 
+    email: 'david.dist@bank.com', 
+    phoneNumber: '+1234567897', 
+    role: 'District Director', 
+    district: 'Central', 
+    status: 'Active' 
+  },
+  { 
+    id: 'dir-1', 
+    name: 'Alice Wilson', 
+    email: 'alice.dir@bank.com', 
+    phoneNumber: '+1234567895', 
+    role: 'Director', 
+    status: 'Active' 
+  },
 ];
 
 interface AuthContextType {
@@ -77,5 +134,4 @@ export const useAuth = () => {
   return context;
 };
 
-// Legacy support for files not yet converted to hook
 export const currentUser = MOCK_USERS[0];
