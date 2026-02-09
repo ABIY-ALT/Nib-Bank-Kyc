@@ -89,7 +89,9 @@
       "type": "object",
       "properties": {
         "autoEscalation": { "type": "boolean" },
+        "escalationHours": { "type": "integer" },
         "strictSla": { "type": "boolean" },
+        "slaHours": { "type": "integer" },
         "lastUpdated": { "type": "string", "format": "date-time" },
         "updatedBy": { "type": "string" },
         "documentTypes": {

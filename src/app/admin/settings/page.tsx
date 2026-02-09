@@ -30,7 +30,9 @@ interface DocType {
 
 interface GlobalSettings {
   autoEscalation: boolean;
+  escalationHours: number;
   strictSla: boolean;
+  slaHours: number;
   lastUpdated?: string;
   updatedBy?: string;
   documentTypes?: DocType[];
@@ -59,7 +61,9 @@ export default function SystemSettingsPage() {
   
   const [localSettings, setLocalSettings] = useState<GlobalSettings>({
     autoEscalation: true,
+    escalationHours: 72,
     strictSla: true,
+    slaHours: 24,
     documentTypes: DEFAULT_DOC_TYPES
   });
 
@@ -69,6 +73,8 @@ export default function SystemSettingsPage() {
     if (remoteSettings) {
       setLocalSettings({
         ...remoteSettings,
+        escalationHours: remoteSettings.escalationHours ?? 72,
+        slaHours: remoteSettings.slaHours ?? 24,
         documentTypes: remoteSettings.documentTypes || DEFAULT_DOC_TYPES
       });
     }
@@ -146,32 +152,58 @@ export default function SystemSettingsPage() {
             <CardDescription>Define institutional SLA and escalation rules.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
-            <div className="flex items-center justify-between p-4 rounded-xl border bg-white shadow-sm">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-orange-600" />
-                  <Label className="text-base font-bold">Auto-escalation Policy</Label>
+            <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4 group hover:border-primary/30 transition-all">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-orange-600" />
+                    <Label className="text-base font-bold">Auto-escalation Policy</Label>
+                  </div>
+                  <p className="text-[12px] text-muted-foreground font-medium">Escalate cases pending for over {localSettings.escalationHours} hours.</p>
                 </div>
-                <p className="text-sm text-muted-foreground">Escalate cases pending for over 72 hours.</p>
+                <Switch 
+                  checked={localSettings.autoEscalation} 
+                  onCheckedChange={(val) => setLocalSettings({...localSettings, autoEscalation: val})}
+                />
               </div>
-              <Switch 
-                checked={localSettings.autoEscalation} 
-                onCheckedChange={(val) => setLocalSettings({...localSettings, autoEscalation: val})}
-              />
+              {localSettings.autoEscalation && (
+                <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed animate-in slide-in-from-top-2 duration-300">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Escalation Window (Hours)</Label>
+                  <Input 
+                    type="number" 
+                    className="w-24 h-9 font-bold bg-slate-50 border-primary/20" 
+                    value={localSettings.escalationHours} 
+                    onChange={(e) => setLocalSettings({...localSettings, escalationHours: parseInt(e.target.value) || 0})}
+                  />
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center justify-between p-4 rounded-xl border bg-white shadow-sm">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <Label className="text-base font-bold">Strict SLA Enforcement</Label>
+            <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4 group hover:border-primary/30 transition-all">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <Label className="text-base font-bold">Strict SLA Enforcement</Label>
+                  </div>
+                  <p className="text-[12px] text-muted-foreground font-medium">Require supervisor remarks for cases exceeding {localSettings.slaHours} hours.</p>
                 </div>
-                <p className="text-sm text-muted-foreground">Require supervisor remarks for cases exceeding 24 hours.</p>
+                <Switch 
+                  checked={localSettings.strictSla} 
+                  onCheckedChange={(val) => setLocalSettings({...localSettings, strictSla: val})}
+                />
               </div>
-              <Switch 
-                checked={localSettings.strictSla} 
-                onCheckedChange={(val) => setLocalSettings({...localSettings, strictSla: val})}
-              />
+              {localSettings.strictSla && (
+                <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed animate-in slide-in-from-top-2 duration-300">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">SLA Deadline (Hours)</Label>
+                  <Input 
+                    type="number" 
+                    className="w-24 h-9 font-bold bg-slate-50 border-primary/20" 
+                    value={localSettings.slaHours} 
+                    onChange={(e) => setLocalSettings({...localSettings, slaHours: parseInt(e.target.value) || 0})}
+                  />
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -217,7 +249,7 @@ export default function SystemSettingsPage() {
       </div>
 
       <div className="pt-4 border-t flex items-center justify-end max-w-none">
-        <Button onClick={handleSavePolicies} className="px-10 h-12 font-bold shadow-lg">
+        <Button onClick={handleSavePolicies} className="px-10 h-12 font-bold shadow-lg bg-primary hover:bg-primary/90">
           Save All System Configurations
         </Button>
       </div>
