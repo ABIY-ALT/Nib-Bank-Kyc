@@ -19,7 +19,8 @@ import {
   History,
   AlertCircle,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Archive
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -35,10 +36,10 @@ import { useToast } from "@/hooks/use-toast";
 export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmission[] }) {
   const { toast } = useToast();
 
-  const handleDownloadBundle = (caseId: string) => {
+  const handleDownloadBundle = (sub: KYCSubmission) => {
     toast({
-      title: "Generating Bundle",
-      description: `Compiling institutional PDF pack for Case ${caseId}...`,
+      title: "Generating Institutional Bundle",
+      description: `Compiling Case ${sub.id} verification assets for ${sub.customerName}.`,
     });
   };
 
@@ -140,12 +141,12 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem 
-                      onClick={() => handleDownloadBundle(sub.id)}
+                      onClick={() => handleDownloadBundle(sub)}
                       className="rounded-md focus:bg-primary/5 cursor-pointer py-3 px-3"
                     >
-                      <div className="flex items-center gap-3 font-medium text-slate-700">
-                        <FileDown className="w-4 h-4 text-slate-500" />
-                        Download PDF Bundle
+                      <div className="flex items-center gap-3 font-bold text-slate-700">
+                        <Archive className="w-4 h-4 text-slate-500" />
+                        Download Case Bundle
                       </div>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="my-1" />

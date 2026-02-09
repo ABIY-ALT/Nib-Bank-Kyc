@@ -35,7 +35,8 @@ import {
   Search,
   Flag,
   Eye,
-  Loader2
+  Loader2,
+  Archive
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -220,6 +221,13 @@ export default function SubmissionDetails() {
     router.back();
   };
 
+  const handleDownloadBundle = () => {
+    toast({ 
+      title: "Generating Institutional Bundle", 
+      description: `Compiling ${documents?.length || 0} verification assets for ${submission.id} into a secure archive.` 
+    });
+  };
+
   const openPreview = (doc: Document) => {
     const isPdf = doc.name.toLowerCase().endsWith('.pdf') || doc.type === 'application/pdf';
     setPreviewFile({
@@ -298,10 +306,10 @@ export default function SubmissionDetails() {
            <Button 
             variant="outline" 
             size="sm" 
-            className="shadow-sm border-slate-200 bg-white hover:bg-slate-50 transition-all font-medium px-4 h-10"
-            onClick={() => toast({ title: "Bundle Generated", description: "Downloading package..." })}
+            className="shadow-sm border-slate-200 bg-white hover:bg-slate-50 transition-all font-bold px-4 h-10"
+            onClick={handleDownloadBundle}
            >
-            <Download className="w-4 h-4 mr-2" /> Download Pack
+            <Archive className="w-4 h-4 mr-2" /> Download Case Bundle
            </Button>
         </div>
       </div>
