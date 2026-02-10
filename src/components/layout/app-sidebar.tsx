@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -38,7 +39,8 @@ import {
   SidebarGroupLabel,
   SidebarMenuSub,
   SidebarMenuSubItem,
-  SidebarMenuSubButton
+  SidebarMenuSubButton,
+  SidebarMenuBadge
 } from "@/components/ui/sidebar"
 import {
   Collapsible,
@@ -56,10 +58,12 @@ import {
 import { useAuth } from "@/lib/auth-mock"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useSidebarCounts } from "@/hooks/use-sidebar-counts"
 
 export function AppSidebar() {
   const pathname = usePathname()
   const { user, loginAs, allUsers } = useAuth()
+  const counts = useSidebarCounts(user)
 
   // Role Checks
   const isBranchOfficer = user.role === 'Branch Officer'
@@ -102,7 +106,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Workflows</SidebarGroupLabel>
           <SidebarMenu>
-            <Collapsible className="group/collapsible" defaultOpen={false}>
+            <Collapsible className="group/collapsible" defaultOpen={true}>
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton tooltip="Identity Verification">
@@ -123,52 +127,77 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
+                        <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/my'}>
                             <Link href="/submissions/my">
                               <Inbox className="w-4 h-4 mr-2" />
                               <span>My Submissions</span>
                             </Link>
                           </SidebarMenuSubButton>
+                          {counts.mySubmissions > 0 && (
+                            <SidebarMenuBadge className="bg-slate-100 text-slate-600 font-bold">
+                              {counts.mySubmissions}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
+                        <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>
                             <Link href="/submissions/amendment-requests">
                               <AlertCircle className="w-4 h-4 mr-2 text-orange-600" />
                               <span>Action Required</span>
                             </Link>
                           </SidebarMenuSubButton>
+                          {counts.actionRequired > 0 && (
+                            <SidebarMenuBadge className="bg-orange-500 text-white font-bold animate-pulse">
+                              {counts.actionRequired}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
                       </>
                     )}
                     {(isKYCOfficer || isAdmin) && (
                       <>
-                        <SidebarMenuSubItem>
+                        <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/queue'}>
                             <Link href="/submissions/queue">
                               <Search className="w-4 h-4 mr-2" />
                               <span>Review Queue</span>
                             </Link>
                           </SidebarMenuSubButton>
+                          {counts.reviewQueue > 0 && (
+                            <SidebarMenuBadge className="bg-primary text-white font-bold">
+                              {counts.reviewQueue}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
+                        <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
                             <Link href="/submissions/amendments">
                               <History className="w-4 h-4 mr-2" />
                               <span>Resubmitted Cases</span>
                             </Link>
                           </SidebarMenuSubButton>
+                          {counts.resubmitted > 0 && (
+                            <SidebarMenuBadge className="bg-blue-600 text-white font-bold">
+                              {counts.resubmitted}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
                       </>
                     )}
                     {(isReviewer) && (
-                      <SidebarMenuSubItem>
+                      <SidebarMenuSubItem className="relative">
                         <SidebarMenuSubButton asChild isActive={pathname === '/submissions/escalated'}>
                           <Link href="/submissions/escalated">
                             <ShieldAlert className="w-4 h-4 mr-2 text-destructive" />
                             <span>Escalated Cases</span>
                           </Link>
                         </SidebarMenuSubButton>
+                        {counts.escalated > 0 && (
+                          <SidebarMenuBadge className="bg-destructive text-white font-bold">
+                            {counts.escalated}
+                          </SidebarMenuBadge>
+                        )}
                       </SidebarMenuSubItem>
                     )}
                     {(isReviewer || isManagement) && (

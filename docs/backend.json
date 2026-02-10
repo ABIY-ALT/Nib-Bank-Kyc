@@ -19,9 +19,22 @@
         },
         "remarks": { "type": "string" },
         "entityType": { "type": "string" },
-        "amendmentCycles": { "type": "integer", "description": "Count of times the case was sent back for amendments." }
+        "amendmentCycles": { "type": "integer", "description": "Count of times the case was sent back for amendments." },
+        "isResubmitted": { "type": "boolean" }
       },
       "required": ["customerName", "branch", "status", "submittedBy"]
+    },
+    "WorkflowCounter": {
+      "title": "Workflow Counter",
+      "description": "Aggregated stats for sidebar badges. Recommended for high-volume enterprise production.",
+      "type": "object",
+      "properties": {
+        "pendingCount": { "type": "integer" },
+        "amendedCount": { "type": "integer" },
+        "escalatedCount": { "type": "integer" },
+        "branchId": { "type": "string" },
+        "userId": { "type": "string" }
+      }
     },
     "Document": {
       "title": "Document",
@@ -153,6 +166,10 @@
     "/settings/{settingId}": {
       "schema": "#/entities/SystemSettings",
       "description": "Global system configurations."
+    },
+    "/counters/{counterId}": {
+      "schema": "#/entities/WorkflowCounter",
+      "description": "Real-time aggregate stats for enterprise scale."
     }
   }
 }
