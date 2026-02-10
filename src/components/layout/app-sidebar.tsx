@@ -24,7 +24,8 @@ import {
   UserCircle,
   Archive,
   ArrowRightLeft,
-  UserCog
+  UserCog,
+  Zap
 } from "lucide-react"
 
 import {
@@ -78,6 +79,7 @@ export function AppSidebar() {
   const isManagement = isDirector || isDistDir || isBranchMgr || isSupervisor || isAdmin
   const canSeePerformance = isBranchMgr || isSupervisor || isDirector || isDistDir || isAdmin
   const canSeeReports = isSupervisor || isDirector || isAdmin
+  const canSeeExceptional = isDistDir || isDirector || isSupervisor || isBranchMgr || isAdmin
 
   return (
     <Sidebar collapsible="icon">
@@ -184,6 +186,21 @@ export function AppSidebar() {
                           )}
                         </SidebarMenuSubItem>
                       </>
+                    )}
+                    {canSeeExceptional && (
+                      <SidebarMenuSubItem className="relative">
+                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions/exceptional'}>
+                          <Link href="/submissions/exceptional">
+                            <Zap className="w-4 h-4 mr-2 text-yellow-600" />
+                            <span>Exceptional Cases</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                        {counts.exceptional > 0 && (
+                          <SidebarMenuBadge className="bg-yellow-600 text-white font-bold">
+                            {counts.exceptional}
+                          </SidebarMenuBadge>
+                        )}
+                      </SidebarMenuSubItem>
                     )}
                     {(isReviewer) && (
                       <SidebarMenuSubItem className="relative">

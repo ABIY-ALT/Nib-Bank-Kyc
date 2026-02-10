@@ -7,6 +7,32 @@ export type SubmissionStatus =
   | 'Escalated' 
   | 'Rejected';
 
+export type ExceptionalStatus = 
+  | 'None'
+  | 'Awaiting District'
+  | 'Awaiting Director'
+  | 'Awaiting Supervisor'
+  | 'Completed'
+  | 'Rejected'
+  | 'Clarification Required';
+
+export interface ExceptionalApproval {
+  role: string;
+  action: 'Approved' | 'Rejected' | 'Clarification';
+  performedBy: string;
+  timestamp: string;
+  remarks: string;
+}
+
+export interface ExceptionalData {
+  reason: 'Missing Documents' | 'High Deposit Amount' | 'High-Risk Profile' | 'Case Aging beyond SLA';
+  justification: string;
+  memoUrl: string;
+  initiatedBy: string;
+  initiatedAt: string;
+  approvalHistory: ExceptionalApproval[];
+}
+
 export interface Document {
   id: string;
   name: string;
@@ -29,9 +55,13 @@ export interface KYCSubmission {
   customerId?: string;
   customerName: string;
   branch: string;
+  district: string;
   submittedBy: string;
   submittedAt: string;
   status: SubmissionStatus;
+  isExceptional?: boolean;
+  exceptionalStatus?: ExceptionalStatus;
+  exceptionalData?: ExceptionalData;
   documents: Document[];
   auditLogs: AuditLog[];
   remarks?: string;
@@ -39,6 +69,8 @@ export interface KYCSubmission {
   resubmittedAt?: string;
   entityType?: string;
   amendmentCycles?: number;
+  reviewedBy?: string;
+  reviewedAt?: string;
 }
 
 export const MOCK_SUBMISSIONS: KYCSubmission[] = [];

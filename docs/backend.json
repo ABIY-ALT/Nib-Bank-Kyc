@@ -17,23 +17,50 @@
           "type": "string", 
           "enum": ["Pending", "In Review", "Amended", "Approved", "Escalated", "Rejected"] 
         },
+        "isExceptional": { "type": "boolean" },
+        "exceptionalStatus": {
+          "type": "string",
+          "enum": ["None", "Awaiting District", "Awaiting Director", "Awaiting Supervisor", "Completed", "Rejected", "Clarification Required"]
+        },
+        "exceptionalData": {
+          "type": "object",
+          "properties": {
+            "reason": { "type": "string" },
+            "justification": { "type": "string" },
+            "memoUrl": { "type": "string" },
+            "initiatedBy": { "type": "string" },
+            "initiatedAt": { "type": "string" },
+            "approvalHistory": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "role": { "type": "string" },
+                  "action": { "type": "string" },
+                  "performedBy": { "type": "string" },
+                  "timestamp": { "type": "string" },
+                  "remarks": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
         "remarks": { "type": "string" },
         "entityType": { "type": "string" },
-        "amendmentCycles": { "type": "integer", "description": "Count of times the case was sent back for amendments." },
+        "amendmentCycles": { "type": "integer" },
         "isResubmitted": { "type": "boolean" }
       },
       "required": ["customerName", "branch", "status", "submittedBy"]
     },
     "WorkflowCounter": {
       "title": "Workflow Counter",
-      "description": "Aggregated stats for sidebar badges. Recommended for high-volume enterprise production.",
+      "description": "Aggregated stats for sidebar badges.",
       "type": "object",
       "properties": {
         "pendingCount": { "type": "integer" },
         "amendedCount": { "type": "integer" },
         "escalatedCount": { "type": "integer" },
-        "branchId": { "type": "string" },
-        "userId": { "type": "string" }
+        "exceptionalCount": { "type": "integer" }
       }
     },
     "Document": {
@@ -56,86 +83,12 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "email": { "type": "string" },
-        "phoneNumber": { "type": "string" },
         "role": { 
           "type": "string", 
           "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Director", "Admin", "Branch Manager", "District Director"] 
         },
-        "branch": { "type": "string", "description": "Primary branch for branch-based roles." },
-        "assignedBranches": { 
-          "type": "array", 
-          "items": { "type": "string" },
-          "description": "List of branches authorized for KYC Officers."
-        },
-        "district": { "type": "string" },
-        "status": { "type": "string", "enum": ["Active", "Inactive"] }
-      }
-    },
-    "Branch": {
-      "title": "Branch",
-      "description": "A physical bank branch location.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "district": { "type": "string" },
-        "code": { "type": "string" }
-      },
-      "required": ["name", "district"]
-    },
-    "District": {
-      "title": "District",
-      "description": "A regional banking district.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" }
-      },
-      "required": ["name"]
-    },
-    "SystemSettings": {
-      "title": "System Settings",
-      "description": "Global configuration for the Nib Kyc system.",
-      "type": "object",
-      "properties": {
-        "autoEscalation": { "type": "boolean" },
-        "escalationHours": { "type": "integer" },
-        "strictSla": { "type": "boolean" },
-        "slaHours": { "type": "integer" },
-        "lastUpdated": { "type": "string", "format": "date-time" },
-        "updatedBy": { "type": "string" },
-        "documentTypes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "label": { "type": "string" }
-            }
-          }
-        },
-        "entityTypes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "label": { "type": "string" }
-            }
-          }
-        },
-        "guidelines": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" },
-              "description": { "type": "string" },
-              "type": { "type": "string", "enum": ["alert", "info"] }
-            }
-          }
-        }
+        "branch": { "type": "string" },
+        "district": { "type": "string" }
       }
     }
   },
@@ -147,29 +100,9 @@
       "schema": "#/entities/KYCSubmission",
       "description": "Top-level collection of all KYC submissions."
     },
-    "/submissions/{submissionId}/documents/{documentId}": {
-      "schema": "#/entities/Document",
-      "description": "Documents uploaded for a specific submission."
-    },
     "/users/{userId}": {
       "schema": "#/entities/UserProfile",
       "description": "System user profiles and permissions."
-    },
-    "/branches/{branchId}": {
-      "schema": "#/entities/Branch",
-      "description": "Institutional branch directory."
-    },
-    "/districts/{districtId}": {
-      "schema": "#/entities/District",
-      "description": "Regional district directory."
-    },
-    "/settings/{settingId}": {
-      "schema": "#/entities/SystemSettings",
-      "description": "Global system configurations."
-    },
-    "/counters/{counterId}": {
-      "schema": "#/entities/WorkflowCounter",
-      "description": "Real-time aggregate stats for enterprise scale."
     }
   }
 }

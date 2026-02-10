@@ -17,22 +17,23 @@ export function useSidebarCounts(user: User) {
     actionRequired: 0,
     reviewQueue: 0,
     resubmitted: 0,
-    escalated: 0
+    escalated: 0,
+    exceptional: 0
   });
 
   useEffect(() => {
     if (!db || !user?.name) return;
 
-    // 1. My Submissions (All cases submitted by the user)
+    // 1. My Submissions
     const qMy = query(
       collection(db, "submissions"), 
       where("submittedBy", "==", user.name)
     );
     const unsubMy = onSnapshot(qMy, (snapshot) => {
       setCounts(prev => ({ ...prev, mySubmissions: snapshot.size }));
-    }, (err) => console.error("My Submissions count error:", err));
+    });
 
-    // 2. Action Required (Cases submitted by user that need amendment)
+    // 2. Action Required
     const qAction = query(
       collection(db, "submissions"), 
       where("submittedBy", "==", user.name),
@@ -40,86 +41,88 @@ export function useSidebarCounts(user: User) {
     );
     const unsubAction = onSnapshot(qAction, (snapshot) => {
       setCounts(prev => ({ ...prev, actionRequired: snapshot.size }));
-    }, (err) => console.error("Action Required count error:", err));
+    });
 
-    // Role-based Reviewer Logic
+    // 3. Exceptional Approvals (Role-based filtering)
+    let qExceptional;
+    if (user.role === 'District Director') {
+      qExceptional = query(
+        collection(db, "submissions"),
+        where("isExceptional", "==", true),
+        where("exceptionalStatus", "==", "Awaiting District"),
+        where("district", "==", user.district || "")
+      );
+    } else if (user.role === 'Director') {
+      qExceptional = query(
+        collection(db, "submissions"),
+        where("isExceptional", "==", true),
+        where("exceptionalStatus", "==", "Awaiting Director")
+      );
+    } else if (user.role === 'Supervisor') {
+      qExceptional = query(
+        collection(db, "submissions"),
+        where("isExceptional", "==", true),
+        where("exceptionalStatus", "==", "Awaiting Supervisor")
+      );
+    } else if (user.role === 'Admin') {
+      qExceptional = query(
+        collection(db, "submissions"),
+        where("isExceptional", "==", true),
+        where("exceptionalStatus", "in", ["Awaiting District", "Awaiting Director", "Awaiting Supervisor"])
+      );
+    }
+
+    const unsubExceptional = qExceptional ? onSnapshot(qExceptional, (snapshot) => {
+      setCounts(prev => ({ ...prev, exceptional: snapshot.size }));
+    }) : () => {};
+
+    // 4. Review Queues (Normal KYC)
     const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role || '');
     const assigned = user.assignedBranches || [];
-    const canReview = isGlobalReviewer || assigned.length > 0;
+    const canReview = isGlobalReviewer || (user.role === 'KYC Officer' && assigned.length > 0);
+
+    let unsubQueue = () => {};
+    let unsubResub = () => {};
+    let unsubEsc = () => {};
 
     if (canReview) {
-      // 3. Review Queue (Pending/In Review cases that are NOT resubmissions)
-      let qQueue;
-      if (isGlobalReviewer) {
-        qQueue = query(
-          collection(db, "submissions"),
-          where("status", "in", ["Pending", "In Review"]),
-          where("isResubmitted", "==", false)
-        );
-      } else {
-        qQueue = query(
-          collection(db, "submissions"),
-          where("status", "in", ["Pending", "In Review"]),
-          where("branch", "in", assigned),
-          where("isResubmitted", "==", false)
-        );
-      }
-      const unsubQueue = onSnapshot(qQueue, (snapshot) => {
+      // Review Queue
+      let qQueue = isGlobalReviewer 
+        ? query(collection(db, "submissions"), where("status", "in", ["Pending", "In Review"]), where("isResubmitted", "==", false), where("isExceptional", "==", false))
+        : query(collection(db, "submissions"), where("status", "in", ["Pending", "In Review"]), where("branch", "in", assigned), where("isResubmitted", "==", false), where("isExceptional", "==", false));
+      
+      unsubQueue = onSnapshot(qQueue, (snapshot) => {
         setCounts(prev => ({ ...prev, reviewQueue: snapshot.size }));
       });
 
-      // 4. Resubmitted Cases (Pending/In Review cases that ARE resubmissions)
-      let qResub;
-      if (isGlobalReviewer) {
-        qResub = query(
-          collection(db, "submissions"),
-          where("isResubmitted", "==", true),
-          where("status", "in", ["Pending", "In Review"])
-        );
-      } else {
-        qResub = query(
-          collection(db, "submissions"),
-          where("isResubmitted", "==", true),
-          where("branch", "in", assigned),
-          where("status", "in", ["Pending", "In Review"])
-        );
-      }
-      const unsubResub = onSnapshot(qResub, (snapshot) => {
+      // Resubmitted
+      let qResub = isGlobalReviewer
+        ? query(collection(db, "submissions"), where("isResubmitted", "==", true), where("status", "in", ["Pending", "In Review"]))
+        : query(collection(db, "submissions"), where("isResubmitted", "==", true), where("branch", "in", assigned), where("status", "in", ["Pending", "In Review"]));
+      
+      unsubResub = onSnapshot(qResub, (snapshot) => {
         setCounts(prev => ({ ...prev, resubmitted: snapshot.size }));
       });
 
-      // 5. Escalated Cases
-      let qEsc;
-      if (isGlobalReviewer) {
-        qEsc = query(
-          collection(db, "submissions"),
-          where("status", "==", "Escalated")
-        );
-      } else {
-        qEsc = query(
-          collection(db, "submissions"),
-          where("status", "==", "Escalated"),
-          where("branch", "in", assigned)
-        );
-      }
-      const unsubEsc = onSnapshot(qEsc, (snapshot) => {
+      // Escalated
+      let qEsc = isGlobalReviewer
+        ? query(collection(db, "submissions"), where("status", "==", "Escalated"))
+        : query(collection(db, "submissions"), where("status", "==", "Escalated"), where("branch", "in", assigned));
+      
+      unsubEsc = onSnapshot(qEsc, (snapshot) => {
         setCounts(prev => ({ ...prev, escalated: snapshot.size }));
       });
-
-      return () => {
-        unsubMy();
-        unsubAction();
-        unsubQueue();
-        unsubResub();
-        unsubEsc();
-      };
     }
 
     return () => {
       unsubMy();
       unsubAction();
+      unsubExceptional();
+      unsubQueue();
+      unsubResub();
+      unsubEsc();
     };
-  }, [db, user?.name, user?.role, user?.assignedBranches]);
+  }, [db, user?.name, user?.role, user?.assignedBranches, user?.district]);
 
   return counts;
 }
