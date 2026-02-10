@@ -2,24 +2,27 @@
 "use client"
 
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { collection, query, where, orderBy, doc, setDoc } from "firebase/firestore";
 import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState } from "react";
-import { KYCSubmission } from "@/lib/kyc-data";
-import { Zap, Loader2, MapPin, Search } from "lucide-react";
+import { KYCSubmission, ExceptionalStatus } from "@/lib/kyc-data";
+import { Zap, Loader2, Search } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ExceptionalCasesPage() {
   const db = useFirestore();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
 
   const exceptionalQuery = useMemo(() => {
     if (!db) return null;
     
-    // Logic for approvers
+    // Logic for approvers: They see cases awaiting their specific level
     if (user.role === 'District Director') {
       return query(
         collection(db, "submissions"),
@@ -48,7 +51,7 @@ export default function ExceptionalCasesPage() {
       );
     }
 
-    // Admins and Branch Managers see their relevant active exceptions
+    // Admins and Branch Managers see their relevant active exceptions regardless of stage
     if (user.role === 'Admin') {
       return query(
         collection(db, "submissions"),
@@ -80,6 +83,37 @@ export default function ExceptionalCasesPage() {
     );
   }, [submissions, searchTerm]);
 
+  const handleSeedException = async () => {
+    if (!db) return;
+    
+    const id = `SEED-KYC-${Math.floor(1000 + Math.random() * 9000)}`;
+    const subRef = doc(db, "submissions", id);
+    
+    const sampleData: any = {
+      id,
+      customerName: "Sample High-Value Corp",
+      entityType: "corporate",
+      branch: "Downtown",
+      district: "Central",
+      submittedBy: "System Admin",
+      submittedAt: new Date().toISOString(),
+      status: "In Review",
+      isExceptional: true,
+      exceptionalStatus: "Awaiting District",
+      exceptionalData: {
+        reason: "High deposit amount",
+        justification: "Strategic corporate partner requiring immediate account activation despite missing secondary utility bill.",
+        initiatedBy: "Mike Manager",
+        initiatedAt: new Date().toISOString(),
+        memoUrl: "#",
+        approvalHistory: []
+      }
+    };
+
+    await setDoc(subRef, sampleData);
+    toast({ title: "Sample Seeded", description: "A test exceptional case has been added to the database." });
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -105,6 +139,21 @@ export default function ExceptionalCasesPage() {
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <p className="font-medium">Retrieving exceptional queue...</p>
+        </div>
+      ) : filteredSubmissions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-6">
+          <div className="p-6 bg-white rounded-full shadow-sm border border-slate-100">
+            <Zap className="w-12 h-12 text-slate-200" />
+          </div>
+          <div className="text-center space-y-2">
+            <p className="font-bold text-slate-900 text-xl">No records found</p>
+            <p className="text-sm text-slate-500 max-w-xs mx-auto">There are currently no cases in this queue.</p>
+          </div>
+          {user.role === 'Admin' && (
+            <Button onClick={handleSeedException} className="bg-yellow-600 hover:bg-yellow-700 font-bold px-8 shadow-lg">
+              Seed Sample Exception
+            </Button>
+          )}
         </div>
       ) : (
         <SubmissionsPageContent submissions={filteredSubmissions || []} />

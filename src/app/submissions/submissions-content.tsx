@@ -20,7 +20,8 @@ import {
   AlertCircle,
   Clock,
   RefreshCw,
-  Archive
+  Archive,
+  Zap
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -44,6 +45,15 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
   };
 
   const getStatusBadge = (sub: KYCSubmission) => {
+    // Priority 1: Exceptional Status
+    if (sub.isExceptional && sub.exceptionalStatus !== 'Completed' && sub.exceptionalStatus !== 'None' && sub.exceptionalStatus) {
+      return (
+        <Badge className="bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100 flex items-center gap-1.5 w-fit font-bold px-3 py-1">
+          <Zap className="w-3.5 h-3.5 text-yellow-600" /> {sub.exceptionalStatus}
+        </Badge>
+      );
+    }
+
     const status = sub.status;
     const isResubmitted = sub.isResubmitted && (status === 'Pending' || status === 'In Review');
 
