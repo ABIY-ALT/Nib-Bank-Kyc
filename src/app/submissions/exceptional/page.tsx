@@ -6,12 +6,13 @@ import { collection, query, where, orderBy, doc, setDoc } from "firebase/firesto
 import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState } from "react";
 import { KYCSubmission, ExceptionalStatus } from "@/lib/kyc-data";
-import { Zap, Loader2, Search } from "lucide-react";
+import { Zap, Loader2, Search, Info } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function ExceptionalCasesPage() {
   const db = useFirestore();
@@ -22,55 +23,48 @@ export default function ExceptionalCasesPage() {
   const exceptionalQuery = useMemo(() => {
     if (!db) return null;
     
-    // Logic for approvers: They see cases awaiting their specific level
+    // 1. Admins see all exceptional cases globally
+    if (user.role === 'Admin' || user.role === 'Director' || user.role === 'Supervisor') {
+      return query(
+        collection(db, "submissions"),
+        where("isExceptional", "==", true),
+        orderBy("submittedAt", "desc")
+      );
+    }
+
+    // 2. District Director: Sees cases within their regional district
     if (user.role === 'District Director') {
       return query(
         collection(db, "submissions"),
         where("isExceptional", "==", true),
-        where("exceptionalStatus", "==", "Awaiting District"),
         where("district", "==", user.district || ""),
         orderBy("submittedAt", "desc")
       );
     }
 
-    if (user.role === 'Director') {
+    // 3. Branch Manager: Sees cases originating from their specific node
+    if (user.role === 'Branch Manager' && user.branch) {
       return query(
         collection(db, "submissions"),
         where("isExceptional", "==", true),
-        where("exceptionalStatus", "==", "Awaiting Director"),
+        where("branch", "==", user.branch),
         orderBy("submittedAt", "desc")
       );
     }
 
-    if (user.role === 'Supervisor') {
+    // 4. KYC Officer: Sees cases within their assigned portfolio of branches
+    const assigned = user.assignedBranches || [];
+    if (user.role === 'KYC Officer' && assigned.length > 0) {
       return query(
         collection(db, "submissions"),
         where("isExceptional", "==", true),
-        where("exceptionalStatus", "==", "Awaiting Supervisor"),
-        orderBy("submittedAt", "desc")
-      );
-    }
-
-    // Admins and Branch Managers see their relevant active exceptions regardless of stage
-    if (user.role === 'Admin') {
-      return query(
-        collection(db, "submissions"),
-        where("isExceptional", "==", true),
-        orderBy("submittedAt", "desc")
-      );
-    }
-
-    if (user.role === 'Branch Manager') {
-      return query(
-        collection(db, "submissions"),
-        where("isExceptional", "==", true),
-        where("branch", "==", user.branch || ""),
+        where("branch", "in", assigned),
         orderBy("submittedAt", "desc")
       );
     }
 
     return null;
-  }, [db, user.role, user.branch, user.district]);
+  }, [db, user.role, user.branch, user.district, user.assignedBranches]);
 
   const { data: submissions, loading } = useCollection<KYCSubmission>(exceptionalQuery);
 
@@ -107,7 +101,10 @@ export default function ExceptionalCasesPage() {
         initiatedAt: new Date().toISOString(),
         memoUrl: "#",
         approvalHistory: []
-      }
+      },
+      isResubmitted: false,
+      amendmentCycles: 0,
+      documents: []
     };
 
     await setDoc(subRef, sampleData);
@@ -122,7 +119,7 @@ export default function ExceptionalCasesPage() {
             <Zap className="w-8 h-8 text-yellow-600" />
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Exceptional Approvals</h1>
           </div>
-          <p className="text-muted-foreground text-lg">High-risk and non-standard KYC requests requiring specialized oversight.</p>
+          <p className="text-muted-foreground text-lg font-medium">Monitoring high-risk and non-standard KYC requests across the hierarchy.</p>
         </div>
         <div className="relative w-full md:w-96">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -135,10 +132,17 @@ export default function ExceptionalCasesPage() {
         </div>
       </div>
 
+      <Alert className="bg-primary/5 border-primary/10 text-primary-foreground/80 shadow-sm">
+        <Info className="h-4 w-4 text-primary" />
+        <AlertDescription className="text-xs font-medium text-slate-600">
+          This workspace provides shared visibility for Branch Managers, KYC Specialists, and the regional approval hierarchy to track high-priority exceptions.
+        </AlertDescription>
+      </Alert>
+
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="font-medium">Retrieving exceptional queue...</p>
+          <p className="font-medium">Synchronizing institutional exceptions...</p>
         </div>
       ) : filteredSubmissions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-6">
@@ -146,8 +150,8 @@ export default function ExceptionalCasesPage() {
             <Zap className="w-12 h-12 text-slate-200" />
           </div>
           <div className="text-center space-y-2">
-            <p className="font-bold text-slate-900 text-xl">No records found</p>
-            <p className="text-sm text-slate-500 max-w-xs mx-auto">There are currently no cases in this queue.</p>
+            <p className="font-bold text-slate-900 text-xl">No exceptions found</p>
+            <p className="text-sm text-slate-500 max-w-xs mx-auto">There are currently no active high-risk cases in your jurisdictional view.</p>
           </div>
           {user.role === 'Admin' && (
             <Button onClick={handleSeedException} className="bg-yellow-600 hover:bg-yellow-700 font-bold px-8 shadow-lg">

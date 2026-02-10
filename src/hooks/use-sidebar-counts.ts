@@ -8,7 +8,7 @@ import { User } from "@/lib/auth-mock";
 
 /**
  * Hook to fetch real-time counts for sidebar badges.
- * Optimized for institutional workflow segregation.
+ * Optimized for institutional workflow segregation and role-aware task lists.
  */
 export function useSidebarCounts(user: User) {
   const db = useFirestore();
@@ -25,7 +25,7 @@ export function useSidebarCounts(user: User) {
   useEffect(() => {
     if (!db || !user?.name) return;
 
-    // 1. My Submissions
+    // 1. My Submissions: All cases created by the current user
     const qMy = query(
       collection(db, "submissions"), 
       where("submittedBy", "==", user.name)
@@ -34,7 +34,7 @@ export function useSidebarCounts(user: User) {
       setCounts(prev => ({ ...prev, mySubmissions: snapshot.size }));
     });
 
-    // 2. Action Required
+    // 2. Action Required: Cases returned by KYC for corrections (for the submitter)
     const qAction = query(
       collection(db, "submissions"), 
       where("submittedBy", "==", user.name),
@@ -44,7 +44,7 @@ export function useSidebarCounts(user: User) {
       setCounts(prev => ({ ...prev, actionRequired: snapshot.size }));
     });
 
-    // 3. Exceptional Approvals (Role-based filtering)
+    // 3. Exceptional Approvals: Role-based task list (Badge shows "To-Do" only)
     let qExceptional;
     if (user.role === 'District Director') {
       qExceptional = query(
@@ -66,23 +66,30 @@ export function useSidebarCounts(user: User) {
         where("exceptionalStatus", "==", "Awaiting Supervisor")
       );
     } else if (user.role === 'Admin') {
-      qExceptional = query(
-        collection(db, "submissions"),
-        where("isExceptional", "==", true)
-      );
-    } else if (user.role === 'Branch Manager') {
+      // Admins see all active exceptions needing action at any level
       qExceptional = query(
         collection(db, "submissions"),
         where("isExceptional", "==", true),
-        where("branch", "==", user.branch || "")
+        where("exceptionalStatus", "not-in", ["Completed", "Rejected", "None"])
       );
+    } else if (user.role === 'Branch Manager' || user.role === 'KYC Officer') {
+      // Managers and KYC Officers see all exceptions in their scope for tracking (Visibility only, no "To-Do" badge usually needed unless it's for status awareness)
+      const scope = user.role === 'Branch Manager' ? [user.branch] : (user.assignedBranches || []);
+      if (scope.length > 0 && scope[0]) {
+        qExceptional = query(
+          collection(db, "submissions"),
+          where("isExceptional", "==", true),
+          where("branch", "in", scope),
+          where("exceptionalStatus", "not-in", ["Completed", "Rejected", "None"])
+        );
+      }
     }
 
     const unsubExceptional = qExceptional ? onSnapshot(qExceptional, (snapshot) => {
       setCounts(prev => ({ ...prev, exceptional: snapshot.size }));
     }) : () => {};
 
-    // 4. Review Queues (Normal KYC)
+    // 4. Review Queues: Normal KYC workflows
     const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role || '');
     const assigned = user.assignedBranches || [];
     const canReview = isGlobalReviewer || (user.role === 'KYC Officer' && assigned.length > 0);
@@ -92,7 +99,7 @@ export function useSidebarCounts(user: User) {
     let unsubEsc = () => {};
 
     if (canReview) {
-      // Review Queue
+      // Review Queue: New, first-time submissions only
       let qQueue = isGlobalReviewer 
         ? query(collection(db, "submissions"), where("status", "in", ["Pending", "In Review"]), where("isResubmitted", "==", false), where("isExceptional", "==", false))
         : query(collection(db, "submissions"), where("status", "in", ["Pending", "In Review"]), where("branch", "in", assigned), where("isResubmitted", "==", false), where("isExceptional", "==", false));
@@ -101,7 +108,7 @@ export function useSidebarCounts(user: User) {
         setCounts(prev => ({ ...prev, reviewQueue: snapshot.size }));
       });
 
-      // Resubmitted
+      // Resubmitted: Cases corrected by Branch Officers
       let qResub = isGlobalReviewer
         ? query(collection(db, "submissions"), where("isResubmitted", "==", true), where("status", "in", ["Pending", "In Review"]))
         : query(collection(db, "submissions"), where("isResubmitted", "==", true), where("branch", "in", assigned), where("status", "in", ["Pending", "In Review"]));
@@ -110,7 +117,7 @@ export function useSidebarCounts(user: User) {
         setCounts(prev => ({ ...prev, resubmitted: snapshot.size }));
       });
 
-      // Escalated
+      // Escalated: High-priority risk assessment cases
       let qEsc = isGlobalReviewer
         ? query(collection(db, "submissions"), where("status", "==", "Escalated"))
         : query(collection(db, "submissions"), where("status", "==", "Escalated"), where("branch", "in", assigned));
@@ -120,7 +127,7 @@ export function useSidebarCounts(user: User) {
       });
     }
 
-    // 5. Branch Node Queue (For Branch Managers)
+    // 5. Branch Node Queue: Overall volume tracking for Branch Managers
     let unsubBranch = () => {};
     if (user.role === 'Branch Manager' && user.branch) {
       const qBranch = query(
