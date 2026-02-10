@@ -142,7 +142,7 @@ export default function SubmissionDetails() {
 
   const isOwner = submission.submittedBy === user.name;
   const isKYCOfficer = ['KYC Officer', 'Admin'].includes(user.role || '');
-  const isSupervisor = ['Supervisor', 'Director', 'Admin'].includes(user.role || '');
+  const isSupervisor = user.role === 'Supervisor' || user.role === 'Admin';
   const isBranchMgr = user.role === 'Branch Manager';
   const isDistDir = user.role === 'District Director';
   const isDirector = user.role === 'Director';
@@ -241,7 +241,7 @@ export default function SubmissionDetails() {
     } else if (action === 'Clarification') {
       nextStatus = 'Clarification Required';
     } else {
-      // Approve Logic
+      // Approve Logic Hierarchy: District -> Director -> Supervisor
       if (currentStatus === 'Awaiting District') nextStatus = 'Awaiting Director';
       else if (currentStatus === 'Awaiting Director') nextStatus = 'Awaiting Supervisor';
       else if (currentStatus === 'Awaiting Supervisor') nextStatus = 'Completed';
@@ -260,10 +260,10 @@ export default function SubmissionDetails() {
       "exceptionalData.approvalHistory": arrayUnion(approvalNode)
     };
 
-    // If final approval complete, return to normal KYC flow
+    // If final approval complete, return to normal KYC flow for KYC Officer
     if (nextStatus === 'Completed') {
-      updateData.status = 'Pending';
-      updateData.isResubmitted = false; // Treat as priority new
+      updateData.status = 'Pending'; // Returns to queue
+      updateData.isResubmitted = false; // Reset to treat as priority new review
     }
 
     updateDoc(submissionRef, updateData).catch(err => console.error(err));
@@ -274,17 +274,25 @@ export default function SubmissionDetails() {
   const steps = [
     { title: "Submitted", status: "completed", icon: Check },
     { 
-      title: "Exceptional Workflow", 
-      status: submission.isExceptional ? (submission.exceptionalStatus === 'Completed' ? "completed" : "active") : "upcoming", 
-      icon: Zap,
-      active: submission.isExceptional && submission.exceptionalStatus !== 'Completed'
+      title: "District Director", 
+      status: submission.isExceptional && (['Awaiting Director', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" : submission.exceptionalStatus === 'Awaiting District' ? "active" : "upcoming", 
+      icon: Zap
     },
     { 
-      title: "KYC Verification", 
-      status: submission.exceptionalStatus === 'Completed' ? "active" : (["Approved", "Rejected"].includes(submission.status) ? "completed" : "upcoming"), 
-      icon: Search 
+      title: "KYC Director", 
+      status: submission.isExceptional && (['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" : submission.exceptionalStatus === 'Awaiting Director' ? "active" : "upcoming", 
+      icon: Shield
     },
-    { title: "Completion", status: ["Approved", "Rejected"].includes(submission.status) ? "active" : "upcoming", icon: Flag }
+    { 
+      title: "Supervisor", 
+      status: submission.isExceptional && submission.exceptionalStatus === 'Completed' ? "completed" : submission.exceptionalStatus === 'Awaiting Supervisor' ? "active" : "upcoming", 
+      icon: ShieldCheck
+    },
+    { 
+      title: "Final KYC Verification", 
+      status: submission.exceptionalStatus === 'Completed' && (submission.status === 'Pending' || submission.status === 'In Review') ? "active" : (["Approved", "Rejected"].includes(submission.status) ? "completed" : "upcoming"), 
+      icon: Search 
+    }
   ];
 
   const currentExceptionalRole = 
@@ -346,17 +354,23 @@ export default function SubmissionDetails() {
                 <CardDescription className="text-yellow-100 font-medium">As the {user.role}, please provide your determination for this exceptional request.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
-                <Label className="font-bold">Review Remarks</Label>
+                <Label className="font-bold text-slate-700">Decision Remarks (Mandatory)</Label>
                 <Textarea 
-                  placeholder="Provide detailed approval/rejection notes..." 
+                  placeholder="Provide detailed approval/rejection notes for the audit trail..." 
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
-                  className="min-h-[120px] bg-white border-yellow-200"
+                  className="min-h-[120px] bg-white border-yellow-200 focus:ring-yellow-600"
                 />
                 <div className="grid grid-cols-3 gap-3">
-                  <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold" onClick={() => handleExceptionalApproval('Approved')}>Approve Level</Button>
-                  <Button variant="outline" className="text-orange-600 border-orange-600 bg-white font-bold" onClick={() => handleExceptionalApproval('Clarification')}>Request Info</Button>
-                  <Button variant="destructive" className="font-bold" onClick={() => handleExceptionalApproval('Rejected')}>Reject Exception</Button>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold h-12" onClick={() => handleExceptionalApproval('Approved')}>
+                    Approve Level
+                  </Button>
+                  <Button variant="outline" className="text-orange-600 border-orange-600 bg-white font-bold h-12" onClick={() => handleExceptionalApproval('Clarification')}>
+                    Request Info
+                  </Button>
+                  <Button variant="destructive" className="font-bold h-12" onClick={() => handleExceptionalApproval('Rejected')}>
+                    Reject Exception
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -389,20 +403,22 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {submission.isExceptional && submission.exceptionalData?.approvalHistory && (
+          {submission.isExceptional && submission.exceptionalData?.approvalHistory && submission.exceptionalData.approvalHistory.length > 0 && (
             <Card className="shadow-sm border-slate-200">
               <CardHeader><CardTitle className="text-xl">Exception Audit Trail</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 {submission.exceptionalData.approvalHistory.map((step, idx) => (
                   <div key={idx} className="flex gap-4 items-start">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0"><CheckCircle className="w-4 h-4 text-emerald-600" /></div>
+                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                      {step.action === 'Approved' ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
+                    </div>
                     <div className="flex-1 space-y-1">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-slate-900">{step.role}: {step.action}</span>
                         <span className="text-[10px] font-bold text-slate-400 uppercase">{new Date(step.timestamp).toLocaleString()}</span>
                       </div>
                       <p className="text-sm text-slate-600 italic">"{step.remarks}"</p>
-                      <p className="text-[10px] text-muted-foreground font-bold">BY: {step.performedBy}</p>
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">BY: {step.performedBy}</p>
                     </div>
                   </div>
                 ))}
@@ -413,7 +429,7 @@ export default function SubmissionDetails() {
 
         <div className="space-y-6">
           <Card className="shadow-lg border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b py-6 px-8"><CardTitle className="text-lg font-bold text-slate-800 uppercase">KYC Lifecycle</CardTitle></CardHeader>
+            <CardHeader className="bg-slate-50/50 border-b py-6 px-8"><CardTitle className="text-lg font-bold text-slate-800 uppercase tracking-widest">Case Lifecycle</CardTitle></CardHeader>
             <CardContent className="pt-8 pb-10 px-8">
               <div className="relative space-y-10">
                 <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
@@ -436,16 +452,16 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {isKYCOfficer && submission.status !== 'Approved' && (!submission.isExceptional || submission.exceptionalStatus === 'Completed') && (
+          {isKYCOfficer && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated') && (!submission.isExceptional || submission.exceptionalStatus === 'Completed') && (
             <Card className="border-primary/20 shadow-xl">
-              <CardHeader><CardTitle className="text-lg">Compliance Decision</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">KYC Determination</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <Textarea placeholder="Enter instructions..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[140px]" />
+                <Textarea placeholder="Provide verification feedback..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[140px]" />
                 <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold">Approve</Button>
-                  <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold">Request Fix</Button>
-                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold">Escalate</Button>
-                  <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Reject</Button>
+                  <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold h-11">Approve</Button>
+                  <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold h-11">Request Fix</Button>
+                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold h-11">Escalate</Button>
+                  <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold h-11">Reject</Button>
                 </div>
               </CardContent>
             </Card>
@@ -453,12 +469,12 @@ export default function SubmissionDetails() {
         </div>
       </div>
 
-      {/* Exceptional Initiation Dialog */}
+      {/* Exceptional Initiation Dialog (Directly on Case) */}
       <Dialog open={isExceptionDialogOpen} onOpenChange={setIsExceptionDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2"><Zap className="w-6 h-6 text-yellow-600" /> Initiate Exceptional Request</DialogTitle>
-            <DialogDescription>Bypasses normal flow for District Director and Director oversight.</DialogDescription>
+            <DialogDescription>Forward this case for regional and strategic approval hierarchy oversight.</DialogDescription>
           </DialogHeader>
           <div className="space-y-6 pt-4">
             <div className="space-y-2">
@@ -496,7 +512,7 @@ export default function SubmissionDetails() {
           </div>
           <DialogFooter className="pt-6">
             <Button variant="outline" onClick={() => setIsExceptionDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-8" onClick={handleTriggerExceptional}>Dispatch Exception</Button>
+            <Button className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-8 h-11" onClick={handleTriggerExceptional}>Dispatch Exception</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
