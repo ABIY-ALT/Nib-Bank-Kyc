@@ -25,7 +25,8 @@ import {
   Archive,
   ArrowRightLeft,
   UserCog,
-  Zap
+  Zap,
+  LayoutList
 } from "lucide-react"
 
 import {
@@ -156,6 +157,21 @@ export function AppSidebar() {
                           )}
                         </SidebarMenuSubItem>
                       </>
+                    )}
+                    {isBranchMgr && (
+                      <SidebarMenuSubItem className="relative">
+                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
+                          <Link href="/submissions/branch-node">
+                            <LayoutList className="w-4 h-4 mr-2 text-[#B89334]" />
+                            <span>Local Node Oversight</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                        {counts.branchNode > 0 && (
+                          <SidebarMenuBadge className="bg-primary/10 text-primary font-bold">
+                            {counts.branchNode}
+                          </SidebarMenuBadge>
+                        )}
+                      </SidebarMenuSubItem>
                     )}
                     {(isKYCOfficer || isAdmin) && (
                       <>

@@ -18,7 +18,8 @@ export function useSidebarCounts(user: User) {
     reviewQueue: 0,
     resubmitted: 0,
     escalated: 0,
-    exceptional: 0
+    exceptional: 0,
+    branchNode: 0
   });
 
   useEffect(() => {
@@ -67,8 +68,13 @@ export function useSidebarCounts(user: User) {
     } else if (user.role === 'Admin') {
       qExceptional = query(
         collection(db, "submissions"),
+        where("isExceptional", "==", true)
+      );
+    } else if (user.role === 'Branch Manager') {
+      qExceptional = query(
+        collection(db, "submissions"),
         where("isExceptional", "==", true),
-        where("exceptionalStatus", "in", ["Awaiting District", "Awaiting Director", "Awaiting Supervisor"])
+        where("branch", "==", user.branch || "")
       );
     }
 
@@ -114,6 +120,19 @@ export function useSidebarCounts(user: User) {
       });
     }
 
+    // 5. Branch Node Queue (For Branch Managers)
+    let unsubBranch = () => {};
+    if (user.role === 'Branch Manager' && user.branch) {
+      const qBranch = query(
+        collection(db, "submissions"),
+        where("branch", "==", user.branch),
+        where("status", "in", ["Pending", "In Review", "Amended"])
+      );
+      unsubBranch = onSnapshot(qBranch, (snapshot) => {
+        setCounts(prev => ({ ...prev, branchNode: snapshot.size }));
+      });
+    }
+
     return () => {
       unsubMy();
       unsubAction();
@@ -121,8 +140,9 @@ export function useSidebarCounts(user: User) {
       unsubQueue();
       unsubResub();
       unsubEsc();
+      unsubBranch();
     };
-  }, [db, user?.name, user?.role, user?.assignedBranches, user?.district]);
+  }, [db, user?.name, user?.role, user?.assignedBranches, user?.district, user?.branch]);
 
   return counts;
 }
