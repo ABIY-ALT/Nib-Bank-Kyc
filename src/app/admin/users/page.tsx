@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useFirestore, useCollection } from "@/firebase";
+import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, doc, setDoc, updateDoc, query, orderBy } from "firebase/firestore";
 import { 
   Table, 
@@ -82,17 +82,23 @@ export default function UserManagementPage() {
     district: ''
   });
 
-  const { data: users, loading } = useCollection<User>(
-    db ? query(collection(db, "users"), orderBy("name")) : null
-  );
+  const usersQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "users"), orderBy("name")) : null;
+  }, [db]);
 
-  const { data: branches } = useCollection<{id: string, name: string, district: string}>(
-    db ? query(collection(db, "branches"), orderBy("name")) : null
-  );
+  const { data: users, loading } = useCollection<User>(usersQuery);
 
-  const { data: districts } = useCollection<{id: string, name: string}>(
-    db ? query(collection(db, "districts"), orderBy("name")) : null
-  );
+  const branchesQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "branches"), orderBy("name")) : null;
+  }, [db]);
+
+  const { data: branches } = useCollection<{id: string, name: string, district: string}>(branchesQuery);
+
+  const districtsQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "districts"), orderBy("name")) : null;
+  }, [db]);
+
+  const { data: districts } = useCollection<{id: string, name: string}>(districtsQuery);
 
   const handleOpenDialog = (user?: User) => {
     if (user) {
