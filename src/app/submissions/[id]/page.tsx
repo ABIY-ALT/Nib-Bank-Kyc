@@ -40,7 +40,8 @@ import {
   Archive,
   Zap,
   Shield,
-  ArrowRight
+  ArrowRight,
+  FileType
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -178,17 +179,30 @@ export default function SubmissionDetails() {
        updateData.resubmittedAt = new Date().toISOString();
        newFiles.forEach(file => {
          const docRef = doc(collection(submissionRef, "documents"));
-         setDoc(docRef, { id: docRef.id, name: file.file.name, type: file.type, uploadedAt: new Date().toISOString(), url: "#", status: 'Current' });
+         const docData = { id: docRef.id, name: file.file.name, type: file.type, uploadedAt: new Date().toISOString(), url: "#", status: 'Current' };
+         setDoc(docRef, docData).catch(async (error) => {
+           errorEmitter.emit('permission-error', new FirestorePermissionError({ path: docRef.path, operation: 'create', requestResourceData: docData }));
+         });
        });
     }
 
-    updateDoc(submissionRef, updateData).catch(err => console.error(err));
+    updateDoc(submissionRef, updateData).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: submissionRef.path,
+        operation: 'update',
+        requestResourceData: updateData
+      }));
+    });
+
     toast({ title: "Workflow Updated", description: `Case moved to ${action}.` });
     router.back();
   };
 
   const handleTriggerExceptional = () => {
-    if (!submissionRef || !db) return;
+    if (!submissionRef || !db || !memoFile) {
+      toast({ variant: "destructive", title: "Missing Evidence", description: "The approval memo (PDF) is mandatory for exceptions." });
+      return;
+    }
     if (!exceptionReason || !riskJustification) {
       toast({ variant: "destructive", title: "Missing Fields", description: "Reason and Risk Justification are mandatory." });
       return;
@@ -200,27 +214,34 @@ export default function SubmissionDetails() {
       exceptionalData: {
         reason: exceptionReason,
         justification: riskJustification,
-        memoUrl: memoFile ? "#" : "",
+        memoUrl: "#", 
         initiatedBy: user.name,
         initiatedAt: new Date().toISOString(),
         approvalHistory: []
       }
     };
 
-    updateDoc(submissionRef, updateData).catch(err => console.error(err));
+    updateDoc(submissionRef, updateData).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: submissionRef.path,
+        operation: 'update',
+        requestResourceData: updateData
+      }));
+    });
     
-    // Add memo to documents if exists
-    if (memoFile) {
-      const docRef = doc(collection(submissionRef, "documents"));
-      setDoc(docRef, {
-        id: docRef.id,
-        name: `Exceptional Memo - ${submission.id}.pdf`,
-        type: 'Exceptional Memo',
-        uploadedAt: new Date().toISOString(),
-        url: "#",
-        status: 'Current'
-      });
-    }
+    // Add memo to documents sub-collection for visibility in "Verification Assets"
+    const docRef = doc(collection(submissionRef, "documents"));
+    const memoData = {
+      id: docRef.id,
+      name: `Institutional_Memo_${submission.id}.pdf`,
+      type: 'Exceptional Memo',
+      uploadedAt: new Date().toISOString(),
+      url: "#",
+      status: 'Current'
+    };
+    setDoc(docRef, memoData).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: docRef.path, operation: 'create', requestResourceData: memoData }));
+    });
 
     setIsExceptionDialogOpen(false);
     toast({ title: "Exceptional Request Dispatched", description: "Case forwarded to District Director for initial review." });
@@ -241,7 +262,6 @@ export default function SubmissionDetails() {
     } else if (action === 'Clarification') {
       nextStatus = 'Clarification Required';
     } else {
-      // Approve Logic Hierarchy: District -> Director -> Supervisor
       if (currentStatus === 'Awaiting District') nextStatus = 'Awaiting Director';
       else if (currentStatus === 'Awaiting Director') nextStatus = 'Awaiting Supervisor';
       else if (currentStatus === 'Awaiting Supervisor') nextStatus = 'Completed';
@@ -260,13 +280,19 @@ export default function SubmissionDetails() {
       "exceptionalData.approvalHistory": arrayUnion(approvalNode)
     };
 
-    // If final approval complete, return to normal KYC flow for KYC Officer
     if (nextStatus === 'Completed') {
-      updateData.status = 'Pending'; // Returns to queue
-      updateData.isResubmitted = false; // Reset to treat as priority new review
+      updateData.status = 'Pending'; 
+      updateData.isResubmitted = false; 
     }
 
-    updateDoc(submissionRef, updateData).catch(err => console.error(err));
+    updateDoc(submissionRef, updateData).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: submissionRef.path,
+        operation: 'update',
+        requestResourceData: updateData
+      }));
+    });
+
     toast({ title: "Exceptional Decision Saved", description: `Workflow status updated to ${nextStatus}.` });
     setRemarks("");
   };
@@ -300,7 +326,6 @@ export default function SubmissionDetails() {
     submission.exceptionalStatus === 'Awaiting Director' ? 'Director' :
     submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
 
-  // Allow System Admin to act as any approver for testing
   const isCurrentExceptionalApprover = user.role === currentExceptionalRole || user.role === 'Admin';
 
   return (
@@ -347,7 +372,6 @@ export default function SubmissionDetails() {
             </Alert>
           )}
 
-          {/* Hierarchy Approval UI */}
           {submission.isExceptional && submission.exceptionalStatus !== 'Completed' && isCurrentExceptionalApprover && (
             <Card className="border-yellow-600 shadow-xl overflow-hidden bg-yellow-50/10 animate-in zoom-in-95 duration-300">
               <CardHeader className="bg-yellow-600 text-white">
@@ -385,9 +409,14 @@ export default function SubmissionDetails() {
             <CardContent>
               <div className="space-y-4">
                 {documents?.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-all group border-slate-200">
+                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-all group border-slate-200 bg-white">
                       <div className="flex items-center gap-4">
-                        <FileText className="w-6 h-6 text-primary" />
+                        <div className={cn(
+                          "p-2 rounded-lg",
+                          doc.type === 'Exceptional Memo' ? "bg-yellow-100 text-yellow-700" : "bg-primary/10 text-primary"
+                        )}>
+                          {doc.type === 'Exceptional Memo' ? <Zap className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+                        </div>
                         <div>
                           <p className="font-bold text-slate-900">{doc.name}</p>
                           <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
@@ -473,7 +502,7 @@ export default function SubmissionDetails() {
         </div>
       </div>
 
-      {/* Exceptional Initiation Dialog (Directly on Case) */}
+      {/* Exceptional Initiation Dialog */}
       <Dialog open={isExceptionDialogOpen} onOpenChange={setIsExceptionDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -503,20 +532,42 @@ export default function SubmissionDetails() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Supporting Memo (PDF)</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Supporting Memo (PDF Only)</Label>
               <div 
                 onClick={() => exceptionMemoInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:bg-slate-50 transition-all"
+                className="border-2 border-dashed border-primary/30 rounded-xl p-8 text-center cursor-pointer hover:bg-primary/5 transition-all group bg-white shadow-sm"
               >
-                <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                <p className="text-xs font-bold text-slate-600">{memoFile ? memoFile.name : "Upload Approval Memo"}</p>
+                <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                  <Upload className="w-6 h-6 text-primary" />
+                </div>
+                <p className="text-sm font-bold text-slate-900">{memoFile ? memoFile.name : "Select Institutional Memo"}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Accepts only .pdf files</p>
               </div>
-              <input type="file" ref={exceptionMemoInputRef} className="hidden" onChange={(e) => setMemoFile(e.target.files?.[0] || null)} accept=".pdf" />
+              <input 
+                type="file" 
+                ref={exceptionMemoInputRef} 
+                className="hidden" 
+                accept="application/pdf" 
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file && file.type !== 'application/pdf') {
+                    toast({ variant: 'destructive', title: 'Invalid File', description: 'Please upload a PDF document only.' });
+                    return;
+                  }
+                  setMemoFile(file || null);
+                }} 
+              />
             </div>
           </div>
           <DialogFooter className="pt-6">
             <Button variant="outline" onClick={() => setIsExceptionDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-8 h-11" onClick={handleTriggerExceptional}>Dispatch Exception</Button>
+            <Button 
+              className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-8 h-11" 
+              onClick={handleTriggerExceptional}
+              disabled={!exceptionReason || !riskJustification || !memoFile}
+            >
+              Dispatch Exception
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

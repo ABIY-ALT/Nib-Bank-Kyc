@@ -6,13 +6,15 @@ import { collection, query, where, orderBy, doc, updateDoc, setDoc } from "fireb
 import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState, useRef } from "react";
 import { KYCSubmission, ExceptionalStatus } from "@/lib/kyc-data";
-import { Zap, Loader2, Search, Info, Plus, FileText, Upload, ShieldAlert } from "lucide-react";
+import { Zap, Loader2, Search, Info, Plus, FileText, Upload, ShieldAlert, FileType } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 import {
   Dialog,
   DialogContent,
@@ -115,9 +117,9 @@ export default function ExceptionalCasesPage() {
     );
   }, [submissions, searchTerm]);
 
-  const handleInitiateException = async () => {
-    if (!db || !selectedCaseId || !exceptionReason || !riskJustification) {
-      toast({ variant: "destructive", title: "Validation Error", description: "All fields and memo are mandatory." });
+  const handleInitiateException = () => {
+    if (!db || !selectedCaseId || !exceptionReason || !riskJustification || !memoFile) {
+      toast({ variant: "destructive", title: "Validation Error", description: "All fields and the PDF memo are mandatory." });
       return;
     }
 
@@ -135,20 +137,32 @@ export default function ExceptionalCasesPage() {
       }
     };
 
-    // If memo file exists, add it to documents sub-collection
-    if (memoFile) {
-      const docRef = doc(collection(subRef, "documents"));
-      await setDoc(docRef, {
-        id: docRef.id,
-        name: `Exceptional_Memo_${selectedCaseId}.pdf`,
-        type: 'Exceptional Memo',
-        uploadedAt: new Date().toISOString(),
-        url: "#",
-        status: 'Current'
-      });
-    }
+    updateDoc(subRef, updateData).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: subRef.path,
+        operation: 'update',
+        requestResourceData: updateData
+      }));
+    });
 
-    await updateDoc(subRef, updateData);
+    // Add memo to documents sub-collection for visibility in "Verification Assets"
+    const docRef = doc(collection(subRef, "documents"));
+    const memoData = {
+      id: docRef.id,
+      name: `Institutional_Memo_${selectedCaseId}.pdf`,
+      type: 'Exceptional Memo',
+      uploadedAt: new Date().toISOString(),
+      url: "#",
+      status: 'Current'
+    };
+    
+    setDoc(docRef, memoData).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: docRef.path,
+        operation: 'create',
+        requestResourceData: memoData
+      }));
+    });
     
     toast({ title: "Exception Initiated", description: `Case ${selectedCaseId} forwarded to District Director.` });
     setIsAddDialogOpen(false);
@@ -162,7 +176,7 @@ export default function ExceptionalCasesPage() {
     setMemoFile(null);
   };
 
-  const handleSeedException = async () => {
+  const handleSeedException = () => {
     if (!db) return;
     const id = `SEED-KYC-${Math.floor(1000 + Math.random() * 9000)}`;
     const subRef = doc(db, "submissions", id);
@@ -189,7 +203,15 @@ export default function ExceptionalCasesPage() {
       amendmentCycles: 0,
       documents: []
     };
-    await setDoc(subRef, sampleData);
+    
+    setDoc(subRef, sampleData).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: subRef.path,
+        operation: 'create',
+        requestResourceData: sampleData
+      }));
+    });
+    
     toast({ title: "Sample Seeded" });
   };
 
@@ -318,7 +340,7 @@ export default function ExceptionalCasesPage() {
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Risk Justification</Label>
                 <Textarea 
-                  placeholder="Provide detailed context for the hierarchy approvers..." 
+                  placeholder="Explain why this exception is justified..." 
                   className="min-h-[100px]"
                   value={riskJustification}
                   onChange={(e) => setRiskJustification(e.target.value)}
@@ -326,21 +348,30 @@ export default function ExceptionalCasesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Supporting Memo (PDF)</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Supporting Memo (PDF Only)</Label>
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center cursor-pointer hover:bg-slate-50 transition-all group"
+                  className="border-2 border-dashed border-primary/30 rounded-xl p-8 text-center cursor-pointer hover:bg-primary/5 transition-all group bg-white shadow-sm"
                 >
-                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2 group-hover:text-primary transition-colors" />
-                  <p className="text-xs font-bold text-slate-600">{memoFile ? memoFile.name : "Upload Signed Approval Memo"}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1 italic">Mandatory institutional evidence</p>
+                  <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                    <Upload className="w-6 h-6 text-primary" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-900">{memoFile ? memoFile.name : "Select Institutional Memo"}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Accepts only .pdf files (Max 10MB)</p>
                 </div>
                 <input 
                   type="file" 
                   ref={fileInputRef} 
                   className="hidden" 
-                  accept=".pdf" 
-                  onChange={(e) => setMemoFile(e.target.files?.[0] || null)} 
+                  accept="application/pdf" 
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file && file.type !== 'application/pdf') {
+                      toast({ variant: 'destructive', title: 'Invalid File', description: 'Please upload a PDF document only.' });
+                      return;
+                    }
+                    setMemoFile(file || null);
+                  }} 
                 />
               </div>
             </div>
@@ -349,8 +380,8 @@ export default function ExceptionalCasesPage() {
           <DialogFooter className="pt-6 border-t mt-4">
             <Button variant="outline" onClick={() => { setIsAddDialogOpen(false); resetForm(); }}>Cancel</Button>
             <Button 
-              className="bg-yellow-600 hover:bg-yellow-700 text-white font-black px-8 shadow-lg"
-              disabled={!selectedCaseId || !exceptionReason || !riskJustification}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white font-black px-8 shadow-lg h-11"
+              disabled={!selectedCaseId || !exceptionReason || !riskJustification || !memoFile}
               onClick={handleInitiateException}
             >
               Dispatch Exception
