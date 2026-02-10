@@ -143,9 +143,9 @@ export default function SubmissionDetails() {
   const isOwner = submission.submittedBy === user.name;
   const isKYCOfficer = ['KYC Officer', 'Admin'].includes(user.role || '');
   const isSupervisor = user.role === 'Supervisor' || user.role === 'Admin';
-  const isBranchMgr = user.role === 'Branch Manager';
-  const isDistDir = user.role === 'District Director';
-  const isDirector = user.role === 'Director';
+  const isBranchMgr = user.role === 'Branch Manager' || user.role === 'Admin';
+  const isDistDir = user.role === 'District Director' || user.role === 'Admin';
+  const isDirector = user.role === 'Director' || user.role === 'Admin';
 
   const handleAction = (action: string) => {
     if (!submissionRef || !db) return;
@@ -275,17 +275,17 @@ export default function SubmissionDetails() {
     { title: "Submitted", status: "completed", icon: Check },
     { 
       title: "District Director", 
-      status: submission.isExceptional && (['Awaiting Director', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" : submission.exceptionalStatus === 'Awaiting District' ? "active" : "upcoming", 
+      status: (submission.isExceptional && ['Awaiting Director', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" : (submission.exceptionalStatus === 'Awaiting District' ? "active" : "upcoming"), 
       icon: Zap
     },
     { 
       title: "KYC Director", 
-      status: submission.isExceptional && (['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" : submission.exceptionalStatus === 'Awaiting Director' ? "active" : "upcoming", 
+      status: (submission.isExceptional && ['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" : (submission.exceptionalStatus === 'Awaiting Director' ? "active" : "upcoming"), 
       icon: Shield
     },
     { 
       title: "Supervisor", 
-      status: submission.isExceptional && submission.exceptionalStatus === 'Completed' ? "completed" : submission.exceptionalStatus === 'Awaiting Supervisor' ? "active" : "upcoming", 
+      status: (submission.isExceptional && submission.exceptionalStatus === 'Completed') ? "completed" : (submission.exceptionalStatus === 'Awaiting Supervisor' ? "active" : "upcoming"), 
       icon: ShieldCheck
     },
     { 
@@ -300,7 +300,8 @@ export default function SubmissionDetails() {
     submission.exceptionalStatus === 'Awaiting Director' ? 'Director' :
     submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
 
-  const isCurrentExceptionalApprover = user.role === currentExceptionalRole;
+  // Allow System Admin to act as any approver for testing
+  const isCurrentExceptionalApprover = user.role === currentExceptionalRole || user.role === 'Admin';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -310,11 +311,11 @@ export default function SubmissionDetails() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-3xl font-bold font-headline">{submission.id}</h1>
-              <Badge variant={submission.status === 'Approved' ? 'default' : 'outline'} className={
-                submission.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
-                submission.status === 'Amended' ? 'bg-orange-100 text-orange-800' : 
-                submission.isExceptional ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : ''
-              }>
+              <Badge variant={submission.status === 'Approved' ? 'default' : 'outline'} className={cn(
+                submission.status === 'Approved' && 'bg-emerald-100 text-emerald-800',
+                submission.status === 'Amended' && 'bg-orange-100 text-orange-800', 
+                submission.isExceptional && submission.exceptionalStatus !== 'Completed' && 'bg-yellow-100 text-yellow-800 border-yellow-200'
+              )}>
                 {submission.isExceptional && submission.exceptionalStatus !== 'Completed' ? `Exception: ${submission.exceptionalStatus}` : submission.status}
               </Badge>
             </div>
@@ -348,10 +349,13 @@ export default function SubmissionDetails() {
 
           {/* Hierarchy Approval UI */}
           {submission.isExceptional && submission.exceptionalStatus !== 'Completed' && isCurrentExceptionalApprover && (
-            <Card className="border-yellow-600 shadow-xl overflow-hidden bg-yellow-50/10">
+            <Card className="border-yellow-600 shadow-xl overflow-hidden bg-yellow-50/10 animate-in zoom-in-95 duration-300">
               <CardHeader className="bg-yellow-600 text-white">
-                <CardTitle className="text-xl flex items-center gap-2"><Shield className="w-5 h-5" /> Institutional Review: {user.role}</CardTitle>
-                <CardDescription className="text-yellow-100 font-medium">As the {user.role}, please provide your determination for this exceptional request.</CardDescription>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Shield className="w-5 h-5" /> 
+                  Institutional Review: {user.role === 'Admin' ? `${currentExceptionalRole} (via Admin)` : user.role}
+                </CardTitle>
+                <CardDescription className="text-yellow-100 font-medium">As the {currentExceptionalRole}, please provide your determination for this exceptional request.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
                 <Label className="font-bold text-slate-700">Decision Remarks (Mandatory)</Label>
@@ -408,7 +412,7 @@ export default function SubmissionDetails() {
               <CardHeader><CardTitle className="text-xl">Exception Audit Trail</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 {submission.exceptionalData.approvalHistory.map((step, idx) => (
-                  <div key={idx} className="flex gap-4 items-start">
+                  <div key={idx} className="flex gap-4 items-start border-l-2 border-slate-100 pl-4 pb-2">
                     <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
                       {step.action === 'Approved' ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
                     </div>
