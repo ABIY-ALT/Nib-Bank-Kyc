@@ -2,14 +2,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useFirestore, useMemoFirebase } from "@/firebase";
+import { useFirestore } from "@/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { User } from "@/lib/auth-mock";
 
 /**
  * Hook to fetch real-time counts for sidebar badges.
- * In a large enterprise production environment, these counts should be 
- * read from a single 'stats' document updated by Cloud Functions.
+ * Optimized for institutional workflow segregation.
  */
 export function useSidebarCounts(user: User) {
   const db = useFirestore();
@@ -21,112 +20,106 @@ export function useSidebarCounts(user: User) {
     escalated: 0
   });
 
-  // 1. My Submissions
   useEffect(() => {
-    if (!db || !user.name) return;
-    const q = query(collection(db, "submissions"), where("submittedBy", "==", user.name));
-    return onSnapshot(q, (snapshot) => {
-      setCounts(prev => ({ ...prev, mySubmissions: snapshot.size }));
-    });
-  }, [db, user.name]);
+    if (!db || !user?.name) return;
 
-  // 2. Action Required (My Amended Submissions)
-  useEffect(() => {
-    if (!db || !user.name) return;
-    const q = query(
+    // 1. My Submissions (All cases submitted by the user)
+    const qMy = query(
+      collection(db, "submissions"), 
+      where("submittedBy", "==", user.name)
+    );
+    const unsubMy = onSnapshot(qMy, (snapshot) => {
+      setCounts(prev => ({ ...prev, mySubmissions: snapshot.size }));
+    }, (err) => console.error("My Submissions count error:", err));
+
+    // 2. Action Required (Cases submitted by user that need amendment)
+    const qAction = query(
       collection(db, "submissions"), 
       where("submittedBy", "==", user.name),
       where("status", "==", "Amended")
     );
-    return onSnapshot(q, (snapshot) => {
+    const unsubAction = onSnapshot(qAction, (snapshot) => {
       setCounts(prev => ({ ...prev, actionRequired: snapshot.size }));
-    });
-  }, [db, user.name]);
+    }, (err) => console.error("Action Required count error:", err));
 
-  // 3. Review Queue (Roles aware + Portfolio aware)
-  useEffect(() => {
-    if (!db) return;
+    // Role-based Reviewer Logic
     const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role || '');
     const assigned = user.assignedBranches || [];
-    
-    let q;
-    if (isGlobalReviewer) {
-      q = query(
-        collection(db, "submissions"),
-        where("status", "in", ["Pending", "In Review"]),
-        where("isResubmitted", "==", false)
-      );
-    } else if (assigned.length > 0) {
-      q = query(
-        collection(db, "submissions"),
-        where("status", "in", ["Pending", "In Review"]),
-        where("branch", "in", assigned),
-        where("isResubmitted", "==", false)
-      );
-    } else {
-      return;
+    const canReview = isGlobalReviewer || assigned.length > 0;
+
+    if (canReview) {
+      // 3. Review Queue (Pending/In Review cases that are NOT resubmissions)
+      let qQueue;
+      if (isGlobalReviewer) {
+        qQueue = query(
+          collection(db, "submissions"),
+          where("status", "in", ["Pending", "In Review"]),
+          where("isResubmitted", "==", false)
+        );
+      } else {
+        qQueue = query(
+          collection(db, "submissions"),
+          where("status", "in", ["Pending", "In Review"]),
+          where("branch", "in", assigned),
+          where("isResubmitted", "==", false)
+        );
+      }
+      const unsubQueue = onSnapshot(qQueue, (snapshot) => {
+        setCounts(prev => ({ ...prev, reviewQueue: snapshot.size }));
+      });
+
+      // 4. Resubmitted Cases (Pending/In Review cases that ARE resubmissions)
+      let qResub;
+      if (isGlobalReviewer) {
+        qResub = query(
+          collection(db, "submissions"),
+          where("isResubmitted", "==", true),
+          where("status", "in", ["Pending", "In Review"])
+        );
+      } else {
+        qResub = query(
+          collection(db, "submissions"),
+          where("isResubmitted", "==", true),
+          where("branch", "in", assigned),
+          where("status", "in", ["Pending", "In Review"])
+        );
+      }
+      const unsubResub = onSnapshot(qResub, (snapshot) => {
+        setCounts(prev => ({ ...prev, resubmitted: snapshot.size }));
+      });
+
+      // 5. Escalated Cases
+      let qEsc;
+      if (isGlobalReviewer) {
+        qEsc = query(
+          collection(db, "submissions"),
+          where("status", "==", "Escalated")
+        );
+      } else {
+        qEsc = query(
+          collection(db, "submissions"),
+          where("status", "==", "Escalated"),
+          where("branch", "in", assigned)
+        );
+      }
+      const unsubEsc = onSnapshot(qEsc, (snapshot) => {
+        setCounts(prev => ({ ...prev, escalated: snapshot.size }));
+      });
+
+      return () => {
+        unsubMy();
+        unsubAction();
+        unsubQueue();
+        unsubResub();
+        unsubEsc();
+      };
     }
 
-    return onSnapshot(q, (snapshot) => {
-      setCounts(prev => ({ ...prev, reviewQueue: snapshot.size }));
-    });
-  }, [db, user.role, user.assignedBranches]);
-
-  // 4. Resubmitted Cases
-  useEffect(() => {
-    if (!db) return;
-    const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role || '');
-    const assigned = user.assignedBranches || [];
-    
-    let q;
-    if (isGlobalReviewer) {
-      q = query(
-        collection(db, "submissions"),
-        where("isResubmitted", "==", true),
-        where("status", "in", ["Pending", "In Review"])
-      );
-    } else if (assigned.length > 0) {
-      q = query(
-        collection(db, "submissions"),
-        where("isResubmitted", "==", true),
-        where("branch", "in", assigned),
-        where("status", "in", ["Pending", "In Review"])
-      );
-    } else {
-      return;
-    }
-
-    return onSnapshot(q, (snapshot) => {
-      setCounts(prev => ({ ...prev, resubmitted: snapshot.size }));
-    });
-  }, [db, user.role, user.assignedBranches]);
-
-  // 5. Escalated Cases
-  useEffect(() => {
-    if (!db) return;
-    const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role || '');
-    const assigned = user.assignedBranches || [];
-    
-    let q;
-    if (isGlobalReviewer) {
-      q = query(
-        collection(db, "submissions"),
-        where("status", "==", "Escalated")
-      );
-    } else if (assigned.length > 0) {
-      q = query(
-        collection(db, "submissions"),
-        where("status", "==", "Escalated"),
-        where("branch", "in", assigned)
-      );
-    } else {
-      return;
-    }
-
-    return onSnapshot(q, (snapshot) => {
-      setCounts(prev => ({ ...prev, escalated: snapshot.size }));
-    });
-  }, [db, user.role, user.assignedBranches]);
+    return () => {
+      unsubMy();
+      unsubAction();
+    };
+  }, [db, user?.name, user?.role, user?.assignedBranches]);
 
   return counts;
 }

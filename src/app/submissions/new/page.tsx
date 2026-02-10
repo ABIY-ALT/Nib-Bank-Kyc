@@ -1,13 +1,12 @@
 
 "use client"
 
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Card, 
   CardContent, 
-  CardDescription, 
   CardFooter, 
   CardHeader, 
   CardTitle 
@@ -83,7 +82,6 @@ export default function NewSubmission() {
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch branch details to get the institutional code for Case ID generation
   const branchQuery = useMemoFirebase(() => {
     if (!db || !user.branch) return null;
     return query(collection(db, "branches"), where("name", "==", user.branch), limit(1));
@@ -117,7 +115,7 @@ export default function NewSubmission() {
       const newFiles = Array.from(e.target.files).map(file => ({
         id: Math.random().toString(36).substr(2, 9),
         file: file,
-        type: "", // Empty default forces selection
+        type: "",
         previewUrl: URL.createObjectURL(file)
       }));
       setUploadedFiles((prev) => [...prev, ...newFiles]);
@@ -151,7 +149,6 @@ export default function NewSubmission() {
       return;
     }
 
-    // Generate Case Number: [BRANCH_CODE]-KYC-[RANDOM]
     const branchCode = branchData?.[0]?.code || user.branch?.substring(0, 3).toUpperCase() || "GEN";
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const submissionId = `${branchCode}-KYC-${randomSuffix}`;
@@ -169,6 +166,7 @@ export default function NewSubmission() {
       status: "Pending",
       remarks,
       isResubmitted: false,
+      amendmentCycles: 0
     };
 
     setDoc(submissionRef, submissionData)
