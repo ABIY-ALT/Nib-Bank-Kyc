@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useRef, useMemo } from "react";
@@ -295,7 +294,8 @@ export default function NewSubmission() {
             <Button variant="outline" type="button" onClick={() => router.back()} className="px-8 h-11 font-bold">Cancel</Button>
             <Button type="submit" className="px-12 h-11 bg-primary font-bold shadow-lg">Dispatch for Review</Button>
           </CardFooter>
-        </form>
+        </Card>
+      </form>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
         <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-[#1a1a1a] [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10 [&>button]:h-10 [&>button]:w-10 [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full">
