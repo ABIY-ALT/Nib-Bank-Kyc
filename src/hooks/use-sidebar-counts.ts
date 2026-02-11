@@ -99,20 +99,24 @@ export function useSidebarCounts(user: User) {
     });
 
     // 4. Branch Node Queue (Global for Admin)
-    const qBranch = isAdmin 
-      ? query(collection(db, "submissions"))
-      : query(collection(db, "submissions"), where("branch", "==", user.branch));
-      
-    const unsubBranch = onSnapshot(qBranch, (snapshot) => {
-      const activeStatuses = ["Pending", "In Review", "Amended"];
-      const count = snapshot.docs.filter(d => {
-        const data = d.data();
-        const matchesStatus = activeStatuses.includes(data.status);
-        if (isAdmin) return matchesStatus;
-        return matchesStatus && data.branch === user.branch;
-      }).length;
-      setCounts(prev => ({ ...prev, branchNode: count }));
-    });
+    // Safety Guard: Only run where() query if field values are not undefined
+    let unsubBranch = () => {};
+    if (isAdmin || user.branch) {
+      const qBranch = isAdmin 
+        ? query(collection(db, "submissions"))
+        : query(collection(db, "submissions"), where("branch", "==", user.branch));
+        
+      unsubBranch = onSnapshot(qBranch, (snapshot) => {
+        const activeStatuses = ["Pending", "In Review", "Amended"];
+        const count = snapshot.docs.filter(d => {
+          const data = d.data();
+          const matchesStatus = activeStatuses.includes(data.status);
+          if (isAdmin) return matchesStatus;
+          return matchesStatus && data.branch === user.branch;
+        }).length;
+        setCounts(prev => ({ ...prev, branchNode: count }));
+      });
+    }
 
     return () => {
       unsubMy();
