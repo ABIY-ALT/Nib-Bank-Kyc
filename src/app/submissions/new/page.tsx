@@ -54,10 +54,11 @@ interface UploadedFile {
 }
 
 const DEFAULT_ENTITY_TYPES = [
-  { id: "individual", label: "Individual" },
-  { id: "corporate", label: "Corporate" },
-  { id: "sme", label: "SME (Small/Medium Enterprise)" },
-  { id: "ngo", label: "NGO (Non-Profit Organization)" },
+  { id: "individual", label: "Individual Account" },
+  { id: "company", label: "Company Account" },
+  { id: "association", label: "Association Account" },
+  { id: "foreign_ngo", label: "Foreign NGO Account" },
+  { id: "foreign_employment_agency", label: "Foreign Employment Agency Account" },
 ];
 
 const DEFAULT_DOC_TYPES = [
@@ -77,7 +78,7 @@ export default function NewSubmission() {
   const db = useFirestore();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [customerName, setCustomerName] = useState("");
-  const [entityType, setEntityType] = useState("");
+  const [entityType, setEntityType] = useState("individual");
   const [remarks, setRemarks] = useState("");
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,12 +104,8 @@ export default function NewSubmission() {
   }, [settings]);
 
   const entityClassifications = useMemo(() => {
-    const list = settings?.entityTypes || DEFAULT_ENTITY_TYPES;
-    if (list.length > 0 && !entityType) {
-      setEntityType(list[0].id);
-    }
-    return list;
-  }, [settings, entityType]);
+    return settings?.entityTypes || DEFAULT_ENTITY_TYPES;
+  }, [settings]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -167,7 +164,8 @@ export default function NewSubmission() {
       remarks,
       isResubmitted: false,
       amendmentCycles: 0,
-      isExceptional: false // CRITICAL: Explicitly set to false so it shows up in exception triggering dropdowns
+      isExceptional: false,
+      checklistState: {}
     };
 
     setDoc(submissionRef, submissionData)
@@ -217,7 +215,7 @@ export default function NewSubmission() {
               <Input placeholder="Full legal name" required className="h-11" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Classification</Label>
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Account Classification</Label>
               <Select value={entityType} onValueChange={setEntityType}>
                 <SelectTrigger className="h-11">
                   <SelectValue placeholder="Select classification" />
@@ -297,8 +295,7 @@ export default function NewSubmission() {
             <Button variant="outline" type="button" onClick={() => router.back()} className="px-8 h-11 font-bold">Cancel</Button>
             <Button type="submit" className="px-12 h-11 bg-primary font-bold shadow-lg">Dispatch for Review</Button>
           </CardFooter>
-        </Card>
-      </form>
+        </form>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
         <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-[#1a1a1a] [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10 [&>button]:h-10 [&>button]:w-10 [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full">

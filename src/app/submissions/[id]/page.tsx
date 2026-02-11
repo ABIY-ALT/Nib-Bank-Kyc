@@ -41,7 +41,9 @@ import {
   Zap,
   Shield,
   ArrowRight,
-  FileType
+  FileType,
+  ClipboardCheck,
+  CheckCircle2
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -88,6 +90,60 @@ interface PreviewDoc {
   url: string;
   isPdf?: boolean;
 }
+
+// Predefined Checklist Definitions
+const CHECKLIST_CONFIGS: Record<string, { id: string; label: string; mandatory: boolean }[]> = {
+  "individual": [
+    { id: "id", label: "National ID", mandatory: true },
+    { id: "form", label: "Fully completed account opening application form", mandatory: true },
+    { id: "name", label: "Full Name", mandatory: true },
+    { id: "dob", label: "Date of Birth", mandatory: true },
+    { id: "address", label: "Residential Address", mandatory: true },
+    { id: "phone", label: "Phone Number", mandatory: true },
+    { id: "deposit", label: "Initial Deposit", mandatory: true },
+    { id: "signature", label: "Customer Signature", mandatory: true },
+    { id: "tin", label: "TIN (if applicable)", mandatory: false },
+  ],
+  "company": [
+    { id: "signatory_id", label: "National ID of all signatories", mandatory: true },
+    { id: "form", label: "Fully completed account opening application form", mandatory: true },
+    { id: "trade_license", label: "Valid & renewed trade license", mandatory: true },
+    { id: "tin", label: "TIN", mandatory: true },
+    { id: "memo_articles", label: "Authenticated Memorandum & Articles of Association", mandatory: true },
+    { id: "address", label: "Company Address", mandatory: true },
+    { id: "phone", label: "Company Phone Number", mandatory: true },
+    { id: "deposit", label: "Initial Deposit", mandatory: true },
+    { id: "board_res", label: "Board resolution authorizing account opening", mandatory: false },
+  ],
+  "association": [
+    { id: "signatory_id", label: "National ID of signatories", mandatory: true },
+    { id: "form", label: "Fully completed account opening application form", mandatory: true },
+    { id: "reg_cert", label: "Certificate of registration", mandatory: true },
+    { id: "bylaws", label: "Association bylaws", mandatory: true },
+    { id: "minutes", label: "Minutes approving account opening", mandatory: true },
+    { id: "tin", label: "TIN", mandatory: true },
+    { id: "deposit", label: "Initial Deposit", mandatory: true },
+    { id: "memo_articles", label: "Memorandum & Articles of Association", mandatory: false },
+    { id: "approval_letter", label: "Approval letter from superior authorities", mandatory: false },
+  ],
+  "foreign_ngo": [
+    { id: "form", label: "Fully completed account opening application form", mandatory: true },
+    { id: "reg_cert", label: "Registration certificate from Ethiopian authority", mandatory: true },
+    { id: "board_res", label: "Board Resolution or POA", mandatory: true },
+    { id: "tin", label: "TIN", mandatory: true },
+    { id: "deposit", label: "Initial Deposit", mandatory: true },
+    { id: "agreement", label: "Agreement with Ethiopian Government", mandatory: false },
+    { id: "memo_articles", label: "Memorandum & Articles of Association", mandatory: false },
+  ],
+  "foreign_employment_agency": [
+    { id: "signatory_id", label: "National ID of all signatories", mandatory: true },
+    { id: "agency_license", label: "Valid Foreign Employment Agency License", mandatory: true },
+    { id: "form", label: "Fully completed account opening application form", mandatory: true },
+    { id: "tin", label: "TIN", mandatory: true },
+    { id: "deposit", label: "Initial Deposit", mandatory: true },
+    { id: "address", label: "Office Address Verification", mandatory: true },
+  ]
+};
 
 export default function SubmissionDetails() {
   const params = useParams();
@@ -143,7 +199,7 @@ export default function SubmissionDetails() {
 
   const isAdmin = user.role === 'Admin';
   const isOwner = submission.submittedBy === user.name;
-  const isKYCOfficer = ['KYC Officer', 'Admin'].includes(user.role || '');
+  const isKYCOfficer = user.role === 'KYC Officer';
   const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
 
   const handleAction = (action: string) => {
@@ -294,6 +350,25 @@ export default function SubmissionDetails() {
     setRemarks("");
   };
 
+  const handleToggleChecklistItem = (itemId: string, currentStatus: boolean) => {
+    if (!isKYCOfficer || !submissionRef) return;
+
+    const newStatus = !currentStatus;
+    const updateData = {
+      [`checklistState.${itemId}`]: newStatus
+    };
+
+    updateDoc(submissionRef, updateData).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: submissionRef.path,
+        operation: 'update',
+        requestResourceData: updateData
+      }));
+    });
+  };
+
+  const currentChecklist = CHECKLIST_CONFIGS[submission.entityType || "individual"] || CHECKLIST_CONFIGS["individual"];
+
   const steps = submission.isExceptional 
     ? [
         { title: "Submitted", status: "completed" as const, icon: Check },
@@ -322,7 +397,7 @@ export default function SubmissionDetails() {
           description: submission.status === 'Escalated' 
             ? "High-Priority Specialist Review" 
             : (submission.amendmentCycles && submission.amendmentCycles > 0 
-              ? `Amendment Cycle ${submission.amendmentCycles}` 
+              ? `Cycle ${submission.amendmentCycles} Active` 
               : (submission.status === 'Amended' ? "Awaiting Correction" : undefined))
         }
       ]
@@ -333,9 +408,9 @@ export default function SubmissionDetails() {
           status: (["Approved", "Rejected"].includes(submission.status) ? "completed" : "active") as const, 
           icon: submission.status === 'Escalated' ? AlertTriangle : Search,
           description: submission.status === 'Escalated' 
-            ? "Assigned to Senior Risk Officer" 
+            ? "High-Priority Specialist Review" 
             : (submission.amendmentCycles && submission.amendmentCycles > 0 
-              ? `Amendment Cycle ${submission.amendmentCycles}` 
+              ? `Cycle ${submission.amendmentCycles} Active` 
               : (submission.status === 'Amended' ? "Correction Required" : "Institutional analysis in progress"))
         },
         { 
@@ -430,8 +505,17 @@ export default function SubmissionDetails() {
           )}
 
           <Card className="shadow-sm border-slate-200">
-            <CardHeader><CardTitle className="text-xl">Verification Assets</CardTitle></CardHeader>
-            <CardContent>
+            <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                Verification Assets
+              </CardTitle>
+              <Badge variant="outline" className="bg-white font-bold text-slate-500 uppercase text-[10px] tracking-widest">
+                {documents?.length || 0} Files Attached
+              </Badge>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-8">
+              {/* Document List */}
               <div className="space-y-4">
                 {documents?.map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-all group border-slate-200 bg-white">
@@ -457,6 +541,72 @@ export default function SubmissionDetails() {
                       </div>
                     </div>
                 ))}
+              </div>
+
+              {/* Dynamic KYC Checklist */}
+              <div className="space-y-4 animate-in fade-in duration-500">
+                <div className="flex items-center gap-2 pb-2 border-b">
+                  <ClipboardCheck className="w-5 h-5 text-primary" />
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
+                    Verification Checklist: {submission.entityType?.replace(/_/g, ' ') || "Individual"}
+                  </h3>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-2">
+                  {currentChecklist.map((item) => {
+                    const isVerified = submission.checklistState?.[item.id] || false;
+                    return (
+                      <div 
+                        key={item.id} 
+                        className={cn(
+                          "flex items-center justify-between p-3 rounded-lg border transition-all",
+                          isVerified ? "bg-emerald-50/50 border-emerald-100" : "bg-slate-50/50 border-slate-100"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-5 h-5 rounded flex items-center justify-center border",
+                            isVerified ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-200"
+                          )}>
+                            {isVerified && <Check className="w-3 h-3" />}
+                          </div>
+                          <span className={cn(
+                            "text-sm font-bold",
+                            isVerified ? "text-emerald-900" : "text-slate-700"
+                          )}>
+                            {item.label} {item.mandatory && <span className="text-destructive">*</span>}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            disabled={!isKYCOfficer}
+                            onClick={() => handleToggleChecklistItem(item.id, isVerified)}
+                            className={cn(
+                              "h-8 font-black text-xs px-3 rounded-full transition-all",
+                              isVerified 
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" 
+                                : "bg-white border border-slate-200 text-slate-400 hover:bg-slate-50"
+                            )}
+                          >
+                            {isVerified ? "✔ VERIFIED" : "✖ NOT VERIFIED"}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {submission.entityType === 'foreign_ngo' && (
+                  <Alert className="bg-blue-50 border-blue-100 py-2">
+                    <Info className="w-4 h-4 text-blue-600" />
+                    <AlertDescription className="text-[10px] font-bold text-blue-700 uppercase tracking-tight">
+                      Special Rule: National ID not mandatory until enforced by NBE schedule for foreign NGOs.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
             </CardContent>
           </Card>

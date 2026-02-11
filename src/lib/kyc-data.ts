@@ -71,6 +71,7 @@ export interface KYCSubmission {
   amendmentCycles?: number;
   reviewedBy?: string;
   reviewedAt?: string;
+  checklistState?: Record<string, boolean>;
 }
 
 export const MOCK_SUBMISSIONS: KYCSubmission[] = [];

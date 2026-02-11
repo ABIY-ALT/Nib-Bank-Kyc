@@ -70,10 +70,11 @@ const DEFAULT_DOC_TYPES: ConfigItem[] = [
 ];
 
 const DEFAULT_ENTITY_TYPES: ConfigItem[] = [
-  { id: "individual", label: "Individual" },
-  { id: "corporate", label: "Corporate" },
-  { id: "sme", label: "SME (Small/Medium Enterprise)" },
-  { id: "ngo", label: "NGO (Non-Profit Organization)" },
+  { id: "individual", label: "Individual Account" },
+  { id: "company", label: "Company Account" },
+  { id: "association", label: "Association Account" },
+  { id: "foreign_ngo", label: "Foreign NGO Account" },
+  { id: "foreign_employment_agency", label: "Foreign Employment Agency Account" },
 ];
 
 const DEFAULT_GUIDELINES: Guideline[] = [
@@ -382,7 +383,7 @@ export default function SystemSettingsPage() {
                 <Users className="w-5 h-5 text-primary" />
                 Entity Classification Registry
               </CardTitle>
-              <CardDescription>Manage the list of customer entity types (e.g. Individual, Corporate).</CardDescription>
+              <CardDescription>Manage the list of customer entity types (e.g. Individual Account, Corporate).</CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div className="flex gap-2">
