@@ -80,6 +80,129 @@ const ACCOUNT_TYPES = [
   { id: "FOREIGN EMPLOYMENT AGENCY", label: "Foreign Employment Agency" },
 ];
 
+const EXAMPLE_FINDINGS: Partial<KYCFinding>[] = [
+  {
+    code: "FQ-001",
+    title: "National ID Expiry",
+    description: "The provided National ID has expired or will expire within 30 days. Please request a renewed identification document or an official renewal receipt from the Kebele/Vital Events Agency.",
+    category: "Identity",
+    severity: "High",
+    applicableTo: ["INDIVIDUAL", "ASSOCIATION"],
+  },
+  {
+    code: "FQ-002",
+    title: "Trade License Renewal",
+    description: "The business trade license is not renewed for the current Ethiopian fiscal year. Please provide a copy of the license with the current year's renewal stamp.",
+    category: "Documentation",
+    severity: "Critical",
+    applicableTo: ["COMPANY", "FOREIGN EMPLOYMENT AGENCY"],
+  },
+  {
+    code: "FQ-003",
+    title: "TIN Number Verification",
+    description: "The Tax Identification Number (TIN) provided does not match the name on the commercial registration. Please provide the correct TIN certificate or a letter of correction from the Tax Authority.",
+    category: "Compliance",
+    severity: "High",
+    applicableTo: ["COMPANY", "ASSOCIATION", "FOREIGN NGO"],
+  },
+  {
+    code: "FQ-004",
+    title: "Utility Bill Address Mismatch",
+    description: "The address on the utility bill does not match the residential address stated on the application form. Please provide a supporting letter from the Kebele.",
+    category: "Identity",
+    severity: "Medium",
+    applicableTo: ["INDIVIDUAL"],
+  },
+  {
+    code: "FQ-005",
+    title: "NGO Registration Certificate",
+    description: "The registration certificate from the Authority for Civil Society Organizations (ACSO) is missing or illegible. Please provide a clear scan of the valid registration.",
+    category: "Documentation",
+    severity: "Critical",
+    applicableTo: ["FOREIGN NGO"],
+  },
+  {
+    code: "FQ-006",
+    title: "Board Resolution Format",
+    description: "The submitted board resolution lacks the official company seal or authorized signatures. Please resubmit a properly executed resolution.",
+    category: "Compliance",
+    severity: "Medium",
+    applicableTo: ["COMPANY", "FOREIGN NGO"],
+  },
+  {
+    code: "FQ-007",
+    title: "Signature Inconsistency",
+    description: "The signature on the form significantly differs from the provided ID card. Please have the customer sign a signature specimen card in-person.",
+    category: "Identity",
+    severity: "High",
+    applicableTo: ["INDIVIDUAL"],
+  },
+  {
+    code: "FQ-008",
+    title: "Initial Deposit Source",
+    description: "For high-value deposits, the source of funds declaration is incomplete. Please provide supporting documents (e.g., sales contract).",
+    category: "Account Validation",
+    severity: "Critical",
+    applicableTo: ["INDIVIDUAL", "COMPANY", "FOREIGN NGO"],
+  },
+  {
+    code: "FQ-009",
+    title: "Passport Photo Quality",
+    description: "The attached photos are not clear or do not meet bank background requirements. Please provide 2 recent, high-quality photos.",
+    category: "Documentation",
+    severity: "Low",
+    applicableTo: ["INDIVIDUAL", "ASSOCIATION"],
+  },
+  {
+    code: "FQ-010",
+    title: "Memorandum of Association",
+    description: "The Memorandum and Articles of Association are missing authentication stamps from the Ministry of Trade or DARS.",
+    category: "Documentation",
+    severity: "High",
+    applicableTo: ["COMPANY", "ASSOCIATION"],
+  },
+  {
+    code: "FQ-011",
+    title: "Power of Attorney Validity",
+    description: "The Power of Attorney (POA) provided is more than 2 years old or lacks specific banking operation clauses.",
+    category: "Compliance",
+    severity: "Critical",
+    applicableTo: ["INDIVIDUAL", "COMPANY", "FOREIGN NGO"],
+  },
+  {
+    code: "FQ-012",
+    title: "Employment Letter Verification",
+    description: "The employment letter does not state the employee's position or gross salary. Please provide an updated letter from HR.",
+    category: "Account Validation",
+    severity: "Medium",
+    applicableTo: ["INDIVIDUAL"],
+  },
+  {
+    code: "FQ-013",
+    title: "Foreign Agency License",
+    description: "The license for the Foreign Employment Agency is missing the 'Permission to Recruit' annex for the current period.",
+    category: "Documentation",
+    severity: "High",
+    applicableTo: ["FOREIGN EMPLOYMENT AGENCY"],
+  },
+  {
+    code: "FQ-014",
+    title: "Association Bylaws",
+    description: "The submitted bylaws do not clearly define the number of signatories required for bank operations.",
+    category: "Compliance",
+    severity: "Medium",
+    applicableTo: ["ASSOCIATION"],
+  },
+  {
+    code: "FQ-015",
+    title: "Customer Name Discrepancy",
+    description: "The name on the commercial registration differs slightly from the TIN certificate. Provide confirmation from the registrar.",
+    category: "Identity",
+    severity: "Medium",
+    applicableTo: ["COMPANY", "FOREIGN EMPLOYMENT AGENCY"],
+  }
+];
+
 export default function KYCFFQReferencePage() {
   const db = useFirestore();
   const { user } = useAuth();
@@ -124,6 +247,22 @@ export default function KYCFFQReferencePage() {
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: "Comment Copied", description: "Standardized remark is ready to be pasted." });
+  };
+
+  const handleSeedLibrary = () => {
+    if (!db || !isAdmin) return;
+    EXAMPLE_FINDINGS.forEach((f, idx) => {
+      const id = `fq-seed-${idx}`;
+      const ref = doc(db, "kyc_findings", id);
+      setDoc(ref, {
+        ...f,
+        id,
+        createdAt: new Date().toISOString(),
+        active: true,
+        source: 'manual'
+      }).catch(() => {});
+    });
+    toast({ title: "Library Seeded", description: "15 institutional examples added to the reference library." });
   };
 
   const handleSaveFinding = () => {
@@ -223,20 +362,20 @@ export default function KYCFFQReferencePage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <Card className="lg:col-span-1 shadow-sm border-slate-200 h-fit sticky top-20">
           <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="w-4 h-4 text-slate-400" /> Workspace Filters
+            <CardTitle className="text-lg flex items-center gap-2 text-slate-700">
+              <Filter className="w-4 h-4 text-slate-400" /> Filters
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                <Search className="w-3 h-3" /> Search Records
+                <Search className="w-3 h-3" /> Search
               </Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input 
                   placeholder="Code or keyword..." 
-                  className="pl-9 h-10 border-slate-200 focus-visible:ring-primary" 
+                  className="pl-9 h-10 border-slate-200 focus-visible:ring-primary bg-white" 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -245,11 +384,11 @@ export default function KYCFFQReferencePage() {
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                <Layers className="w-3 h-3" /> Institutional Category
+                <Layers className="w-3 h-3" /> Category
               </Label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="h-10">
-                  <SelectValue />
+                <SelectTrigger className="h-10 bg-white">
+                  <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
@@ -263,11 +402,11 @@ export default function KYCFFQReferencePage() {
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                <ShieldAlert className="w-3 h-3" /> Risk Severity
+                <ShieldAlert className="w-3 h-3" /> Severity
               </Label>
               <Select value={selectedSeverity} onValueChange={setSelectedSeverity}>
-                <SelectTrigger className="h-10">
-                  <SelectValue />
+                <SelectTrigger className="h-10 bg-white">
+                  <SelectValue placeholder="All Severities" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Severities</SelectItem>
@@ -279,8 +418,21 @@ export default function KYCFFQReferencePage() {
               </Select>
             </div>
 
+            {/* Explicit Search Button as requested */}
+            <Button 
+              className="w-full gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold h-11 shadow-lg mt-2"
+              onClick={() => {
+                toast({ 
+                  title: "Search Executed", 
+                  description: `Found ${filteredFindings.length} matching institutional findings.` 
+                });
+              }}
+            >
+              <Search className="w-4 h-4" /> Search Findings
+            </Button>
+
             {isFiltered && (
-              <div className="pt-2 animate-in fade-in zoom-in-95 duration-300">
+              <div className="pt-2">
                 <Button 
                   variant="ghost" 
                   onClick={handleResetFilters} 
@@ -294,17 +446,9 @@ export default function KYCFFQReferencePage() {
 
             <div className="pt-4 border-t space-y-4">
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                <ClipboardCheck className="w-3.5 h-3.5" /> Quick Actions
+                <ClipboardCheck className="w-3.5 h-3.5" /> Compliance Links
               </div>
               
-              {isBranchOfficer && (
-                <Button variant="link" asChild className="p-0 h-auto text-primary font-bold text-sm justify-start">
-                  <Link href="/submissions/new">
-                    <ArrowRight className="w-3.5 h-3.5 mr-2" /> Start New Submission
-                  </Link>
-                </Button>
-              )}
-
               <Button variant="link" onClick={() => toast({ title: "Opening Guidelines..." })} className="p-0 h-auto text-slate-600 font-bold text-sm justify-start">
                 <FileType className="w-3.5 h-3.5 mr-2" /> NBE Document Matrix
               </Button>
@@ -313,22 +457,6 @@ export default function KYCFFQReferencePage() {
         </Card>
 
         <div className="lg:col-span-3 space-y-6">
-          {isFiltered && !loading && (
-            <div className="flex items-center justify-between bg-primary/5 border border-primary/10 rounded-xl px-6 py-3 animate-in slide-in-from-top-2">
-              <div className="flex items-center gap-3">
-                <div className="p-1.5 bg-primary/10 rounded-lg">
-                  <ListFilter className="w-4 h-4 text-primary" />
-                </div>
-                <span className="text-sm font-bold text-slate-700">
-                  Live Results: <span className="text-primary">{filteredFindings.length}</span> matching records found
-                </span>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleResetFilters} className="text-xs font-black text-primary hover:bg-primary/10">
-                RESET WORKSPACE
-              </Button>
-            </div>
-          )}
-
           {loading ? (
             <div className="flex flex-col items-center justify-center py-32 text-muted-foreground gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -341,7 +469,16 @@ export default function KYCFFQReferencePage() {
               </div>
               <div className="space-y-2">
                 <p className="font-bold text-slate-900 text-xl">No Findings Discovered</p>
-                <p className="text-sm text-slate-500 max-w-sm mx-auto">Try adjusting your filters to explore the institutional library.</p>
+                <p className="text-sm text-slate-500 max-w-sm mx-auto">Try adjusting your filters or use the seed button to populate the institutional library.</p>
+                {isAdmin && findings?.length === 0 && (
+                  <Button 
+                    variant="outline" 
+                    onClick={handleSeedLibrary} 
+                    className="mt-4 border-dashed border-primary/50 text-primary hover:bg-primary/5 gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> Seed Standardized Library
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -372,7 +509,7 @@ export default function KYCFFQReferencePage() {
                     </CardContent>
                     <CardFooter className="bg-slate-50/30 border-t p-4 flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200 text-[9px] font-bold">Manual</Badge>
+                        <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200 text-[9px] font-bold">Standardized</Badge>
                       </div>
                       <div className="flex gap-2">
                         {isAdmin && (
@@ -393,6 +530,7 @@ export default function KYCFFQReferencePage() {
         </div>
       </div>
 
+      {/* Add Finding Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -498,5 +636,18 @@ export default function KYCFFQReferencePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <div className="fixed bottom-8 right-8 animate-in slide-in-from-bottom-4">
+        <Card className="bg-white/90 backdrop-blur shadow-2xl p-4 border-primary/20">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Workspace Status</span>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-sm font-bold text-slate-700">Discovered {filteredFindings.length} findings.</span>
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
+}
