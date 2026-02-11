@@ -35,7 +35,8 @@ import {
   Check,
   Layers,
   RotateCcw,
-  ListFilter
+  ListFilter,
+  Beaker
 } from "lucide-react";
 import { 
   Select, 
@@ -81,11 +82,21 @@ const ACCOUNT_TYPES = [
 ];
 
 const EXAMPLE_FINDINGS: Partial<KYCFinding>[] = [
-  { code: "FQ-001", title: "Illegible Document Scan", description: "The uploaded copy of the National ID is blurred or cut off. Please provide a clear, high-resolution scan showing all four corners of the document.", category: "Documentation", severity: "Low", applicableTo: ["INDIVIDUAL", "COMPANY"], source: "manual" },
-  { code: "FQ-002", title: "Expired Trade License", description: "The submitted Trade License has exceeded its validity period. Institutional policy requires a renewed license for the current fiscal year.", category: "Compliance", severity: "High", applicableTo: ["COMPANY"], source: "manual" },
-  { code: "FQ-003", title: "Missing TIN Verification", description: "Tax Identification Number (TIN) certificate is mandatory for corporate accounts but was not found in the bundle.", category: "Documentation", severity: "Medium", applicableTo: ["COMPANY", "ASSOCIATION"], source: "manual" },
+  { code: "FQ-001", title: "Illegible Document Scan", description: "The uploaded copy of the National ID is blurred or cut off. Please provide a clear, high-resolution scan showing all four corners of the document.", category: "Documentation", severity: "Low", applicableTo: ["INDIVIDUAL", "COMPANY", "ASSOCIATION"], source: "manual" },
+  { code: "FQ-002", title: "Expired Trade License", description: "The submitted Trade License has exceeded its validity period. Institutional policy requires a renewed license for the current fiscal year.", category: "Compliance", severity: "High", applicableTo: ["COMPANY", "FOREIGN EMPLOYMENT AGENCY"], source: "manual" },
+  { code: "FQ-003", title: "Missing TIN Verification", description: "Tax Identification Number (TIN) certificate is mandatory for corporate accounts but was not found in the bundle.", category: "Documentation", severity: "Medium", applicableTo: ["COMPANY", "ASSOCIATION", "FOREIGN NGO"], source: "manual" },
   { code: "FQ-004", title: "Signature Mismatch", description: "The signature on the account opening form does not match the specimen on the provided National ID. Please verify identity or re-sign.", category: "Identity", severity: "High", applicableTo: ["INDIVIDUAL"], source: "manual" },
   { code: "FQ-005", title: "Initial Deposit Below Threshold", description: "The initial deposit provided is below the minimum required for this account classification.", category: "Account Validation", severity: "Medium", applicableTo: ["INDIVIDUAL", "COMPANY", "ASSOCIATION"], source: "manual" },
+  { code: "FQ-006", title: "Address Evidence Missing", description: "A recent utility bill or local authority letter verifying the residential address is required for Individual accounts.", category: "Documentation", severity: "Medium", applicableTo: ["INDIVIDUAL"], source: "manual" },
+  { code: "FQ-007", title: "Incomplete KYC Form", description: "Several mandatory fields in the Account Opening Form (e.g., Source of Wealth, Occupation) were left blank.", category: "Compliance", severity: "Low", applicableTo: ["INDIVIDUAL", "COMPANY", "ASSOCIATION", "FOREIGN NGO"], source: "manual" },
+  { code: "FQ-008", title: "Unauthenticated POA", description: "The Power of Attorney (POA) submitted has not been authenticated by the appropriate legal authority or notary.", category: "Compliance", severity: "Critical", applicableTo: ["COMPANY", "ASSOCIATION", "FOREIGN NGO"], source: "manual" },
+  { code: "FQ-009", title: "Board Resolution Seal Missing", description: "The Board Resolution authorizing account opening is missing the company's official common seal.", category: "Account Validation", severity: "Medium", applicableTo: ["COMPANY"], source: "manual" },
+  { code: "FQ-010", title: "Identity Name Mismatch", description: "The customer name on the application form differs from the name recorded on the primary Identity Document.", category: "Identity", severity: "High", applicableTo: ["INDIVIDUAL"], source: "manual" },
+  { code: "FQ-011", title: "Outdated Commercial Registration", description: "The Commercial Registration certificate provided is older than 6 months. Please provide a fresh 'Letter of Good Standing'.", category: "Documentation", severity: "Medium", applicableTo: ["COMPANY"], source: "manual" },
+  { code: "FQ-012", title: "Beneficial Owner Disclosure Gap", description: "Detailed disclosure of Ultimate Beneficial Owners (UBO) holding >10% share is missing for this corporate entity.", category: "Compliance", severity: "Critical", applicableTo: ["COMPANY"], source: "manual" },
+  { code: "FQ-013", title: "ID Near Expiry", description: "The submitted National ID expires in less than 30 days. Please request a renewed ID or an alternative valid document.", category: "Identity", severity: "Low", applicableTo: ["INDIVIDUAL"], source: "manual" },
+  { code: "FQ-014", title: "Signature Witness Missing", description: "The customer's signature was not witnessed by an authorized bank staff member as per internal protocol.", category: "Account Validation", severity: "Medium", applicableTo: ["INDIVIDUAL"], source: "manual" },
+  { code: "FQ-015", title: "PEP Declaration Gap", description: "The Politically Exposed Person (PEP) self-declaration section was not completed by the applicant.", category: "Compliance", severity: "High", applicableTo: ["INDIVIDUAL"], source: "manual" },
 ];
 
 export default function KYCFQReferencePage() {
@@ -200,11 +211,11 @@ export default function KYCFQReferencePage() {
   const handleSeedExamples = () => {
     if (!db) return;
     EXAMPLE_FINDINGS.forEach((f, idx) => {
-      const id = `example-${idx}`;
+      const id = f.code || `example-${idx}`;
       const ref = doc(db, "kyc_findings", id);
-      setDoc(ref, { ...f, id, createdAt: new Date().toISOString(), active: true });
+      setDoc(ref, { ...f, id, createdAt: new Date().toISOString(), active: true, source: 'manual' });
     });
-    toast({ title: "Library Seeded", description: "Standardized reference set has been loaded." });
+    toast({ title: "Library Seeded", description: "Institutional reference set (15 entries) has been loaded." });
   };
 
   const toggleApplicability = (typeId: string) => {
@@ -232,9 +243,14 @@ export default function KYCFQReferencePage() {
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           {isAdmin && (
-            <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 bg-primary shadow-xl font-bold">
-              <Plus className="w-4 h-4" /> Add Finding
-            </Button>
+            <>
+              <Button variant="outline" onClick={handleSeedExamples} className="gap-2 border-dashed border-primary/50 text-primary font-bold">
+                <Beaker className="w-4 h-4" /> Seed Library
+              </Button>
+              <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 bg-primary shadow-xl font-bold">
+                <Plus className="w-4 h-4" /> Add Finding
+              </Button>
+            </>
           )}
         </div>
       </div>
