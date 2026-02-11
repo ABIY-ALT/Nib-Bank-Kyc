@@ -106,6 +106,7 @@ export default function KYCFQReferencePage() {
   });
 
   const isAdmin = user.role === 'Admin';
+  const isBranchOfficer = user.role === 'Branch Officer';
 
   const findingsQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "kyc_findings"), orderBy("code")) : null;
@@ -283,11 +284,15 @@ export default function KYCFQReferencePage() {
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                 <ClipboardCheck className="w-3.5 h-3.5" /> Compliance Links
               </div>
-              <Button variant="link" asChild className="p-0 h-auto text-primary font-bold text-sm justify-start">
-                <Link href="/submissions/new">
-                  <ArrowRight className="w-3.5 h-3.5 mr-2" /> Start New Submission
-                </Link>
-              </Button>
+              
+              {(isBranchOfficer || isAdmin) && (
+                <Button variant="link" asChild className="p-0 h-auto text-primary font-bold text-sm justify-start">
+                  <Link href="/submissions/new">
+                    <ArrowRight className="w-3.5 h-3.5 mr-2" /> Start New Submission
+                  </Link>
+                </Button>
+              )}
+
               <Button variant="link" onClick={() => toast({ title: "Loading Guidelines..." })} className="p-0 h-auto text-slate-600 font-bold text-sm justify-start">
                 <FileType className="w-3.5 h-3.5 mr-2" /> NBE Document Matrix
               </Button>
@@ -371,7 +376,9 @@ export default function KYCFQReferencePage() {
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               <Plus className="w-6 h-6 text-primary" /> Register New Finding
             </DialogTitle>
-            <DialogDescription>Add a standardized comment to the institutional knowledge base.</DialogDescription>
+            <DialogDescription>
+              Add a standardized comment to the institutional knowledge base.
+            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-6 pt-4">
