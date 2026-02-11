@@ -154,7 +154,7 @@ export default function SubmissionDetails() {
   const { user } = useAuth();
   
   const [remarks, setRemarks] = useState("");
-  const [newFiles, setNewFiles] = useState<any[]>([]);
+  const [newFiles, setNewFiles] = useState<{file: File, type: string}[]>([]);
   const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
   
   // Exceptional Request State
@@ -162,6 +162,7 @@ export default function SubmissionDetails() {
   const [exceptionReason, setExceptionReason] = useState("");
   const [riskJustification, setRiskJustification] = useState("");
   const exceptionMemoInputRef = useRef<HTMLInputElement>(null);
+  const correctionInputRef = useRef<HTMLInputElement>(null);
   const [memoFile, setMemoFile] = useState<File | null>(null);
 
   const submissionRef = useMemoFirebase(() => {
@@ -203,17 +204,32 @@ export default function SubmissionDetails() {
   if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
+  const handleCorrectionFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files).map(f => ({ file: f, type: "" }));
+      setNewFiles(prev => [...prev, ...files]);
+    }
+  };
+
+  const removeNewFile = (index: number) => {
+    setNewFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateNewFileType = (index: number, type: string) => {
+    setNewFiles(prev => prev.map((f, i) => i === index ? { ...f, type } : f));
+  };
+
   const handleAction = (action: string) => {
     if (!submissionRef || !db) return;
 
-    if (action === 'Pending' && submission.status === 'Amended' && isOwner) {
+    if (action === 'Pending' && submission.status === 'Amended' && (isOwner || isAdmin)) {
       if (newFiles.some(f => !f.type)) {
         toast({ variant: "destructive", title: "Classification Required", description: "Select a document type for all uploaded corrections." });
         return;
       }
     }
 
-    if ((action === 'Amended' || action === 'Rejected' || action === 'Escalated') && !remarks.trim()) {
+    if ((action === 'Amended' || action === 'Rejected' || action === 'Escalated') && !remarks.trim() && !isAdmin) {
       toast({ variant: "destructive", title: "Instructions Required", description: `Please provide specific feedback for the ${action}.` });
       return;
     }
@@ -224,12 +240,13 @@ export default function SubmissionDetails() {
     };
 
     if (action === 'Amended') updateData.amendmentCycles = increment(1);
+    
     if (['Approved', 'Amended', 'Rejected', 'Escalated'].includes(action)) {
       updateData.reviewedBy = user.name;
       updateData.reviewedAt = new Date().toISOString();
     }
 
-    if (action === 'Pending' && submission.status === 'Amended' && isOwner) {
+    if (action === 'Pending' && submission.status === 'Amended' && (isOwner || isAdmin)) {
        updateData.isResubmitted = true;
        updateData.resubmittedAt = new Date().toISOString();
        newFiles.forEach(file => {
@@ -303,7 +320,7 @@ export default function SubmissionDetails() {
 
   const handleExceptionalApproval = (action: 'Approved' | 'Rejected' | 'Clarification') => {
     if (!submissionRef || !db || !submission.exceptionalData) return;
-    if (!remarks.trim()) {
+    if (!remarks.trim() && !isAdmin) {
       toast({ variant: "destructive", title: "Remarks Required", description: "Decision remarks are mandatory for exceptional cases." });
       return;
     }
@@ -669,11 +686,85 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {(isKYCOfficer || isAdmin) && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated' || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
+          {/* Amendment Response Workspace */}
+          {(isOwner || isAdmin) && submission.status === 'Amended' && (
+            <Card className="border-orange-200 shadow-xl bg-orange-50/5 animate-in slide-in-from-right-4 duration-500">
+              <CardHeader className="bg-orange-100/50 border-b">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5 text-orange-600" />
+                  Correction Workspace
+                </CardTitle>
+                <CardDescription className="text-orange-800 font-medium">Provide requested documentation to resolve verify requirements.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-6">
+                <div className="p-4 rounded-xl bg-white border border-orange-200 shadow-sm">
+                  <Label className="text-[10px] font-black uppercase text-orange-800 tracking-widest mb-2 block">Institutional Feedback</Label>
+                  <p className="text-sm font-bold text-slate-700 leading-relaxed italic">"{submission.remarks}"</p>
+                </div>
+
+                <div className="space-y-4">
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    ref={correctionInputRef} 
+                    multiple 
+                    onChange={handleCorrectionFileChange} 
+                  />
+                  <div 
+                    onClick={() => correctionInputRef.current?.click()}
+                    className="border-2 border-dashed border-orange-300 rounded-2xl p-8 text-center cursor-pointer hover:bg-orange-50 transition-all group bg-white shadow-sm"
+                  >
+                    <div className="bg-orange-100 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
+                      <Upload className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <p className="text-xs font-bold text-orange-900">Attach Corrected Files</p>
+                    <p className="text-[9px] text-orange-600 uppercase font-black mt-1">Accepts PDF & Images</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {newFiles.map((f, idx) => (
+                      <div key={idx} className="p-3 border rounded-xl bg-white shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span className="text-[11px] font-bold truncate text-slate-700">{f.file.name}</span>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive rounded-full" onClick={() => removeNewFile(idx)}>
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <Select value={f.type} onValueChange={(val) => updateNewFileType(idx, val)}>
+                          <SelectTrigger className="h-9 text-[10px] border-orange-100 bg-orange-50/30">
+                            <SelectValue placeholder="Categorize File..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {documentTypes.map(t => <SelectItem key={t.id} value={t.id} className="text-xs font-bold">{t.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="bg-slate-50 border-t p-6">
+                <Button 
+                  className="w-full bg-orange-600 hover:bg-orange-700 font-black h-12 shadow-xl shadow-orange-200"
+                  onClick={() => handleAction('Pending')}
+                  disabled={newFiles.length === 0}
+                >
+                  <CheckCircle2 className="w-5 h-5 mr-2" />
+                  Submit Corrections
+                </Button>
+              </CardFooter>
+            </Card>
+          )}
+
+          {(isKYCOfficer || isAdmin) && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated' || submission.status === 'Amended' || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
             <Card className="border-primary/20 shadow-xl">
-              <CardHeader><CardTitle className="text-lg">KYC Determination</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <Textarea placeholder="Provide verification feedback..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[140px]" />
+              <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-lg">KYC Determination</CardTitle></CardHeader>
+              <CardContent className="space-y-4 pt-6">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Decision Remarks</Label>
+                <Textarea placeholder="Provide verification feedback for the audit trail..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[140px] bg-white" />
                 <div className="grid grid-cols-2 gap-2">
                   <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold h-11">Approve</Button>
                   <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold h-11">Request Fix</Button>
