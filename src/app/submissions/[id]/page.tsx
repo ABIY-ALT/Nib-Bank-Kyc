@@ -294,29 +294,43 @@ export default function SubmissionDetails() {
     setRemarks("");
   };
 
-  const steps = [
-    { title: "Submitted", status: "completed", icon: Check },
-    { 
-      title: "District Director", 
-      status: (submission.isExceptional && ['Awaiting Director', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" : (submission.exceptionalStatus === 'Awaiting District' ? "active" : "upcoming"), 
-      icon: Zap
-    },
-    { 
-      title: "KYC Director", 
-      status: (submission.isExceptional && ['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" : (submission.exceptionalStatus === 'Awaiting Director' ? "active" : "upcoming"), 
-      icon: Shield
-    },
-    { 
-      title: "Supervisor", 
-      status: (submission.isExceptional && submission.exceptionalStatus === 'Completed') ? "completed" : (submission.exceptionalStatus === 'Awaiting Supervisor' ? "active" : "upcoming"), 
-      icon: ShieldCheck
-    },
-    { 
-      title: "Final KYC Verification", 
-      status: submission.exceptionalStatus === 'Completed' && (submission.status === 'Pending' || submission.status === 'In Review') ? "active" : (["Approved", "Rejected"].includes(submission.status) ? "completed" : "upcoming"), 
-      icon: Search 
-    }
-  ];
+  const steps = submission.isExceptional 
+    ? [
+        { title: "Submitted", status: "completed" as const, icon: Check },
+        { 
+          title: "District Director", 
+          status: (['Awaiting Director', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting District' ? "active" as const : "upcoming" as const), 
+          icon: Zap
+        },
+        { 
+          title: "KYC Director", 
+          status: (['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Director' ? "active" as const : "upcoming" as const), 
+          icon: Shield
+        },
+        { 
+          title: "Supervisor", 
+          status: (submission.exceptionalStatus === 'Completed') ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Supervisor' ? "active" as const : "upcoming" as const), 
+          icon: ShieldCheck
+        },
+        { 
+          title: "Final KYC Verification", 
+          status: submission.exceptionalStatus === 'Completed' && (submission.status === 'Pending' || submission.status === 'In Review') ? "active" as const : (["Approved", "Rejected"].includes(submission.status) ? "completed" as const : "upcoming" as const), 
+          icon: Search 
+        }
+      ]
+    : [
+        { title: "Submitted", status: "completed" as const, icon: Check },
+        { 
+          title: "KYC Verification", 
+          status: (["Approved", "Rejected"].includes(submission.status) ? "completed" : "active") as const, 
+          icon: Search 
+        },
+        { 
+          title: "Final Decision", 
+          status: (["Approved", "Rejected"].includes(submission.status) ? "completed" : "upcoming") as const, 
+          icon: ShieldCheck 
+        }
+      ];
 
   const currentExceptionalRole = 
     submission.exceptionalStatus === 'Awaiting District' ? 'District Director' :
