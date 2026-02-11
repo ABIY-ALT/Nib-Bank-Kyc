@@ -32,7 +32,10 @@ import {
   ClipboardCheck,
   FileType,
   ArrowRight,
-  Check
+  Check,
+  Layers,
+  RotateCcw,
+  ListFilter
 } from "lucide-react";
 import { 
   Select, 
@@ -187,6 +190,13 @@ export default function KYCFQReferencePage() {
     });
   };
 
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setSelectedCategory("all");
+    setSelectedSeverity("all");
+    toast({ title: "Filters Cleared", description: "Showing all institutional findings." });
+  };
+
   const handleSeedExamples = () => {
     if (!db) return;
     EXAMPLE_FINDINGS.forEach((f, idx) => {
@@ -205,6 +215,8 @@ export default function KYCFQReferencePage() {
       setFindingForm({ ...findingForm, applicableTo: [...current, typeId] });
     }
   };
+
+  const isFiltered = searchTerm !== "" || selectedCategory !== "all" || selectedSeverity !== "all";
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -236,7 +248,9 @@ export default function KYCFQReferencePage() {
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Search</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <Search className="w-3 h-3" /> Search
+              </Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input 
@@ -249,7 +263,9 @@ export default function KYCFQReferencePage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Category</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <Layers className="w-3 h-3" /> Category
+              </Label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="h-10">
                   <SelectValue />
@@ -265,7 +281,9 @@ export default function KYCFQReferencePage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Severity</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <ShieldAlert className="w-3 h-3" /> Severity
+              </Label>
               <Select value={selectedSeverity} onValueChange={setSelectedSeverity}>
                 <SelectTrigger className="h-10">
                   <SelectValue />
@@ -280,12 +298,33 @@ export default function KYCFQReferencePage() {
               </Select>
             </div>
 
+            <div className="pt-2 flex flex-col gap-2">
+              <Button 
+                onClick={() => toast({ title: "Results Filtered", description: `Discovered ${filteredFindings.length} findings.` })}
+                className="w-full gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold h-10 shadow-md"
+              >
+                <Search className="w-4 h-4" />
+                Search Findings
+              </Button>
+              
+              {isFiltered && (
+                <Button 
+                  variant="ghost" 
+                  onClick={handleResetFilters} 
+                  className="w-full gap-2 text-slate-500 font-bold hover:bg-slate-100"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Clear All
+                </Button>
+              )}
+            </div>
+
             <div className="pt-4 border-t space-y-4">
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                 <ClipboardCheck className="w-3.5 h-3.5" /> Compliance Links
               </div>
               
-              {(isBranchOfficer || isAdmin) && (
+              {isBranchOfficer && (
                 <Button variant="link" asChild className="p-0 h-auto text-primary font-bold text-sm justify-start">
                   <Link href="/submissions/new">
                     <ArrowRight className="w-3.5 h-3.5 mr-2" /> Start New Submission
@@ -301,6 +340,22 @@ export default function KYCFQReferencePage() {
         </Card>
 
         <div className="lg:col-span-3 space-y-6">
+          {isFiltered && !loading && (
+            <div className="flex items-center justify-between bg-primary/5 border border-primary/10 rounded-xl px-6 py-3 animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-3">
+                <div className="p-1.5 bg-primary/10 rounded-lg">
+                  <ListFilter className="w-4 h-4 text-primary" />
+                </div>
+                <span className="text-sm font-bold text-slate-700">
+                  Showing <span className="text-primary">{filteredFindings.length}</span> results for active filters
+                </span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleResetFilters} className="text-xs font-black text-primary hover:bg-primary/10">
+                RESET FILTERS
+              </Button>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex flex-col items-center justify-center py-32 text-muted-foreground gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
