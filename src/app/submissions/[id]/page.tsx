@@ -188,6 +188,11 @@ export default function SubmissionDetails() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
+  const isAdmin = user.role === 'Admin';
+  const isKYCOfficer = user.role === 'KYC Officer';
+  const isOwner = submission?.submittedBy === user.name;
+  const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
+
   useEffect(() => {
     const isReviewer = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role || '');
     if (submission && (submission.status === 'Pending') && isReviewer && submissionRef && !submission.isResubmitted && !submission.isExceptional) {
@@ -197,11 +202,6 @@ export default function SubmissionDetails() {
 
   if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
-
-  const isAdmin = user.role === 'Admin';
-  const isOwner = submission.submittedBy === user.name;
-  const isKYCOfficer = user.role === 'KYC Officer';
-  const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
 
   const handleAction = (action: string) => {
     if (!submissionRef || !db) return;
@@ -352,7 +352,8 @@ export default function SubmissionDetails() {
   };
 
   const handleToggleChecklistItem = (itemId: string, currentStatus: boolean) => {
-    if (!(isKYCOfficer || isAdmin) || !submissionRef) return;
+    const canEdit = isKYCOfficer || isAdmin;
+    if (!canEdit || !submissionRef) return;
 
     const newStatus = !currentStatus;
     const updateData = {
@@ -556,6 +557,8 @@ export default function SubmissionDetails() {
                 <div className="grid grid-cols-1 gap-2">
                   {currentChecklist.map((item) => {
                     const isVerified = submission.checklistState?.[item.id] || false;
+                    const canEditChecklist = isKYCOfficer || isAdmin;
+                    
                     return (
                       <div 
                         key={item.id} 
@@ -583,7 +586,7 @@ export default function SubmissionDetails() {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            disabled={!(isKYCOfficer || isAdmin)}
+                            disabled={!canEditChecklist}
                             onClick={() => handleToggleChecklistItem(item.id, isVerified)}
                             className={cn(
                               "h-8 font-black text-xs px-3 rounded-full transition-all",
@@ -666,7 +669,7 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {isKYCOfficer && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated') && (!submission.isExceptional || submission.exceptionalStatus === 'Completed') && (
+          {(isKYCOfficer || isAdmin) && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated') && (!submission.isExceptional || submission.exceptionalStatus === 'Completed') && (
             <Card className="border-primary/20 shadow-xl">
               <CardHeader><CardTitle className="text-lg">KYC Determination</CardTitle></CardHeader>
               <CardContent className="space-y-4">
