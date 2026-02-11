@@ -166,7 +166,8 @@ export default function NewSubmission() {
       status: "Pending",
       remarks,
       isResubmitted: false,
-      amendmentCycles: 0
+      amendmentCycles: 0,
+      isExceptional: false // CRITICAL: Explicitly set to false so it shows up in exception triggering dropdowns
     };
 
     setDoc(submissionRef, submissionData)

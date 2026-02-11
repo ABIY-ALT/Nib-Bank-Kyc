@@ -6,7 +6,7 @@ import { collection, query, where, orderBy, doc, updateDoc, setDoc } from "fireb
 import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState, useRef } from "react";
 import { KYCSubmission, ExceptionalStatus } from "@/lib/kyc-data";
-import { Zap, Loader2, Search, Info, Plus, FileText, Upload, ShieldAlert, FileType, CheckCircle2 } from "lucide-react";
+import { Zap, Loader2, Search, Info, Plus, FileText, Upload, ShieldAlert, FileType, CheckCircle2, Beaker } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -57,7 +57,8 @@ export default function ExceptionalCasesPage() {
     if (!canTrigger) return null;
 
     if (isAdmin) {
-      // Admins can trigger exceptions on any non-exceptional case globally for testing
+      // Admins see all non-exceptional cases globally for testing. 
+      // Note: Documents MUST have isExceptional set to false to appear in this query.
       return query(
         collection(db, "submissions"),
         where("isExceptional", "==", false)
@@ -134,6 +135,30 @@ export default function ExceptionalCasesPage() {
     );
   }, [submissions, searchTerm]);
 
+  // TESTING UTILITY: Seed a sample case that is eligible for the dropdown
+  const handleSeedSampleCase = () => {
+    if (!db) return;
+    const testId = `SEED-KYC-${Math.floor(1000 + Math.random() * 9000)}`;
+    const ref = doc(db, "submissions", testId);
+    const data = {
+      id: testId,
+      customerName: "Sample Test Customer (Auto-Seeded)",
+      entityType: "individual",
+      branch: user.branch || "Downtown",
+      district: user.district || "Central",
+      submittedBy: user.name,
+      submittedAt: new Date().toISOString(),
+      status: "Pending",
+      isResubmitted: false,
+      amendmentCycles: 0,
+      isExceptional: false // This ensures it shows up in the dropdown
+    };
+
+    setDoc(ref, data).then(() => {
+      toast({ title: "Sample Case Created", description: `Case ${testId} is now eligible for the exception workflow.` });
+    });
+  };
+
   const handleInitiateException = () => {
     if (!db || !selectedCaseId || !exceptionReason || !riskJustification || !memoFile) {
       toast({ variant: "destructive", title: "Validation Error", description: "All fields and the PDF memo are mandatory institutional requirements." });
@@ -208,6 +233,16 @@ export default function ExceptionalCasesPage() {
           <p className="text-muted-foreground text-lg font-medium">Hierarchy oversight for high-risk and non-standard verification requests.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
+          {isAdmin && (
+            <Button 
+              variant="outline"
+              onClick={handleSeedSampleCase}
+              className="border-dashed border-primary/50 text-primary hover:bg-primary/5 gap-2"
+            >
+              <Beaker className="w-4 h-4" />
+              Seed Sample Case
+            </Button>
+          )}
           {(user.role === 'Branch Manager' || isAdmin) && (
             <Button 
               onClick={() => setIsAddDialogOpen(true)}
@@ -281,7 +316,14 @@ export default function ExceptionalCasesPage() {
                       <SelectItem key={c.id} value={c.id}>{c.id}</SelectItem>
                     ))}
                     {(!availableCases || availableCases.length === 0) && (
-                      <p className="p-2 text-xs text-center text-muted-foreground italic">No eligible cases found.</p>
+                      <div className="p-4 text-center">
+                        <p className="text-xs text-muted-foreground italic mb-2">No eligible cases found.</p>
+                        {isAdmin && (
+                          <Button variant="outline" size="sm" onClick={handleSeedSampleCase} className="text-[10px] h-7">
+                            Seed Test Case
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </SelectContent>
                 </Select>
