@@ -48,15 +48,28 @@ export default function ExceptionalCasesPage() {
   const [memoFile, setMemoFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Fetch available cases for Branch Manager to trigger exception on
+  const isAdmin = user.role === 'Admin';
+
+  // 1. Fetch available cases for Branch Manager/Admin to trigger exception on
   const branchCasesQuery = useMemoFirebase(() => {
-    if (!db || user.role !== 'Branch Manager') return null;
+    if (!db) return null;
+    const canTrigger = user.role === 'Branch Manager' || isAdmin;
+    if (!canTrigger) return null;
+
+    if (isAdmin) {
+      // Admins can trigger exceptions on any non-exceptional case globally for testing
+      return query(
+        collection(db, "submissions"),
+        where("isExceptional", "==", false)
+      );
+    }
+
     return query(
       collection(db, "submissions"),
       where("branch", "==", user.branch || ""),
       where("isExceptional", "==", false)
     );
-  }, [db, user.role, user.branch]);
+  }, [db, user.role, user.branch, isAdmin]);
 
   const { data: availableCases } = useCollection<KYCSubmission>(branchCasesQuery);
 
@@ -195,7 +208,7 @@ export default function ExceptionalCasesPage() {
           <p className="text-muted-foreground text-lg font-medium">Hierarchy oversight for high-risk and non-standard verification requests.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {user.role === 'Branch Manager' && (
+          {(user.role === 'Branch Manager' || isAdmin) && (
             <Button 
               onClick={() => setIsAddDialogOpen(true)}
               className="bg-[#B89334] hover:bg-[#A6822D] text-white font-bold h-12 px-8 shadow-xl gap-2 rounded-lg transition-all active:scale-95"
