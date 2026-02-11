@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, query, orderBy, where, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, orderBy, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-mock.tsx";
 import { 
   Card, 
@@ -26,13 +25,10 @@ import {
   Copy, 
   Trash2, 
   ShieldAlert, 
-  BrainCircuit, 
   Loader2,
   Filter,
-  CheckCircle2,
   AlertTriangle,
   Info,
-  X,
   ClipboardCheck,
   FileType,
   ArrowRight
@@ -52,10 +48,9 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { KYCFinding, KYCSubmission } from '@/lib/kyc-data';
+import { KYCFinding } from '@/lib/kyc-data';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { learnKYCFindings } from '@/ai/flows/learn-kyc-findings-flow';
 import Link from 'next/link';
 
 const SEVERITY_COLORS = {
@@ -89,7 +84,6 @@ export default function KYCFQReferencePage() {
   const [selectedSeverity, setSelectedSeverity] = useState("all");
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isLearning, setIsLearning] = useState(false);
   const [findingForm, setFindingForm] = useState<Partial<KYCFinding>>({
     code: "",
     title: "",
@@ -108,12 +102,6 @@ export default function KYCFQReferencePage() {
   }, [db]);
 
   const { data: findings, loading } = useCollection<KYCFinding>(findingsQuery);
-
-  const submissionsQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "submissions"), where("status", "==", "Amended")) : null;
-  }, [db]);
-
-  const { data: pastAmendedCases } = useCollection<KYCSubmission>(submissionsQuery);
 
   const filteredFindings = useMemo(() => {
     if (!findings) return [];
@@ -146,7 +134,7 @@ export default function KYCFQReferencePage() {
       id: findingId,
       createdAt: new Date().toISOString(),
       active: true,
-      source: findingForm.source || 'manual'
+      source: 'manual'
     };
 
     setDoc(findingRef, data)
@@ -183,48 +171,6 @@ export default function KYCFQReferencePage() {
     });
   };
 
-  const handleAutoLearn = async () => {
-    if (!pastAmendedCases || pastAmendedCases.length === 0) {
-      toast({ title: "Insufficient Data", description: "No historical amendment remarks found to analyze." });
-      return;
-    }
-
-    setIsLearning(true);
-    try {
-      const historicalRemarks = pastAmendedCases.map(c => c.remarks || "").filter(r => r.length > 10);
-      const existingFindingTitles = findings?.map(f => f.title) || [];
-
-      const result = await learnKYCFindings({ historicalRemarks, existingFindingTitles });
-
-      if (result.suggestedFindings.length === 0) {
-        toast({ title: "Analysis Complete", description: "No new recurring patterns identified in recent cases." });
-      } else {
-        // Automatically add suggested findings
-        result.suggestedFindings.forEach((suggestion, idx) => {
-          if (!db) return;
-          const nextCode = `FQ-A${(findings?.length || 0) + idx + 100}`;
-          const id = `auto-${Date.now()}-${idx}`;
-          const ref = doc(db, "kyc_findings", id);
-          const data = {
-            ...suggestion,
-            id,
-            code: nextCode,
-            createdAt: new Date().toISOString(),
-            active: true,
-            source: 'auto'
-          };
-          setDoc(ref, data);
-        });
-        toast({ title: "Institutional Learning Complete", description: `Discovered and added ${result.suggestedFindings.length} new standardized findings.` });
-      }
-    } catch (error) {
-      console.error("AI Learning Error:", error);
-      toast({ variant: "destructive", title: "AI Learning Failed", description: "Could not analyze institutional history at this time." });
-    } finally {
-      setIsLearning(false);
-    }
-  };
-
   const handleSeedExamples = () => {
     if (!db) return;
     EXAMPLE_FINDINGS.forEach((f, idx) => {
@@ -249,20 +195,9 @@ export default function KYCFQReferencePage() {
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           {isAdmin && (
-            <>
-              <Button 
-                variant="outline" 
-                onClick={handleAutoLearn} 
-                disabled={isLearning}
-                className="gap-2 border-primary/30 text-primary hover:bg-primary/5 font-bold"
-              >
-                {isLearning ? <Loader2 className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />}
-                AI Learning
-              </Button>
-              <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 bg-primary shadow-xl font-bold">
-                <Plus className="w-4 h-4" /> Add Finding
-              </Button>
-            </>
+            <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 bg-primary shadow-xl font-bold">
+              <Plus className="w-4 h-4" /> Add Finding
+            </Button>
           )}
         </div>
       </div>
@@ -385,13 +320,7 @@ export default function KYCFQReferencePage() {
                     </CardContent>
                     <CardFooter className="bg-slate-50/30 border-t p-4 flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        {finding.source === 'auto' ? (
-                          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[9px] font-bold">
-                            <BrainCircuit className="w-3 h-3 mr-1" /> AI Suggested
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200 text-[9px] font-bold">Manual</Badge>
-                        )}
+                        <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200 text-[9px] font-bold">Manual</Badge>
                       </div>
                       <div className="flex gap-2">
                         {isAdmin && (
