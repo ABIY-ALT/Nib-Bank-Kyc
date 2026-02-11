@@ -189,17 +189,18 @@ export default function SubmissionDetails() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
+  // Unified Role Definitions
   const isAdmin = user.role === 'Admin';
-  const isKYCOfficer = user.role === 'KYC Officer';
+  const isKYCOfficer = user.role === 'KYC Officer'; 
+  const isReviewer = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role || '');
   const isOwner = submission?.submittedBy === user.name;
   const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
 
   useEffect(() => {
-    const isReviewer = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role || '');
     if (submission && (submission.status === 'Pending') && isReviewer && submissionRef && !submission.isResubmitted && !submission.isExceptional) {
       updateDoc(submissionRef, { status: 'In Review' }).catch(() => {});
     }
-  }, [submission, user.role, submissionRef]);
+  }, [submission, isReviewer, submissionRef]);
 
   if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
@@ -686,8 +687,8 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {/* Amendment Response Workspace */}
-          {(isOwner || isAdmin) && submission.status === 'Amended' && (
+          {/* Amendment Response Workspace (Visible to Submitter, Admin, and Reviewer for collaboration) */}
+          {(isOwner || isReviewer || isAdmin) && submission.status === 'Amended' && (
             <Card className="border-orange-200 shadow-xl bg-orange-50/5 animate-in slide-in-from-right-4 duration-500">
               <CardHeader className="bg-orange-100/50 border-b">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -750,7 +751,7 @@ export default function SubmissionDetails() {
                 <Button 
                   className="w-full bg-orange-600 hover:bg-orange-700 font-black h-12 shadow-xl shadow-orange-200"
                   onClick={() => handleAction('Pending')}
-                  disabled={newFiles.length === 0}
+                  disabled={newFiles.length === 0 || (!isOwner && !isAdmin)}
                 >
                   <CheckCircle2 className="w-5 h-5 mr-2" />
                   Submit Corrections
@@ -759,18 +760,34 @@ export default function SubmissionDetails() {
             </Card>
           )}
 
-          {(isKYCOfficer || isAdmin) && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated' || submission.status === 'Amended' || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
-            <Card className="border-primary/20 shadow-xl">
-              <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-lg">KYC Determination</CardTitle></CardHeader>
+          {/* KYC Determination Workspace (Visible to Reviewers, Admin, and Submitter - buttons restricted) */}
+          {(isReviewer || isOwner || isAdmin) && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated' || submission.status === 'Amended' || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
+            <Card className="border-primary/20 shadow-xl overflow-hidden">
+              <CardHeader className="bg-slate-50/50 border-b">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-primary" />
+                  KYC Determination
+                </CardTitle>
+              </CardHeader>
               <CardContent className="space-y-4 pt-6">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Decision Remarks</Label>
-                <Textarea placeholder="Provide verification feedback for the audit trail..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[140px] bg-white" />
-                <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold h-11">Approve</Button>
-                  <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold h-11">Request Fix</Button>
-                  <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold h-11">Escalate</Button>
-                  <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold h-11">Reject</Button>
-                </div>
+                <Textarea 
+                  placeholder={isReviewer || isAdmin ? "Provide verification feedback for the audit trail..." : "No reviewer remarks provided yet."}
+                  value={remarks} 
+                  onChange={(e) => setRemarks(e.target.value)} 
+                  className="min-h-[140px] bg-white" 
+                  disabled={!isReviewer && !isAdmin}
+                />
+                
+                {/* Decision Buttons - Restricted to Reviewers and Admins */}
+                {(isReviewer || isAdmin) && (
+                  <div className="grid grid-cols-2 gap-2 pt-2 animate-in fade-in duration-500">
+                    <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold h-11">Approve</Button>
+                    <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold h-11 border-[#E67E22]/30 hover:bg-[#E67E22]/5">Request Fix</Button>
+                    <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold h-11 hover:bg-[#8B5CF6]/5">Escalate</Button>
+                    <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold h-11">Reject</Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
