@@ -669,7 +669,7 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {(isKYCOfficer || isAdmin) && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated') && (!submission.isExceptional || submission.exceptionalStatus === 'Completed') && (
+          {(isKYCOfficer || isAdmin) && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated' || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
             <Card className="border-primary/20 shadow-xl">
               <CardHeader><CardTitle className="text-lg">KYC Determination</CardTitle></CardHeader>
               <CardContent className="space-y-4">

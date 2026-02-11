@@ -6,10 +6,11 @@ import { collection, query, where } from "firebase/firestore";
 import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
-import { AlertCircle, Loader2, Search, Zap } from "lucide-react";
+import { AlertCircle, Loader2, Search, Zap, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
 export default function AmendmentRequestsPage() {
@@ -22,12 +23,18 @@ export default function AmendmentRequestsPage() {
 
   const amendmentRequestQuery = useMemo(() => {
     if (!db) return null;
+    if (isAdmin) {
+      return query(
+        collection(db, "submissions"),
+        where("status", "==", "Amended")
+      );
+    }
     return query(
       collection(db, "submissions"),
       where("submittedBy", "==", user.name),
       where("status", "==", "Amended")
     );
-  }, [db, user.name]);
+  }, [db, user.name, isAdmin]);
 
   const { data: submissions, loading } = useCollection<KYCSubmission>(amendmentRequestQuery);
 
@@ -50,12 +57,20 @@ export default function AmendmentRequestsPage() {
             <AlertCircle className="w-8 h-8 text-orange-600" />
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Action Required</h1>
           </div>
-          <p className="text-muted-foreground text-lg">
-            Submissions requiring your attention and requested corrections.
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-muted-foreground text-lg">
+              {isAdmin ? 'Monitoring all network cases requiring correction.' : 'Submissions requiring your attention and requested corrections.'}
+            </p>
+            {isAdmin && (
+              <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
+                <ShieldCheck className="w-3 h-3" />
+                Global Oversight
+              </Badge>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {(isBranchMgr || isAdmin) && (
+          {isBranchMgr && (
             <Button asChild className="bg-[#B89334] hover:bg-[#A6822D] text-white font-bold h-12 px-8 shadow-xl gap-2 rounded-lg">
               <Link href="/submissions/exceptional">
                 <Zap className="w-5 h-5 fill-white" />
