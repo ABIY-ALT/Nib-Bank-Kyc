@@ -141,12 +141,10 @@ export default function SubmissionDetails() {
   if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
+  const isAdmin = user.role === 'Admin';
   const isOwner = submission.submittedBy === user.name;
   const isKYCOfficer = ['KYC Officer', 'Admin'].includes(user.role || '');
-  const isSupervisor = user.role === 'Supervisor' || user.role === 'Admin';
-  const isBranchMgr = user.role === 'Branch Manager' || user.role === 'Admin';
-  const isDistDir = user.role === 'District Director' || user.role === 'Admin';
-  const isDirector = user.role === 'Director' || user.role === 'Admin';
+  const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
 
   const handleAction = (action: string) => {
     if (!submissionRef || !db) return;
@@ -229,7 +227,6 @@ export default function SubmissionDetails() {
       }));
     });
     
-    // Add memo to documents sub-collection for visibility in "Verification Assets"
     const docRef = doc(collection(submissionRef, "documents"));
     const memoData = {
       id: docRef.id,
@@ -268,7 +265,7 @@ export default function SubmissionDetails() {
     }
 
     const approvalNode = {
-      role: user.role || "",
+      role: user.role || "Admin",
       action,
       performedBy: user.name,
       timestamp: new Date().toISOString(),
@@ -326,7 +323,7 @@ export default function SubmissionDetails() {
     submission.exceptionalStatus === 'Awaiting Director' ? 'Director' :
     submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
 
-  const isCurrentExceptionalApprover = user.role === currentExceptionalRole || user.role === 'Admin';
+  const isCurrentExceptionalApprover = user.role === currentExceptionalRole || isAdmin;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -377,9 +374,9 @@ export default function SubmissionDetails() {
               <CardHeader className="bg-yellow-600 text-white">
                 <CardTitle className="text-xl flex items-center gap-2">
                   <Shield className="w-5 h-5" /> 
-                  Institutional Review: {user.role === 'Admin' ? `${currentExceptionalRole} (via Admin)` : user.role}
+                  Institutional Review: {isAdmin ? `${currentExceptionalRole} (via Admin Override)` : user.role}
                 </CardTitle>
-                <CardDescription className="text-yellow-100 font-medium">As the {currentExceptionalRole}, please provide your determination for this exceptional request.</CardDescription>
+                <CardDescription className="text-yellow-100 font-medium">Please provide your determination for this exceptional request.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
                 <Label className="font-bold text-slate-700">Decision Remarks (Mandatory)</Label>

@@ -9,7 +9,7 @@ import { User } from "@/lib/auth-mock";
 /**
  * Hook to fetch real-time counts for sidebar badges.
  * Optimized for institutional workflow segregation and role-aware task lists.
- * Fixed: Firestore limitation where 'in' and 'not-in' cannot be combined.
+ * Updated: Admins now see global counts for all badges to enable master oversight.
  */
 export function useSidebarCounts(user: User) {
   const db = useFirestore();
@@ -26,7 +26,9 @@ export function useSidebarCounts(user: User) {
   useEffect(() => {
     if (!db || !user?.name) return;
 
-    // 1. My Submissions: All cases created by the current user
+    const isAdmin = user.role === 'Admin';
+
+    // 1. My Submissions: All cases created by the current user (Always personal)
     const qMy = query(
       collection(db, "submissions"), 
       where("submittedBy", "==", user.name)
@@ -49,7 +51,14 @@ export function useSidebarCounts(user: User) {
     let qExceptional;
     let filterExceptionalClient = false;
 
-    if (user.role === 'District Director') {
+    if (isAdmin) {
+      // Admins see all active exceptions regardless of stage
+      qExceptional = query(
+        collection(db, "submissions"),
+        where("isExceptional", "==", true),
+        where("exceptionalStatus", "not-in", ["Completed", "Rejected", "None"])
+      );
+    } else if (user.role === 'District Director') {
       qExceptional = query(
         collection(db, "submissions"),
         where("isExceptional", "==", true),
@@ -68,17 +77,9 @@ export function useSidebarCounts(user: User) {
         where("isExceptional", "==", true),
         where("exceptionalStatus", "==", "Awaiting Supervisor")
       );
-    } else if (user.role === 'Admin') {
-      // Admins see all active exceptions (not-in is allowed as it is the only restricted filter here)
-      qExceptional = query(
-        collection(db, "submissions"),
-        where("isExceptional", "==", true),
-        where("exceptionalStatus", "not-in", ["Completed", "Rejected", "None"])
-      );
     } else if (user.role === 'Branch Manager' || user.role === 'KYC Officer') {
       const scope = user.role === 'Branch Manager' ? [user.branch] : (user.assignedBranches || []);
       if (scope.length > 0 && scope[0]) {
-        // Cannot use 'not-in' with 'in', so we query by branch and filter client-side
         qExceptional = query(
           collection(db, "submissions"),
           where("isExceptional", "==", true),
@@ -118,7 +119,6 @@ export function useSidebarCounts(user: User) {
         );
         unsubQueue = onSnapshot(qQueueGlobal, (s) => setCounts(prev => ({ ...prev, reviewQueue: s.size })));
       } else {
-        // Local KYC Officers: cannot combine two 'in' filters, filter status client-side
         const qQueueLocal = query(
           collection(db, "submissions"), 
           where("branch", "in", assigned), 
@@ -161,10 +161,18 @@ export function useSidebarCounts(user: User) {
       });
     }
 
-    // 5. Branch Node Queue: Overall volume tracking for Branch Managers and Admins
+    // 5. Branch Node Queue: Overall volume tracking
     let unsubBranch = () => {};
-    if ((user.role === 'Branch Manager' || user.role === 'Admin') && user.branch) {
-      // Combining one == and one in is allowed
+    if (isAdmin) {
+      // Admin sees global active volume
+      const qBranchGlobal = query(
+        collection(db, "submissions"),
+        where("status", "in", ["Pending", "In Review", "Amended"])
+      );
+      unsubBranch = onSnapshot(qBranchGlobal, (snapshot) => {
+        setCounts(prev => ({ ...prev, branchNode: snapshot.size }));
+      });
+    } else if (user.role === 'Branch Manager' && user.branch) {
       const qBranch = query(
         collection(db, "submissions"),
         where("branch", "==", user.branch),

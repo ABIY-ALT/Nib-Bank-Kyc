@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   Inbox,
   User,
-  ShieldAlert
+  ShieldAlert,
+  Globe
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
@@ -34,18 +35,27 @@ export default function BranchNodeOversightPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
 
+  const isAdmin = user.role === 'Admin';
+
   const branchQuery = useMemo(() => {
-    if (!db || !user.branch) return null;
+    if (!db) return null;
+    if (isAdmin) {
+      // Admins see all cases globally in this management view
+      return query(
+        collection(db, "submissions"),
+        orderBy("submittedAt", "desc")
+      );
+    }
+    if (!user.branch) return null;
     return query(
       collection(db, "submissions"),
       where("branch", "==", user.branch),
       orderBy("submittedAt", "desc")
     );
-  }, [db, user.branch]);
+  }, [db, user.branch, isAdmin]);
 
   const { data: submissions, loading } = useCollection<KYCSubmission>(branchQuery);
 
-  // Filter submissions based on search term
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
@@ -55,7 +65,6 @@ export default function BranchNodeOversightPage() {
     });
   }, [submissions, searchTerm]);
 
-  // Aggregate officer metrics
   const officerMetrics = useMemo(() => {
     if (!submissions) return [];
     
@@ -92,7 +101,7 @@ export default function BranchNodeOversightPage() {
     };
   }, [submissions]);
 
-  if (!user.branch) {
+  if (!user.branch && !isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-6 animate-in fade-in duration-500">
         <div className="p-6 bg-white rounded-full shadow-sm border border-slate-100">
@@ -109,17 +118,23 @@ export default function BranchNodeOversightPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <LayoutList className="w-8 h-8 text-[#B89334]" />
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Local Node Oversight</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
+              {isAdmin ? 'Global Command Oversight' : 'Local Node Oversight'}
+            </h1>
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-muted-foreground text-lg">Managing operational verifications at the <strong>{user.branch}</strong> node.</p>
+            <p className="text-muted-foreground text-lg">
+              {isAdmin 
+                ? 'Master institutional monitoring of all branches and specialized staff.' 
+                : `Managing operational verifications at the ${user.branch} node.`}
+            </p>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
-              <ShieldCheck className="w-3 h-3" />
+              {isAdmin ? <Globe className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
               {user.role} Control
             </Badge>
           </div>
@@ -127,7 +142,7 @@ export default function BranchNodeOversightPage() {
         <div className="relative w-full md:w-96">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input 
-            placeholder="Search branch cases..." 
+            placeholder="Search cases..." 
             className="pl-11 h-12 rounded-full border-2 border-primary focus-visible:ring-primary/20 bg-white shadow-sm font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -138,7 +153,7 @@ export default function BranchNodeOversightPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="shadow-lg border-slate-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Node Volume</CardTitle>
+            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total volume</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center justify-between">
             <span className="text-3xl font-black text-slate-900">{totalBranchStats.total}</span>
@@ -178,7 +193,7 @@ export default function BranchNodeOversightPage() {
         <TabsList className="bg-slate-100 p-1 border h-12">
           <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8">
             <LayoutList className="w-4 h-4 mr-2" />
-            Branch Case Archive
+            Case Archive
           </TabsTrigger>
           <TabsTrigger value="officer-performance" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8">
             <Users className="w-4 h-4 mr-2" />
@@ -190,7 +205,7 @@ export default function BranchNodeOversightPage() {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="font-medium">Synchronizing branch records...</p>
+              <p className="font-medium">Synchronizing records...</p>
             </div>
           ) : (
             <SubmissionsPageContent submissions={filteredSubmissions || []} />
@@ -203,7 +218,7 @@ export default function BranchNodeOversightPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="text-xl">Staff Throughput Matrix</CardTitle>
-                  <CardDescription>Individual productivity and accuracy tracking for branch personnel.</CardDescription>
+                  <CardDescription>Individual productivity and accuracy tracking for institutional personnel.</CardDescription>
                 </div>
                 <Badge variant="outline" className="font-bold border-primary/20 text-primary bg-white px-4 py-1">
                   {officerMetrics.length} Active Officers
@@ -226,7 +241,7 @@ export default function BranchNodeOversightPage() {
                   {officerMetrics.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic">
-                        No personnel data detected for this node period.
+                        No personnel data detected for this period.
                       </TableCell>
                     </TableRow>
                   ) : officerMetrics.map((officer) => {

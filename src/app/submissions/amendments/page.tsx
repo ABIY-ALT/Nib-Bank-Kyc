@@ -6,7 +6,7 @@ import { collection, query, where, orderBy } from "firebase/firestore";
 import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
-import { History, Loader2, MapPin, Search } from "lucide-react";
+import { History, Loader2, MapPin, Search, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -27,19 +27,26 @@ export default function AmendmentReviewPage() {
 
   const { data: submissions, loading } = useCollection<KYCSubmission>(amendmentReviewQuery);
 
+  const isAdmin = user.role === 'Admin';
+
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     
     const term = searchTerm.toLowerCase();
     return submissions.filter(sub => {
       const matchesStatus = ["Pending", "In Review"].includes(sub.status);
-      const matchesBranch = !user.branch || user.branch === 'Central HQ' || sub.branch === user.branch;
+      
+      // Admin sees global amendments, others restricted to branch/portfolio
+      const matchesBranch = isAdmin || 
+                          !user.branch || 
+                          user.branch === 'Central HQ' || 
+                          sub.branch === user.branch ||
+                          (user.assignedBranches || []).includes(sub.branch);
+
       const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
       return matchesStatus && matchesBranch && matchesSearch;
     });
-  }, [submissions, user.branch, searchTerm]);
-
-  const isLocalized = user.role === 'KYC Officer' && user.branch && user.branch !== 'Central HQ';
+  }, [submissions, user.branch, user.assignedBranches, isAdmin, searchTerm]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -53,7 +60,12 @@ export default function AmendmentReviewPage() {
             <p className="text-muted-foreground text-lg">
               Prioritized queue for resubmitted cases.
             </p>
-            {isLocalized && (
+            {isAdmin ? (
+              <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
+                <ShieldCheck className="w-3 h-3" />
+                Global Oversight
+              </Badge>
+            ) : user.branch && user.branch !== 'Central HQ' && (
               <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
                 <MapPin className="w-3 h-3" />
                 {user.branch} Office
