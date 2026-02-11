@@ -51,28 +51,28 @@ export default function ExceptionalCasesPage() {
   const isAdmin = user.role === 'Admin';
 
   // 1. Fetch available cases for Branch Manager/Admin to trigger exception on
+  // Changed: Removing where("isExceptional", "==", false) filter to handle legacy cases missing the field
   const branchCasesQuery = useMemoFirebase(() => {
     if (!db) return null;
     const canTrigger = user.role === 'Branch Manager' || isAdmin;
     if (!canTrigger) return null;
 
     if (isAdmin) {
-      // Admins see all non-exceptional cases globally for testing. 
-      // Note: Documents MUST have isExceptional set to false to appear in this query.
-      return query(
-        collection(db, "submissions"),
-        where("isExceptional", "==", false)
-      );
+      return query(collection(db, "submissions"));
     }
 
     return query(
       collection(db, "submissions"),
-      where("branch", "==", user.branch || ""),
-      where("isExceptional", "==", false)
+      where("branch", "==", user.branch || "")
     );
   }, [db, user.role, user.branch, isAdmin]);
 
-  const { data: availableCases } = useCollection<KYCSubmission>(branchCasesQuery);
+  const { data: rawAvailableCases } = useCollection<KYCSubmission>(branchCasesQuery);
+
+  // Client-side filter to be robust against missing isExceptional flags
+  const availableCases = useMemo(() => {
+    return rawAvailableCases?.filter(c => c.isExceptional !== true) || [];
+  }, [rawAvailableCases]);
 
   const selectedCase = useMemo(() => 
     availableCases?.find(c => c.id === selectedCaseId), 
@@ -144,7 +144,7 @@ export default function ExceptionalCasesPage() {
       id: testId,
       customerName: "Sample Test Customer (Auto-Seeded)",
       entityType: "individual",
-      branch: user.branch || "Downtown",
+      branch: user.branch || "Headquarters",
       district: user.district || "Central",
       submittedBy: user.name,
       submittedAt: new Date().toISOString(),

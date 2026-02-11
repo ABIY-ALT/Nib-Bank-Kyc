@@ -20,7 +20,8 @@ import {
   Inbox,
   User,
   ShieldAlert,
-  Globe
+  Globe,
+  Zap
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default function BranchNodeOversightPage() {
   const db = useFirestore();
@@ -36,11 +39,11 @@ export default function BranchNodeOversightPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const isAdmin = user.role === 'Admin';
+  const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
 
   const branchQuery = useMemo(() => {
     if (!db) return null;
     if (isAdmin) {
-      // Admins see all cases globally in this management view
       return query(
         collection(db, "submissions"),
         orderBy("submittedAt", "desc")
@@ -139,14 +142,24 @@ export default function BranchNodeOversightPage() {
             </Badge>
           </div>
         </div>
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input 
-            placeholder="Search cases..." 
-            className="pl-11 h-12 rounded-full border-2 border-primary focus-visible:ring-primary/20 bg-white shadow-sm font-medium"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          {isBranchMgr && (
+            <Button asChild className="bg-[#B89334] hover:bg-[#A6822D] text-white font-bold h-12 px-8 shadow-xl gap-2 rounded-lg">
+              <Link href="/submissions/exceptional">
+                <Zap className="w-5 h-5 fill-white" />
+                Trigger Exception
+              </Link>
+            </Button>
+          )}
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input 
+              placeholder="Search cases..." 
+              className="pl-11 h-12 rounded-full border-2 border-primary focus-visible:ring-primary/20 bg-white shadow-sm font-medium"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
