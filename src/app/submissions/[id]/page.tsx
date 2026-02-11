@@ -197,6 +197,7 @@ export default function SubmissionDetails() {
   const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
 
   useEffect(() => {
+    // Auto-move to "In Review" if a reviewer opens a "Pending" case
     if (submission && (submission.status === 'Pending') && isReviewer && submissionRef && !submission.isResubmitted && !submission.isExceptional) {
       updateDoc(submissionRef, { status: 'In Review' }).catch(() => {});
     }
@@ -223,6 +224,7 @@ export default function SubmissionDetails() {
   const handleAction = (action: string) => {
     if (!submissionRef || !db) return;
 
+    // Validation for resubmission
     if (action === 'Pending' && submission.status === 'Amended' && (isOwner || isAdmin)) {
       if (newFiles.some(f => !f.type)) {
         toast({ variant: "destructive", title: "Classification Required", description: "Select a document type for all uploaded corrections." });
@@ -230,6 +232,7 @@ export default function SubmissionDetails() {
       }
     }
 
+    // Validation for reviewer actions
     if ((action === 'Amended' || action === 'Rejected' || action === 'Escalated') && !remarks.trim() && !isAdmin) {
       toast({ variant: "destructive", title: "Instructions Required", description: `Please provide specific feedback for the ${action}.` });
       return;
@@ -247,6 +250,7 @@ export default function SubmissionDetails() {
       updateData.reviewedAt = new Date().toISOString();
     }
 
+    // Handle resubmission logic
     if (action === 'Pending' && submission.status === 'Amended' && (isOwner || isAdmin)) {
        updateData.isResubmitted = true;
        updateData.resubmittedAt = new Date().toISOString();
