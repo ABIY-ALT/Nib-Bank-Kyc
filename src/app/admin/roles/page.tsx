@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -13,7 +12,6 @@ import {
   ShieldCheck, 
   Search,
   UserCog,
-  ShieldAlert,
   UserCheck,
   Lock,
   Plus,
@@ -210,6 +208,9 @@ export default function StaffRolesPage() {
     );
   }
 
+  const EnabledIcon = () => <CheckCircle2 className="w-5 h-5 mx-auto text-emerald-500" />;
+  const DisabledIcon = () => <XCircle className="w-5 h-5 mx-auto text-slate-200" />;
+
   const PermissionIconToggle = ({ 
     enabled, 
     onClick 
@@ -221,11 +222,7 @@ export default function StaffRolesPage() {
       onClick={onClick}
       className="focus:outline-none transition-all active:scale-90 p-1 hover:bg-slate-100 rounded-full group/toggle"
     >
-      {enabled ? (
-        <CheckCircle2 className="w-5 h-5 mx-auto text-emerald-500" />
-      ) : (
-        <XCircle className="w-5 h-5 mx-auto text-slate-300 group-hover/toggle:text-slate-400" />
-      )}
+      {enabled ? <EnabledIcon /> : <DisabledIcon />}
     </button>
   );
 
@@ -345,82 +342,94 @@ export default function StaffRolesPage() {
           <div className="grid gap-6">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-2xl font-bold text-slate-900">Permission Matrix</h3>
-                <p className="text-muted-foreground">Define what each institutional role can view and execute.</p>
+                <h3 className="text-3xl font-extrabold text-slate-900 font-headline">Permission Matrix</h3>
+                <p className="text-muted-foreground text-lg">Define what each institutional role can view and execute.</p>
               </div>
-              <Button onClick={() => setIsAddRoleOpen(true)} className="gap-2 shadow-lg">
-                <Plus className="w-4 h-4" /> Define New Role
+              <Button onClick={() => setIsAddRoleOpen(true)} className="gap-2 bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 shadow-xl">
+                <Plus className="w-5 h-5" /> Define New Role
               </Button>
             </div>
 
-            <Card className="shadow-xl border-slate-200 overflow-hidden">
+            <Card className="shadow-2xl border-slate-200 overflow-hidden bg-white rounded-2xl">
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-50/50">
-                      <TableHead className="font-bold py-4">Role Designation</TableHead>
-                      <TableHead className="font-bold text-center">Submissions</TableHead>
-                      <TableHead className="font-bold text-center">Review Workflows</TableHead>
-                      <TableHead className="font-bold text-center">Escalations</TableHead>
-                      <TableHead className="font-bold text-center">Reports</TableHead>
-                      <TableHead className="font-bold text-center">User Management</TableHead>
-                      <TableHead className="font-bold text-center">System Settings</TableHead>
+                    <TableRow className="bg-slate-50/50 border-b hover:bg-transparent">
+                      <TableHead className="font-bold py-6 pl-8 text-slate-500 uppercase tracking-widest text-[11px]">Role Designation</TableHead>
+                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Submissions</TableHead>
+                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Review Workflows</TableHead>
+                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Escalations</TableHead>
+                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Reports</TableHead>
+                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">User Management</TableHead>
+                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">System Settings</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* Default Roles */}
+                    {/* Default Roles - Locked to Screenshot Matrix */}
                     {DEFAULT_ROLES.map(role => (
-                      <TableRow key={role} className="hover:bg-slate-50">
-                        <TableCell className="font-bold text-slate-900 flex items-center gap-2">
-                          <Lock className="w-3.5 h-3.5 text-slate-400" />
-                          {role}
+                      <TableRow key={role} className="hover:bg-slate-50/50 transition-colors border-b last:border-0">
+                        <TableCell className="font-bold text-slate-900 py-6 pl-8 flex items-center gap-3">
+                          <Lock className="w-4 h-4 text-slate-300" />
+                          <span className="text-[15px]">{role}</span>
                         </TableCell>
-                        <TableCell className="text-center"><CheckCircle2 className="w-4 h-4 mx-auto text-emerald-500" /></TableCell>
+                        
+                        {/* Submissions Column - All roles in screenshot have this enabled */}
+                        <TableCell className="text-center"><EnabledIcon /></TableCell>
+                        
+                        {/* Review Workflows Column */}
                         <TableCell className="text-center">
-                          {['KYC Officer', 'Supervisor', 'Admin'].includes(role) ? <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-500" /> : <XCircle className="w-4 h-4 mx-auto text-slate-200" />}
+                          {['KYC Officer', 'Supervisor', 'Admin'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
                         </TableCell>
+                        
+                        {/* Escalations Column */}
                         <TableCell className="text-center">
-                          {['Supervisor', 'Director', 'Admin'].includes(role) ? <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-500" /> : <XCircle className="w-4 h-4 mx-auto text-slate-200" />}
+                          {['Supervisor', 'Director', 'Admin'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
                         </TableCell>
+                        
+                        {/* Reports Column */}
                         <TableCell className="text-center">
-                          {['Supervisor', 'Director', 'Admin', 'District Director', 'Branch Manager'].includes(role) ? <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-500" /> : <XCircle className="w-4 h-4 mx-auto text-slate-200" />}
+                          {['Supervisor', 'Director', 'Admin', 'Branch Manager', 'District Director'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
                         </TableCell>
+                        
+                        {/* User Management Column */}
                         <TableCell className="text-center">
-                          {role === 'Admin' ? <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-500" /> : <XCircle className="w-4 h-4 mx-auto text-slate-200" />}
+                          {role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}
                         </TableCell>
+                        
+                        {/* System Settings Column */}
                         <TableCell className="text-center">
-                          {role === 'Admin' ? <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-500" /> : <XCircle className="w-4 h-4 mx-auto text-slate-200" />}
+                          {role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}
                         </TableCell>
                       </TableRow>
                     ))}
 
                     {/* Dynamic Roles */}
                     {dynamicRoles?.map(role => (
-                      <TableRow key={role.id} className="bg-primary/5 hover:bg-primary/10 transition-colors group">
-                        <TableCell className="font-bold text-slate-900">
-                          <div className="flex items-center gap-2">
-                            <Settings2 className="w-3.5 h-3.5 text-primary" />
-                            <span>{role.name}</span>
+                      <TableRow key={role.id} className="bg-primary/5 hover:bg-primary/10 transition-colors group border-b last:border-0">
+                        <TableCell className="font-bold text-slate-900 py-6 pl-8">
+                          <div className="flex items-center gap-3">
+                            <Settings2 className="w-4 h-4 text-primary" />
+                            <span className="text-[15px]">{role.name}</span>
                             <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
-                                className="h-6 w-6 text-primary hover:bg-primary/10"
+                                className="h-7 w-7 text-primary hover:bg-primary/10"
                                 onClick={() => {
                                   setEditingRole(role);
                                   setNewRoleName(role.name);
                                   setIsEditNameOpen(true);
                                 }}
                               >
-                                <Edit2 className="w-3 h-3" />
+                                <Edit2 className="w-3.5 h-3.5" />
                               </Button>
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
-                                className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                                className="h-7 w-7 text-destructive hover:bg-destructive/10"
                                 onClick={() => handleDeleteRole(role)}
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
                           </div>
