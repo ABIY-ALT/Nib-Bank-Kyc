@@ -99,7 +99,7 @@ const EXAMPLE_FINDINGS: Partial<KYCFinding>[] = [
   { code: "FQ-015", title: "PEP Declaration Gap", description: "The Politically Exposed Person (PEP) self-declaration section was not completed by the applicant.", category: "Compliance", severity: "High", applicableTo: ["INDIVIDUAL"], source: "manual" },
 ];
 
-export default function KYCFQReferencePage() {
+export default function KYCFFQReferencePage() {
   const db = useFirestore();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -205,7 +205,6 @@ export default function KYCFQReferencePage() {
     setSearchTerm("");
     setSelectedCategory("all");
     setSelectedSeverity("all");
-    toast({ title: "Filters Cleared", description: "Showing all institutional findings." });
   };
 
   const handleSeedExamples = () => {
@@ -215,7 +214,7 @@ export default function KYCFQReferencePage() {
       const ref = doc(db, "kyc_findings", id);
       setDoc(ref, { ...f, id, createdAt: new Date().toISOString(), active: true, source: 'manual' });
     });
-    toast({ title: "Library Seeded", description: "Institutional reference set (15 entries) has been loaded." });
+    toast({ title: "Library Seeded", description: "Institutional reference set has been loaded." });
   };
 
   const toggleApplicability = (typeId: string) => {
@@ -259,19 +258,19 @@ export default function KYCFQReferencePage() {
         <Card className="lg:col-span-1 shadow-sm border-slate-200 h-fit sticky top-20">
           <CardHeader className="bg-slate-50/50 border-b">
             <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="w-4 h-4 text-slate-400" /> Filters
+              <Filter className="w-4 h-4 text-slate-400" /> Workspace Filters
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                <Search className="w-3 h-3" /> Search
+                <Search className="w-3 h-3" /> Search Records
               </Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input 
                   placeholder="Code or keyword..." 
-                  className="pl-9 h-10 border-slate-200" 
+                  className="pl-9 h-10 border-slate-200 focus-visible:ring-primary" 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -280,7 +279,7 @@ export default function KYCFQReferencePage() {
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                <Layers className="w-3 h-3" /> Category
+                <Layers className="w-3 h-3" /> Institutional Category
               </Label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="h-10">
@@ -298,7 +297,7 @@ export default function KYCFQReferencePage() {
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                <ShieldAlert className="w-3 h-3" /> Severity
+                <ShieldAlert className="w-3 h-3" /> Risk Severity
               </Label>
               <Select value={selectedSeverity} onValueChange={setSelectedSeverity}>
                 <SelectTrigger className="h-10">
@@ -314,30 +313,22 @@ export default function KYCFQReferencePage() {
               </Select>
             </div>
 
-            <div className="pt-2 flex flex-col gap-2">
-              <Button 
-                onClick={() => toast({ title: "Results Filtered", description: `Discovered ${filteredFindings.length} findings.` })}
-                className="w-full gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold h-10 shadow-md"
-              >
-                <Search className="w-4 h-4" />
-                Search Findings
-              </Button>
-              
-              {isFiltered && (
+            {isFiltered && (
+              <div className="pt-2 animate-in fade-in zoom-in-95 duration-300">
                 <Button 
                   variant="ghost" 
                   onClick={handleResetFilters} 
-                  className="w-full gap-2 text-slate-500 font-bold hover:bg-slate-100"
+                  className="w-full gap-2 text-slate-500 font-bold hover:bg-slate-100 h-10"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  Clear All
+                  Clear Filters
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="pt-4 border-t space-y-4">
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                <ClipboardCheck className="w-3.5 h-3.5" /> Compliance Links
+                <ClipboardCheck className="w-3.5 h-3.5" /> Quick Actions
               </div>
               
               {isBranchOfficer && (
@@ -348,7 +339,7 @@ export default function KYCFQReferencePage() {
                 </Button>
               )}
 
-              <Button variant="link" onClick={() => toast({ title: "Loading Guidelines..." })} className="p-0 h-auto text-slate-600 font-bold text-sm justify-start">
+              <Button variant="link" onClick={() => toast({ title: "Opening Guidelines..." })} className="p-0 h-auto text-slate-600 font-bold text-sm justify-start">
                 <FileType className="w-3.5 h-3.5 mr-2" /> NBE Document Matrix
               </Button>
             </div>
@@ -363,11 +354,11 @@ export default function KYCFQReferencePage() {
                   <ListFilter className="w-4 h-4 text-primary" />
                 </div>
                 <span className="text-sm font-bold text-slate-700">
-                  Showing <span className="text-primary">{filteredFindings.length}</span> results for active filters
+                  Live Results: <span className="text-primary">{filteredFindings.length}</span> matching records found
                 </span>
               </div>
               <Button variant="ghost" size="sm" onClick={handleResetFilters} className="text-xs font-black text-primary hover:bg-primary/10">
-                RESET FILTERS
+                RESET WORKSPACE
               </Button>
             </div>
           )}
@@ -375,7 +366,7 @@ export default function KYCFQReferencePage() {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-32 text-muted-foreground gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="font-bold">Syncing institutional registry...</p>
+              <p className="font-bold">Synchronizing institutional registry...</p>
             </div>
           ) : filteredFindings.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-6 text-center">
