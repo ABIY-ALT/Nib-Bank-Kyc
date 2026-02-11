@@ -31,7 +31,8 @@ import {
   Info,
   ClipboardCheck,
   FileType,
-  ArrowRight
+  ArrowRight,
+  Check
 } from "lucide-react";
 import { 
   Select, 
@@ -48,6 +49,7 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { KYCFinding } from '@/lib/kyc-data';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -66,6 +68,14 @@ const SEVERITY_ICONS = {
   High: ShieldAlert,
   Critical: AlertTriangle
 };
+
+const ACCOUNT_TYPES = [
+  { id: "INDIVIDUAL", label: "Individual" },
+  { id: "COMPANY", label: "Company" },
+  { id: "ASSOCIATION", label: "Association" },
+  { id: "FOREIGN NGO", label: "Foreign NGO" },
+  { id: "FOREIGN EMPLOYMENT AGENCY", label: "Foreign Employment Agency" },
+];
 
 const EXAMPLE_FINDINGS: Partial<KYCFinding>[] = [
   { code: "FQ-001", title: "Illegible Document Scan", description: "The uploaded copy of the National ID is blurred or cut off. Please provide a clear, high-resolution scan showing all four corners of the document.", category: "Documentation", severity: "Low", applicableTo: ["INDIVIDUAL", "COMPANY"], source: "manual" },
@@ -90,7 +100,7 @@ export default function KYCFQReferencePage() {
     description: "",
     category: "Documentation",
     severity: "Low",
-    applicableTo: ["INDIVIDUAL"],
+    applicableTo: [],
     active: true,
     source: "manual"
   });
@@ -124,6 +134,11 @@ export default function KYCFQReferencePage() {
     if (!db) return;
     if (!findingForm.code || !findingForm.title || !findingForm.description) {
       toast({ variant: "destructive", title: "Validation Error", description: "All fields are required for standardization." });
+      return;
+    }
+
+    if (!findingForm.applicableTo || findingForm.applicableTo.length === 0) {
+      toast({ variant: "destructive", title: "Applicability Required", description: "Select at least one account type this finding applies to." });
       return;
     }
 
@@ -165,7 +180,7 @@ export default function KYCFQReferencePage() {
       description: "",
       category: "Documentation",
       severity: "Low",
-      applicableTo: ["INDIVIDUAL"],
+      applicableTo: [],
       active: true,
       source: "manual"
     });
@@ -179,6 +194,15 @@ export default function KYCFQReferencePage() {
       setDoc(ref, { ...f, id, createdAt: new Date().toISOString(), active: true });
     });
     toast({ title: "Library Seeded", description: "Standardized reference set has been loaded." });
+  };
+
+  const toggleApplicability = (typeId: string) => {
+    const current = findingForm.applicableTo || [];
+    if (current.includes(typeId)) {
+      setFindingForm({ ...findingForm, applicableTo: current.filter(id => id !== typeId) });
+    } else {
+      setFindingForm({ ...findingForm, applicableTo: [...current, typeId] });
+    }
   };
 
   return (
@@ -313,7 +337,7 @@ export default function KYCFQReferencePage() {
                       <p className="text-sm text-slate-600 leading-relaxed font-medium line-clamp-4 italic">"{finding.description}"</p>
                       <div className="flex flex-wrap gap-1.5">
                         <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none text-[10px] font-bold">{finding.category}</Badge>
-                        {finding.applicableTo.map(type => (
+                        {finding.applicableTo?.map(type => (
                           <Badge key={type} variant="outline" className="text-[9px] font-black uppercase tracking-tighter border-slate-200">{type}</Badge>
                         ))}
                       </div>
@@ -342,7 +366,7 @@ export default function KYCFQReferencePage() {
       </div>
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               <Plus className="w-6 h-6 text-primary" /> Register New Finding
@@ -395,7 +419,28 @@ export default function KYCFQReferencePage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-4 pt-2 border-t">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Applicable Account Types</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {ACCOUNT_TYPES.map((type) => (
+                  <div key={type.id} className="flex items-center space-x-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
+                    <Checkbox 
+                      id={`type-${type.id}`} 
+                      checked={findingForm.applicableTo?.includes(type.id)}
+                      onCheckedChange={() => toggleApplicability(type.id)}
+                    />
+                    <label 
+                      htmlFor={`type-${type.id}`} 
+                      className="text-xs font-bold text-slate-700 cursor-pointer select-none"
+                    >
+                      {type.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6 pt-4 border-t">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Risk Severity</Label>
                 <Select value={findingForm.severity} onValueChange={(val: any) => setFindingForm({...findingForm, severity: val})}>
