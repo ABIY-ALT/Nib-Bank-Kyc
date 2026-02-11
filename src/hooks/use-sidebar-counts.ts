@@ -9,6 +9,7 @@ import { User } from "@/lib/auth-mock";
 /**
  * Hook to fetch real-time counts for sidebar badges.
  * Optimized for institutional workflow segregation and role-aware task lists.
+ * Fixed: Firestore limitation where 'in' and 'not-in' cannot be combined.
  */
 export function useSidebarCounts(user: User) {
   const db = useFirestore();
@@ -44,8 +45,10 @@ export function useSidebarCounts(user: User) {
       setCounts(prev => ({ ...prev, actionRequired: snapshot.size }));
     });
 
-    // 3. Exceptional Approvals: Role-based task list (Badge shows "To-Do" only)
+    // 3. Exceptional Approvals: Role-based task list
     let qExceptional;
+    let filterExceptionalClient = false;
+
     if (user.role === 'District Director') {
       qExceptional = query(
         collection(db, "submissions"),
@@ -66,27 +69,33 @@ export function useSidebarCounts(user: User) {
         where("exceptionalStatus", "==", "Awaiting Supervisor")
       );
     } else if (user.role === 'Admin') {
-      // Admins see all active exceptions needing action at any level
+      // Admins see all active exceptions (not-in is allowed as it is the only restricted filter here)
       qExceptional = query(
         collection(db, "submissions"),
         where("isExceptional", "==", true),
         where("exceptionalStatus", "not-in", ["Completed", "Rejected", "None"])
       );
     } else if (user.role === 'Branch Manager' || user.role === 'KYC Officer') {
-      // Managers and KYC Officers see all exceptions in their scope for tracking (Visibility only, no "To-Do" badge usually needed unless it's for status awareness)
       const scope = user.role === 'Branch Manager' ? [user.branch] : (user.assignedBranches || []);
       if (scope.length > 0 && scope[0]) {
+        // Cannot use 'not-in' with 'in', so we query by branch and filter client-side
         qExceptional = query(
           collection(db, "submissions"),
           where("isExceptional", "==", true),
-          where("branch", "in", scope),
-          where("exceptionalStatus", "not-in", ["Completed", "Rejected", "None"])
+          where("branch", "in", scope)
         );
+        filterExceptionalClient = true;
       }
     }
 
     const unsubExceptional = qExceptional ? onSnapshot(qExceptional, (snapshot) => {
-      setCounts(prev => ({ ...prev, exceptional: snapshot.size }));
+      if (filterExceptionalClient) {
+        const excluded = ["Completed", "Rejected", "None"];
+        const activeCount = snapshot.docs.filter(doc => !excluded.includes(doc.data().exceptionalStatus)).length;
+        setCounts(prev => ({ ...prev, exceptional: activeCount }));
+      } else {
+        setCounts(prev => ({ ...prev, exceptional: snapshot.size }));
+      }
     }) : () => {};
 
     // 4. Review Queues: Normal KYC workflows
@@ -99,26 +108,51 @@ export function useSidebarCounts(user: User) {
     let unsubEsc = () => {};
 
     if (canReview) {
-      // Review Queue: New, first-time submissions only
-      let qQueue = isGlobalReviewer 
-        ? query(collection(db, "submissions"), where("status", "in", ["Pending", "In Review"]), where("isResubmitted", "==", false), where("isExceptional", "==", false))
-        : query(collection(db, "submissions"), where("status", "in", ["Pending", "In Review"]), where("branch", "in", assigned), where("isResubmitted", "==", false), where("isExceptional", "==", false));
-      
-      unsubQueue = onSnapshot(qQueue, (snapshot) => {
-        setCounts(prev => ({ ...prev, reviewQueue: snapshot.size }));
-      });
+      // Review Queue: New submissions
+      if (isGlobalReviewer) {
+        const qQueueGlobal = query(
+          collection(db, "submissions"), 
+          where("status", "in", ["Pending", "In Review"]), 
+          where("isResubmitted", "==", false), 
+          where("isExceptional", "==", false)
+        );
+        unsubQueue = onSnapshot(qQueueGlobal, (s) => setCounts(prev => ({ ...prev, reviewQueue: s.size })));
+      } else {
+        // Local KYC Officers: cannot combine two 'in' filters, filter status client-side
+        const qQueueLocal = query(
+          collection(db, "submissions"), 
+          where("branch", "in", assigned), 
+          where("isResubmitted", "==", false), 
+          where("isExceptional", "==", false)
+        );
+        unsubQueue = onSnapshot(qQueueLocal, (s) => {
+          const count = s.docs.filter(d => ["Pending", "In Review"].includes(d.data().status)).length;
+          setCounts(prev => ({ ...prev, reviewQueue: count }));
+        });
+      }
 
       // Resubmitted: Cases corrected by Branch Officers
-      let qResub = isGlobalReviewer
-        ? query(collection(db, "submissions"), where("isResubmitted", "==", true), where("status", "in", ["Pending", "In Review"]))
-        : query(collection(db, "submissions"), where("isResubmitted", "==", true), where("branch", "in", assigned), where("status", "in", ["Pending", "In Review"]));
-      
-      unsubResub = onSnapshot(qResub, (snapshot) => {
-        setCounts(prev => ({ ...prev, resubmitted: snapshot.size }));
-      });
+      if (isGlobalReviewer) {
+        const qResubGlobal = query(
+          collection(db, "submissions"), 
+          where("isResubmitted", "==", true), 
+          where("status", "in", ["Pending", "In Review"])
+        );
+        unsubResub = onSnapshot(qResubGlobal, (s) => setCounts(prev => ({ ...prev, resubmitted: s.size })));
+      } else {
+        const qResubLocal = query(
+          collection(db, "submissions"), 
+          where("isResubmitted", "==", true), 
+          where("branch", "in", assigned)
+        );
+        unsubResub = onSnapshot(qResubLocal, (s) => {
+          const count = s.docs.filter(d => ["Pending", "In Review"].includes(d.data().status)).length;
+          setCounts(prev => ({ ...prev, resubmitted: count }));
+        });
+      }
 
-      // Escalated: High-priority risk assessment cases
-      let qEsc = isGlobalReviewer
+      // Escalated: High-priority cases
+      const qEsc = isGlobalReviewer
         ? query(collection(db, "submissions"), where("status", "==", "Escalated"))
         : query(collection(db, "submissions"), where("status", "==", "Escalated"), where("branch", "in", assigned));
       
@@ -130,6 +164,7 @@ export function useSidebarCounts(user: User) {
     // 5. Branch Node Queue: Overall volume tracking for Branch Managers
     let unsubBranch = () => {};
     if (user.role === 'Branch Manager' && user.branch) {
+      // Combining one == and one in is allowed
       const qBranch = query(
         collection(db, "submissions"),
         where("branch", "==", user.branch),
