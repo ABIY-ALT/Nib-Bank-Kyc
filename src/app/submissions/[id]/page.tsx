@@ -43,7 +43,8 @@ import {
   ArrowRight,
   FileType,
   ClipboardCheck,
-  CheckCircle2
+  CheckCircle2,
+  Info
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -72,24 +73,6 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-
-const DEFAULT_DOC_TYPES = [
-  { id: "id_card", label: "ID Card / National ID" },
-  { id: "passport", label: "Passport" },
-  { id: "utility_bill", label: "Utility Bill" },
-  { id: "bank_statement", label: "Bank Statement" },
-  { id: "incorporation", label: "Certificate of Incorporation" },
-  { id: "tax_cert", label: "Tax Certificate" },
-  { id: "other", label: "Other Document" },
-];
-
-interface PreviewDoc {
-  id: string;
-  name: string;
-  type: string;
-  url: string;
-  isPdf?: boolean;
-}
 
 // Predefined Checklist Definitions
 const CHECKLIST_CONFIGS: Record<string, { id: string; label: string; mandatory: boolean }[]> = {
@@ -144,6 +127,24 @@ const CHECKLIST_CONFIGS: Record<string, { id: string; label: string; mandatory: 
     { id: "address", label: "Office Address Verification", mandatory: true },
   ]
 };
+
+const DEFAULT_DOC_TYPES = [
+  { id: "id_card", label: "ID Card / National ID" },
+  { id: "passport", label: "Passport" },
+  { id: "utility_bill", label: "Utility Bill" },
+  { id: "bank_statement", label: "Bank Statement" },
+  { id: "incorporation", label: "Certificate of Incorporation" },
+  { id: "tax_cert", label: "Tax Certificate" },
+  { id: "other", label: "Other Document" },
+];
+
+interface PreviewDoc {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  isPdf?: boolean;
+}
 
 export default function SubmissionDetails() {
   const params = useParams();
@@ -351,7 +352,7 @@ export default function SubmissionDetails() {
   };
 
   const handleToggleChecklistItem = (itemId: string, currentStatus: boolean) => {
-    if (!isKYCOfficer || !submissionRef) return;
+    if (!(isKYCOfficer || isAdmin) || !submissionRef) return;
 
     const newStatus = !currentStatus;
     const updateData = {
@@ -582,7 +583,7 @@ export default function SubmissionDetails() {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            disabled={!isKYCOfficer}
+                            disabled={!(isKYCOfficer || isAdmin)}
                             onClick={() => handleToggleChecklistItem(item.id, isVerified)}
                             className={cn(
                               "h-8 font-black text-xs px-3 rounded-full transition-all",
@@ -601,7 +602,7 @@ export default function SubmissionDetails() {
                 
                 {submission.entityType === 'foreign_ngo' && (
                   <Alert className="bg-blue-50 border-blue-100 py-2">
-                    <Info className="w-4 h-4 text-blue-600" />
+                    <AlertCircle className="w-4 h-4 text-blue-600" />
                     <AlertDescription className="text-[10px] font-bold text-blue-700 uppercase tracking-tight">
                       Special Rule: National ID not mandatory until enforced by NBE schedule for foreign NGOs.
                     </AlertDescription>
