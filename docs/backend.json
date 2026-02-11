@@ -48,32 +48,37 @@
         "remarks": { "type": "string" },
         "entityType": { "type": "string" },
         "amendmentCycles": { "type": "integer" },
-        "isResubmitted": { "type": "boolean" }
+        "isResubmitted": { "type": "boolean" },
+        "checklistState": { "type": "object" }
       },
       "required": ["customerName", "branch", "status", "submittedBy"]
     },
-    "WorkflowCounter": {
-      "title": "Workflow Counter",
-      "description": "Aggregated stats for sidebar badges.",
-      "type": "object",
-      "properties": {
-        "pendingCount": { "type": "integer" },
-        "amendedCount": { "type": "integer" },
-        "escalatedCount": { "type": "integer" },
-        "exceptionalCount": { "type": "integer" }
-      }
-    },
-    "Document": {
-      "title": "Document",
-      "description": "A document associated with a KYC submission.",
+    "KYCFinding": {
+      "title": "KYC Finding",
+      "description": "Standardized KYC comment or query for reference.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" },
-        "type": { "type": "string" },
-        "url": { "type": "string" },
-        "uploadedAt": { "type": "string", "format": "date-time" }
-      }
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { 
+          "type": "string", 
+          "enum": ["Identity", "Documentation", "Compliance", "Account Validation"] 
+        },
+        "severity": { 
+          "type": "string", 
+          "enum": ["Low", "Medium", "High", "Critical"] 
+        },
+        "applicableTo": { 
+          "type": "array", 
+          "items": { "type": "string" } 
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "active": { "type": "boolean" },
+        "source": { "type": "string", "enum": ["manual", "auto"] }
+      },
+      "required": ["code", "title", "category", "severity"]
     },
     "UserProfile": {
       "title": "User Profile",
@@ -103,6 +108,10 @@
     "/users/{userId}": {
       "schema": "#/entities/UserProfile",
       "description": "System user profiles and permissions."
+    },
+    "/kyc_findings/{findingId}": {
+      "schema": "#/entities/KYCFinding",
+      "description": "Knowledge base of standardized findings and queries."
     }
   }
 }

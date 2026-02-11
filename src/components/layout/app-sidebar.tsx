@@ -26,7 +26,8 @@ import {
   ArrowRightLeft,
   UserCog,
   Zap,
-  LayoutList
+  LayoutList,
+  BookOpen
 } from "lucide-react"
 
 import {
@@ -250,6 +251,21 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
+        {/* KNOWLEDGE BASE */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Reference</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === '/kyc-fq-reference'} tooltip="KYC F&amp;Q Reference">
+                <Link href="/kyc-fq-reference">
+                  <BookOpen />
+                  <span>KYC F&amp;Q Reference</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
         {/* PERFORMANCE */}
         {canSeePerformance && (
           <SidebarGroup>
@@ -260,7 +276,7 @@ export function AppSidebar() {
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Oversight">
                       <BarChart3 />
-                      <span>Performance & Oversight</span>
+                      <span>Performance &amp; Oversight</span>
                       <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
@@ -307,7 +323,7 @@ export function AppSidebar() {
         {/* REPORTING */}
         {canSeeReports && (
           <SidebarGroup>
-            <SidebarGroupLabel>Audit & Reporting</SidebarGroupLabel>
+            <SidebarGroupLabel>Audit &amp; Reporting</SidebarGroupLabel>
             <SidebarMenu>
               <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
@@ -335,7 +351,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}>
                             <Link href="/reports/branch">
                               <Building2 className="w-4 h-4 mr-2" />
-                              <span>Branch & District</span>
+                              <span>Branch &amp; District</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -402,7 +418,7 @@ export function AppSidebar() {
                         <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
                           <Link href="/admin/branches">
                             <Building2 className="w-4 h-4 mr-2" />
-                            <span>Branches & Districts</span>
+                            <span>Branches &amp; Districts</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>

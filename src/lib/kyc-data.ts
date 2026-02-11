@@ -74,4 +74,17 @@ export interface KYCSubmission {
   checklistState?: Record<string, boolean>;
 }
 
+export interface KYCFinding {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  category: 'Identity' | 'Documentation' | 'Compliance' | 'Account Validation';
+  severity: 'Low' | 'Medium' | 'High' | 'Critical';
+  applicableTo: string[];
+  createdAt: string;
+  active: boolean;
+  source: 'manual' | 'auto';
+}
+
 export const MOCK_SUBMISSIONS: KYCSubmission[] = [];
