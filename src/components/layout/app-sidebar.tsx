@@ -158,7 +158,7 @@ export function AppSidebar() {
                         </SidebarMenuSubItem>
                       </>
                     )}
-                    {isBranchMgr && (
+                    {(isBranchMgr || isAdmin) && (
                       <SidebarMenuSubItem className="relative">
                         <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
                           <Link href="/submissions/branch-node">

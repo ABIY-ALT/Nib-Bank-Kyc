@@ -161,9 +161,9 @@ export function useSidebarCounts(user: User) {
       });
     }
 
-    // 5. Branch Node Queue: Overall volume tracking for Branch Managers
+    // 5. Branch Node Queue: Overall volume tracking for Branch Managers and Admins
     let unsubBranch = () => {};
-    if (user.role === 'Branch Manager' && user.branch) {
+    if ((user.role === 'Branch Manager' || user.role === 'Admin') && user.branch) {
       // Combining one == and one in is allowed
       const qBranch = query(
         collection(db, "submissions"),

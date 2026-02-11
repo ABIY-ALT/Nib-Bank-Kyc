@@ -18,7 +18,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Inbox,
-  User
+  User,
+  ShieldAlert
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
@@ -91,6 +92,22 @@ export default function BranchNodeOversightPage() {
     };
   }, [submissions]);
 
+  if (!user.branch) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-6 animate-in fade-in duration-500">
+        <div className="p-6 bg-white rounded-full shadow-sm border border-slate-100">
+          <ShieldAlert className="w-16 h-16 text-slate-200" />
+        </div>
+        <div className="text-center space-y-2 max-w-sm">
+          <p className="font-bold text-slate-900 text-2xl tracking-tight">No Branch Assigned</p>
+          <p className="text-sm text-slate-500 font-medium">
+            This workspace provides oversight for a specific institutional node. Please assign a branch to your profile in the **Personnel Directory** to monitor local operations.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -100,10 +117,10 @@ export default function BranchNodeOversightPage() {
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Local Node Oversight</h1>
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-muted-foreground text-lg">Managing all operational verifications at the <strong>{user.branch}</strong> node.</p>
+            <p className="text-muted-foreground text-lg">Managing operational verifications at the <strong>{user.branch}</strong> node.</p>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
               <ShieldCheck className="w-3 h-3" />
-              Branch Manager Control
+              {user.role} Control
             </Badge>
           </div>
         </div>
