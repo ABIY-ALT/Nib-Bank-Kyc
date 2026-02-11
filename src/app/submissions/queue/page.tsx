@@ -2,7 +2,7 @@
 'use client';
 
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
@@ -19,28 +19,23 @@ export default function ReviewQueuePage() {
   const reviewQueueQuery = useMemo(() => {
     if (!db) return null;
     
-    // Admins and Global Supervisors can see everything
     const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role || '');
-    
+    const assigned = user.assignedBranches || [];
+
     if (isGlobalReviewer) {
       return query(
         collection(db, "submissions"),
         where("status", "in", ["Pending", "In Review"]),
-        where("isResubmitted", "==", false),
-        orderBy("submittedAt", "desc")
+        where("isResubmitted", "==", false)
       );
     }
 
-    // Local KYC Officers are restricted to their assigned portfolio of branches
-    const assigned = user.assignedBranches || [];
-    
     if (assigned.length > 0) {
       return query(
         collection(db, "submissions"),
         where("status", "in", ["Pending", "In Review"]),
         where("branch", "in", assigned),
-        where("isResubmitted", "==", false),
-        orderBy("submittedAt", "desc")
+        where("isResubmitted", "==", false)
       );
     }
 
@@ -53,10 +48,14 @@ export default function ReviewQueuePage() {
     if (!submissions) return [];
     
     const term = searchTerm.toLowerCase();
-    return submissions.filter(sub => 
-      sub.customerName.toLowerCase().includes(term) || 
-      sub.id.toLowerCase().includes(term)
-    );
+    return submissions
+      .filter(sub => {
+        // Exclude exceptional cases from standard queue
+        const isNotExceptional = sub.isExceptional === false;
+        const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
+        return isNotExceptional && matchesSearch;
+      })
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   }, [submissions, searchTerm]);
 
   const isLocalized = !['Admin', 'Director', 'Supervisor'].includes(user.role || '') && (user.assignedBranches?.length || 0) > 0;

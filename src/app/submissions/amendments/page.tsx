@@ -2,7 +2,7 @@
 "use client"
 
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 import { SubmissionsPageContent } from "../submissions-content";
 import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
@@ -20,8 +20,7 @@ export default function AmendmentReviewPage() {
     if (!db) return null;
     return query(
       collection(db, "submissions"),
-      where("isResubmitted", "==", true),
-      orderBy("submittedAt", "desc")
+      where("isResubmitted", "==", true)
     );
   }, [db]);
 
@@ -33,19 +32,20 @@ export default function AmendmentReviewPage() {
     if (!submissions) return [];
     
     const term = searchTerm.toLowerCase();
-    return submissions.filter(sub => {
-      const matchesStatus = ["Pending", "In Review"].includes(sub.status);
-      
-      // Admin sees global amendments, others restricted to branch/portfolio
-      const matchesBranch = isAdmin || 
-                          !user.branch || 
-                          user.branch === 'Central HQ' || 
-                          sub.branch === user.branch ||
-                          (user.assignedBranches || []).includes(sub.branch);
+    return submissions
+      .filter(sub => {
+        const matchesStatus = ["Pending", "In Review"].includes(sub.status);
+        
+        const matchesBranch = isAdmin || 
+                            !user.branch || 
+                            user.branch === 'Central HQ' || 
+                            sub.branch === user.branch ||
+                            (user.assignedBranches || []).includes(sub.branch);
 
-      const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
-      return matchesStatus && matchesBranch && matchesSearch;
-    });
+        const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
+        return matchesStatus && matchesBranch && matchesSearch;
+      })
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   }, [submissions, user.branch, user.assignedBranches, isAdmin, searchTerm]);
 
   return (
