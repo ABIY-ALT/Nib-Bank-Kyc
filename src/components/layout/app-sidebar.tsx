@@ -110,7 +110,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Workflows</SidebarGroupLabel>
           <SidebarMenu>
-            <Collapsible className="group/collapsible" defaultOpen={true}>
+            <Collapsible className="group/collapsible" defaultOpen={false}>
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton tooltip="Identity Verification">
@@ -276,7 +276,7 @@ export function AppSidebar() {
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Oversight">
                       <BarChart3 />
-                      <span>Performance &amp; Oversight</span>
+                      <span>Performance & Oversight</span>
                       <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
@@ -323,7 +323,7 @@ export function AppSidebar() {
         {/* REPORTING */}
         {canSeeReports && (
           <SidebarGroup>
-            <SidebarGroupLabel>Audit &amp; Reporting</SidebarGroupLabel>
+            <SidebarGroupLabel>Audit & Reporting</SidebarGroupLabel>
             <SidebarMenu>
               <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
@@ -351,7 +351,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}>
                             <Link href="/reports/branch">
                               <Building2 className="w-4 h-4 mr-2" />
-                              <span>Branch &amp; District</span>
+                              <span>Branch & District</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -418,7 +418,7 @@ export function AppSidebar() {
                         <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
                           <Link href="/admin/branches">
                             <Building2 className="w-4 h-4 mr-2" />
-                            <span>Branches &amp; Districts</span>
+                            <span>Branches & Districts</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
