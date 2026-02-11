@@ -300,35 +300,49 @@ export default function SubmissionDetails() {
         { 
           title: "District Director", 
           status: (['Awaiting Director', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting District' ? "active" as const : "upcoming" as const), 
-          icon: Zap
+          icon: Zap,
+          description: submission.exceptionalStatus === 'Awaiting District' ? "Awaiting Regional Authorization" : undefined
         },
         { 
           title: "KYC Director", 
           status: (['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Director' ? "active" as const : "upcoming" as const), 
-          icon: Shield
+          icon: Shield,
+          description: submission.exceptionalStatus === 'Awaiting Director' ? "Strategic Risk Review" : undefined
         },
         { 
           title: "Supervisor", 
           status: (submission.exceptionalStatus === 'Completed') ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Supervisor' ? "active" as const : "upcoming" as const), 
-          icon: ShieldCheck
+          icon: ShieldCheck,
+          description: submission.exceptionalStatus === 'Awaiting Supervisor' ? "Institutional Verification" : undefined
         },
         { 
-          title: "Final KYC Verification", 
-          status: submission.exceptionalStatus === 'Completed' && (submission.status === 'Pending' || submission.status === 'In Review') ? "active" as const : (["Approved", "Rejected"].includes(submission.status) ? "completed" as const : "upcoming" as const), 
-          icon: Search 
+          title: submission.status === 'Escalated' ? "Senior Escalation" : "Final KYC Verification", 
+          status: submission.exceptionalStatus === 'Completed' && (['Pending', 'In Review', 'Amended', 'Escalated'].includes(submission.status)) ? "active" as const : (["Approved", "Rejected"].includes(submission.status) ? "completed" as const : "upcoming" as const), 
+          icon: submission.status === 'Escalated' ? AlertTriangle : Search,
+          description: submission.status === 'Escalated' 
+            ? "High-Priority Specialist Review" 
+            : (submission.amendmentCycles && submission.amendmentCycles > 0 
+              ? `Amendment Cycle ${submission.amendmentCycles}` 
+              : (submission.status === 'Amended' ? "Awaiting Correction" : undefined))
         }
       ]
     : [
         { title: "Submitted", status: "completed" as const, icon: Check },
         { 
-          title: "KYC Verification", 
+          title: submission.status === 'Escalated' ? "Senior Escalation" : "KYC Verification", 
           status: (["Approved", "Rejected"].includes(submission.status) ? "completed" : "active") as const, 
-          icon: Search 
+          icon: submission.status === 'Escalated' ? AlertTriangle : Search,
+          description: submission.status === 'Escalated' 
+            ? "Assigned to Senior Risk Officer" 
+            : (submission.amendmentCycles && submission.amendmentCycles > 0 
+              ? `Amendment Cycle ${submission.amendmentCycles}` 
+              : (submission.status === 'Amended' ? "Correction Required" : "Institutional analysis in progress"))
         },
         { 
           title: "Final Decision", 
           status: (["Approved", "Rejected"].includes(submission.status) ? "completed" : "upcoming") as const, 
-          icon: ShieldCheck 
+          icon: ShieldCheck,
+          description: submission.status === 'Approved' ? "Verification Authorized" : submission.status === 'Rejected' ? "Verification Declined" : undefined
         }
       ];
 
@@ -488,6 +502,11 @@ export default function SubmissionDetails() {
                       )}><Icon className={cn("w-5 h-5", step.status === "active" && "animate-pulse")} /></div>
                       <div className="space-y-1.5 pt-0.5">
                         <p className={cn("text-base font-bold", step.status === "upcoming" ? "text-slate-300" : "text-slate-900")}>{step.title}</p>
+                        {step.description && (
+                          <p className="text-[10px] font-black uppercase tracking-widest text-primary/70 animate-in fade-in slide-in-from-left-1 duration-500">
+                            {step.description}
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
