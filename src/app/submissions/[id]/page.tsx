@@ -474,7 +474,17 @@ export default function SubmissionDetails() {
     });
   };
 
-  const wasForwardedToChief = submission.exceptionalData?.approvalHistory?.some(h => h.role === 'Chief Retail & SME Banking Officer' || h.action === 'Forwarded to Chief');
+  const currentExceptionalRole = 
+    submission.exceptionalStatus === 'Awaiting District' ? 'District Director' :
+    submission.exceptionalStatus === 'Awaiting Director' ? 'Director' :
+    submission.exceptionalStatus === 'Awaiting Chief' ? 'Chief Retail & SME Banking Officer' :
+    submission.exceptionalStatus === 'Awaiting Division' ? 'Division Manager' :
+    submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
+
+  const isCurrentExceptionalApprover = user.role === currentExceptionalRole || isAdmin;
+
+  const showDirectorButtons = submission.exceptionalStatus === 'Awaiting Director' && (user.role === 'Director' || isAdmin);
+  const showChiefButtons = submission.exceptionalStatus === 'Awaiting Chief' && (user.role === 'Chief Retail & SME Banking Officer' || isAdmin);
 
   const steps = submission.isExceptional 
     ? [
@@ -535,15 +545,6 @@ export default function SubmissionDetails() {
           description: submission.status === 'Approved' ? "Verification Authorized" : submission.status === 'Rejected' ? "Verification Declined" : undefined
         }
       ];
-
-  const currentExceptionalRole = 
-    submission.exceptionalStatus === 'Awaiting District' ? 'District Director' :
-    submission.exceptionalStatus === 'Awaiting Director' ? 'Director' :
-    submission.exceptionalStatus === 'Awaiting Chief' ? 'Chief Retail & SME Banking Officer' :
-    submission.exceptionalStatus === 'Awaiting Division' ? 'Division Manager' :
-    submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
-
-  const isCurrentExceptionalApprover = user.role === currentExceptionalRole || isAdmin;
 
   const isCurrentlyEscalated = submission.status === 'Escalated';
   const canResolveEscalation = isSeniorReviewer;
@@ -646,24 +647,22 @@ export default function SubmissionDetails() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  {user.role === 'Director' && (
+                  {showDirectorButtons ? (
                     <>
-                      <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold h-12 flex-1" onClick={() => handleExceptionalApproval('Approved')}>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>
                         Approve & Forward to Division
                       </Button>
-                      <Button variant="secondary" className="bg-primary hover:bg-primary/90 text-white font-bold h-12 flex-1" onClick={() => handleExceptionalApproval('ForwardChief')}>
+                      <Button variant="secondary" className="bg-primary hover:bg-primary/90 text-white font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('ForwardChief')}>
                         Forward to Chief Officer
                       </Button>
                     </>
-                  )}
-                  {user.role === 'Chief Retail & SME Banking Officer' && (
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold h-12 w-full" onClick={() => handleExceptionalApproval('Approved')}>
+                  ) : showChiefButtons ? (
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 w-full shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>
                       Approve & Return to Director
                     </Button>
-                  )}
-                  {user.role !== 'Director' && user.role !== 'Chief Retail & SME Banking Officer' && (
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold h-12 flex-1" onClick={() => handleExceptionalApproval('Approved')}>
-                      {user.role === 'Supervisor' ? 'Confirm & Dispatch' : 'Approve Level'}
+                  ) : (
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>
+                      {currentExceptionalRole === 'Supervisor' ? 'Confirm & Dispatch' : 'Approve Level'}
                     </Button>
                   )}
                   
