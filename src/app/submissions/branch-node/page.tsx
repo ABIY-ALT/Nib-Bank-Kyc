@@ -21,7 +21,8 @@ import {
   User,
   ShieldAlert,
   Globe,
-  Zap
+  Zap,
+  RefreshCw
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
@@ -76,16 +77,18 @@ export default function BranchNodeOversightPage() {
       total: number, 
       approved: number, 
       amended: number, 
-      pending: number 
+      pending: number,
+      totalCycles: number
     }> = {};
 
     submissions.forEach(sub => {
       const officer = sub.submittedBy;
       if (!stats[officer]) {
-        stats[officer] = { name: officer, total: 0, approved: 0, amended: 0, pending: 0 };
+        stats[officer] = { name: officer, total: 0, approved: 0, amended: 0, pending: 0, totalCycles: 0 };
       }
       
       stats[officer].total += 1;
+      stats[officer].totalCycles += (sub.amendmentCycles || 0);
       if (sub.status === 'Approved') stats[officer].approved += 1;
       else if (sub.status === 'Amended') stats[officer].amended += 1;
       else if (['Pending', 'In Review'].includes(sub.status)) stats[officer].pending += 1;
@@ -246,6 +249,7 @@ export default function BranchNodeOversightPage() {
                     <TableHead className="font-bold text-center">Total Submitted</TableHead>
                     <TableHead className="font-bold text-center text-emerald-600">Approved</TableHead>
                     <TableHead className="font-bold text-center text-orange-600">Needs Fix (Errors)</TableHead>
+                    <TableHead className="font-bold text-center text-blue-600">Correction Cycles</TableHead>
                     <TableHead className="font-bold text-center">In Review</TableHead>
                     <TableHead className="font-bold text-right pr-8">Efficiency Index</TableHead>
                   </TableRow>
@@ -253,7 +257,7 @@ export default function BranchNodeOversightPage() {
                 <TableBody>
                   {officerMetrics.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic">
+                      <TableCell colSpan={7} className="text-center py-20 text-muted-foreground italic">
                         No personnel data detected for this period.
                       </TableCell>
                     </TableRow>
@@ -278,6 +282,12 @@ export default function BranchNodeOversightPage() {
                         <TableCell className="text-center">
                           <Badge variant="secondary" className={`font-bold ${officer.amended > 5 ? 'bg-red-50 text-red-700 border-red-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
                             {officer.amended}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50 font-bold flex items-center gap-1.5 justify-center mx-auto w-12">
+                            <RefreshCw className="w-2.5 h-2.5" />
+                            {officer.totalCycles}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center text-slate-500 font-medium tabular-nums">{officer.pending}</TableCell>
