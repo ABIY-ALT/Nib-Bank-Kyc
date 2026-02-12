@@ -20,7 +20,8 @@ import {
   Loader2,
   Filter,
   History,
-  Dices
+  Dices,
+  FileDown
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { KYCSubmission, FollowUpVerification } from "@/lib/kyc-data";
@@ -34,7 +35,7 @@ export default function FollowUpDashboard() {
   const { toast } = useToast();
   const [isSampling, setIsSampling] = useState(false);
 
-  // 1. Fetch completed verifications for analytics
+  // 1. Fetch completed verifications for analytics and reporting
   const verificationsQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "follow_up_verifications"), orderBy("verifiedAt", "desc")) : null;
   }, [db]);
@@ -113,6 +114,44 @@ export default function FollowUpDashboard() {
     return { rate, total, discrepancies, byBranch };
   }, [verifications]);
 
+  // 5. Export Logic
+  const handleExportReport = () => {
+    if (!verifications || verifications.filter(v => v.status === 'Completed').length === 0) {
+      toast({ variant: "destructive", title: "No Data", description: "There are no completed audit records to export." });
+      return;
+    }
+
+    const completed = verifications.filter(v => v.status === 'Completed');
+    const headers = ['Audit ID', 'Case ID', 'Customer', 'Branch', 'Officer', 'Result', 'Auditor', 'Audit Date', 'Remarks'];
+    const rows = completed.map(v => [
+      v.id,
+      v.submissionId,
+      v.customerName,
+      v.branch,
+      v.officer,
+      v.result,
+      v.verifiedBy || 'N/A',
+      new Date(v.verifiedAt).toLocaleString(),
+      v.remarks ? v.remarks.replace(/,/g, ';') : ''
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `nib-kyc-followup-audit-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Audit Report Exported",
+      description: `Institutional record of ${completed.length} audits saved to CSV.`,
+    });
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -125,14 +164,24 @@ export default function FollowUpDashboard() {
           </div>
           <p className="text-muted-foreground text-lg font-medium">Head Office quality control and institutional audit workspace.</p>
         </div>
-        <Button 
-          onClick={handleSampleCases} 
-          disabled={isSampling}
-          className="bg-primary hover:bg-primary/90 h-12 px-8 font-black shadow-xl gap-2 rounded-xl transition-all active:scale-95"
-        >
-          {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
-          Generate Random Audit Sample
-        </Button>
+        <div className="flex gap-3">
+          <Button 
+            variant="outline"
+            onClick={handleExportReport}
+            className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200 bg-white"
+          >
+            <FileDown className="w-5 h-5 text-primary" />
+            Export Audit Report
+          </Button>
+          <Button 
+            onClick={handleSampleCases} 
+            disabled={isSampling}
+            className="bg-primary hover:bg-primary/90 h-12 px-8 font-black shadow-xl gap-2 rounded-xl transition-all active:scale-95"
+          >
+            {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
+            Generate Random Audit Sample
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -221,7 +270,7 @@ export default function FollowUpDashboard() {
                 <Dices className="w-12 h-12 text-slate-200 mx-auto" />
                 <div className="space-y-1">
                   <p className="font-bold text-slate-900">Queue Exhausted</p>
-                  <p className="text-sm text-muted-foreground">Generate a new sample sample to begin quality control.</p>
+                  <p className="text-sm text-muted-foreground">Generate a new sample to begin quality control.</p>
                 </div>
               </div>
             )}
