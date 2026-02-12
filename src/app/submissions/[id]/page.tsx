@@ -194,6 +194,7 @@ export default function SubmissionDetails() {
   const isAdmin = user.role === 'Admin';
   const isKYCOfficer = user.role === 'KYC Officer'; 
   const isReviewer = ['KYC Officer', 'Supervisor', 'Director', 'Admin'].includes(user.role || '');
+  const isSeniorReviewer = ['Supervisor', 'Director', 'Admin'].includes(user.role || '');
   const isOwner = submission?.submittedBy === user.name;
   const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
 
@@ -458,6 +459,9 @@ export default function SubmissionDetails() {
     submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
 
   const isCurrentExceptionalApprover = user.role === currentExceptionalRole || isAdmin;
+
+  const isCurrentlyEscalated = submission.status === 'Escalated';
+  const canResolveEscalation = isSeniorReviewer;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -781,7 +785,7 @@ export default function SubmissionDetails() {
             </Card>
           )}
 
-          {/* KYC Determination Workspace (Visible to Reviewers, Admin, and Submitter - buttons restricted) */}
+          {/* KYC Determination Workspace */}
           {(isReviewer || isOwner || isAdmin) && (submission.status === 'Pending' || submission.status === 'In Review' || submission.status === 'Escalated' || submission.status === 'Amended' || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
             <Card className="border-primary/20 shadow-xl overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b">
@@ -800,13 +804,28 @@ export default function SubmissionDetails() {
                   disabled={!isReviewer && !isAdmin}
                 />
                 
-                {/* Decision Buttons - Restricted to Reviewers and Admins */}
+                {/* Decision Buttons - Role and Status Restricted */}
                 {(isReviewer || isAdmin) && (
                   <div className="grid grid-cols-2 gap-2 pt-2 animate-in fade-in duration-500">
-                    <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold h-11">Approve</Button>
-                    <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold h-11 border-[#E67E22]/30 hover:bg-[#E67E22]/5">Request Fix</Button>
-                    <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold h-11 hover:bg-[#8B5CF6]/5">Escalate</Button>
-                    <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold h-11">Reject</Button>
+                    {/* Approve: Standard reviewers if not escalated, Seniors if escalated */}
+                    {(!isCurrentlyEscalated || canResolveEscalation) && (
+                      <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold h-11">Approve</Button>
+                    )}
+                    
+                    {/* Request Fix: Standard reviewers if not escalated, Seniors if escalated */}
+                    {(!isCurrentlyEscalated || canResolveEscalation) && (
+                      <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold h-11 border-[#E67E22]/30 hover:bg-[#E67E22]/5">Request Fix</Button>
+                    )}
+                    
+                    {/* Escalate: Visible only if NOT already escalated and user is KYC Officer or Admin */}
+                    {(!isCurrentlyEscalated && (isKYCOfficer || isAdmin)) && (
+                      <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold h-11 hover:bg-[#8B5CF6]/5">Escalate</Button>
+                    )}
+                    
+                    {/* Reject: Standard reviewers if not escalated, Seniors if escalated */}
+                    {(!isCurrentlyEscalated || canResolveEscalation) && (
+                      <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold h-11">Reject</Button>
+                    )}
                   </div>
                 )}
               </CardContent>
