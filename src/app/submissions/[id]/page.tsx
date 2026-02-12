@@ -491,12 +491,12 @@ export default function SubmissionDetails() {
           icon: Shield,
           description: submission.exceptionalStatus === 'Awaiting Director' ? "Strategic Risk Review" : undefined
         },
-        ...(wasForwardedToChief || submission.exceptionalStatus === 'Awaiting Chief' ? [{
+        {
           title: "Chief Retail & SME",
           status: (['Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Chief' ? "active" as const : "upcoming" as const),
           icon: ShieldAlert,
-          description: submission.exceptionalStatus === 'Awaiting Chief' ? "Executive Policy Review" : undefined
-        }] : []),
+          description: submission.exceptionalStatus === 'Awaiting Chief' ? "Executive Review" : "Optional: High-Risk Node"
+        },
         { 
           title: "Division Manager", 
           status: (['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Division' ? "active" as const : "upcoming" as const), 

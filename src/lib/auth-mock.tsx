@@ -10,10 +10,10 @@ export type UserRole =
   | 'Director' 
   | 'Admin' 
   | 'Branch Manager' 
-  | 'District Director'
-  | 'Division Manager'
-  | 'Chief Retail & SME Banking Officer'
-  | 'Follow-up Team'
+  | 'District Director' 
+  | 'Division Manager' 
+  | 'Chief Retail & SME Banking Officer' 
+  | 'Follow-up Team' 
   | 'Chief';
 
 export interface User {
@@ -35,6 +35,22 @@ export const MOCK_USERS: User[] = [
     email: 'admin@bank.com', 
     phoneNumber: '+1234567890', 
     role: 'Admin', 
+    status: 'Active' 
+  },
+  { 
+    id: 'chief-1', 
+    name: 'Executive Chief', 
+    email: 'chief@bank.com', 
+    phoneNumber: '+1234567899', 
+    role: 'Chief Retail & SME Banking Officer', 
+    status: 'Active' 
+  },
+  { 
+    id: 'dir-1', 
+    name: 'Alice Wilson', 
+    email: 'alice.dir@bank.com', 
+    phoneNumber: '+1234567895', 
+    role: 'Director', 
     status: 'Active' 
   },
   { 
