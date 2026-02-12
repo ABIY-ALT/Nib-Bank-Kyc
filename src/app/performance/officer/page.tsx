@@ -30,10 +30,10 @@ import {
 import { useToast } from "@/hooks/use-toast"
 
 const MOCK_OFFICER_METRICS = [
-  { name: "Jane Smith", branch: "Downtown", processed: 85, approved: 72, amended: 10, rejected: 3, turnaround: "0.8d" },
-  { name: "Robert Brown", branch: "Uptown", processed: 76, approved: 60, amended: 12, rejected: 4, turnaround: "1.2d" },
-  { name: "Alice Wilson", branch: "Downtown", processed: 64, approved: 58, amended: 4, rejected: 2, turnaround: "1.1d" },
-  { name: "Local Officer", branch: "East Side", processed: 42, approved: 35, amended: 5, rejected: 2, turnaround: "0.9d" },
+  { name: "Jane Smith", branch: "Downtown", processed: 85, approved: 72, amended: 10, turnaround: "0.8d" },
+  { name: "Robert Brown", branch: "Uptown", processed: 76, approved: 60, amended: 12, turnaround: "1.2d" },
+  { name: "Alice Wilson", branch: "Downtown", processed: 64, approved: 58, amended: 4, turnaround: "1.1d" },
+  { name: "Local Officer", branch: "East Side", processed: 42, approved: 35, amended: 5, turnaround: "0.9d" },
 ];
 
 const BRANCH_OPTIONS = ["Downtown", "Uptown", "East Side", "Valley Branch"];
@@ -72,9 +72,9 @@ export default function OfficerPerformancePage() {
   };
 
   const handleExportCSV = () => {
-    const headers = ['Officer', 'Branch', 'Processed', 'Approved', 'Amended', 'Rejected', 'Turnaround'];
+    const headers = ['Officer', 'Branch', 'Processed', 'Approved', 'Amended', 'Turnaround'];
     const rows = filteredOfficers.map(o => [
-      o.name, o.branch, o.processed, o.approved, o.amended, o.rejected, o.turnaround
+      o.name, o.branch, o.processed, o.approved, o.amended, o.turnaround
     ]);
     
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -243,10 +243,6 @@ export default function OfficerPerformancePage() {
                   <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
                     <History className="w-4 h-4 text-indigo-400" />
                     {officer.processed} Cycles
-                  </div>
-                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
-                    <AlertTriangle className="w-4 h-4 text-red-500" />
-                    {officer.rejected} Rejections
                   </div>
                 </div>
               </CardContent>
