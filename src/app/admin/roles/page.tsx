@@ -46,7 +46,8 @@ const DEFAULT_ROLES: UserRole[] = [
   'Admin', 
   'Branch Manager', 
   'District Director',
-  'Division Manager'
+  'Division Manager',
+  'Chief Retail & SME Banking Officer'
 ];
 
 interface PermissionSet {
@@ -205,21 +206,6 @@ export default function StaffRolesPage() {
   const EnabledIcon = () => <CheckCircle2 className="w-5 h-5 mx-auto text-emerald-500" />;
   const DisabledIcon = () => <XCircle className="w-5 h-5 mx-auto text-slate-200" />;
 
-  const PermissionIconToggle = ({ 
-    enabled, 
-    onClick 
-  }: { 
-    enabled: boolean; 
-    onClick: () => void 
-  }) => (
-    <button 
-      onClick={onClick}
-      className="focus:outline-none transition-all active:scale-90 p-1 hover:bg-slate-100 rounded-full group/toggle"
-    >
-      {enabled ? <EnabledIcon /> : <DisabledIcon />}
-    </button>
-  );
-
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -332,10 +318,10 @@ export default function StaffRolesPage() {
                         {['KYC Officer', 'Supervisor', 'Admin'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
                       </TableCell>
                       <TableCell className="text-center">
-                        {['Supervisor', 'Director', 'Admin', 'Division Manager'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
+                        {['Supervisor', 'Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
                       </TableCell>
                       <TableCell className="text-center">
-                        {['Supervisor', 'Director', 'Admin', 'Branch Manager', 'District Director', 'Division Manager'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
+                        {['Supervisor', 'Director', 'Admin', 'Branch Manager', 'District Director', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
                       </TableCell>
                       <TableCell className="text-center">{role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}</TableCell>
                       <TableCell className="text-center">{role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}</TableCell>

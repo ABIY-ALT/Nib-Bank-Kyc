@@ -11,6 +11,7 @@ export type ExceptionalStatus =
   | 'None'
   | 'Awaiting District'
   | 'Awaiting Director'
+  | 'Awaiting Chief'
   | 'Awaiting Division'
   | 'Awaiting Supervisor'
   | 'Completed'
@@ -19,7 +20,7 @@ export type ExceptionalStatus =
 
 export interface ExceptionalApproval {
   role: string;
-  action: 'Approved' | 'Rejected' | 'Clarification';
+  action: 'Approved' | 'Rejected' | 'Clarification' | 'Forwarded to Chief' | 'Returned to Director';
   performedBy: string;
   timestamp: string;
   remarks: string;

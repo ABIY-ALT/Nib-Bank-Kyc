@@ -45,7 +45,8 @@ import {
   ClipboardCheck,
   CheckCircle2,
   Info,
-  ChevronRight
+  ChevronRight,
+  TrendingUp
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,7 +76,6 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 
-// Predefined Checklist Definitions
 const CHECKLIST_CONFIGS: Record<string, { id: string; label: string; mandatory: boolean }[]> = {
   "individual": [
     { id: "id", label: "National ID", mandatory: true },
@@ -196,8 +196,8 @@ export default function SubmissionDetails() {
   // Role Definitions
   const isAdmin = user.role === 'Admin';
   const isKYCOfficer = user.role === 'KYC Officer'; 
-  const isReviewer = ['KYC Officer', 'Supervisor', 'Director', 'Admin', 'Division Manager'].includes(user.role || '');
-  const isSeniorReviewer = ['Supervisor', 'Director', 'Admin', 'Division Manager'].includes(user.role || '');
+  const isReviewer = ['KYC Officer', 'Supervisor', 'Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
+  const isSeniorReviewer = ['Supervisor', 'Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
   const isOwner = submission?.submittedBy === user.name;
   const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
 
@@ -330,10 +330,10 @@ export default function SubmissionDetails() {
     toast({ title: "Exceptional Request Dispatched", description: "Case forwarded to District Director for initial review." });
   };
 
-  const handleExceptionalApproval = (action: 'Approved' | 'Rejected' | 'Clarification') => {
+  const handleExceptionalApproval = (action: 'Approved' | 'Rejected' | 'Clarification' | 'ForwardChief') => {
     if (!submissionRef || !db || !submission.exceptionalData) return;
     
-    // Memo check for DD and KD
+    const isDirectorRole = user.role === 'Director';
     const isMemoRequiredRole = user.role === 'District Director' || user.role === 'Director';
     if (action === 'Approved' && isMemoRequiredRole && !decisionMemoFile && !isAdmin) {
       toast({ variant: "destructive", title: "Memo Required", description: "You must upload a supporting institutional memo to approve this request." });
@@ -352,17 +352,20 @@ export default function SubmissionDetails() {
       nextStatus = 'Rejected';
     } else if (action === 'Clarification') {
       nextStatus = 'Clarification Required';
+    } else if (action === 'ForwardChief') {
+      nextStatus = 'Awaiting Chief';
     } else {
-      // Sequential Flow: District -> Director -> Division -> Supervisor
+      // Sequential Flow: District -> Director -> (Optional Chief -> Director) -> Division -> Supervisor
       if (currentStatus === 'Awaiting District') nextStatus = 'Awaiting Director';
       else if (currentStatus === 'Awaiting Director') nextStatus = 'Awaiting Division';
+      else if (currentStatus === 'Awaiting Chief') nextStatus = 'Awaiting Director';
       else if (currentStatus === 'Awaiting Division') nextStatus = 'Awaiting Supervisor';
       else if (currentStatus === 'Awaiting Supervisor') nextStatus = 'Completed';
     }
 
     const approvalNode = {
       role: user.role || "Admin",
-      action,
+      action: action === 'ForwardChief' ? 'Forwarded to Chief' : (user.role === 'Chief Retail & SME Banking Officer' ? 'Returned to Director' : action),
       performedBy: user.name,
       timestamp: new Date().toISOString(),
       remarks,
@@ -387,12 +390,11 @@ export default function SubmissionDetails() {
       }));
     });
 
-    // Upload the decision memo if present
     if (decisionMemoFile) {
       const docRef = doc(collection(submissionRef, "documents"));
       const memoData = {
         id: docRef.id,
-        name: `${user.role?.replace(' ', '_')}_Support_Memo.pdf`,
+        name: `${user.role?.replace(/ /g, '_')}_Support_Memo.pdf`,
         type: 'Institutional Support Memo',
         uploadedAt: new Date().toISOString(),
         url: "#",
@@ -426,21 +428,31 @@ export default function SubmissionDetails() {
 
   const currentChecklist = CHECKLIST_CONFIGS[submission.entityType || "individual"] || CHECKLIST_CONFIGS["individual"];
 
+  // Logic to check if Chief step was taken
+  const wasForwardedToChief = submission.exceptionalData?.approvalHistory?.some(h => h.role === 'Chief Retail & SME Banking Officer' || h.action === 'Forwarded to Chief');
+
   const steps = submission.isExceptional 
     ? [
         { title: "Submitted", status: "completed" as const, icon: Check },
         { 
           title: "District Director", 
-          status: (['Awaiting Director', 'Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting District' ? "active" as const : "upcoming" as const), 
+          status: (['Awaiting Director', 'Awaiting Chief', 'Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting District' ? "active" as const : "upcoming" as const), 
           icon: Zap,
           description: submission.exceptionalStatus === 'Awaiting District' ? "Regional Authorization" : undefined
         },
         { 
           title: "KYC Director", 
-          status: (['Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Director' ? "active" as const : "upcoming" as const), 
+          status: (['Awaiting Chief', 'Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Director' ? "active" as const : "upcoming" as const), 
           icon: Shield,
           description: submission.exceptionalStatus === 'Awaiting Director' ? "Strategic Risk Review" : undefined
         },
+        // Optional Chief Step
+        ...(wasForwardedToChief || submission.exceptionalStatus === 'Awaiting Chief' ? [{
+          title: "Chief Retail & SME",
+          status: (['Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Chief' ? "active" as const : "upcoming" as const),
+          icon: ShieldAlert,
+          description: submission.exceptionalStatus === 'Awaiting Chief' ? "Executive Policy Review" : undefined
+        }] : []),
         { 
           title: "Division Manager", 
           status: (['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Division' ? "active" as const : "upcoming" as const), 
@@ -483,6 +495,7 @@ export default function SubmissionDetails() {
   const currentExceptionalRole = 
     submission.exceptionalStatus === 'Awaiting District' ? 'District Director' :
     submission.exceptionalStatus === 'Awaiting Director' ? 'Director' :
+    submission.exceptionalStatus === 'Awaiting Chief' ? 'Chief Retail & SME Banking Officer' :
     submission.exceptionalStatus === 'Awaiting Division' ? 'Division Manager' :
     submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
 
@@ -545,8 +558,7 @@ export default function SubmissionDetails() {
                 <CardDescription className="text-yellow-100 font-medium">Provide your determination and supporting documentation for this level.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
-                {/* Support Memo Upload for DD and KD */}
-                {(user.role === 'District Director' || user.role === 'Director' || isAdmin) && (
+                {(user.role === 'District Director' || user.role === 'Director' || user.role === 'Chief Retail & SME Banking Officer' || isAdmin) && (
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Mandatory Supporting Memo (PDF)</Label>
                     <div 
@@ -589,14 +601,32 @@ export default function SubmissionDetails() {
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold h-12" onClick={() => handleExceptionalApproval('Approved')}>
-                    {user.role === 'Supervisor' ? 'Confirm & Dispatch' : 'Approve Level'}
-                  </Button>
-                  <Button variant="outline" className="text-orange-600 border-orange-600 bg-white font-bold h-12" onClick={() => handleExceptionalApproval('Clarification')}>
+                <div className="flex flex-wrap gap-3">
+                  {user.role === 'Director' && (
+                    <>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold h-12 flex-1" onClick={() => handleExceptionalApproval('Approved')}>
+                        Approve & Forward to Division
+                      </Button>
+                      <Button variant="secondary" className="bg-primary hover:bg-primary/90 text-white font-bold h-12 flex-1" onClick={() => handleExceptionalApproval('ForwardChief')}>
+                        Forward to Chief Officer
+                      </Button>
+                    </>
+                  )}
+                  {user.role === 'Chief Retail & SME Banking Officer' && (
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold h-12 w-full" onClick={() => handleExceptionalApproval('Approved')}>
+                      Approve & Return to Director
+                    </Button>
+                  )}
+                  {user.role !== 'Director' && user.role !== 'Chief Retail & SME Banking Officer' && (
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold h-12 flex-1" onClick={() => handleExceptionalApproval('Approved')}>
+                      {user.role === 'Supervisor' ? 'Confirm & Dispatch' : 'Approve Level'}
+                    </Button>
+                  )}
+                  
+                  <Button variant="outline" className="text-orange-600 border-orange-600 bg-white font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Clarification')}>
                     Request Info
                   </Button>
-                  <Button variant="destructive" className="font-bold h-12" onClick={() => handleExceptionalApproval('Rejected')}>
+                  <Button variant="destructive" className="font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Rejected')}>
                     Reject Flow
                   </Button>
                 </div>
@@ -681,7 +711,7 @@ export default function SubmissionDetails() {
                 {submission.exceptionalData.approvalHistory.map((step, idx) => (
                   <div key={idx} className="flex gap-4 items-start border-l-2 border-slate-100 pl-4 pb-2">
                     <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                      {step.action === 'Approved' ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
+                      {step.action === 'Approved' || step.action === 'Forwarded to Chief' || step.action === 'Returned to Director' ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
                     </div>
                     <div className="flex-1 space-y-1">
                       <div className="flex justify-between items-center">
@@ -731,7 +761,6 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {/* Amendment Workspace */}
           {(isOwner || isReviewer || isAdmin) && submission.status === 'Amended' && (
             <Card className="border-orange-200 shadow-xl bg-orange-50/5 animate-in slide-in-from-right-4 duration-500">
               <CardHeader className="bg-orange-100/50 border-b">
@@ -747,7 +776,10 @@ export default function SubmissionDetails() {
                     <Upload className="w-5 h-5 text-orange-600 mx-auto mb-2" />
                     <p className="text-xs font-bold text-orange-900">Attach Corrected Files (Optional)</p>
                   </div>
-                  <Textarea placeholder="Explain correction or provide context..." value={correctionNote} onChange={(e) => setCorrectionNote(e.target.value)} className="min-h-[100px]" />
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Response Note / Clarification</Label>
+                    <Textarea placeholder="Explain correction or provide context..." value={correctionNote} onChange={(e) => setCorrectionNote(e.target.value)} className="min-h-[100px]" />
+                  </div>
                   {newFiles.map((f, idx) => (
                     <div key={idx} className="p-3 border rounded-xl bg-white shadow-sm space-y-3">
                       <div className="flex items-center justify-between"><span className="text-[11px] font-bold truncate flex-1">{f.file.name}</span><button onClick={() => removeNewFile(idx)}><X className="w-3 h-3" /></button></div>
@@ -765,7 +797,6 @@ export default function SubmissionDetails() {
             </Card>
           )}
 
-          {/* KYC Determination */}
           {(isReviewer || isOwner || isAdmin) && (['Pending', 'In Review', 'Escalated', 'Amended'].includes(submission.status) || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
             <Card className="border-primary/20 shadow-xl overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-lg flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" /> KYC Determination</CardTitle></CardHeader>
@@ -776,7 +807,7 @@ export default function SubmissionDetails() {
                     {(!isCurrentlyEscalated || canResolveEscalation) && <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold">Approve</Button>}
                     {(!isCurrentlyEscalated || canResolveEscalation) && <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold border-[#E67E22]/30">Request Fix</Button>}
                     {(!isCurrentlyEscalated && (isKYCOfficer || isAdmin)) && <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold">Escalate</Button>}
-                    {isSeniorReviewer && <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Reject</Button>}
+                    {(isSeniorReviewer && user.role !== 'KYC Officer') && <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Reject</Button>}
                   </div>
                 )}
               </CardContent>
@@ -785,7 +816,6 @@ export default function SubmissionDetails() {
         </div>
       </div>
 
-      {/* Exceptional Initiation Dialog */}
       <Dialog open={isExceptionDialogOpen} onOpenChange={setIsExceptionDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -825,7 +855,6 @@ export default function SubmissionDetails() {
         </DialogContent>
       </Dialog>
 
-      {/* Preview Dialog */}
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
         <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none bg-[#1a1a1a]">
           <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between border-b border-white/5 pr-14">

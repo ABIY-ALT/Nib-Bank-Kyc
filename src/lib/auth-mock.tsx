@@ -11,7 +11,8 @@ export type UserRole =
   | 'Admin' 
   | 'Branch Manager' 
   | 'District Director'
-  | 'Division Manager';
+  | 'Division Manager'
+  | 'Chief Retail & SME Banking Officer';
 
 export interface User {
   id: string;
@@ -95,6 +96,14 @@ export const MOCK_USERS: User[] = [
     email: 'samuel.div@bank.com', 
     phoneNumber: '+1234567898', 
     role: 'Division Manager', 
+    status: 'Active' 
+  },
+  { 
+    id: 'chief-1', 
+    name: 'Charles Chief', 
+    email: 'charles.chief@bank.com', 
+    phoneNumber: '+1234567899', 
+    role: 'Chief Retail & SME Banking Officer', 
     status: 'Active' 
   },
 ];
