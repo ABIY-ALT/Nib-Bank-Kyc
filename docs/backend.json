@@ -20,7 +20,7 @@
         "isExceptional": { "type": "boolean" },
         "exceptionalStatus": {
           "type": "string",
-          "enum": ["None", "Awaiting District", "Awaiting Director", "Awaiting Supervisor", "Completed", "Rejected", "Clarification Required"]
+          "enum": ["None", "Awaiting District", "Awaiting Director", "Awaiting Supervisor", "Completed", "Rejected", "Clarification Required", "Awaiting Chief", "Awaiting Division"]
         },
         "exceptionalData": {
           "type": "object",
@@ -39,7 +39,8 @@
                   "action": { "type": "string" },
                   "performedBy": { "type": "string" },
                   "timestamp": { "type": "string" },
-                  "remarks": { "type": "string" }
+                  "remarks": { "type": "string" },
+                  "memoAttached": { "type": "boolean" }
                 }
               }
             }
@@ -53,32 +54,23 @@
       },
       "required": ["customerName", "branch", "status", "submittedBy"]
     },
-    "KYCFinding": {
-      "title": "KYC Finding",
-      "description": "Standardized KYC comment or query for reference.",
+    "FollowUpVerification": {
+      "title": "Follow-up Verification",
+      "description": "Head Office audit record for an approved KYC case.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "code": { "type": "string" },
-        "title": { "type": "string" },
-        "description": { "type": "string" },
-        "category": { 
-          "type": "string", 
-          "enum": ["Identity", "Documentation", "Compliance", "Account Validation"] 
-        },
-        "severity": { 
-          "type": "string", 
-          "enum": ["Low", "Medium", "High", "Critical"] 
-        },
-        "applicableTo": { 
-          "type": "array", 
-          "items": { "type": "string" } 
-        },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "active": { "type": "boolean" },
-        "source": { "type": "string", "enum": ["manual", "auto"] }
-      },
-      "required": ["code", "title", "category", "severity"]
+        "submissionId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "branch": { "type": "string" },
+        "officer": { "type": "string" },
+        "accountType": { "type": "string" },
+        "verifiedBy": { "type": "string" },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "result": { "type": "string", "enum": ["Correct", "Discrepancy"] },
+        "remarks": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Completed"] }
+      }
     },
     "UserProfile": {
       "title": "User Profile",
@@ -90,7 +82,7 @@
         "email": { "type": "string" },
         "role": { 
           "type": "string", 
-          "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Director", "Admin", "Branch Manager", "District Director"] 
+          "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Director", "Admin", "Branch Manager", "District Director", "Division Manager", "Chief Retail & SME Banking Officer", "Follow-up Team"] 
         },
         "branch": { "type": "string" },
         "district": { "type": "string" }
@@ -105,13 +97,13 @@
       "schema": "#/entities/KYCSubmission",
       "description": "Top-level collection of all KYC submissions."
     },
+    "/follow_up_verifications/{verifyId}": {
+      "schema": "#/entities/FollowUpVerification",
+      "description": "Head Office audit records."
+    },
     "/users/{userId}": {
       "schema": "#/entities/UserProfile",
       "description": "System user profiles and permissions."
-    },
-    "/kyc_findings/{findingId}": {
-      "schema": "#/entities/KYCFinding",
-      "description": "Knowledge base of standardized findings and queries."
     }
   }
 }

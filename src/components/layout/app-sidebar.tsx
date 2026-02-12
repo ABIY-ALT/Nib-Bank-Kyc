@@ -27,7 +27,8 @@ import {
   UserCog,
   Zap,
   LayoutList,
-  BookOpen
+  BookOpen,
+  ClipboardList
 } from "lucide-react"
 
 import {
@@ -76,6 +77,7 @@ export function AppSidebar() {
   const isDirector = user.role === 'Director'
   const isDistDir = user.role === 'District Director'
   const isAdmin = user.role === 'Admin'
+  const isFollowUp = user.role === 'Follow-up Team'
 
   const isReviewer = isKYCOfficer || isSupervisor || isAdmin
   const isManagement = isDirector || isDistDir || isBranchMgr || isSupervisor || isAdmin
@@ -105,6 +107,23 @@ export function AppSidebar() {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
+
+        {/* HEAD OFFICE FOLLOW-UP */}
+        {(isFollowUp || isAdmin) && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Head Office Audit</SidebarGroupLabel>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/head-office/follow-up')} tooltip="Follow-up Verification">
+                  <Link href="/head-office/follow-up">
+                    <ClipboardList className="text-primary" />
+                    <span>Follow-up Audit</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
 
         {/* SUBMISSIONS */}
         <SidebarGroup>

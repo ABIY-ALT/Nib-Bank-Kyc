@@ -12,7 +12,8 @@ export type UserRole =
   | 'Branch Manager' 
   | 'District Director'
   | 'Division Manager'
-  | 'Chief Retail & SME Banking Officer';
+  | 'Chief Retail & SME Banking Officer'
+  | 'Follow-up Team';
 
 export interface User {
   id: string;
@@ -33,6 +34,14 @@ export const MOCK_USERS: User[] = [
     email: 'admin@bank.com', 
     phoneNumber: '+1234567890', 
     role: 'Admin', 
+    status: 'Active' 
+  },
+  { 
+    id: 'follow-1', 
+    name: 'Arthur Auditor', 
+    email: 'arthur.audit@bank.com', 
+    phoneNumber: '+1234567891', 
+    role: 'Follow-up Team', 
     status: 'Active' 
   },
   { 
@@ -71,39 +80,6 @@ export const MOCK_USERS: User[] = [
     phoneNumber: '+1234567894', 
     role: 'Supervisor', 
     district: 'Central', 
-    status: 'Active' 
-  },
-  { 
-    id: 'dist-dir-1', 
-    name: 'David District', 
-    email: 'david.dist@bank.com', 
-    phoneNumber: '+1234567897', 
-    role: 'District Director', 
-    district: 'Central', 
-    status: 'Active' 
-  },
-  { 
-    id: 'dir-1', 
-    name: 'Alice Wilson', 
-    email: 'alice.dir@bank.com', 
-    phoneNumber: '+1234567895', 
-    role: 'Director', 
-    status: 'Active' 
-  },
-  { 
-    id: 'div-mgr-1', 
-    name: 'Samuel Division', 
-    email: 'samuel.div@bank.com', 
-    phoneNumber: '+1234567898', 
-    role: 'Division Manager', 
-    status: 'Active' 
-  },
-  { 
-    id: 'chief-1', 
-    name: 'Charles Chief', 
-    email: 'charles.chief@bank.com', 
-    phoneNumber: '+1234567899', 
-    role: 'Chief Retail & SME Banking Officer', 
     status: 'Active' 
   },
 ];

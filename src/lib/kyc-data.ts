@@ -66,7 +66,6 @@ export interface KYCSubmission {
   exceptionalStatus?: ExceptionalStatus;
   exceptionalData?: ExceptionalData;
   documents: Document[];
-  auditLogs: AuditLog[];
   remarks?: string;
   isResubmitted?: boolean;
   resubmittedAt?: string;
@@ -75,6 +74,20 @@ export interface KYCSubmission {
   reviewedBy?: string;
   reviewedAt?: string;
   checklistState?: Record<string, boolean>;
+}
+
+export interface FollowUpVerification {
+  id: string;
+  submissionId: string;
+  customerName: string;
+  branch: string;
+  officer: string;
+  accountType: string;
+  verifiedBy: string;
+  verifiedAt: string;
+  result: 'Correct' | 'Discrepancy';
+  remarks: string;
+  status: 'Pending' | 'Completed';
 }
 
 export interface KYCFinding {
