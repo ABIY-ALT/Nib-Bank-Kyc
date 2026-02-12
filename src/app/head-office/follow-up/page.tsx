@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
@@ -19,28 +18,28 @@ import {
   FileDown,
   Calendar,
   History,
-  FileText
+  FileText,
+  ArrowRight
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { KYCSubmission, FollowUpVerification } from "@/lib/kyc-data";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
-import { subDays, startOfDay } from "date-fns";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
+import { subDays, startOfDay, endOfDay, format } from "date-fns";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 export default function FollowUpDashboard() {
   const db = useFirestore();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSampling, setIsSampling] = useState(false);
-  const [samplingHorizon, setSamplingHorizon] = useState("30"); // Default 30 days
+  
+  // Date range state: Default to last 30 days
+  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   // 1. Fetch completed verifications for analytics and reporting
   const verificationsQuery = useMemoFirebase(() => {
@@ -56,31 +55,28 @@ export default function FollowUpDashboard() {
 
   const { data: pendingVerifications, loading: pLoading } = useCollection<FollowUpVerification>(pendingQuery);
 
-  // 3. Sampling Logic: Select random approved cases within date select
+  // 3. Sampling Logic: Select random approved cases within custom date range
   const handleSampleCases = async () => {
     if (!db) return;
     setIsSampling(true);
     
     try {
-      let q;
-      if (samplingHorizon === "all") {
-        q = query(collection(db, "submissions"), where("status", "==", "Approved"), limit(100));
-      } else {
-        const days = parseInt(samplingHorizon);
-        const startDate = startOfDay(subDays(new Date(), days)).toISOString();
-        // Fetch approved cases submitted after the horizon start date
-        q = query(
-          collection(db, "submissions"), 
-          where("status", "==", "Approved"), 
-          where("submittedAt", ">=", startDate),
-          limit(100)
-        );
-      }
+      const start = startOfDay(new Date(fromDate)).toISOString();
+      const end = endOfDay(new Date(toDate)).toISOString();
+
+      // Fetch approved cases submitted within the range
+      const q = query(
+        collection(db, "submissions"), 
+        where("status", "==", "Approved"), 
+        where("submittedAt", ">=", start),
+        where("submittedAt", "<=", end),
+        limit(100)
+      );
 
       const snapshot = await getDocs(q);
       const approvedCases = snapshot.docs.map(d => d.data() as KYCSubmission);
       
-      // Filter out those already in verification
+      // Filter out those already in verification or currently pending
       const existingIds = new Set(verifications?.map(v => v.submissionId) || []);
       const pendingIds = new Set(pendingVerifications?.map(v => v.submissionId) || []);
       const pool = approvedCases.filter(c => !existingIds.has(c.id) && !pendingIds.has(c.id));
@@ -88,8 +84,8 @@ export default function FollowUpDashboard() {
       if (pool.length === 0) {
         toast({ 
           variant: "destructive", 
-          title: "Sampling Exhausted", 
-          description: `No new approved cases available for the selected period (${samplingHorizon === 'all' ? 'Full Archive' : `Last ${samplingHorizon} Days`}).` 
+          title: "Sampling Pool Empty", 
+          description: `No new approved cases discovered between ${fromDate} and ${toDate}.` 
         });
         return;
       }
@@ -115,11 +111,11 @@ export default function FollowUpDashboard() {
 
       toast({ 
         title: "Sample Generated", 
-        description: `Added ${selected.length} random cases from the ${samplingHorizon === 'all' ? 'full archive' : `last ${samplingHorizon} days`} to the queue.` 
+        description: `Added ${selected.length} random cases from the selected period to the queue.` 
       });
     } catch (e) {
       console.error(e);
-      toast({ variant: "destructive", title: "Error", description: "Could not generate sample queue. Ensure database indices are ready." });
+      toast({ variant: "destructive", title: "Query Error", description: "Could not fetch cases. Ensure date range is valid and indices are ready." });
     } finally {
       setIsSampling(false);
     }
@@ -192,42 +188,60 @@ export default function FollowUpDashboard() {
           </div>
           <p className="text-muted-foreground text-lg font-medium">Head Office quality control and institutional audit workspace.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <Button 
-            variant="outline"
-            onClick={handleExportReport}
-            className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200 bg-white"
-          >
-            <FileDown className="w-5 h-5 text-primary" />
-            Export Audit Report
-          </Button>
-          
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 h-12 shadow-sm">
-            <Calendar className="w-4 h-4 text-slate-400" />
-            <Select value={samplingHorizon} onValueChange={setSamplingHorizon}>
-              <SelectTrigger className="w-[160px] border-none shadow-none focus:ring-0 font-bold text-sm">
-                <SelectValue placeholder="Sampling period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7" className="font-bold">Last 7 Days</SelectItem>
-                <SelectItem value="30" className="font-bold">Last 30 Days</SelectItem>
-                <SelectItem value="90" className="font-bold">Last 90 Days</SelectItem>
-                <SelectItem value="all" className="font-bold">Full Archive</SelectItem>
-              </SelectContent>
-            </Select>
-            <Separator orientation="vertical" className="h-6 mx-1" />
+        <Button 
+          variant="outline"
+          onClick={handleExportReport}
+          className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200 bg-white"
+        >
+          <FileDown className="w-5 h-5 text-primary" />
+          Export Audit Report
+        </Button>
+      </div>
+
+      {/* Sampling Control Bar */}
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col md:flex-row items-end gap-6">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit From Date</Label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Upto Date</Label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <Separator orientation="vertical" className="hidden md:block h-12 mx-2" />
+            
             <Button 
               onClick={handleSampleCases} 
-              disabled={isSampling}
-              variant="ghost"
-              className="hover:bg-primary/5 h-10 px-4 font-black gap-2 text-primary transition-all active:scale-95"
+              disabled={isSampling || !fromDate || !toDate}
+              className="bg-[#B89334] hover:bg-[#A6822D] text-white font-black h-11 px-8 gap-3 shadow-xl transition-all active:scale-95 min-w-[200px]"
             >
-              {isSampling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Dices className="w-4 h-4" />}
-              Generate Sample
+              {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
+              Generate Random Sample
             </Button>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-lg border-slate-200 overflow-hidden group">
@@ -280,7 +294,7 @@ export default function FollowUpDashboard() {
           <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-xl">Verification Sample Queue</CardTitle>
-              <CardDescription>Cases sampled for the {samplingHorizon === 'all' ? 'full history' : `last ${samplingHorizon} days`}.</CardDescription>
+              <CardDescription>Cases sampled for review.</CardDescription>
             </div>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-3">
               {pendingVerifications?.length || 0} Cases
@@ -320,7 +334,7 @@ export default function FollowUpDashboard() {
                 </div>
                 <div className="space-y-1">
                   <p className="font-bold text-slate-900">Queue Exhausted</p>
-                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">Adjust the sampling horizon and generate a new sample to begin quality control.</p>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">Configure a date range above and generate a new sample to begin quality control.</p>
                 </div>
               </div>
             )}
@@ -393,16 +407,4 @@ export default function FollowUpDashboard() {
 
 function cn(...classes: any[]) {
   return classes.filter(Boolean).join(' ');
-}
-
-function Separator({ className, orientation = "horizontal" }: { className?: string, orientation?: "horizontal" | "vertical" }) {
-  return (
-    <div 
-      className={cn(
-        "bg-slate-200", 
-        orientation === "horizontal" ? "h-[1px] w-full" : "w-[1px] h-full",
-        className
-      )} 
-    />
-  );
 }
