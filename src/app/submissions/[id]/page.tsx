@@ -333,10 +333,9 @@ export default function SubmissionDetails() {
   const handleExceptionalApproval = (action: 'Approved' | 'Rejected' | 'Clarification' | 'ForwardChief') => {
     if (!submissionRef || !db || !submission.exceptionalData) return;
     
-    const isDirectorRole = user.role === 'Director';
-    const isMemoRequiredRole = user.role === 'District Director' || user.role === 'Director';
+    const isMemoRequiredRole = ['District Director', 'Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
     if (action === 'Approved' && isMemoRequiredRole && !decisionMemoFile && !isAdmin) {
-      toast({ variant: "destructive", title: "Memo Required", description: "You must upload a supporting institutional memo to approve this request." });
+      toast({ variant: "destructive", title: "Memo Required", description: "You must upload a supporting institutional memo to authorize this request." });
       return;
     }
 
@@ -394,7 +393,7 @@ export default function SubmissionDetails() {
       const docRef = doc(collection(submissionRef, "documents"));
       const memoData = {
         id: docRef.id,
-        name: `${user.role?.replace(/ /g, '_')}_Support_Memo.pdf`,
+        name: `${user.role?.replace(/ /g, '_')}_Authorization_Memo.pdf`,
         type: 'Institutional Support Memo',
         uploadedAt: new Date().toISOString(),
         url: "#",
@@ -428,7 +427,6 @@ export default function SubmissionDetails() {
 
   const currentChecklist = CHECKLIST_CONFIGS[submission.entityType || "individual"] || CHECKLIST_CONFIGS["individual"];
 
-  // Logic to check if Chief step was taken
   const wasForwardedToChief = submission.exceptionalData?.approvalHistory?.some(h => h.role === 'Chief Retail & SME Banking Officer' || h.action === 'Forwarded to Chief');
 
   const steps = submission.isExceptional 
@@ -446,7 +444,6 @@ export default function SubmissionDetails() {
           icon: Shield,
           description: submission.exceptionalStatus === 'Awaiting Director' ? "Strategic Risk Review" : undefined
         },
-        // Optional Chief Step
         ...(wasForwardedToChief || submission.exceptionalStatus === 'Awaiting Chief' ? [{
           title: "Chief Retail & SME",
           status: (['Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Chief' ? "active" as const : "upcoming" as const),
@@ -555,10 +552,10 @@ export default function SubmissionDetails() {
                   <Shield className="w-5 h-5" /> 
                   Institutional Review: {isAdmin && currentExceptionalRole ? `${currentExceptionalRole} (via Admin Override)` : user.role}
                 </CardTitle>
-                <CardDescription className="text-yellow-100 font-medium">Provide your determination and supporting documentation for this level.</CardDescription>
+                <CardDescription className="text-yellow-100 font-medium">Provide your determination and upload supporting documentation for the audit trail.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
-                {(user.role === 'District Director' || user.role === 'Director' || user.role === 'Chief Retail & SME Banking Officer' || isAdmin) && (
+                {['District Director', 'Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '') || isAdmin ? (
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Mandatory Supporting Memo (PDF)</Label>
                     <div 
@@ -577,7 +574,7 @@ export default function SubmissionDetails() {
                       ) : (
                         <div className="flex flex-col items-center gap-2">
                           <Upload className="w-6 h-6 text-yellow-600" />
-                          <p className="text-xs font-bold text-slate-600">Upload {user.role} Authorization Memo</p>
+                          <p className="text-xs font-bold text-slate-600">Upload Official {user.role} Authorization Memo</p>
                         </div>
                       )}
                     </div>
@@ -589,12 +586,12 @@ export default function SubmissionDetails() {
                       onChange={(e) => setDecisionMemoFile(e.target.files?.[0] || null)}
                     />
                   </div>
-                )}
+                ) : null}
 
                 <div className="space-y-2">
                   <Label className="font-bold text-slate-700">Decision Remarks (Mandatory)</Label>
                   <Textarea 
-                    placeholder="Provide detailed approval/rejection notes for the audit trail..." 
+                    placeholder="Provide detailed context for your determination..." 
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
                     className="min-h-[120px] bg-white border-yellow-200 focus:ring-yellow-600"
