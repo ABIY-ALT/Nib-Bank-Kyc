@@ -46,7 +46,8 @@ import {
   CheckCircle2,
   Info,
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  ListFilter
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,7 +57,7 @@ import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase
 import { doc, updateDoc, collection, setDoc, increment, arrayUnion } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { KYCSubmission, Document, ExceptionalStatus } from "@/lib/kyc-data";
+import { KYCSubmission, Document, ExceptionalStatus, AMENDMENT_SCENARIOS } from "@/lib/kyc-data";
 import { 
   Select, 
   SelectContent, 
@@ -66,6 +67,7 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { 
   Dialog, 
@@ -155,6 +157,8 @@ export default function SubmissionDetails() {
   const { user } = useAuth();
   
   const [remarks, setRemarks] = useState("");
+  const [selectedScenario, setSelectedScenario] = useState<string>("");
+  const [otherScenarioText, setOtherScenarioText] = useState("");
   const [correctionNote, setCorrectionNote] = useState("");
   const [newFiles, setNewFiles] = useState<{file: File, type: string}[]>([]);
   const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
@@ -206,6 +210,22 @@ export default function SubmissionDetails() {
       updateDoc(submissionRef, { status: 'In Review' }).catch(() => {});
     }
   }, [submission, isReviewer, submissionRef]);
+
+  const handleScenarioChange = (val: string) => {
+    setSelectedScenario(val);
+    if (val !== "19. Other (specify)") {
+      setRemarks(val);
+      setOtherScenarioText("");
+    } else {
+      setRemarks("");
+    }
+  };
+
+  const handleOtherScenarioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    setOtherScenarioText(text);
+    setRemarks(`Other Finding: ${text}`);
+  };
 
   if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
@@ -796,9 +816,58 @@ export default function SubmissionDetails() {
 
           {(isReviewer || isOwner || isAdmin) && (['Pending', 'In Review', 'Escalated', 'Amended'].includes(submission.status) || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
             <Card className="border-primary/20 shadow-xl overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-lg flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" /> KYC Determination</CardTitle></CardHeader>
-              <CardContent className="space-y-4 pt-6">
-                <Textarea placeholder={isReviewer || isAdmin ? "Provide verification feedback..." : "No remarks provided yet."} value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[140px]" disabled={!isReviewer && !isAdmin} />
+              <CardHeader className="bg-slate-50/50 border-b">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-primary" /> 
+                  KYC Determination
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-6">
+                {(isReviewer || isAdmin) && (
+                  <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                        <ListFilter className="w-3 h-3" /> Amendment Scenario Registry
+                      </Label>
+                      <Select value={selectedScenario} onValueChange={handleScenarioChange}>
+                        <SelectTrigger className="h-11 bg-slate-50/50 border-slate-200">
+                          <SelectValue placeholder="Select institutional finding..." />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px]">
+                          {AMENDMENT_SCENARIOS.map((scenario) => (
+                            <SelectItem key={scenario} value={scenario} className="text-xs font-medium">
+                              {scenario}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {selectedScenario === "19. Other (specify)" && (
+                      <div className="space-y-2 animate-in fade-in duration-300">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Specify Custom Finding</Label>
+                        <Input 
+                          placeholder="Detail the bespoke amendment required..." 
+                          value={otherScenarioText}
+                          onChange={handleOtherScenarioChange}
+                          className="h-11 border-primary/20"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Decision Remarks</Label>
+                  <Textarea 
+                    placeholder={isReviewer || isAdmin ? "Provide verification feedback or select a scenario above..." : "No remarks provided yet."} 
+                    value={remarks} 
+                    onChange={(e) => setRemarks(e.target.value)} 
+                    className="min-h-[140px] bg-white" 
+                    disabled={!isReviewer && !isAdmin} 
+                  />
+                </div>
+
                 {(isReviewer || isAdmin) && (
                   <div className="grid grid-cols-2 gap-2 pt-2">
                     {(!isCurrentlyEscalated || canResolveEscalation) && <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold">Approve</Button>}
