@@ -227,6 +227,36 @@ export default function SubmissionDetails() {
     setRemarks(`Other Finding: ${text}`);
   };
 
+  const currentChecklist = useMemo(() => {
+    return CHECKLIST_CONFIGS[submission?.entityType || "individual"] || CHECKLIST_CONFIGS["individual"];
+  }, [submission?.entityType]);
+
+  const handleSelectAllChecklist = (value: boolean) => {
+    if (!submissionRef || (!isKYCOfficer && !isAdmin)) return;
+
+    const newState: Record<string, boolean> = {};
+    currentChecklist.forEach(item => {
+      newState[item.id] = value;
+    });
+
+    const updateData = {
+      checklistState: newState
+    };
+
+    updateDoc(submissionRef, updateData).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: submissionRef.path,
+        operation: 'update',
+        requestResourceData: updateData
+      }));
+    });
+    
+    toast({
+      title: value ? "All Items Verified" : "Checklist Reset",
+      description: value ? "All items have been marked as verified." : "Verification status has been cleared for all items."
+    });
+  };
+
   if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
@@ -374,7 +404,6 @@ export default function SubmissionDetails() {
     } else if (action === 'ForwardChief') {
       nextStatus = 'Awaiting Chief';
     } else {
-      // Sequential Flow: District -> Director -> (Optional Chief -> Director) -> Division -> Supervisor
       if (currentStatus === 'Awaiting District') nextStatus = 'Awaiting Director';
       else if (currentStatus === 'Awaiting Director') nextStatus = 'Awaiting Division';
       else if (currentStatus === 'Awaiting Chief') nextStatus = 'Awaiting Director';
@@ -444,8 +473,6 @@ export default function SubmissionDetails() {
       }));
     });
   };
-
-  const currentChecklist = CHECKLIST_CONFIGS[submission.entityType || "individual"] || CHECKLIST_CONFIGS["individual"];
 
   const wasForwardedToChief = submission.exceptionalData?.approvalHistory?.some(h => h.role === 'Chief Retail & SME Banking Officer' || h.action === 'Forwarded to Chief');
 
@@ -690,11 +717,33 @@ export default function SubmissionDetails() {
               </div>
 
               <div className="space-y-4 animate-in fade-in duration-500">
-                <div className="flex items-center gap-2 pb-2 border-b">
-                  <ClipboardCheck className="w-5 h-5 text-primary" />
-                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
-                    Verification Checklist: {submission.entityType?.replace(/_/g, ' ') || "Individual"}
-                  </h3>
+                <div className="flex items-center justify-between pb-2 border-b">
+                  <div className="flex items-center gap-2">
+                    <ClipboardCheck className="w-5 h-5 text-primary" />
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
+                      Verification Checklist: {submission.entityType?.replace(/_/g, ' ') || "Individual"}
+                    </h3>
+                  </div>
+                  {(isKYCOfficer || isAdmin) && (
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-7 text-[10px] font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => handleSelectAllChecklist(true)}
+                      >
+                        Select All
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-7 text-[10px] font-bold border-slate-200 text-slate-500 hover:bg-slate-50"
+                        onClick={() => handleSelectAllChecklist(false)}
+                      >
+                        Deselect All
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 gap-2">
                   {currentChecklist.map((item) => {
