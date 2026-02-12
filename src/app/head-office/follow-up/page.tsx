@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
@@ -204,7 +205,7 @@ export default function FollowUpDashboard() {
           <div className="flex flex-col md:flex-row items-end gap-6">
             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit From Date</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
@@ -216,7 +217,7 @@ export default function FollowUpDashboard() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Upto Date</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
