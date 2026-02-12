@@ -3,37 +3,44 @@
 
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, query, where, orderBy, doc, setDoc, limit, getDocs } from "firebase/firestore";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-mock";
 import { 
   ShieldCheck, 
-  Search, 
   RefreshCw, 
   CheckCircle2, 
   AlertTriangle, 
   TrendingUp, 
   Building2, 
-  User, 
-  FileText,
   Loader2,
-  Filter,
-  History,
   Dices,
-  FileDown
+  FileDown,
+  Calendar,
+  History,
+  FileText
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { KYCSubmission, FollowUpVerification } from "@/lib/kyc-data";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
+import { subDays, startOfDay } from "date-fns";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 
 export default function FollowUpDashboard() {
   const db = useFirestore();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSampling, setIsSampling] = useState(false);
+  const [samplingHorizon, setSamplingHorizon] = useState("30"); // Default 30 days
 
   // 1. Fetch completed verifications for analytics and reporting
   const verificationsQuery = useMemoFirebase(() => {
@@ -49,14 +56,27 @@ export default function FollowUpDashboard() {
 
   const { data: pendingVerifications, loading: pLoading } = useCollection<FollowUpVerification>(pendingQuery);
 
-  // 3. Sampling Logic: Select random approved cases
+  // 3. Sampling Logic: Select random approved cases within date select
   const handleSampleCases = async () => {
     if (!db) return;
     setIsSampling(true);
     
     try {
-      // Get all approved submissions
-      const q = query(collection(db, "submissions"), where("status", "==", "Approved"), limit(50));
+      let q;
+      if (samplingHorizon === "all") {
+        q = query(collection(db, "submissions"), where("status", "==", "Approved"), limit(100));
+      } else {
+        const days = parseInt(samplingHorizon);
+        const startDate = startOfDay(subDays(new Date(), days)).toISOString();
+        // Fetch approved cases submitted after the horizon start date
+        q = query(
+          collection(db, "submissions"), 
+          where("status", "==", "Approved"), 
+          where("submittedAt", ">=", startDate),
+          limit(100)
+        );
+      }
+
       const snapshot = await getDocs(q);
       const approvedCases = snapshot.docs.map(d => d.data() as KYCSubmission);
       
@@ -66,11 +86,15 @@ export default function FollowUpDashboard() {
       const pool = approvedCases.filter(c => !existingIds.has(c.id) && !pendingIds.has(c.id));
 
       if (pool.length === 0) {
-        toast({ variant: "destructive", title: "Sampling Exhausted", description: "No new approved cases available for audit selection." });
+        toast({ 
+          variant: "destructive", 
+          title: "Sampling Exhausted", 
+          description: `No new approved cases available for the selected period (${samplingHorizon === 'all' ? 'Full Archive' : `Last ${samplingHorizon} Days`}).` 
+        });
         return;
       }
 
-      // Select 5 random cases
+      // Select up to 5 random cases
       const shuffled = pool.sort(() => 0.5 - Math.random());
       const selected = shuffled.slice(0, 5);
 
@@ -89,9 +113,13 @@ export default function FollowUpDashboard() {
         });
       }
 
-      toast({ title: "Sample Generated", description: `Added ${selected.length} random cases to the follow-up queue.` });
+      toast({ 
+        title: "Sample Generated", 
+        description: `Added ${selected.length} random cases from the ${samplingHorizon === 'all' ? 'full archive' : `last ${samplingHorizon} days`} to the queue.` 
+      });
     } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: "Could not generate sample queue." });
+      console.error(e);
+      toast({ variant: "destructive", title: "Error", description: "Could not generate sample queue. Ensure database indices are ready." });
     } finally {
       setIsSampling(false);
     }
@@ -164,7 +192,7 @@ export default function FollowUpDashboard() {
           </div>
           <p className="text-muted-foreground text-lg font-medium">Head Office quality control and institutional audit workspace.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button 
             variant="outline"
             onClick={handleExportReport}
@@ -173,14 +201,31 @@ export default function FollowUpDashboard() {
             <FileDown className="w-5 h-5 text-primary" />
             Export Audit Report
           </Button>
-          <Button 
-            onClick={handleSampleCases} 
-            disabled={isSampling}
-            className="bg-primary hover:bg-primary/90 h-12 px-8 font-black shadow-xl gap-2 rounded-xl transition-all active:scale-95"
-          >
-            {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
-            Generate Random Audit Sample
-          </Button>
+          
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 h-12 shadow-sm">
+            <Calendar className="w-4 h-4 text-slate-400" />
+            <Select value={samplingHorizon} onValueChange={setSamplingHorizon}>
+              <SelectTrigger className="w-[160px] border-none shadow-none focus:ring-0 font-bold text-sm">
+                <SelectValue placeholder="Sampling period" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7" className="font-bold">Last 7 Days</SelectItem>
+                <SelectItem value="30" className="font-bold">Last 30 Days</SelectItem>
+                <SelectItem value="90" className="font-bold">Last 90 Days</SelectItem>
+                <SelectItem value="all" className="font-bold">Full Archive</SelectItem>
+              </SelectContent>
+            </Select>
+            <Separator orientation="vertical" className="h-6 mx-1" />
+            <Button 
+              onClick={handleSampleCases} 
+              disabled={isSampling}
+              variant="ghost"
+              className="hover:bg-primary/5 h-10 px-4 font-black gap-2 text-primary transition-all active:scale-95"
+            >
+              {isSampling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Dices className="w-4 h-4" />}
+              Generate Sample
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -231,11 +276,11 @@ export default function FollowUpDashboard() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-7">
-        <Card className="lg:col-span-4 shadow-xl border-slate-200 overflow-hidden">
+        <Card className="lg:col-span-4 shadow-xl border-slate-200 overflow-hidden min-h-[400px]">
           <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-xl">Verification Sample Queue</CardTitle>
-              <CardDescription>Randomly sampled cases requiring Head Office sign-off.</CardDescription>
+              <CardDescription>Cases sampled for the {samplingHorizon === 'all' ? 'full history' : `last ${samplingHorizon} days`}.</CardDescription>
             </div>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-3">
               {pendingVerifications?.length || 0} Cases
@@ -243,7 +288,10 @@ export default function FollowUpDashboard() {
           </CardHeader>
           <CardContent className="p-0">
             {pLoading ? (
-              <div className="py-20 text-center text-muted-foreground"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" /> Synchronizing queue...</div>
+              <div className="flex flex-col items-center justify-center py-32 text-muted-foreground gap-4">
+                <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                <p className="font-bold">Synchronizing institutional queue...</p>
+              </div>
             ) : pendingVerifications && pendingVerifications.length > 0 ? (
               <div className="divide-y">
                 {pendingVerifications.map((v) => (
@@ -267,10 +315,12 @@ export default function FollowUpDashboard() {
               </div>
             ) : (
               <div className="py-24 text-center space-y-4">
-                <Dices className="w-12 h-12 text-slate-200 mx-auto" />
+                <div className="p-6 bg-slate-50 rounded-full w-fit mx-auto">
+                  <Dices className="w-12 h-12 text-slate-300" />
+                </div>
                 <div className="space-y-1">
                   <p className="font-bold text-slate-900">Queue Exhausted</p>
-                  <p className="text-sm text-muted-foreground">Generate a new sample to begin quality control.</p>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">Adjust the sampling horizon and generate a new sample to begin quality control.</p>
                 </div>
               </div>
             )}
@@ -288,7 +338,11 @@ export default function FollowUpDashboard() {
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-4">
-                {verifications?.filter(v => v.status === 'Completed').slice(0, 5).map((v) => (
+                {vLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse py-10 justify-center">
+                    <RefreshCw className="w-4 h-4 animate-spin" /> Syncing history...
+                  </div>
+                ) : verifications?.filter(v => v.status === 'Completed').slice(0, 5).map((v) => (
                   <div key={v.id} className="flex gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all">
                     <div className={cn(
                       "p-2 rounded-lg h-fit",
@@ -303,8 +357,8 @@ export default function FollowUpDashboard() {
                     </div>
                   </div>
                 ))}
-                {(!verifications || verifications.filter(v => v.status === 'Completed').length === 0) && (
-                  <div className="text-center py-10 text-muted-foreground italic text-sm">No audit history found.</div>
+                {!vLoading && (!verifications || verifications.filter(v => v.status === 'Completed').length === 0) && (
+                  <div className="text-center py-10 text-muted-foreground italic text-sm">No audit history discovered.</div>
                 )}
               </div>
             </CardContent>
@@ -339,4 +393,16 @@ export default function FollowUpDashboard() {
 
 function cn(...classes: any[]) {
   return classes.filter(Boolean).join(' ');
+}
+
+function Separator({ className, orientation = "horizontal" }: { className?: string, orientation?: "horizontal" | "vertical" }) {
+  return (
+    <div 
+      className={cn(
+        "bg-slate-200", 
+        orientation === "horizontal" ? "h-[1px] w-full" : "w-[1px] h-full",
+        className
+      )} 
+    />
+  );
 }
