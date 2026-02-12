@@ -13,7 +13,8 @@ export type UserRole =
   | 'District Director'
   | 'Division Manager'
   | 'Chief Retail & SME Banking Officer'
-  | 'Follow-up Team';
+  | 'Follow-up Team'
+  | 'Chief';
 
 export interface User {
   id: string;

@@ -64,7 +64,10 @@ const ROLES: UserRole[] = [
   'Admin', 
   'Branch Manager', 
   'District Director',
-  'Division Manager'
+  'Division Manager',
+  'Chief Retail & SME Banking Officer',
+  'Follow-up Team',
+  'Chief'
 ];
 
 export default function UserManagementPage() {

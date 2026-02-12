@@ -10,7 +10,8 @@ export type UserRole =
   | 'Director' 
   | 'Admin' 
   | 'Branch Manager' 
-  | 'District Director';
+  | 'District Director'
+  | 'Chief';
 
 export interface User {
   id: string;

@@ -82,7 +82,7 @@
         "email": { "type": "string" },
         "role": { 
           "type": "string", 
-          "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Director", "Admin", "Branch Manager", "District Director", "Division Manager", "Chief Retail & SME Banking Officer", "Follow-up Team"] 
+          "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Director", "Admin", "Branch Manager", "District Director", "Division Manager", "Chief Retail & SME Banking Officer", "Follow-up Team", "Chief"] 
         },
         "branch": { "type": "string" },
         "district": { "type": "string" }
