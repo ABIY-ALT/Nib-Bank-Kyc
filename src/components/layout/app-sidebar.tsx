@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -74,16 +73,16 @@ export function AppSidebar() {
   const isKYCOfficer = user.role === 'KYC Officer'
   const isSupervisor = user.role === 'Supervisor'
   const isBranchMgr = user.role === 'Branch Manager'
-  const isDirector = user.role === 'Director'
+  const isBranchBankingDir = user.role === 'Branch Banking Director'
   const isDistDir = user.role === 'District Director'
   const isAdmin = user.role === 'Admin'
   const isFollowUp = user.role === 'Follow-up Team'
 
   const isReviewer = isKYCOfficer || isSupervisor || isAdmin
-  const isManagement = isDirector || isDistDir || isBranchMgr || isSupervisor || isAdmin
-  const canSeePerformance = isBranchMgr || isSupervisor || isDirector || isDistDir || isAdmin
-  const canSeeReports = isSupervisor || isDirector || isAdmin
-  const canSeeExceptional = isDistDir || isDirector || isSupervisor || isBranchMgr || isAdmin
+  const isManagement = isBranchBankingDir || isDistDir || isBranchMgr || isSupervisor || isAdmin
+  const canSeePerformance = isBranchMgr || isSupervisor || isBranchBankingDir || isDistDir || isAdmin
+  const canSeeReports = isSupervisor || isBranchBankingDir || isAdmin
+  const canSeeExceptional = isDistDir || isBranchBankingDir || isSupervisor || isBranchMgr || isAdmin
 
   return (
     <Sidebar collapsible="icon">
@@ -301,7 +300,7 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      {(isDirector || isDistDir || isAdmin) && (
+                      {(isBranchBankingDir || isDistDir || isAdmin) && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/performance/district'}>
                             <Link href="/performance/district">
@@ -311,7 +310,7 @@ export function AppSidebar() {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
-                      {(isBranchMgr || isDirector || isAdmin) && (
+                      {(isBranchMgr || isBranchBankingDir || isAdmin) && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/performance/branch'}>
                             <Link href="/performance/branch">
@@ -321,7 +320,7 @@ export function AppSidebar() {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
-                      {(isSupervisor || isDirector || isAdmin) && (
+                      {(isSupervisor || isBranchBankingDir || isAdmin) && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
                             <Link href="/performance/officer">
@@ -365,7 +364,7 @@ export function AppSidebar() {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
-                      {(isDirector || isAdmin) && (
+                      {(isBranchBankingDir || isAdmin) && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}>
                             <Link href="/reports/branch">
@@ -375,7 +374,7 @@ export function AppSidebar() {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
-                      {(isSupervisor || isDirector || isAdmin) && (
+                      {(isSupervisor || isBranchBankingDir || isAdmin) && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/officer'}>
                             <Link href="/reports/officer">

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -42,7 +41,7 @@ const DEFAULT_ROLES: UserRole[] = [
   'Branch Officer', 
   'KYC Officer', 
   'Supervisor', 
-  'Director', 
+  'Branch Banking Director', 
   'Admin', 
   'Branch Manager', 
   'District Director',
@@ -320,10 +319,10 @@ export default function StaffRolesPage() {
                         {['KYC Officer', 'Supervisor', 'Admin'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
                       </TableCell>
                       <TableCell className="text-center">
-                        {['Supervisor', 'Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Chief'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
+                        {['Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Chief'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
                       </TableCell>
                       <TableCell className="text-center">
-                        {['Supervisor', 'Director', 'Admin', 'Branch Manager', 'District Director', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Chief'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
+                        {['Supervisor', 'Branch Banking Director', 'Admin', 'Branch Manager', 'District Director', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Chief'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
                       </TableCell>
                       <TableCell className="text-center">{role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}</TableCell>
                       <TableCell className="text-center">{role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}</TableCell>

@@ -171,7 +171,7 @@ export default function FollowUpDashboard() {
     document.body.removeChild(link);
 
     toast({
-      title: "Audit Report Exported",
+      title: "Follow-up Report Exported",
       description: `Institutional record of ${completed.length} audits saved to CSV.`,
     });
   };
@@ -194,7 +194,7 @@ export default function FollowUpDashboard() {
           className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200 bg-white"
         >
           <FileDown className="w-5 h-5 text-primary" />
-          Export Audit Report
+          Export Follow-up Report
         </Button>
       </div>
 

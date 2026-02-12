@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
@@ -7,7 +6,7 @@ export type UserRole =
   | 'Branch Officer' 
   | 'KYC Officer' 
   | 'Supervisor' 
-  | 'Director' 
+  | 'Branch Banking Director' 
   | 'Admin' 
   | 'Branch Manager' 
   | 'District Director' 
@@ -50,7 +49,7 @@ export const MOCK_USERS: User[] = [
     name: 'Alice Wilson', 
     email: 'alice.dir@bank.com', 
     phoneNumber: '+1234567895', 
-    role: 'Director', 
+    role: 'Branch Banking Director', 
     status: 'Active' 
   },
   { 

@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "KYCSubmission": {
@@ -20,7 +19,7 @@
         "isExceptional": { "type": "boolean" },
         "exceptionalStatus": {
           "type": "string",
-          "enum": ["None", "Awaiting District", "Awaiting Director", "Awaiting Supervisor", "Completed", "Rejected", "Clarification Required", "Awaiting Chief", "Awaiting Division"]
+          "enum": ["None", "Awaiting District", "Awaiting Director", "Awaiting Chief", "Awaiting Division", "Awaiting Supervisor", "Completed", "Rejected", "Clarification Required"]
         },
         "exceptionalData": {
           "type": "object",
@@ -82,7 +81,7 @@
         "email": { "type": "string" },
         "role": { 
           "type": "string", 
-          "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Director", "Admin", "Branch Manager", "District Director", "Division Manager", "Chief Retail & SME Banking Officer", "Follow-up Team", "Chief"] 
+          "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Branch Banking Director", "Admin", "Branch Manager", "District Director", "Division Manager", "Chief Retail & SME Banking Officer", "Follow-up Team", "Chief"] 
         },
         "branch": { "type": "string" },
         "district": { "type": "string" }

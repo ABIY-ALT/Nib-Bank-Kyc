@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -60,7 +59,7 @@ const ROLES: UserRole[] = [
   'Branch Officer', 
   'KYC Officer', 
   'Supervisor', 
-  'Director', 
+  'Branch Banking Director', 
   'Admin', 
   'Branch Manager', 
   'District Director',

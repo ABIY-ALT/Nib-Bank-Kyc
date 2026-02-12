@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
@@ -7,7 +6,7 @@ export type UserRole =
   | 'Branch Officer' 
   | 'KYC Officer' 
   | 'Supervisor' 
-  | 'Director' 
+  | 'Branch Banking Director' 
   | 'Admin' 
   | 'Branch Manager' 
   | 'District Director'
@@ -29,7 +28,7 @@ export const MOCK_USERS: User[] = [
   { id: 'branch-1', name: 'John Doe', email: 'john.branch@bank.com', phoneNumber: '+1234567891', role: 'Branch Officer', branch: 'Downtown', district: 'Central', status: 'Active' },
   { id: 'kyc-1', name: 'Jane Smith', email: 'jane.kyc@bank.com', phoneNumber: '+1234567892', role: 'KYC Officer', status: 'Active' },
   { id: 'super-1', name: 'Robert Brown', email: 'robert.super@bank.com', phoneNumber: '+1234567894', role: 'Supervisor', district: 'Central', status: 'Active' },
-  { id: 'dir-1', name: 'Alice Wilson', email: 'alice.dir@bank.com', phoneNumber: '+1234567895', role: 'Director', status: 'Active' },
+  { id: 'dir-1', name: 'Alice Wilson', email: 'alice.dir@bank.com', phoneNumber: '+1234567895', role: 'Branch Banking Director', status: 'Active' },
 ];
 
 interface AuthContextType {

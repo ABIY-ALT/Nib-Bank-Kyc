@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -64,7 +63,7 @@ export function useSidebarCounts(user: User) {
 
         if (isAdmin) return true;
         if (user.role === 'District Director') return data.exceptionalStatus === 'Awaiting District' && data.district === user.district;
-        if (user.role === 'Director') return data.exceptionalStatus === 'Awaiting Director';
+        if (user.role === 'Branch Banking Director') return data.exceptionalStatus === 'Awaiting Director';
         if (user.role === 'Chief Retail & SME Banking Officer') return data.exceptionalStatus === 'Awaiting Chief';
         if (user.role === 'Division Manager') return data.exceptionalStatus === 'Awaiting Division';
         if (user.role === 'Supervisor') return data.exceptionalStatus === 'Awaiting Supervisor';
@@ -85,7 +84,7 @@ export function useSidebarCounts(user: User) {
       
       const filterByScope = (data: any) => {
         if (isAdmin) return true;
-        const isGlobalReviewer = ['Director', 'Supervisor', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
+        const isGlobalReviewer = ['Branch Banking Director', 'Supervisor', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
         if (isGlobalReviewer) return true;
         const assigned = user.assignedBranches || [];
         return assigned.includes(data.branch);

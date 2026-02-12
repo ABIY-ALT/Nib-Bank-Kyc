@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -200,8 +199,8 @@ export default function SubmissionDetails() {
   // Role Definitions
   const isAdmin = user.role === 'Admin';
   const isKYCOfficer = user.role === 'KYC Officer'; 
-  const isReviewer = ['KYC Officer', 'Supervisor', 'Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
-  const isSeniorReviewer = ['Supervisor', 'Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
+  const isReviewer = ['KYC Officer', 'Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
+  const isSeniorReviewer = ['Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
   const isOwner = submission?.submittedBy === user.name;
   const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
 
@@ -383,7 +382,7 @@ export default function SubmissionDetails() {
   const handleExceptionalApproval = (action: 'Approved' | 'Rejected' | 'Clarification' | 'ForwardChief') => {
     if (!submissionRef || !db || !submission.exceptionalData) return;
     
-    const isMemoRequiredRole = ['District Director', 'Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
+    const isMemoRequiredRole = ['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
     if (action === 'Approved' && isMemoRequiredRole && !decisionMemoFile && !isAdmin) {
       toast({ variant: "destructive", title: "Memo Required", description: "You must upload a supporting institutional memo to authorize this request." });
       return;
@@ -476,14 +475,14 @@ export default function SubmissionDetails() {
 
   const currentExceptionalRole = 
     submission.exceptionalStatus === 'Awaiting District' ? 'District Director' :
-    submission.exceptionalStatus === 'Awaiting Director' ? 'Director' :
+    submission.exceptionalStatus === 'Awaiting Director' ? 'Branch Banking Director' :
     submission.exceptionalStatus === 'Awaiting Chief' ? 'Chief Retail & SME Banking Officer' :
     submission.exceptionalStatus === 'Awaiting Division' ? 'Division Manager' :
     submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
 
   const isCurrentExceptionalApprover = user.role === currentExceptionalRole || isAdmin;
 
-  const showDirectorButtons = submission.exceptionalStatus === 'Awaiting Director' && (user.role === 'Director' || isAdmin);
+  const showDirectorButtons = submission.exceptionalStatus === 'Awaiting Director' && (user.role === 'Branch Banking Director' || isAdmin);
   const showChiefButtons = submission.exceptionalStatus === 'Awaiting Chief' && (user.role === 'Chief Retail & SME Banking Officer' || isAdmin);
 
   const steps = submission.isExceptional 
@@ -496,7 +495,7 @@ export default function SubmissionDetails() {
           description: submission.exceptionalStatus === 'Awaiting District' ? "Regional Authorization" : undefined
         },
         { 
-          title: "KYC Director", 
+          title: "Branch Banking Director", 
           status: (['Awaiting Chief', 'Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Director' ? "active" as const : "upcoming" as const), 
           icon: Shield,
           description: submission.exceptionalStatus === 'Awaiting Director' ? "Strategic Risk Review" : undefined
@@ -505,7 +504,7 @@ export default function SubmissionDetails() {
           title: "Chief Retail & SME",
           status: (['Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Chief' ? "active" as const : "upcoming" as const),
           icon: ShieldAlert,
-          description: submission.exceptionalStatus === 'Awaiting Chief' ? "Executive Review" : "Optional: High-Risk Node"
+          description: submission.exceptionalStatus === 'Awaiting Chief' ? "Executive Review" : "Optional: Executive Review"
         },
         { 
           title: "Division Manager", 
@@ -603,7 +602,7 @@ export default function SubmissionDetails() {
                 <CardDescription className="text-yellow-100 font-medium">Provide your determination and upload supporting documentation for the audit trail.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
-                {['District Director', 'Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '') || isAdmin ? (
+                {['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '') || isAdmin ? (
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Mandatory Supporting Memo (PDF)</Label>
                     <div 
@@ -690,7 +689,7 @@ export default function SubmissionDetails() {
             <CardContent className="pt-6 space-y-8">
               <div className="space-y-4">
                 {documents?.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-all group border-slate-200 bg-white">
+                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all group border-slate-200">
                       <div className="flex items-center gap-4">
                         <div className={cn(
                           "p-2 rounded-lg",
