@@ -257,7 +257,7 @@ export default function FollowUpDashboard() {
 
         <Card className="shadow-lg border-slate-200 overflow-hidden group">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50">
-            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Audited</CardTitle>
+            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Checked</CardTitle>
             <FileText className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="pt-4">
