@@ -154,6 +154,7 @@ export default function SubmissionDetails() {
   const { user } = useAuth();
   
   const [remarks, setRemarks] = useState("");
+  const [correctionNote, setCorrectionNote] = useState("");
   const [newFiles, setNewFiles] = useState<{file: File, type: string}[]>([]);
   const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
   
@@ -214,7 +215,7 @@ export default function SubmissionDetails() {
   };
 
   const removeNewFile = (index: number) => {
-    setNewFiles(prev => prev.filter((_, i) => i !== index));
+    setNewFiles(prev => setNewFiles(prev.filter((_, i) => i !== index)));
   };
 
   const updateNewFileType = (index: number, type: string) => {
@@ -230,6 +231,10 @@ export default function SubmissionDetails() {
         toast({ variant: "destructive", title: "Classification Required", description: "Select a document type for all uploaded corrections." });
         return;
       }
+      if (newFiles.length === 0 && !correctionNote.trim()) {
+        toast({ variant: "destructive", title: "Response Required", description: "Please provide either a response note or a supporting file." });
+        return;
+      }
     }
 
     // Validation for reviewer actions
@@ -240,7 +245,9 @@ export default function SubmissionDetails() {
 
     const updateData: any = {
       status: action,
-      remarks: remarks || submission.remarks || "", 
+      remarks: action === 'Pending' 
+        ? (correctionNote ? `Branch Response: ${correctionNote}\n\n${submission.remarks || ""}` : (submission.remarks || ""))
+        : (remarks || submission.remarks || ""), 
     };
 
     if (action === 'Amended') updateData.amendmentCycles = increment(1);
@@ -699,7 +706,7 @@ export default function SubmissionDetails() {
                   <RefreshCw className="w-5 h-5 text-orange-600" />
                   Correction Workspace
                 </CardTitle>
-                <CardDescription className="text-orange-800 font-medium">Provide requested documentation to resolve verify requirements.</CardDescription>
+                <CardDescription className="text-orange-800 font-medium">Provide requested documentation or a response note to resolve verify requirements.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
                 <div className="p-4 rounded-xl bg-white border border-orange-200 shadow-sm">
@@ -722,8 +729,18 @@ export default function SubmissionDetails() {
                     <div className="bg-orange-100 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
                       <Upload className="w-5 h-5 text-orange-600" />
                     </div>
-                    <p className="text-xs font-bold text-orange-900">Attach Corrected Files</p>
+                    <p className="text-xs font-bold text-orange-900">Attach Corrected Files (Optional)</p>
                     <p className="text-[9px] text-orange-600 uppercase font-black mt-1">Accepts PDF & Images</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase text-orange-800 tracking-widest">Response Note / Clarification</Label>
+                    <Textarea 
+                      placeholder="Explain the correction or provide additional context for the reviewer..."
+                      value={correctionNote}
+                      onChange={(e) => setCorrectionNote(e.target.value)}
+                      className="min-h-[100px] bg-white border-orange-100 focus:ring-orange-600 shadow-sm"
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -734,9 +751,9 @@ export default function SubmissionDetails() {
                             <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                             <span className="text-[11px] font-bold truncate text-slate-700">{f.file.name}</span>
                           </div>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive rounded-full" onClick={() => removeNewFile(idx)}>
+                          <button className="h-6 w-6 text-destructive rounded-full hover:bg-destructive/5 flex items-center justify-center transition-colors" onClick={() => removeNewFile(idx)}>
                             <X className="w-3 h-3" />
-                          </Button>
+                          </button>
                         </div>
                         <Select value={f.type} onValueChange={(val) => updateNewFileType(idx, val)}>
                           <SelectTrigger className="h-9 text-[10px] border-orange-100 bg-orange-50/30">
@@ -755,7 +772,7 @@ export default function SubmissionDetails() {
                 <Button 
                   className="w-full bg-orange-600 hover:bg-orange-700 font-black h-12 shadow-xl shadow-orange-200"
                   onClick={() => handleAction('Pending')}
-                  disabled={newFiles.length === 0 || (!isOwner && !isAdmin)}
+                  disabled={(!isOwner && !isAdmin) || (newFiles.length === 0 && !correctionNote.trim())}
                 >
                   <CheckCircle2 className="w-5 h-5 mr-2" />
                   Submit Corrections
