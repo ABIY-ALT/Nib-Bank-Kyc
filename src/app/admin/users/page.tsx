@@ -63,7 +63,8 @@ const ROLES: UserRole[] = [
   'Director', 
   'Admin', 
   'Branch Manager', 
-  'District Director'
+  'District Director',
+  'Division Manager'
 ];
 
 export default function UserManagementPage() {
@@ -131,7 +132,6 @@ export default function UserManagementPage() {
       return;
     }
 
-    // Role-based validation
     if (editingUser || formData.role) {
       if (!formData.role) {
         toast({ variant: "destructive", title: "Role Required", description: "Please assign an institutional role." });
@@ -152,7 +152,6 @@ export default function UserManagementPage() {
     const userId = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
     const userRef = doc(db, "users", userId);
     
-    // Sanitize data to remove undefined values for Firestore
     const data: any = {
       id: userId,
       name: formData.name || "",
@@ -311,40 +310,36 @@ export default function UserManagementPage() {
             <DialogDescription>
               {editingUser 
                 ? 'Assign institutional roles and jurisdictional mapping for this staff member.' 
-                : 'Initial identity registration. Role and branch mapping can be assigned after registration.'}
+                : 'Initial identity registration.'}
             </DialogDescription>
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
             <div className="space-y-8">
-              {/* Identity Section */}
               <div className="space-y-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Legal Name</Label>
-                  <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 bg-white border-slate-200 focus:ring-primary" placeholder="e.g. Michael Smith" />
+                  <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 bg-white" placeholder="e.g. Michael Smith" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Phone (Login ID)</Label>
-                    <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white border-slate-200 focus:ring-primary" placeholder="09..." />
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Phone</Label>
+                    <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white" placeholder="09..." />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Corporate Email</Label>
-                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white border-slate-200 focus:ring-primary" placeholder="name@bank.com" />
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Email</Label>
+                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white" placeholder="name@bank.com" />
                   </div>
                 </div>
               </div>
 
-              {/* Institutional Assignment Section (Visible for existing users) */}
               {editingUser && (
                 <div className="space-y-8">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1">
-                        <Layers className="w-3 h-3" /> System Role
-                      </Label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-primary">System Role</Label>
                       <Select value={formData.role || ""} onValueChange={val => setFormData({...formData, role: val as UserRole})}>
-                        <SelectTrigger className="h-11 border-primary/30 bg-primary/5 focus:ring-primary">
+                        <SelectTrigger className="h-11 border-primary/30 bg-primary/5">
                           <SelectValue placeholder="Assign Role" />
                         </SelectTrigger>
                         <SelectContent>
@@ -353,14 +348,12 @@ export default function UserManagementPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Staff Status</Label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Status</Label>
                       <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val})}>
-                        <SelectTrigger className="h-11 border-slate-200">
-                          <SelectValue />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-11 border-slate-200"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Active" className="text-green-600 font-bold">Active</SelectItem>
-                          <SelectItem value="Inactive" className="text-slate-400 font-bold">Inactive</SelectItem>
+                          <SelectItem value="Active">Active</SelectItem>
+                          <SelectItem value="Inactive">Inactive</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -368,19 +361,11 @@ export default function UserManagementPage() {
 
                   {formData.role && (
                     <div className="space-y-6 pt-2 animate-in fade-in duration-500">
-                      <div className="flex items-center gap-2">
-                        <Separator className="flex-1" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">
-                          Jurisdictional Mapping Required
-                        </span>
-                        <Separator className="flex-1" />
-                      </div>
-
                       {showDistrictField && (
                         <div className="space-y-2">
-                          <Label className="text-sm font-bold text-slate-700">Assigned Regional District</Label>
+                          <Label className="text-sm font-bold text-slate-700">Assigned District</Label>
                           <Select value={formData.district || ""} onValueChange={val => setFormData({...formData, district: val, branch: ''})}>
-                            <SelectTrigger className="h-11 border-slate-200 bg-white"><SelectValue placeholder="Select Region" /></SelectTrigger>
+                            <SelectTrigger className="h-11"><SelectValue placeholder="Select Region" /></SelectTrigger>
                             <SelectContent>
                               {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
                             </SelectContent>
@@ -392,7 +377,7 @@ export default function UserManagementPage() {
                         <div className="space-y-2">
                           <Label className="text-sm font-bold text-slate-700">Primary Branch Node</Label>
                           <Select value={formData.branch || ""} onValueChange={val => setFormData({...formData, branch: val})} disabled={!formData.district}>
-                            <SelectTrigger className="h-11 border-slate-200 bg-white"><SelectValue placeholder="Select Node" /></SelectTrigger>
+                            <SelectTrigger className="h-11"><SelectValue placeholder="Select Node" /></SelectTrigger>
                             <SelectContent>
                               {branches?.filter(b => b.district === formData.district).map(b => (
                                 <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
@@ -409,7 +394,7 @@ export default function UserManagementPage() {
                             <span className="text-xs font-bold uppercase tracking-wider">Multi-Branch Portfolio</span>
                           </div>
                           <p className="text-[12px] text-slate-600 font-medium leading-relaxed">
-                            Jurisdictional mapping for KYC Officers is managed centrally in the **Staff Assignments** workspace to ensure balanced portfolio distribution.
+                            Jurisdictional mapping for KYC Officers is managed in Staff Assignments.
                           </p>
                           <Button asChild variant="outline" size="sm" className="w-full h-10 font-bold text-primary border-primary/20 hover:bg-primary/5 gap-2">
                             <Link href="/admin/assignments">

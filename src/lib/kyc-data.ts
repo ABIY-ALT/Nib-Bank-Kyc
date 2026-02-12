@@ -11,6 +11,7 @@ export type ExceptionalStatus =
   | 'None'
   | 'Awaiting District'
   | 'Awaiting Director'
+  | 'Awaiting Division'
   | 'Awaiting Supervisor'
   | 'Completed'
   | 'Rejected'
@@ -22,6 +23,7 @@ export interface ExceptionalApproval {
   performedBy: string;
   timestamp: string;
   remarks: string;
+  memoAttached?: boolean;
 }
 
 export interface ExceptionalData {

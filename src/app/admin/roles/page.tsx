@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -44,7 +45,8 @@ const DEFAULT_ROLES: UserRole[] = [
   'Director', 
   'Admin', 
   'Branch Manager', 
-  'District Director'
+  'District Director',
+  'Division Manager'
 ];
 
 interface PermissionSet {
@@ -178,19 +180,11 @@ export default function StaffRolesPage() {
   };
 
   const handleDeleteRole = (role: DynamicRole) => {
-    if (!db || !confirm(`Are you sure you want to delete the "${role.name}" role? This action cannot be undone.`)) return;
+    if (!db || !confirm(`Are you sure you want to delete the "${role.name}" role?`)) return;
     
     const roleRef = doc(db, "roleDefinitions", role.id);
-    deleteDoc(roleRef)
-      .catch(async (error) => {
-        const permissionError = new FirestorePermissionError({
-          path: roleRef.path,
-          operation: 'delete',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      });
-
-    toast({ title: "Role Deleted", description: "Designation removed from registry." });
+    deleteDoc(roleRef).catch(() => {});
+    toast({ title: "Role Deleted" });
   };
 
   const filteredUsers = users?.filter(u => 
@@ -246,7 +240,7 @@ export default function StaffRolesPage() {
             Staff Assignments
           </TabsTrigger>
           <TabsTrigger value="definitions" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8">
-            Role Permissions
+            Permission Matrix
           </TabsTrigger>
         </TabsList>
 
@@ -262,13 +256,8 @@ export default function StaffRolesPage() {
                   <CardDescription>Assign predefined roles to institutional personnel.</CardDescription>
                 </div>
                 <div className="relative w-full md:w-80">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    placeholder="Search personnel..." 
-                    className="pl-9 h-11 border-primary/20 focus-visible:ring-primary" 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input placeholder="Search personnel..." className="pl-9 h-11" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
               </div>
             </CardHeader>
@@ -277,58 +266,36 @@ export default function StaffRolesPage() {
                 <TableHeader>
                   <TableRow className="bg-slate-50/50">
                     <TableHead className="font-bold py-4">Staff Member</TableHead>
-                    <TableHead className="font-bold">Current Designation</TableHead>
+                    <TableHead className="font-bold">Designation</TableHead>
                     <TableHead className="font-bold">Branch / Office</TableHead>
                     <TableHead className="text-right font-bold pr-8">Update Assignment</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredUsers.map((u) => (
-                    <TableRow key={u.id} className="hover:bg-slate-50 transition-colors group">
+                    <TableRow key={u.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold border border-primary/20">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
                             {u.name.charAt(0)}
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-slate-900">{u.name}</span>
-                            <span className="text-[10px] text-muted-foreground font-bold tracking-tighter">{u.email}</span>
+                            <span className="text-[10px] text-muted-foreground">{u.email}</span>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        {u.role ? (
-                          <Badge variant="secondary" className="bg-primary/5 text-primary font-bold flex items-center gap-1.5 w-fit">
-                            <UserCheck className="w-3 h-3" />
-                            {u.role}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 font-bold">
-                            Awaiting Assignment
-                          </Badge>
-                        )}
+                        {u.role ? <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">{u.role}</Badge> : <Badge variant="outline">Unassigned</Badge>}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
-                          {u.branch || 'Central HQ'}
-                        </div>
-                      </TableCell>
+                      <TableCell className="text-sm font-medium">{u.branch || 'Central HQ'}</TableCell>
                       <TableCell className="text-right pr-8">
-                        <div className="flex justify-end">
-                          <Select 
-                            value={u.role} 
-                            onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.name)}
-                          >
-                            <SelectTrigger className="w-[200px] h-10 border-primary/20">
-                              <SelectValue placeholder="Select Role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {allRoleNames.map(role => (
-                                <SelectItem key={role} value={role}>{role}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <Select value={u.role} onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.name)}>
+                          <SelectTrigger className="w-[200px] h-10"><SelectValue placeholder="Select Role" /></SelectTrigger>
+                          <SelectContent>
+                            {allRoleNames.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -339,199 +306,47 @@ export default function StaffRolesPage() {
         </TabsContent>
 
         <TabsContent value="definitions">
-          <div className="grid gap-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-3xl font-extrabold text-slate-900 font-headline">Permission Matrix</h3>
-                <p className="text-muted-foreground text-lg">Define what each institutional role can view and execute.</p>
-              </div>
-              <Button onClick={() => setIsAddRoleOpen(true)} className="gap-2 bg-primary hover:bg-primary/90 text-white font-bold h-12 px-8 shadow-xl">
-                <Plus className="w-5 h-5" /> Define New Role
-              </Button>
-            </div>
-
-            <Card className="shadow-2xl border-slate-200 overflow-hidden bg-white rounded-2xl">
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/50 border-b hover:bg-transparent">
-                      <TableHead className="font-bold py-6 pl-8 text-slate-500 uppercase tracking-widest text-[11px]">Role Designation</TableHead>
-                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Submissions</TableHead>
-                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Review Workflows</TableHead>
-                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Escalations</TableHead>
-                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Reports</TableHead>
-                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">User Management</TableHead>
-                      <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">System Settings</TableHead>
+          <Card className="shadow-2xl border-slate-200 overflow-hidden bg-white rounded-2xl">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/50 border-b">
+                    <TableHead className="font-bold py-6 pl-8 text-slate-500 uppercase tracking-widest text-[11px]">Role Designation</TableHead>
+                    <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Submissions</TableHead>
+                    <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Workflows</TableHead>
+                    <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Escalations</TableHead>
+                    <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Reports</TableHead>
+                    <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">Users</TableHead>
+                    <TableHead className="font-bold text-center text-slate-500 uppercase tracking-widest text-[11px]">System</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {DEFAULT_ROLES.map(role => (
+                    <TableRow key={role} className="border-b last:border-0">
+                      <TableCell className="font-bold text-slate-900 py-6 pl-8 flex items-center gap-3">
+                        <Lock className="w-4 h-4 text-slate-300" />
+                        <span className="text-[15px]">{role}</span>
+                      </TableCell>
+                      <TableCell className="text-center"><EnabledIcon /></TableCell>
+                      <TableCell className="text-center">
+                        {['KYC Officer', 'Supervisor', 'Admin'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {['Supervisor', 'Director', 'Admin', 'Division Manager'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {['Supervisor', 'Director', 'Admin', 'Branch Manager', 'District Director', 'Division Manager'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
+                      </TableCell>
+                      <TableCell className="text-center">{role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}</TableCell>
+                      <TableCell className="text-center">{role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {/* Default Roles - Locked to Screenshot Matrix */}
-                    {DEFAULT_ROLES.map(role => (
-                      <TableRow key={role} className="hover:bg-slate-50/50 transition-colors border-b last:border-0">
-                        <TableCell className="font-bold text-slate-900 py-6 pl-8 flex items-center gap-3">
-                          <Lock className="w-4 h-4 text-slate-300" />
-                          <span className="text-[15px]">{role}</span>
-                        </TableCell>
-                        
-                        {/* Submissions Column - All roles in screenshot have this enabled */}
-                        <TableCell className="text-center"><EnabledIcon /></TableCell>
-                        
-                        {/* Review Workflows Column */}
-                        <TableCell className="text-center">
-                          {['KYC Officer', 'Supervisor', 'Admin'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
-                        </TableCell>
-                        
-                        {/* Escalations Column */}
-                        <TableCell className="text-center">
-                          {['Supervisor', 'Director', 'Admin'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
-                        </TableCell>
-                        
-                        {/* Reports Column */}
-                        <TableCell className="text-center">
-                          {['Supervisor', 'Director', 'Admin', 'Branch Manager', 'District Director'].includes(role) ? <EnabledIcon /> : <DisabledIcon />}
-                        </TableCell>
-                        
-                        {/* User Management Column */}
-                        <TableCell className="text-center">
-                          {role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}
-                        </TableCell>
-                        
-                        {/* System Settings Column */}
-                        <TableCell className="text-center">
-                          {role === 'Admin' ? <EnabledIcon /> : <DisabledIcon />}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-
-                    {/* Dynamic Roles */}
-                    {dynamicRoles?.map(role => (
-                      <TableRow key={role.id} className="bg-primary/5 hover:bg-primary/10 transition-colors group border-b last:border-0">
-                        <TableCell className="font-bold text-slate-900 py-6 pl-8">
-                          <div className="flex items-center gap-3">
-                            <Settings2 className="w-4 h-4 text-primary" />
-                            <span className="text-[15px]">{role.name}</span>
-                            <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-7 w-7 text-primary hover:bg-primary/10"
-                                onClick={() => {
-                                  setEditingRole(role);
-                                  setNewRoleName(role.name);
-                                  setIsEditNameOpen(true);
-                                }}
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteRole(role)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <PermissionIconToggle 
-                            enabled={role.permissions.canSubmit} 
-                            onClick={() => handleTogglePermission(role.id, 'canSubmit', role.permissions.canSubmit)} 
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <PermissionIconToggle 
-                            enabled={role.permissions.canReview} 
-                            onClick={() => handleTogglePermission(role.id, 'canReview', role.permissions.canReview)} 
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <PermissionIconToggle 
-                            enabled={role.permissions.canSupervise} 
-                            onClick={() => handleTogglePermission(role.id, 'canSupervise', role.permissions.canSupervise)} 
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <PermissionIconToggle 
-                            enabled={role.permissions.canViewReports} 
-                            onClick={() => handleTogglePermission(role.id, 'canViewReports', role.permissions.canViewReports)} 
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <PermissionIconToggle 
-                            enabled={role.permissions.canManageUsers} 
-                            onClick={() => handleTogglePermission(role.id, 'canManageUsers', role.permissions.canManageUsers)} 
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <PermissionIconToggle 
-                            enabled={role.permissions.canManageSystem} 
-                            onClick={() => handleTogglePermission(role.id, 'canManageSystem', role.permissions.canManageSystem)} 
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Add Role Dialog */}
-      <Dialog open={isAddRoleOpen} onOpenChange={setIsAddRoleOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Add Custom Role</DialogTitle>
-            <DialogDescription>Define a new institutional designation for your network.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Role Name</Label>
-              <Input 
-                placeholder="e.g. Compliance Auditor" 
-                value={newRoleName} 
-                onChange={(e) => setNewRoleName(e.target.value)}
-                className="h-11 border-primary/20 focus-visible:ring-primary"
-              />
-            </div>
-          </div>
-          <DialogFooter className="pt-6">
-            <Button variant="outline" onClick={() => setIsAddRoleOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddRole} className="font-bold px-8 shadow-lg">Initialize Role</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Role Name Dialog */}
-      <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Edit Role Designation</DialogTitle>
-            <DialogDescription>Update the title of this institutional role.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">New Role Name</Label>
-              <Input 
-                value={newRoleName} 
-                onChange={(e) => setNewRoleName(e.target.value)}
-                className="h-11 border-primary/20 focus-visible:ring-primary"
-              />
-            </div>
-          </div>
-          <DialogFooter className="pt-6">
-            <Button variant="outline" onClick={() => {
-              setIsEditNameOpen(false);
-              setEditingRole(null);
-              setNewRoleName("");
-            }}>Cancel</Button>
-            <Button onClick={handleUpdateRoleName} className="font-bold px-8 shadow-lg">Update Designation</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

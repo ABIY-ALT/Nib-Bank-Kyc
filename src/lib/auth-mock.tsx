@@ -10,7 +10,8 @@ export type UserRole =
   | 'Director' 
   | 'Admin' 
   | 'Branch Manager' 
-  | 'District Director';
+  | 'District Director'
+  | 'Division Manager';
 
 export interface User {
   id: string;
@@ -86,6 +87,14 @@ export const MOCK_USERS: User[] = [
     email: 'alice.dir@bank.com', 
     phoneNumber: '+1234567895', 
     role: 'Director', 
+    status: 'Active' 
+  },
+  { 
+    id: 'div-mgr-1', 
+    name: 'Samuel Division', 
+    email: 'samuel.div@bank.com', 
+    phoneNumber: '+1234567898', 
+    role: 'Division Manager', 
     status: 'Active' 
   },
 ];

@@ -8,7 +8,6 @@ import { User } from "@/lib/auth-mock";
 
 /**
  * Hook to fetch real-time counts for sidebar badges.
- * Optimized for consistency with page-level filters and Admin universal bypass.
  */
 export function useSidebarCounts(user: User) {
   const db = useFirestore();
@@ -38,7 +37,7 @@ export function useSidebarCounts(user: User) {
 
     const isAdmin = user.role === 'Admin';
 
-    // 1. My Submissions & Action Required (Strictly personal, but global for Admin)
+    // 1. My Submissions & Action Required
     const qMy = isAdmin 
       ? query(collection(db, "submissions"))
       : query(collection(db, "submissions"), where("submittedBy", "==", user.name));
@@ -52,7 +51,7 @@ export function useSidebarCounts(user: User) {
       }));
     });
 
-    // 2. Exceptional Approvals (Global for Admin)
+    // 2. Exceptional Approvals
     const qExceptional = query(
       collection(db, "submissions"),
       where("isExceptional", "==", true)
@@ -66,6 +65,7 @@ export function useSidebarCounts(user: User) {
         if (isAdmin) return true;
         if (user.role === 'District Director') return data.exceptionalStatus === 'Awaiting District' && data.district === user.district;
         if (user.role === 'Director') return data.exceptionalStatus === 'Awaiting Director';
+        if (user.role === 'Division Manager') return data.exceptionalStatus === 'Awaiting Division';
         if (user.role === 'Supervisor') return data.exceptionalStatus === 'Awaiting Supervisor';
         
         const scope = user.role === 'Branch Manager' ? [user.branch] : (user.assignedBranches || []);
@@ -74,7 +74,7 @@ export function useSidebarCounts(user: User) {
       setCounts(prev => ({ ...prev, exceptional: activeExceptions.length }));
     });
 
-    // 3. Review Queues (Global for Admin)
+    // 3. Review Queues
     const qAllActive = query(
       collection(db, "submissions"),
       where("status", "in", ["Pending", "In Review", "Escalated"])
@@ -84,7 +84,7 @@ export function useSidebarCounts(user: User) {
       
       const filterByScope = (data: any) => {
         if (isAdmin) return true;
-        const isGlobalReviewer = ['Director', 'Supervisor'].includes(user.role || '');
+        const isGlobalReviewer = ['Director', 'Supervisor', 'Division Manager'].includes(user.role || '');
         if (isGlobalReviewer) return true;
         const assigned = user.assignedBranches || [];
         return assigned.includes(data.branch);
@@ -98,8 +98,7 @@ export function useSidebarCounts(user: User) {
       }));
     });
 
-    // 4. Branch Node Queue (Global for Admin)
-    // Safety Guard: Only run where() query if field values are not undefined
+    // 4. Branch Node Queue
     let unsubBranch = () => {};
     if (isAdmin || user.branch) {
       const qBranch = isAdmin 
