@@ -822,8 +822,8 @@ export default function SubmissionDetails() {
                       <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold h-11 hover:bg-[#8B5CF6]/5">Escalate</Button>
                     )}
                     
-                    {/* Reject: Standard reviewers if not escalated, Seniors if escalated */}
-                    {(!isCurrentlyEscalated || canResolveEscalation) && (
+                    {/* Reject: Restricted to Senior Reviewers (Supervisor and above) */}
+                    {isSeniorReviewer && (
                       <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold h-11">Reject</Button>
                     )}
                   </div>
