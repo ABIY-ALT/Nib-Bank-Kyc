@@ -7,7 +7,6 @@ import {
   Users, 
   CheckCircle, 
   History, 
-  AlertTriangle, 
   Filter, 
   FileDown, 
   Calendar as CalendarIcon, 
@@ -28,6 +27,9 @@ import {
   DropdownMenuItem
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
+import { subDays, format } from "date-fns";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 const MOCK_OFFICER_METRICS = [
   { name: "Jane Smith", branch: "Downtown", processed: 85, approved: 72, amended: 10, turnaround: "0.8d" },
@@ -43,15 +45,18 @@ export default function OfficerPerformancePage() {
   const { toast } = useToast();
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedOfficers, setSelectedOfficers] = useState<string[]>([]);
-  const [timeRange, setTimeRange] = useState("all");
+  
+  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const filteredOfficers = useMemo(() => {
+    // In real app, filter mock data by date if needed
     return MOCK_OFFICER_METRICS.filter(o => {
       const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(o.branch);
       const matchesOfficer = selectedOfficers.length === 0 || selectedOfficers.includes(o.name);
       return matchesBranch && matchesOfficer;
     });
-  }, [selectedBranches, selectedOfficers]);
+  }, [selectedBranches, selectedOfficers, fromDate, toDate]);
 
   const toggleBranch = (branch: string) => {
     setSelectedBranches(prev => 
@@ -68,7 +73,8 @@ export default function OfficerPerformancePage() {
   const resetFilters = () => {
     setSelectedBranches([]);
     setSelectedOfficers([]);
-    setTimeRange("all");
+    setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+    setToDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
   const handleExportCSV = () => {
@@ -82,7 +88,7 @@ export default function OfficerPerformancePage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `officer-productivity-${timeRange}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `officer-productivity-${fromDate}-to-${toDate}.csv`);
     link.click();
     
     toast({
@@ -90,13 +96,6 @@ export default function OfficerPerformancePage() {
       description: `Data for ${filteredOfficers.length} officers has been saved to CSV.`,
     });
   };
-
-  const timeRangeLabel = {
-    all: "Full Archive",
-    "7d": "Last 7 Days",
-    "30d": "Last 30 Days",
-    "90d": "Current Quarter"
-  }[timeRange];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -109,27 +108,9 @@ export default function OfficerPerformancePage() {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-10 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50 gap-2 min-w-[140px] justify-between">
-                <span className="flex items-center gap-2">
-                  <CalendarIcon className="w-4 h-4 text-slate-400" />
-                  {timeRangeLabel}
-                </span>
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => setTimeRange("all")} className="cursor-pointer">Full Archive</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTimeRange("7d")} className="cursor-pointer">Last 7 Days</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTimeRange("30d")} className="cursor-pointer">Last 30 Days</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTimeRange("90d")} className="cursor-pointer">Current Quarter</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
                 <Filter className="w-4 h-4 text-slate-400" />
-                Filter
+                Filter Personnel
                 {(selectedBranches.length > 0 || selectedOfficers.length > 0) && (
                   <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
                     {selectedBranches.length + selectedOfficers.length}
@@ -193,6 +174,39 @@ export default function OfficerPerformancePage() {
           </Button>
         </div>
       </div>
+
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col md:flex-row items-end gap-6">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredOfficers.map((officer) => {

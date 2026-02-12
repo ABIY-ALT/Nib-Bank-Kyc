@@ -19,7 +19,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
-  BarChart3, 
   Download, 
   Globe, 
   History,
@@ -29,14 +28,10 @@ import {
   Calendar as CalendarIcon,
   FileDown
 } from "lucide-react";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { subDays, format } from "date-fns";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 const MOCK_SYSTEM_STATS = {
   total: 1245,
@@ -60,13 +55,15 @@ const MOCK_SYSTEM_STATS = {
 export default function SystemWideReportsPage() {
   const { toast } = useToast();
   const [reportData, setReportData] = useState<any | null>(null);
-  const [dateRange, setDateRange] = useState("Last 30 Days");
+  
+  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const handleGenerateReport = () => {
     setReportData(MOCK_SYSTEM_STATS);
     toast({
       title: "Institutional Audit Complete",
-      description: `Analyzed 1,245 system-wide records for ${dateRange}.`,
+      description: `Analyzed 1,245 system-wide records from ${fromDate} to ${toDate}.`,
     });
   };
 
@@ -89,7 +86,7 @@ export default function SystemWideReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-kyc-global-audit-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `nib-kyc-global-audit-${fromDate}-to-${toDate}.csv`);
     link.click();
     
     toast({
@@ -105,6 +102,12 @@ export default function SystemWideReportsPage() {
     });
   };
 
+  const resetFilters = () => {
+    setReportData(null);
+    setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+    setToDate(format(new Date(), 'yyyy-MM-dd'));
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -118,27 +121,48 @@ export default function SystemWideReportsPage() {
           <p className="text-muted-foreground text-lg font-medium">Master institutional oversight of all branches and specialized staff.</p>
         </div>
         <div className="flex gap-2">
-          <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-[180px] h-10 border-slate-200">
-              <CalendarIcon className="w-4 h-4 mr-2 text-slate-400" />
-              <SelectValue placeholder="Date Range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Last 7 Days">Last 7 Days</SelectItem>
-              <SelectItem value="Last 30 Days">Last 30 Days</SelectItem>
-              <SelectItem value="Last 90 Days">Last 90 Days</SelectItem>
-              <SelectItem value="All Time">All Time (Master)</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" className="gap-2 font-bold" onClick={() => setReportData(null)}>
+          <Button variant="outline" className="gap-2 font-bold h-10 px-6 border-slate-200 bg-white" onClick={resetFilters}>
             <History className="w-4 h-4" /> Reset
           </Button>
-          <Button className="gap-2 bg-primary shadow-xl font-bold" onClick={handleGenerateReport}>
+          <Button className="gap-2 bg-primary shadow-xl font-bold h-10 px-6" onClick={handleGenerateReport}>
             <ShieldCheck className="w-4 h-4" />
             Compile Master Audit
           </Button>
         </div>
       </div>
+
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col md:flex-row items-end gap-6">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {!reportData ? (
         <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50 shadow-inner">
@@ -189,7 +213,6 @@ export default function SystemWideReportsPage() {
                <CardContent>
                  <span className="text-5xl font-black text-purple-600">{reportData.accuracy}</span>
                </CardContent>
-             </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

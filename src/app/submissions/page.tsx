@@ -39,6 +39,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
 import { useToast } from "@/hooks/use-toast";
+import { subDays, startOfDay, endOfDay, format, isWithinInterval } from "date-fns";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 
 const STATUS_OPTIONS = [
   { id: 'Approved', label: 'Approved' },
@@ -55,7 +58,9 @@ export default function SubmissionsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
-  const [timeHorizon, setTimeHorizon] = useState("all");
+  
+  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const allSubmissionsQuery = useMemo(() => {
     if (!db) return null;
@@ -73,6 +78,9 @@ export default function SubmissionsPage() {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
     
+    const start = startOfDay(new Date(fromDate));
+    const end = endOfDay(new Date(toDate));
+
     return submissions.filter(s => {
       const matchesSearch = s.customerName.toLowerCase().includes(term) ||
                           s.id.toLowerCase().includes(term) ||
@@ -82,15 +90,11 @@ export default function SubmissionsPage() {
       const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(s.branch);
       
       const subDate = new Date(s.submittedAt);
-      const now = new Date();
-      let matchesTime = true;
-      if (timeHorizon === '7d') matchesTime = (now.getTime() - subDate.getTime()) <= (7 * 24 * 60 * 60 * 1000);
-      if (timeHorizon === '30d') matchesTime = (now.getTime() - subDate.getTime()) <= (30 * 24 * 60 * 60 * 1000);
-      if (timeHorizon === '90d') matchesTime = (now.getTime() - subDate.getTime()) <= (90 * 24 * 60 * 60 * 1000);
+      const matchesTime = isWithinInterval(subDate, { start, end });
 
       return matchesSearch && matchesStatus && matchesBranch && matchesTime;
     });
-  }, [submissions, searchTerm, selectedStatuses, selectedBranches, timeHorizon]);
+  }, [submissions, searchTerm, selectedStatuses, selectedBranches, fromDate, toDate]);
 
   const handleExportCSV = () => {
     if (filteredSubmissions.length === 0) return;
@@ -109,7 +113,7 @@ export default function SubmissionsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-kyc-archive-${timeHorizon}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `nib-kyc-archive-${fromDate}-to-${toDate}.csv`);
     link.click();
     
     toast({
@@ -134,15 +138,9 @@ export default function SubmissionsPage() {
     setSelectedStatuses([]);
     setSelectedBranches([]);
     setSearchTerm("");
-    setTimeHorizon("all");
+    setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+    setToDate(format(new Date(), 'yyyy-MM-dd'));
   };
-
-  const timeRangeLabel = {
-    all: "Full Archive",
-    "7d": "Last 7 Days",
-    "30d": "Last 30 Days",
-    "90d": "Last 90 Days"
-  }[timeHorizon];
 
   const getStatusBadge = (sub: KYCSubmission) => {
     const status = sub.status;
@@ -178,24 +176,6 @@ export default function SubmissionsPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-10 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50 gap-2 min-w-[140px] justify-between">
-                <span className="flex items-center gap-2">
-                  <CalendarIcon className="w-4 h-4 text-slate-400" />
-                  {timeRangeLabel}
-                </span>
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => setTimeHorizon("all")} className="cursor-pointer">Full Archive</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTimeHorizon("7d")} className="cursor-pointer">Last 7 Days</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTimeHorizon("30d")} className="cursor-pointer">Last 30 Days</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTimeHorizon("90d")} className="cursor-pointer">Last 90 Days</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
@@ -264,15 +244,50 @@ export default function SubmissionsPage() {
         </div>
       </div>
 
-      <div className="relative w-full">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <Input 
-          placeholder="Search by Customer Name, Case ID, or Branch..." 
-          className="pl-10 h-11 border-slate-200 bg-white shadow-sm" 
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col md:flex-row items-end gap-6">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2 lg:col-span-1">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Keyword Search</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input 
+                    placeholder="Search name, ID, or branch..." 
+                    className="pl-10 h-11 border-slate-200 bg-white" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="border rounded-xl bg-card overflow-hidden shadow-xl border-slate-200">
         <Table>

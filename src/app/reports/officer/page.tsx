@@ -24,11 +24,9 @@ import {
   History,
   CheckCircle2,
   Clock,
-  PieChart as PieChartIcon,
   FileDown,
   Filter,
-  Calendar as CalendarIcon,
-  ChevronDown
+  Calendar as CalendarIcon
 } from "lucide-react";
 import { 
   DropdownMenu,
@@ -43,6 +41,9 @@ import {
   DropdownMenuItem
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { subDays, format } from "date-fns";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 const MOCK_OFFICER_REPORTS = [
   { name: "Jane Smith", total: 124, approved: 110, amended: 10, rejected: 4, accuracy: 89 },
@@ -55,7 +56,9 @@ export default function OfficerReportsPage() {
   const { toast } = useToast();
   const [reportDataActive, setReportDataActive] = useState(false);
   const [selectedOfficers, setSelectedOfficers] = useState<string[]>([]);
-  const [timeRange, setTimeRange] = useState("all");
+  
+  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const OFFICER_NAMES = MOCK_OFFICER_REPORTS.map(o => o.name);
 
@@ -70,7 +73,7 @@ export default function OfficerReportsPage() {
     setReportDataActive(true);
     toast({
       title: "Staff Audit Complete",
-      description: `Analyzed ${filteredData.length} specialist records for the selected period.`,
+      description: `Analyzed ${filteredData.length} specialist records from ${fromDate} to ${toDate}.`,
     });
   };
 
@@ -87,7 +90,7 @@ export default function OfficerReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `staff-productivity-audit-${timeRange}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `staff-productivity-audit-${fromDate}-to-${toDate}.csv`);
     link.click();
     
     toast({
@@ -102,12 +105,12 @@ export default function OfficerReportsPage() {
     );
   };
 
-  const timeRangeLabel = {
-    all: "Full Archive",
-    "7d": "Last 7 Days",
-    "30d": "Last 30 Days",
-    "90d": "Current Quarter"
-  }[timeRange];
+  const resetFilters = () => {
+    setSelectedOfficers([]);
+    setReportDataActive(false);
+    setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+    setToDate(format(new Date(), 'yyyy-MM-dd'));
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -120,27 +123,9 @@ export default function OfficerReportsPage() {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-10 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50 gap-2 min-w-[140px] justify-between">
-                <span className="flex items-center gap-2">
-                  <CalendarIcon className="w-4 h-4 text-slate-400" />
-                  {timeRangeLabel}
-                </span>
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => setTimeRange("all")} className="cursor-pointer">Full Archive</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTimeRange("7d")} className="cursor-pointer">Last 7 Days</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTimeRange("30d")} className="cursor-pointer">Last 30 Days</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTimeRange("90d")} className="cursor-pointer">Current Quarter</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
                 <Filter className="w-4 h-4 text-slate-400" />
-                Filter
+                Filter Specialists
                 {selectedOfficers.length > 0 && (
                   <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
                     {selectedOfficers.length}
@@ -169,7 +154,7 @@ export default function OfficerReportsPage() {
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => { setSelectedOfficers([]); setReportDataActive(false); }} className="text-destructive font-bold cursor-pointer">
+              <DropdownMenuItem onClick={resetFilters} className="text-destructive font-bold cursor-pointer">
                 Clear Productivity Filters
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -185,6 +170,39 @@ export default function OfficerReportsPage() {
           </Button>
         </div>
       </div>
+
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col md:flex-row items-end gap-6">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    type="date" 
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {!reportDataActive ? (
         <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50">
@@ -231,7 +249,7 @@ export default function OfficerReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
-                  <span className="text-4xl font-extrabold text-blue-600 tracking-tighter">{timeRangeLabel}</span>
+                  <span className="text-sm font-extrabold text-blue-600 tracking-tighter">{fromDate} — {toDate}</span>
                   <div className="p-2 bg-blue-50 rounded-lg">
                     <Clock className="w-6 h-6 text-blue-600" />
                   </div>
