@@ -213,6 +213,7 @@ export default function SystemWideReportsPage() {
                <CardContent>
                  <span className="text-5xl font-black text-purple-600">{reportData.accuracy}</span>
                </CardContent>
+             </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
