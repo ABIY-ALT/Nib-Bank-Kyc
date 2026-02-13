@@ -90,9 +90,11 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b h-16 flex items-center px-4">
-        <div className="flex items-center gap-2 font-bold text-primary">
-          <ShieldCheck className="w-8 h-8 shrink-0" />
-          <span className="group-data-[collapsible=icon]:hidden truncate">Nib Kyc</span>
+        <div className="flex items-center gap-3 font-bold">
+          <div className="bg-primary p-1.5 rounded-lg shadow-sm shrink-0 flex items-center justify-center">
+            <ShieldCheck className="w-5 h-5 text-white" />
+          </div>
+          <span className="group-data-[collapsible=icon]:hidden truncate text-slate-900 font-headline tracking-tight text-lg">Nib Kyc</span>
         </div>
       </SidebarHeader>
       <SidebarContent>

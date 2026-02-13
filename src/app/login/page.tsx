@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -56,7 +55,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#FCFAF7] flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in-95 duration-500">
         <div className="flex flex-col items-center text-center space-y-2">
-          <div className="p-4 bg-primary rounded-2xl shadow-xl mb-4">
+          <div className="p-5 bg-primary rounded-2xl shadow-xl mb-4 flex items-center justify-center">
             <ShieldCheck className="w-12 h-12 text-white" />
           </div>
           <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tighter">Nib Kyc</h1>
