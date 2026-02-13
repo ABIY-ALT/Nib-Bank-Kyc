@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -27,7 +28,8 @@ import {
   Zap,
   LayoutList,
   BookOpen,
-  ClipboardList
+  ClipboardList,
+  Folders
 } from "lucide-react"
 
 import {
@@ -80,12 +82,17 @@ export function AppSidebar() {
   const isDistDir = user.role === 'District Director'
   const isAdmin = user.role === 'Admin'
   const isFollowUp = user.role === 'Follow-up Team'
+  const isChief = user.role === 'Chief' || user.role === 'Chief Retail & SME Banking Officer'
+  const isDivisionMgr = user.role === 'Division Manager'
 
   const isReviewer = isKYCOfficer || isSupervisor || isAdmin
   const isManagement = isBranchBankingDir || isDistDir || isBranchMgr || isSupervisor || isAdmin
   const canSeePerformance = isBranchMgr || isSupervisor || isBranchBankingDir || isDistDir || isAdmin
   const canSeeReports = isSupervisor || isBranchBankingDir || isAdmin
   const canSeeExceptional = isDistDir || isBranchBankingDir || isSupervisor || isBranchMgr || isAdmin
+  
+  // Master Bundle Access: Restricted to senior/HQ roles
+  const canDownloadMasterBundle = isAdmin || isSupervisor || isFollowUp || isBranchBankingDir || isChief || isDivisionMgr
 
   return (
     <Sidebar collapsible="icon">
@@ -133,7 +140,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Workflows</SidebarGroupLabel>
           <SidebarMenu>
-            <Collapsible className="group/collapsible" defaultOpen={false}>
+            <Collapsible className="group/collapsible" defaultOpen={true}>
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton tooltip="Identity Verification">
@@ -255,6 +262,16 @@ export function AppSidebar() {
                             {counts.escalated}
                           </SidebarMenuBadge>
                         )}
+                      </SidebarMenuSubItem>
+                    )}
+                    {canDownloadMasterBundle && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions/master-bundle'}>
+                          <Link href="/submissions/master-bundle">
+                            <Folders className="w-4 h-4 mr-2 text-emerald-600" />
+                            <span>Master Case Bundle</span>
+                          </Link>
+                        </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
                     {(isReviewer || isManagement) && (
