@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -53,7 +52,8 @@ import {
   Building2,
   Calendar,
   Layers,
-  UserCheck
+  UserCheck,
+  MessagesSquare
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,7 +63,7 @@ import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase
 import { doc, updateDoc, collection, setDoc, increment, arrayUnion, query, orderBy, limit } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { KYCSubmission, Document, ExceptionalStatus, AMENDMENT_SCENARIOS, BundleDownloadLog } from "@/lib/kyc-data";
+import { KYCSubmission, Document, ExceptionalStatus, AMENDMENT_SCENARIOS, BundleDownloadLog, CommentHistoryEntry } from "@/lib/kyc-data";
 import { 
   Select, 
   SelectContent, 
@@ -283,7 +283,6 @@ export default function SubmissionDetails() {
       const branchName = submission.branch.replace(/\s+/g, '_');
       const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
-      // 1. Log the download session for audit trail
       const logRef = doc(collection(submissionRef, "bundle_downloads"));
       const logData = {
         id: logRef.id,
@@ -294,10 +293,8 @@ export default function SubmissionDetails() {
         sourceBranch: submission.branch
       };
 
-      // Firestore Write (Non-blocking)
       setDoc(logRef, logData).catch(() => {});
 
-      // 2. Simulated real-world bundle generation
       const mockContent = `NIB Institutional KYC Bundle\nGenerated: ${now.toLocaleString()}\nID: ${submission.id}\nSource: ${submission.district} District / ${submission.branch} Branch\n\nIncluded Documents:\n${documents?.map(d => `- [${d.type}] ${d.name}`).join('\n') || 'No documents'}`;
       
       const blob = new Blob([mockContent], { type: 'text/plain' });
@@ -306,12 +303,10 @@ export default function SubmissionDetails() {
       link.href = url;
       link.setAttribute('download', `${bundleName}.zip`);
       
-      // Mandatory DOM attachment for cross-browser reliability
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      // Cleanup
       setTimeout(() => URL.revokeObjectURL(url), 100);
 
       toast({
@@ -329,9 +324,6 @@ export default function SubmissionDetails() {
       setIsDownloading(false);
     }
   };
-
-  if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
-  if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
   const handleCorrectionFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -367,29 +359,35 @@ export default function SubmissionDetails() {
       return;
     }
 
+    const now = new Date().toISOString();
+    const historyEntry: CommentHistoryEntry = {
+      role: user.role || 'Bank User',
+      performedBy: user.name,
+      timestamp: now,
+      comment: action === 'Pending' ? (correctionNote || "Documents resubmitted for review.") : (remarks || "Status updated."),
+      action: action
+    };
+
     const updateData: any = {
       status: action,
-      remarks: action === 'Pending' 
-        ? (correctionNote ? `Branch Response: ${correctionNote}\n\n${submission.remarks || ""}` : (submission.remarks || ""))
-        : (remarks || submission.remarks || ""), 
+      remarks: remarks || submission.remarks || "",
+      commentHistory: arrayUnion(historyEntry)
     };
 
     if (action === 'Amended') updateData.amendmentCycles = increment(1);
     
     if (['Approved', 'Amended', 'Rejected', 'Escalated'].includes(action)) {
       updateData.reviewedBy = user.name;
-      updateData.reviewedAt = new Date().toISOString();
+      updateData.reviewedAt = now;
     }
 
     if (action === 'Pending' && submission.status === 'Amended' && (isOwner || isAdmin)) {
        updateData.isResubmitted = true;
-       updateData.resubmittedAt = new Date().toISOString();
+       updateData.resubmittedAt = now;
        newFiles.forEach(file => {
          const docRef = doc(collection(submissionRef, "documents"));
          const docData = { id: docRef.id, name: file.file.name, type: file.type, uploadedAt: new Date().toISOString(), url: "#", status: 'Current' };
-         setDoc(docRef, docData).catch(async (error) => {
-           errorEmitter.emit('permission-error', new FirestorePermissionError({ path: docRef.path, operation: 'create', requestResourceData: docData }));
-         });
+         setDoc(docRef, docData).catch(() => {});
        });
     }
 
@@ -402,7 +400,9 @@ export default function SubmissionDetails() {
     });
 
     toast({ title: "Workflow Updated", description: `Case moved to ${action}.` });
-    router.back();
+    setRemarks("");
+    setCorrectionNote("");
+    setNewFiles([]);
   };
 
   const handleTriggerExceptional = () => {
@@ -415,15 +415,25 @@ export default function SubmissionDetails() {
       return;
     }
 
+    const now = new Date().toISOString();
+    const historyEntry: CommentHistoryEntry = {
+      role: user.role || 'Branch Manager',
+      performedBy: user.name,
+      timestamp: now,
+      comment: `Triggered Hierarchy Flow: ${exceptionReason}. Justification: ${riskJustification}`,
+      action: 'Hierarchy Trigger'
+    };
+
     const updateData = {
       isExceptional: true,
       exceptionalStatus: 'Awaiting District' as ExceptionalStatus,
+      commentHistory: arrayUnion(historyEntry),
       exceptionalData: {
         reason: exceptionReason,
         justification: riskJustification,
         memoUrl: "#", 
         initiatedBy: user.name,
-        initiatedAt: new Date().toISOString(),
+        initiatedAt: now,
         approvalHistory: []
       }
     };
@@ -437,20 +447,11 @@ export default function SubmissionDetails() {
     });
     
     const docRef = doc(collection(submissionRef, "documents"));
-    const memoData = {
-      id: docRef.id,
-      name: `Institutional_Memo_${submission.id}.pdf`,
-      type: 'Exceptional Memo',
-      uploadedAt: new Date().toISOString(),
-      url: "#",
-      status: 'Current'
-    };
-    setDoc(docRef, memoData).catch(async (error) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: docRef.path, operation: 'create', requestResourceData: memoData }));
-    });
+    const memoData = { id: docRef.id, name: `Institutional_Memo_${submission.id}.pdf`, type: 'Exceptional Memo', uploadedAt: new Date().toISOString(), url: "#", status: 'Current' };
+    setDoc(docRef, memoData).catch(() => {});
 
     setIsExceptionDialogOpen(false);
-    toast({ title: "Exceptional Request Dispatched", description: "Case forwarded to District Director for initial review." });
+    toast({ title: "Exceptional Request Dispatched", description: "Case forwarded to District Director." });
   };
 
   const handleExceptionalApproval = (action: 'Approved' | 'Rejected' | 'Clarification' | 'ForwardChief') => {
@@ -458,25 +459,23 @@ export default function SubmissionDetails() {
     
     const isMemoRequiredRole = ['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
     if (action === 'Approved' && isMemoRequiredRole && !decisionMemoFile && !isAdmin) {
-      toast({ variant: "destructive", title: "Memo Required", description: "You must upload a supporting institutional memo to authorize this request." });
+      toast({ variant: "destructive", title: "Memo Required", description: "You must upload a supporting institutional memo." });
       return;
     }
 
     if (!remarks.trim() && !isAdmin) {
-      toast({ variant: "destructive", title: "Remarks Required", description: "Decision remarks are mandatory for exceptional cases." });
+      toast({ variant: "destructive", title: "Remarks Required", description: "Decision remarks are mandatory." });
       return;
     }
 
+    const now = new Date().toISOString();
     const currentStatus = submission.exceptionalStatus;
     let nextStatus: ExceptionalStatus = 'Completed';
 
-    if (action === 'Rejected') {
-      nextStatus = 'Rejected';
-    } else if (action === 'Clarification') {
-      nextStatus = 'Clarification Required';
-    } else if (action === 'ForwardChief') {
-      nextStatus = 'Awaiting Chief';
-    } else {
+    if (action === 'Rejected') nextStatus = 'Rejected';
+    else if (action === 'Clarification') nextStatus = 'Clarification Required';
+    else if (action === 'ForwardChief') nextStatus = 'Awaiting Chief';
+    else {
       if (currentStatus === 'Awaiting District') nextStatus = 'Awaiting Director';
       else if (currentStatus === 'Awaiting Director') nextStatus = 'Awaiting Division';
       else if (currentStatus === 'Awaiting Chief') nextStatus = 'Awaiting Director';
@@ -484,18 +483,27 @@ export default function SubmissionDetails() {
       else if (currentStatus === 'Awaiting Supervisor') nextStatus = 'Completed';
     }
 
+    const historyEntry: CommentHistoryEntry = {
+      role: user.role || 'Management',
+      performedBy: user.name,
+      timestamp: now,
+      comment: remarks,
+      action: `Hierarchy: ${action}`
+    };
+
     const approvalNode = {
       role: user.role || "Admin",
       action: action === 'ForwardChief' ? 'Forwarded to Chief' : (user.role === 'Chief Retail & SME Banking Officer' ? 'Returned to Director' : action),
       performedBy: user.name,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       remarks,
       memoAttached: !!decisionMemoFile
     };
 
     const updateData: any = {
       exceptionalStatus: nextStatus,
-      "exceptionalData.approvalHistory": arrayUnion(approvalNode)
+      "exceptionalData.approvalHistory": arrayUnion(approvalNode),
+      commentHistory: arrayUnion(historyEntry)
     };
 
     if (nextStatus === 'Completed') {
@@ -513,14 +521,7 @@ export default function SubmissionDetails() {
 
     if (decisionMemoFile) {
       const docRef = doc(collection(submissionRef, "documents"));
-      const memoData = {
-        id: docRef.id,
-        name: `${user.role?.replace(/ /g, '_')}_Authorization_Memo.pdf`,
-        type: 'Institutional Support Memo',
-        uploadedAt: new Date().toISOString(),
-        url: "#",
-        status: 'Current'
-      };
+      const memoData = { id: docRef.id, name: `${user.role?.replace(/ /g, '_')}_Authorization_Memo.pdf`, type: 'Institutional Support Memo', uploadedAt: new Date().toISOString(), url: "#", status: 'Current' };
       setDoc(docRef, memoData).catch(() => {});
     }
 
@@ -532,20 +533,13 @@ export default function SubmissionDetails() {
   const handleToggleChecklistItem = (itemId: string, currentStatus: boolean) => {
     const canEdit = isKYCOfficer || isAdmin;
     if (!canEdit || !submissionRef) return;
-
     const newStatus = !currentStatus;
-    const updateData = {
-      [`checklistState.${itemId}`]: newStatus
-    };
-
-    updateDoc(submissionRef, updateData).catch(async (error) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: submissionRef.path,
-        operation: 'update',
-        requestResourceData: updateData
-      }));
-    });
+    const updateData = { [`checklistState.${itemId}`]: newStatus };
+    updateDoc(submissionRef, updateData).catch(() => {});
   };
+
+  if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
+  if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
   const currentExceptionalRole = 
     submission.exceptionalStatus === 'Awaiting District' ? 'District Director' :
@@ -555,68 +549,23 @@ export default function SubmissionDetails() {
     submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
 
   const isCurrentExceptionalApprover = user?.role === currentExceptionalRole || isAdmin;
-
   const showDirectorButtons = submission.exceptionalStatus === 'Awaiting Director' && (user?.role === 'Branch Banking Director' || isAdmin);
   const showChiefButtons = submission.exceptionalStatus === 'Awaiting Chief' && (user?.role === 'Chief Retail & SME Banking Officer' || isAdmin);
 
   const steps = submission.isExceptional 
     ? [
         { title: "Submitted", status: "completed" as const, icon: Check },
-        { 
-          title: "District Director", 
-          status: (['Awaiting Director', 'Awaiting Chief', 'Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting District' ? "active" as const : "upcoming" as const), 
-          icon: Zap,
-          description: submission.exceptionalStatus === 'Awaiting District' ? "Regional Authorization" : undefined
-        },
-        { 
-          title: "Branch Banking Director", 
-          status: (['Awaiting Chief', 'Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Director' ? "active" as const : "upcoming" as const), 
-          icon: Shield,
-          description: submission.exceptionalStatus === 'Awaiting Director' ? "Strategic Risk Review" : undefined
-        },
-        {
-          title: "Chief Retail & SME",
-          status: (['Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Chief' ? "active" as const : "upcoming" as const),
-          icon: ShieldAlert,
-          description: submission.exceptionalStatus === 'Awaiting Chief' ? "Executive Review" : "Optional: Executive Review"
-        },
-        { 
-          title: "Division Manager", 
-          status: (['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Division' ? "active" as const : "upcoming" as const), 
-          icon: ShieldCheck,
-          description: submission.exceptionalStatus === 'Awaiting Division' ? "Divisional Oversight" : undefined
-        },
-        { 
-          title: "Supervisor", 
-          status: (submission.exceptionalStatus === 'Completed') ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Supervisor' ? "active" as const : "upcoming" as const), 
-          icon: ClipboardCheck,
-          description: submission.exceptionalStatus === 'Awaiting Supervisor' ? "Final Hierarchy confirmation" : undefined
-        },
-        { 
-          title: "KYC Officer", 
-          status: submission.exceptionalStatus === 'Completed' && (['Pending', 'In Review', 'Amended', 'Escalated'].includes(submission.status)) ? "active" as const : (["Approved", "Rejected"].includes(submission.status) ? "completed" as const : "upcoming" as const), 
-          icon: Search,
-          description: submission.exceptionalStatus === 'Completed' ? "Standard verification in progress" : undefined
-        }
+        { title: "District Director", status: (['Awaiting Director', 'Awaiting Chief', 'Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting District' ? "active" as const : "upcoming" as const), icon: Zap },
+        { title: "Branch Banking Director", status: (['Awaiting Chief', 'Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Director' ? "active" as const : "upcoming" as const), icon: Shield },
+        { title: "Chief Retail & SME", status: (['Awaiting Division', 'Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Chief' ? "active" as const : "upcoming" as const), icon: ShieldAlert },
+        { title: "Division Manager", status: (['Awaiting Supervisor', 'Completed'].includes(submission.exceptionalStatus || '')) ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Division' ? "active" as const : "upcoming" as const), icon: ShieldCheck },
+        { title: "Supervisor", status: (submission.exceptionalStatus === 'Completed') ? "completed" as const : (submission.exceptionalStatus === 'Awaiting Supervisor' ? "active" as const : "upcoming" as const), icon: ClipboardCheck },
+        { title: "KYC Officer", status: submission.exceptionalStatus === 'Completed' && (['Pending', 'In Review', 'Amended', 'Escalated'].includes(submission.status)) ? "active" as const : (["Approved", "Rejected"].includes(submission.status) ? "completed" as const : "upcoming" as const), icon: Search }
       ]
     : [
         { title: "Submitted", status: "completed" as const, icon: Check },
-        { 
-          title: submission.status === 'Escalated' ? "Senior Escalation" : "KYC Verification", 
-          status: (["Approved", "Rejected"].includes(submission.status) ? "completed" : "active") as const, 
-          icon: submission.status === 'Escalated' ? AlertTriangle : Search,
-          description: submission.status === 'Escalated' 
-            ? "High-Priority Specialist Review" 
-            : (submission.amendmentCycles && submission.amendmentCycles > 0 
-              ? `Cycle ${submission.amendmentCycles} Active` 
-              : (submission.status === 'Amended' ? "Correction Required" : "Institutional analysis in progress"))
-        },
-        { 
-          title: "Final Decision", 
-          status: (["Approved", "Rejected"].includes(submission.status) ? "completed" : "upcoming") as const, 
-          icon: ShieldCheck,
-          description: submission.status === 'Approved' ? "Verification Authorized" : submission.status === 'Rejected' ? "Verification Declined" : undefined
-        }
+        { title: submission.status === 'Escalated' ? "Senior Escalation" : "KYC Verification", status: (["Approved", "Rejected"].includes(submission.status) ? "completed" : "active") as const, icon: submission.status === 'Escalated' ? AlertTriangle : Search },
+        { title: "Final Decision", status: (["Approved", "Rejected"].includes(submission.status) ? "completed" : "upcoming") as const, icon: ShieldCheck }
       ];
 
   const isCurrentlyEscalated = submission.status === 'Escalated';
@@ -647,11 +596,7 @@ export default function SubmissionDetails() {
                <Zap className="w-4 h-4 mr-2" /> Trigger Hierarchy Approval
              </Button>
            )}
-           <Button 
-            className="bg-primary hover:bg-primary/90 text-white font-bold px-6 shadow-lg h-10" 
-            onClick={handleDownloadBundle}
-            disabled={isDownloading}
-           >
+           <Button className="bg-primary hover:bg-primary/90 text-white font-bold px-6 shadow-lg h-10" onClick={handleDownloadBundle} disabled={isDownloading}>
             {isDownloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileArchive className="w-4 h-4 mr-2" />}
             Download Case Bundle
            </Button>
@@ -660,37 +605,17 @@ export default function SubmissionDetails() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
-          {submission.isExceptional && (
-            <Alert className="bg-yellow-50 border-yellow-200 text-yellow-900 shadow-sm">
-              <Zap className="h-5 w-5 text-yellow-600" />
-              <AlertTitle className="font-bold">Exceptional Hierarchy Flow Active</AlertTitle>
-              <AlertDescription className="font-medium space-y-2">
-                <p>Reason: <span className="font-bold">{submission.exceptionalData?.reason}</span></p>
-                <p className="italic">"{submission.exceptionalData?.justification}"</p>
-              </AlertDescription>
-            </Alert>
-          )}
-
           {submission.isExceptional && submission.exceptionalStatus !== 'Completed' && isCurrentExceptionalApprover && (
             <Card className="border-yellow-600 shadow-xl overflow-hidden bg-yellow-50/10 animate-in zoom-in-95 duration-300">
               <CardHeader className="bg-yellow-600 text-white">
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <Shield className="w-5 h-5" /> 
-                  Institutional Review: {isAdmin && currentExceptionalRole ? `${currentExceptionalRole} (via Admin Override)` : user?.role}
-                </CardTitle>
-                <CardDescription className="text-yellow-100 font-medium">Provide your determination and upload supporting documentation for the audit trail.</CardDescription>
+                <CardTitle className="text-xl flex items-center gap-2"><Shield className="w-5 h-5" /> Institutional Review: {user?.role}</CardTitle>
+                <CardDescription className="text-yellow-100 font-medium">Provide determination and upload supporting documentation.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
                 {['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user?.role || '') || isAdmin ? (
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Mandatory Supporting Memo (PDF)</Label>
-                    <div 
-                      onClick={() => decisionMemoInputRef.current?.click()}
-                      className={cn(
-                        "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all bg-white shadow-sm",
-                        decisionMemoFile ? "border-emerald-300 bg-emerald-50/20" : "border-yellow-300 hover:bg-yellow-50/50"
-                      )}
-                    >
+                    <div onClick={() => decisionMemoInputRef.current?.click()} className={cn("border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all bg-white shadow-sm", decisionMemoFile ? "border-emerald-300 bg-emerald-50/20" : "border-yellow-300 hover:bg-yellow-50/50")}>
                       {decisionMemoFile ? (
                         <div className="flex items-center justify-center gap-3 text-emerald-700">
                           <CheckCircle2 className="w-5 h-5" />
@@ -704,52 +629,26 @@ export default function SubmissionDetails() {
                         </div>
                       )}
                     </div>
-                    <input 
-                      type="file" 
-                      ref={decisionMemoInputRef} 
-                      className="hidden" 
-                      accept="application/pdf"
-                      onChange={(e) => setDecisionMemoFile(e.target.files?.[0] || null)}
-                    />
+                    <input type="file" ref={decisionMemoInputRef} className="hidden" accept="application/pdf" onChange={(e) => setDecisionMemoFile(e.target.files?.[0] || null)} />
                   </div>
                 ) : null}
-
                 <div className="space-y-2">
                   <Label className="font-bold text-slate-700">Decision Remarks (Mandatory)</Label>
-                  <Textarea 
-                    placeholder="Provide detailed context for your determination..." 
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    className="min-h-[120px] bg-white border-yellow-200 focus:ring-yellow-600"
-                  />
+                  <Textarea placeholder="Provide context for your determination..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[120px]" />
                 </div>
-
                 <div className="flex flex-wrap gap-3">
                   {showDirectorButtons ? (
                     <>
-                      <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>
-                        Approve & Forward to Division
-                      </Button>
-                      <Button variant="secondary" className="bg-primary hover:bg-primary/90 text-white font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('ForwardChief')}>
-                        Forward to Chief for High-Risk Review
-                      </Button>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>Approve & Forward</Button>
+                      <Button variant="secondary" className="bg-primary hover:bg-primary/90 text-white font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('ForwardChief')}>Forward to Chief</Button>
                     </>
                   ) : showChiefButtons ? (
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 w-full shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>
-                      Approve & Return to Director
-                    </Button>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 w-full shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>Approve & Return</Button>
                   ) : (
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>
-                      {currentExceptionalRole === 'Supervisor' ? 'Confirm & Dispatch' : 'Approve Level'}
-                    </Button>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>{currentExceptionalRole === 'Supervisor' ? 'Confirm & Dispatch' : 'Approve Level'}</Button>
                   )}
-                  
-                  <Button variant="outline" className="text-orange-600 border-orange-600 bg-white font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Clarification')}>
-                    Request Info
-                  </Button>
-                  <Button variant="destructive" className="font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Rejected')}>
-                    Reject Flow
-                  </Button>
+                  <Button variant="outline" className="text-orange-600 border-orange-600 bg-white font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Clarification')}>Request Info</Button>
+                  <Button variant="destructive" className="font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Rejected')}>Reject Flow</Button>
                 </div>
               </CardContent>
             </Card>
@@ -757,87 +656,54 @@ export default function SubmissionDetails() {
 
           <Card className="shadow-sm border-slate-200">
             <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50">
-              <CardTitle className="text-xl flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />
-                Verification Assets
-              </CardTitle>
-              <Badge variant="outline" className="bg-white font-bold text-slate-500 uppercase text-[10px] tracking-widest">
-                {documents?.length || 0} Files Attached
-              </Badge>
+              <CardTitle className="text-xl flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Verification Assets</CardTitle>
+              <Badge variant="outline" className="bg-white font-bold text-slate-500 uppercase text-[10px] tracking-widest">{documents?.length || 0} Files</Badge>
             </CardHeader>
             <CardContent className="pt-6 space-y-8">
-              <div className="space-y-4">
+              <div className="grid gap-4">
                 {documents?.map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all group border-slate-200">
                       <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "p-2 rounded-lg",
-                          doc.type.includes('Memo') ? "bg-yellow-100 text-yellow-700" : "bg-primary/10 text-primary"
-                        )}>
+                        <div className={cn("p-2 rounded-lg", doc.type.includes('Memo') ? "bg-yellow-100 text-yellow-700" : "bg-primary/10 text-primary")}>
                           {doc.type.includes('Memo') ? <Zap className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
                         </div>
                         <div>
                           <p className="font-bold text-slate-900">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                            {doc.type.replace(/_/g, ' ')} • {new Date(doc.uploadedAt).toLocaleDateString()}
-                          </p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{doc.type.replace(/_/g, ' ')} • {new Date(doc.uploadedAt).toLocaleDateString()}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
-                         <Button variant="ghost" size="icon" onClick={() => setPreviewFile({ id: doc.id, name: doc.name, type: doc.type, url: doc.url === '#' ? 'https://picsum.photos/seed/doc/1200/1600' : doc.url, isPdf: doc.name.toLowerCase().endsWith('.pdf') })} className="rounded-full text-slate-500 hover:text-primary"><Eye className="w-4 h-4" /></Button>
-                         <Button variant="ghost" size="icon" asChild className="rounded-full text-slate-500 hover:text-primary">
-                           <a href={doc.url === '#' ? '#' : doc.url} download={doc.name}><Download className="w-4 h-4" /></a>
-                         </Button>
+                         <Button variant="ghost" size="icon" onClick={() => setPreviewFile({ id: doc.id, name: doc.name, type: doc.type, url: doc.url === '#' ? 'https://picsum.photos/seed/doc/1200/1600' : doc.url, isPdf: doc.name.toLowerCase().endsWith('.pdf') })} className="rounded-full"><Eye className="w-4 h-4" /></Button>
+                         <Button variant="ghost" size="icon" asChild className="rounded-full"><a href={doc.url === '#' ? '#' : doc.url} download={doc.name}><Download className="w-4 h-4" /></a></Button>
                       </div>
                     </div>
                 ))}
               </div>
 
-              <div className="space-y-4 animate-in fade-in duration-500">
-                <div className="flex items-center justify-between pb-2 border-b">
+              <div className="space-y-4 pt-4 border-t">
+                <div className="flex items-center justify-between pb-2">
                   <div className="flex items-center gap-2">
                     <ClipboardCheck className="w-5 h-5 text-primary" />
-                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
-                      Verification Checklist: {submission.entityType?.replace(/_/g, ' ') || "Individual"}
-                    </h3>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Verification Checklist</h3>
                   </div>
                   {(isKYCOfficer || isAdmin) && (
                     <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-7 text-[10px] font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                        onClick={() => handleSelectAllChecklist(true)}
-                      >
-                        Select All
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-7 text-[10px] font-bold border-slate-200 text-slate-500 hover:bg-slate-50"
-                        onClick={() => handleSelectAllChecklist(false)}
-                      >
-                        Deselect All
-                      </Button>
+                      <Button variant="outline" size="sm" className="h-7 text-[10px] font-bold" onClick={() => handleSelectAllChecklist(true)}>Select All</Button>
+                      <Button variant="outline" size="sm" className="h-7 text-[10px] font-bold" onClick={() => handleSelectAllChecklist(false)}>Reset</Button>
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid gap-2">
                   {currentChecklist.map((item) => {
                     const isVerified = submission.checklistState?.[item.id] || false;
-                    const canEditChecklist = isKYCOfficer || isAdmin;
                     return (
                       <div key={item.id} className={cn("flex items-center justify-between p-3 rounded-lg border transition-all", isVerified ? "bg-emerald-50/50 border-emerald-100" : "bg-slate-50/50 border-slate-100")}>
                         <div className="flex items-center gap-3">
-                          <div className={cn("w-5 h-5 rounded flex items-center justify-center border", isVerified ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-200")}>
-                            {isVerified && <Check className="w-3 h-3" />}
-                          </div>
-                          <span className={cn("text-sm font-bold", isVerified ? "text-emerald-900" : "text-slate-700")}>
-                            {item.label} {item.mandatory && <span className="text-destructive">*</span>}
-                          </span>
+                          <div className={cn("w-5 h-5 rounded flex items-center justify-center border", isVerified ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-200")}>{isVerified && <Check className="w-3 h-3" />}</div>
+                          <span className={cn("text-sm font-bold", isVerified ? "text-emerald-900" : "text-slate-700")}>{item.label} {item.mandatory && <span className="text-destructive">*</span>}</span>
                         </div>
-                        <Button variant="ghost" size="sm" disabled={!canEditChecklist} onClick={() => handleToggleChecklistItem(item.id, isVerified)} className={cn("h-8 font-black text-xs px-3 rounded-full transition-all", isVerified ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-white border border-slate-200 text-slate-400 hover:bg-slate-50")}>
-                          {isVerified ? "✔ VERIFIED" : "✖ NOT VERIFIED"}
+                        <Button variant="ghost" size="sm" disabled={!(isKYCOfficer || isAdmin)} onClick={() => handleToggleChecklistItem(item.id, isVerified)} className={cn("h-8 font-black text-xs px-3 rounded-full transition-all", isVerified ? "bg-emerald-100 text-emerald-700" : "bg-white border text-slate-400")}>
+                          {isVerified ? "✔ VERIFIED" : "✖ PENDING"}
                         </Button>
                       </div>
                     );
@@ -847,99 +713,91 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {submission.isExceptional && submission.exceptionalData?.approvalHistory && submission.exceptionalData.approvalHistory.length > 0 && (
-            <Card className="shadow-sm border-slate-200">
-              <CardHeader><CardTitle className="text-xl">Exceptional Approval History</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
-                {submission.exceptionalData.approvalHistory.map((step, idx) => (
-                  <div key={idx} className="flex gap-4 items-start border-l-2 border-slate-100 pl-4 pb-2">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                      {step.action === 'Approved' || step.action === 'Forwarded to Chief' || step.action === 'Returned to Director' ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-slate-900">{step.role}: {step.action}</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">{new Date(step.timestamp).toLocaleString()}</span>
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <MessagesSquare className="w-5 h-5 text-primary" />
+                Audit & Communication History
+              </CardTitle>
+              <Badge variant="outline" className="bg-white font-bold text-[10px] tracking-widest uppercase">
+                {submission.commentHistory?.length || 0} Entries
+              </Badge>
+            </CardHeader>
+            <CardContent className="pt-8 px-8">
+              <div className="relative space-y-8">
+                <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
+                {submission.commentHistory && submission.commentHistory.length > 0 ? (
+                  submission.commentHistory.map((entry, idx) => (
+                    <div key={idx} className="relative flex gap-6 animate-in fade-in slide-in-from-left-2 duration-500">
+                      <div className="z-10 w-10 h-10 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center shrink-0 shadow-sm">
+                        {entry.action === 'Approved' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> :
+                         entry.action === 'Amended' ? <RefreshCw className="w-5 h-5 text-orange-500" /> :
+                         entry.action === 'Rejected' ? <XCircle className="w-5 h-5 text-red-500" /> :
+                         entry.action === 'Submission' ? <FilePlus className="w-5 h-5 text-primary" /> :
+                         <MessageSquare className="w-5 h-5 text-slate-400" />}
                       </div>
-                      <p className="text-sm text-slate-600 italic">"{step.remarks}"</p>
-                      <div className="flex items-center justify-between">
-                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">BY: {step.performedBy}</p>
-                        {step.memoAttached && <Badge variant="outline" className="text-[9px] bg-yellow-50 text-yellow-700 border-yellow-200">Supporting Memo Attached</Badge>}
+                      <div className="flex-1 space-y-2 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-slate-900">{entry.performedBy}</span>
+                            <Badge variant="secondary" className="text-[9px] font-black uppercase tracking-tighter bg-white border-slate-200">
+                              {entry.role}
+                            </Badge>
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-400 tabular-nums">
+                            {new Date(entry.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-700 leading-relaxed font-medium italic">"{entry.comment}"</p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Action:</span>
+                          <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-primary/20 text-primary bg-white">
+                            {entry.action}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="py-12 text-center text-muted-foreground italic bg-slate-50/50 rounded-2xl border-2 border-dashed">
+                    No institutional comments logged for this case.
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-6">
-          <Card className="shadow-lg border-primary/20 bg-primary/5 overflow-hidden">
+          <Card className="shadow-lg border-primary/20 bg-primary/5 overflow-hidden sticky top-24">
             <CardHeader className="bg-primary/10 border-b border-primary/10 py-4">
-              <CardTitle className="text-[11px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
-                Institutional Source
-              </CardTitle>
+              <CardTitle className="text-[11px] font-black uppercase tracking-widest text-primary flex items-center gap-2"><MapPin className="w-4 h-4" /> Institutional Source</CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y divide-primary/10">
+            <CardContent className="p-0 divide-y divide-primary/10">
                 <div className="p-5 space-y-1 relative group">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer</p>
-                    <User className="w-4 h-4 text-primary/20" />
-                  </div>
+                  <div className="flex items-center justify-between"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer</p><User className="w-4 h-4 text-primary/20" /></div>
                   <p className="font-black text-slate-900 text-lg leading-tight">{submission.customerName}</p>
                 </div>
-
                 <div className="p-5 space-y-1 relative group bg-white/30">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account Classification</p>
-                    <Layers className="w-4 h-4 text-primary/20" />
-                  </div>
+                  <div className="flex items-center justify-between"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account Classification</p><Layers className="w-4 h-4 text-primary/20" /></div>
                   <p className="font-black text-slate-900 uppercase text-xs tracking-tight">{submission.entityType?.replace(/_/g, ' ') || 'Individual Account'}</p>
                 </div>
-
                 <div className="p-5 space-y-1 relative group">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Region</p>
-                    <Globe className="w-4 h-4 text-primary/20" />
-                  </div>
+                  <div className="flex items-center justify-between"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Region</p><Globe className="w-4 h-4 text-primary/20" /></div>
                   <p className="font-black text-slate-900">{submission.district} District</p>
                 </div>
-
                 <div className="p-5 space-y-1 relative group bg-white/30">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Node</p>
-                    <Building2 className="w-4 h-4 text-primary/20" />
-                  </div>
+                  <div className="flex items-center justify-between"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Node</p><Building2 className="w-4 h-4 text-primary/20" /></div>
                   <p className="font-black text-slate-900">{submission.branch} Branch</p>
                 </div>
-
                 <div className="p-5 space-y-1 relative group">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Originating Officer</p>
-                    <UserCheck className="w-4 h-4 text-primary/20" />
-                  </div>
+                  <div className="flex items-center justify-between"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Originating Officer</p><UserCheck className="w-4 h-4 text-primary/20" /></div>
                   <p className="font-black text-slate-900">{submission.submittedBy}</p>
                 </div>
-
                 <div className="p-5 space-y-1 relative group bg-white/30">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Submitted On</p>
-                    <Calendar className="w-4 h-4 text-primary/20" />
-                  </div>
-                  <p className="font-black text-slate-900 text-sm tabular-nums">
-                    {new Date(submission.submittedAt).toLocaleDateString(undefined, { 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
+                  <div className="flex items-center justify-between"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Submitted On</p><Calendar className="w-4 h-4 text-primary/20" /></div>
+                  <p className="font-black text-slate-900 text-sm tabular-nums">{new Date(submission.submittedAt).toLocaleString()}</p>
                 </div>
-              </div>
             </CardContent>
           </Card>
 
@@ -952,47 +810,13 @@ export default function SubmissionDetails() {
                   const Icon = step.icon;
                   return (
                     <div key={idx} className="relative flex gap-6 group">
-                      <div className={cn(
-                        "z-10 w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shrink-0",
-                        step.status === "completed" ? "bg-emerald-500 border-emerald-500 text-white" :
-                        step.status === "active" ? "bg-primary border-primary text-white shadow-lg" : "bg-white border-slate-200 text-slate-300"
-                      )}><Icon className={cn("w-5 h-5", step.status === "active" && "animate-pulse")} /></div>
+                      <div className={cn("z-10 w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shrink-0", step.status === "completed" ? "bg-emerald-500 border-emerald-500 text-white" : step.status === "active" ? "bg-primary border-primary text-white shadow-lg" : "bg-white border-slate-200 text-slate-300")}><Icon className={cn("w-5 h-5", step.status === "active" && "animate-pulse")} /></div>
                       <div className="space-y-1.5 pt-0.5">
                         <p className={cn("text-base font-bold", step.status === "upcoming" ? "text-slate-300" : "text-slate-900")}>{step.title}</p>
-                        {step.description && (
-                          <p className="text-[10px] font-black uppercase tracking-widest text-primary/70 animate-in fade-in slide-in-from-left-1 duration-500">
-                            {step.description}
-                          </p>
-                        )}
                       </div>
                     </div>
                   );
                 })}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-lg border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50 border-b">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <History className="w-4 h-4 text-slate-400" />
-                Bundle Transfer History
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 px-0">
-              <div className="divide-y">
-                {downloadHistory?.map((log) => (
-                  <div key={log.id} className="p-4 space-y-1">
-                    <p className="text-[11px] font-black text-slate-900 truncate">{log.bundleName}</p>
-                    <div className="flex items-center justify-between text-[10px] font-bold">
-                      <span className="text-slate-500 uppercase">{log.performedBy}</span>
-                      <span className="text-slate-400">{new Date(log.timestamp).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                ))}
-                {(!downloadHistory || downloadHistory.length === 0) && (
-                  <p className="p-8 text-center text-xs text-muted-foreground italic">No bundle transfers logged.</p>
-                )}
               </div>
             </CardContent>
           </Card>
@@ -1003,14 +827,11 @@ export default function SubmissionDetails() {
                 <CardTitle className="text-lg flex items-center gap-2"><RefreshCw className="w-5 h-5 text-orange-600" /> Correction Workspace</CardTitle>
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
-                <div className="p-4 rounded-xl bg-white border border-orange-200">
-                  <p className="text-sm font-bold text-slate-700 leading-relaxed italic">"{submission.remarks}"</p>
-                </div>
                 <div className="space-y-4">
                   <input type="file" className="hidden" ref={correctionInputRef} multiple onChange={handleCorrectionFileChange} />
                   <div onClick={() => correctionInputRef.current?.click()} className="border-2 border-dashed border-orange-300 rounded-2xl p-8 text-center cursor-pointer hover:bg-orange-50 bg-white shadow-sm">
                     <Upload className="w-5 h-5 text-orange-600 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-orange-900">Attach Corrected Files (Optional)</p>
+                    <p className="text-xs font-bold text-orange-900">Attach Corrected Files</p>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Response Note / Clarification</Label>
@@ -1020,7 +841,7 @@ export default function SubmissionDetails() {
                     <div key={idx} className="p-3 border rounded-xl bg-white shadow-sm space-y-3">
                       <div className="flex items-center justify-between"><span className="text-[11px] font-bold truncate flex-1">{f.file.name}</span><button onClick={() => removeNewFile(idx)}><X className="w-3 h-3" /></button></div>
                       <Select value={f.type} onValueChange={(val) => updateNewFileType(idx, val)}>
-                        <SelectTrigger className="h-9 text-[10px]"><SelectValue placeholder="Categorize File..." /></SelectTrigger>
+                        <SelectTrigger className="h-9 text-[10px]"><SelectValue placeholder="Categorize..." /></SelectTrigger>
                         <SelectContent>{documentTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
@@ -1036,57 +857,27 @@ export default function SubmissionDetails() {
           {(isReviewer || isOwner || isAdmin) && (['Pending', 'In Review', 'Escalated', 'Amended'].includes(submission.status) || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
             <Card className="border-primary/20 shadow-xl overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-primary" /> 
-                  KYC Determination
-                </CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" /> KYC Determination</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
                 {(isReviewer || isAdmin) && (
-                  <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                        <ListFilter className="w-3 h-3" /> Amendment Scenario Registry
-                      </Label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Amendment Scenario Registry</Label>
                       <Select value={selectedScenario} onValueChange={handleScenarioChange}>
-                        <SelectTrigger className="h-11 bg-slate-50/50 border-slate-200">
-                          <SelectValue placeholder="Select institutional finding..." />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-[300px]">
-                          {AMENDMENT_SCENARIOS.map((scenario) => (
-                            <SelectItem key={scenario} value={scenario} className="text-xs font-medium">
-                              {scenario}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
+                        <SelectTrigger className="h-11 bg-slate-50/50 border-slate-200"><SelectValue placeholder="Select institutional finding..." /></SelectTrigger>
+                        <SelectContent className="max-h-[300px]">{AMENDMENT_SCENARIOS.map((scenario) => (<SelectItem key={scenario} value={scenario} className="text-xs font-medium">{scenario}</SelectItem>))}</SelectContent>
                       </Select>
                     </div>
-
                     {selectedScenario === "19. Other (specify)" && (
-                      <div className="space-y-2 animate-in fade-in duration-300">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Specify Custom Finding</Label>
-                        <Input 
-                          placeholder="Detail the bespoke amendment required..." 
-                          value={otherScenarioText}
-                          onChange={handleOtherScenarioChange}
-                          className="h-11 border-primary/20"
-                        />
-                      </div>
+                      <div className="space-y-2"><Label className="text-[10px] font-black uppercase tracking-widest text-primary">Specify Custom Finding</Label><Input placeholder="Detail bespoke amendment..." value={otherScenarioText} onChange={handleOtherScenarioChange} className="h-11 border-primary/20" /></div>
                     )}
                   </div>
                 )}
-
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Decision Remarks</Label>
-                  <Textarea 
-                    placeholder={isReviewer || isAdmin ? "Provide verification feedback or select a scenario above..." : "No remarks provided yet."} 
-                    value={remarks} 
-                    onChange={(e) => setRemarks(e.target.value)} 
-                    className="min-h-[140px] bg-white" 
-                    disabled={!isReviewer && !isAdmin} 
-                  />
+                  <Textarea placeholder={isReviewer || isAdmin ? "Provide verification feedback..." : "No remarks."} value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[140px]" disabled={!isReviewer && !isAdmin} />
                 </div>
-
                 {(isReviewer || isAdmin) && (
                   <div className="grid grid-cols-2 gap-2 pt-2">
                     {(!isCurrentlyEscalated || canResolveEscalation) && <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold">Approve</Button>}

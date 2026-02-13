@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "KYCSubmission": {
@@ -43,6 +42,19 @@
                   "memoAttached": { "type": "boolean" }
                 }
               }
+            }
+          }
+        },
+        "commentHistory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string" },
+              "performedBy": { "type": "string" },
+              "timestamp": { "type": "string" },
+              "comment": { "type": "string" },
+              "action": { "type": "string" }
             }
           }
         },

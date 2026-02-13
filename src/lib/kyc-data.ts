@@ -1,4 +1,3 @@
-
 export type SubmissionStatus = 
   | 'Pending' 
   | 'In Review' 
@@ -34,6 +33,14 @@ export interface ExceptionalData {
   initiatedBy: string;
   initiatedAt: string;
   approvalHistory: ExceptionalApproval[];
+}
+
+export interface CommentHistoryEntry {
+  role: string;
+  performedBy: string;
+  timestamp: string;
+  comment: string;
+  action: string;
 }
 
 export interface Document {
@@ -74,6 +81,7 @@ export interface KYCSubmission {
   isExceptional?: boolean;
   exceptionalStatus?: ExceptionalStatus;
   exceptionalData?: ExceptionalData;
+  commentHistory?: CommentHistoryEntry[];
   documents: Document[];
   remarks?: string;
   isResubmitted?: boolean;

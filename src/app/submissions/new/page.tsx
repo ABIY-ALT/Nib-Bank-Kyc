@@ -83,9 +83,9 @@ export default function NewSubmission() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const branchQuery = useMemoFirebase(() => {
-    if (!db || !user.branch) return null;
+    if (!db || !user?.branch) return null;
     return query(collection(db, "branches"), where("name", "==", user.branch), limit(1));
-  }, [db, user.branch]);
+  }, [db, user?.branch]);
 
   const { data: branchData } = useCollection<{code: string}>(branchQuery);
 
@@ -133,7 +133,7 @@ export default function NewSubmission() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db) return;
+    if (!db || !user) return;
     
     if (uploadedFiles.length === 0) {
       toast({ variant: "destructive", title: "Missing Documents", description: "Upload at least one document." });
@@ -151,6 +151,7 @@ export default function NewSubmission() {
     
     const submissionRef = doc(db, "submissions", submissionId);
     
+    const now = new Date().toISOString();
     const submissionData = {
       id: submissionId,
       customerName,
@@ -158,9 +159,16 @@ export default function NewSubmission() {
       branch: user.branch || "Headquarters",
       district: user.district || "Central",
       submittedBy: user.name,
-      submittedAt: new Date().toISOString(),
+      submittedAt: now,
       status: "Pending",
       remarks,
+      commentHistory: remarks ? [{
+        role: user.role || 'Branch Officer',
+        performedBy: user.name,
+        timestamp: now,
+        comment: remarks,
+        action: 'Submission'
+      }] : [],
       isResubmitted: false,
       amendmentCycles: 0,
       isExceptional: false,
@@ -286,7 +294,7 @@ export default function NewSubmission() {
         </Card>
 
         <Card className="border-slate-200 shadow-sm">
-          <CardHeader><CardTitle className="text-xl">Remarks</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-xl">Initial Remarks</CardTitle></CardHeader>
           <CardContent>
              <Textarea placeholder="Provide internal context for the KYC Officer (optional)..." className="min-h-[140px]" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           </CardContent>
