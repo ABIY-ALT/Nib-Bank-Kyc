@@ -1,6 +1,17 @@
+
 'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
+import { useFirebase, useFirestore } from '@/firebase';
+import { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  User as FirebaseUser 
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, collection } from 'firebase/firestore';
+import { useRouter, usePathname } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 
 export type UserRole = 
   | 'Branch Officer' 
@@ -24,115 +35,143 @@ export interface User {
   branch?: string;
   assignedBranches?: string[];
   district?: string;
-  status?: string;
+  status?: 'Active' | 'Inactive' | 'Suspended';
 }
 
-export const MOCK_USERS: User[] = [
-  { 
-    id: 'admin-1', 
-    name: 'System Admin', 
-    email: 'admin@bank.com', 
-    phoneNumber: '+1234567890', 
-    role: 'Admin', 
-    status: 'Active' 
-  },
-  { 
-    id: 'chief-1', 
-    name: 'Executive Chief', 
-    email: 'chief@bank.com', 
-    phoneNumber: '+1234567899', 
-    role: 'Chief Retail & SME Banking Officer', 
-    status: 'Active' 
-  },
-  { 
-    id: 'dir-1', 
-    name: 'Alice Wilson', 
-    email: 'alice.dir@bank.com', 
-    phoneNumber: '+1234567895', 
-    role: 'Branch Banking Director', 
-    status: 'Active' 
-  },
-  { 
-    id: 'follow-1', 
-    name: 'Arthur Auditor', 
-    email: 'arthur.audit@bank.com', 
-    phoneNumber: '+1234567891', 
-    role: 'Follow-up Team', 
-    status: 'Active' 
-  },
-  { 
-    id: 'branch-1', 
-    name: 'John Doe', 
-    email: 'john.branch@bank.com', 
-    phoneNumber: '+1234567891', 
-    role: 'Branch Officer', 
-    branch: 'Downtown', 
-    district: 'Central', 
-    status: 'Active' 
-  },
-  { 
-    id: 'mgr-1', 
-    name: 'Mike Manager', 
-    email: 'mike.mgr@bank.com', 
-    phoneNumber: '+1234567896', 
-    role: 'Branch Manager', 
-    branch: 'Downtown', 
-    district: 'Central', 
-    status: 'Active' 
-  },
-  { 
-    id: 'kyc-1', 
-    name: 'Jane Smith', 
-    email: 'jane.kyc@bank.com', 
-    phoneNumber: '+1234567892', 
-    role: 'KYC Officer', 
-    assignedBranches: ['Downtown', 'Uptown'], 
-    status: 'Active' 
-  },
-  { 
-    id: 'super-1', 
-    name: 'Robert Brown', 
-    email: 'robert.super@bank.com', 
-    phoneNumber: '+1234567894', 
-    role: 'Supervisor', 
-    district: 'Central', 
-    status: 'Active' 
-  },
-];
+const SESSION_TIMEOUT_MINUTES = 30;
 
 interface AuthContextType {
-  user: User;
+  user: User | null;
+  loading: boolean;
+  login: (email: string, pass: string) => Promise<void>;
+  logout: () => Promise<void>;
+  allUsers: User[]; // For testing purposes in this prototype
   loginAs: (userId: string) => void;
-  allUsers: User[];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User>(MOCK_USERS[0]);
-  const [allUsers, setAllUsers] = useState<User[]>(MOCK_USERS);
+  const { auth } = useFirebase();
+  const db = useFirestore();
+  const router = useRouter();
+  const pathname = usePathname();
+  const { toast } = useToast();
+  
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [lastActivity, setLastActivity] = useState(Date.now());
+
+  // MOCK DATA for switching during prototyping
+  const MOCK_PROFILES: User[] = [
+    { id: 'admin-1', name: 'System Admin', email: 'admin@bank.com', role: 'Admin', status: 'Active' },
+    { id: 'chief-1', name: 'Executive Chief', email: 'chief@bank.com', role: 'Chief Retail & SME Banking Officer', status: 'Active' },
+    { id: 'branch-1', name: 'John Doe', email: 'john.branch@bank.com', role: 'Branch Officer', branch: 'Downtown', district: 'Central', status: 'Active' },
+    { id: 'kyc-1', name: 'Jane Smith', email: 'jane.kyc@bank.com', role: 'KYC Officer', assignedBranches: ['Downtown', 'Uptown'], status: 'Active' },
+  ];
 
   useEffect(() => {
-    const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('current_user_id') : null;
-    if (savedUserId) {
-      const found = allUsers.find(u => u.id === savedUserId);
-      if (found) setUser(found);
-    }
-  }, [allUsers]);
+    if (!auth || !db) return;
 
-  const loginAs = (userId: string) => {
-    const found = allUsers.find(u => u.id === userId);
-    if (found) {
-      setUser(found);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('current_user_id', userId);
-        window.location.href = '/'; // Refresh to clear state
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const userDoc = await getDoc(doc(db, "users", fbUser.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data() as User;
+          
+          if (userData.status !== 'Active') {
+            toast({ variant: 'destructive', title: 'Access Denied', description: `Your account is currently ${userData.status}.` });
+            await signOut(auth);
+            setUser(null);
+          } else {
+            setUser({ ...userData, id: fbUser.uid });
+          }
+        } else {
+          // If no doc exists, create a default for this demo context
+          const newUser: User = {
+            id: fbUser.uid,
+            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Bank User',
+            email: fbUser.email || '',
+            role: 'Branch Officer',
+            status: 'Active'
+          };
+          await setDoc(doc(db, "users", fbUser.uid), newUser);
+          setUser(newUser);
+        }
+      } else {
+        setUser(null);
       }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [auth, db, toast]);
+
+  // Session Timeout Watchdog
+  useEffect(() => {
+    const handleActivity = () => setLastActivity(Date.now());
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (user && now - lastActivity > SESSION_TIMEOUT_MINUTES * 60 * 1000) {
+        toast({ title: 'Session Expired', description: 'Institutional session timed out due to inactivity.' });
+        logout();
+      }
+    }, 60000);
+
+    return () => {
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      clearInterval(interval);
+    };
+  }, [user, lastActivity]);
+
+  const logAuthEvent = async (action: string, details?: string) => {
+    if (!db || !user) return;
+    const logRef = doc(collection(db, "audit_logs"));
+    await setDoc(logRef, {
+      id: logRef.id,
+      userId: user.id,
+      userEmail: user.email,
+      action,
+      timestamp: new Date().toISOString(),
+      ipAddress: "10.128." + Math.floor(Math.random() * 255) + "." + Math.floor(Math.random() * 255), // Simulated Internal IP
+      details: details || ""
+    });
+  };
+
+  const login = async (email: string, pass: string) => {
+    if (!auth) return;
+    if (!email.endsWith('@bank.com')) {
+      throw new Error('Institutional access restricted to @bank.com domains.');
+    }
+    
+    await signInWithEmailAndPassword(auth, email, pass);
+    // User profile check is handled in the onAuthStateChanged listener
+    await logAuthEvent('Login', 'Successful institutional authentication');
+  };
+
+  const logout = async () => {
+    if (!auth) return;
+    await logAuthEvent('Logout', 'Session terminated by user');
+    await signOut(auth);
+    setUser(null);
+    router.push('/login');
+  };
+
+  const loginAs = async (userId: string) => {
+    // Prototyping tool: Switch profiles instantly
+    const profile = MOCK_PROFILES.find(p => p.id === userId);
+    if (profile) {
+      setUser(profile);
+      toast({ title: 'Profile Switched', description: `Viewing as ${profile.name} (${profile.role})` });
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loginAs, allUsers }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, allUsers: MOCK_PROFILES, loginAs }}>
       {children}
     </AuthContext.Provider>
   );
@@ -143,5 +182,3 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
-
-export const currentUser = MOCK_USERS[0];

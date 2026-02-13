@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "KYCSubmission": {
@@ -84,12 +85,27 @@
           "enum": ["Branch Officer", "KYC Officer", "Supervisor", "Branch Banking Director", "Admin", "Branch Manager", "District Director", "Division Manager", "Chief Retail & SME Banking Officer", "Follow-up Team", "Chief"] 
         },
         "branch": { "type": "string" },
-        "district": { "type": "string" }
+        "district": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive", "Suspended"] }
+      }
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "System security and activity log.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "ipAddress": { "type": "string" },
+        "details": { "type": "string" }
       }
     }
   },
   "auth": {
-    "providers": ["google.com"]
+    "providers": ["password"]
   },
   "firestore": {
     "/submissions/{submissionId}": {
@@ -103,6 +119,10 @@
     "/users/{userId}": {
       "schema": "#/entities/UserProfile",
       "description": "System user profiles and permissions."
+    },
+    "/audit_logs/{logId}": {
+      "schema": "#/entities/AuditLog",
+      "description": "System-wide security audit logs."
     }
   }
 }
