@@ -172,6 +172,7 @@ export default function SubmissionDetails() {
   const [correctionNote, setCorrectionNote] = useState("");
   const [newFiles, setNewFiles] = useState<{file: File, type: string}[]>([]);
   const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
+  const isDownloadingRef = useRef(false);
   const [isDownloading, setIsDownloading] = useState(false);
   
   // Exceptional Request State
@@ -240,9 +241,11 @@ export default function SubmissionDetails() {
     setSelectedScenario(val);
     if (val !== "19. Other (specify)") {
       setRemarks(prev => {
-        if (!prev || prev.trim() === "" || AMENDMENT_SCENARIOS.includes(prev)) {
+        // If the current remarks are empty or just another scenario, replace it
+        if (!prev || prev.trim() === "" || AMENDMENT_SCENARIOS.includes(prev.split('\n\n')[0]) || AMENDMENT_SCENARIOS.includes(prev)) {
           return val;
         }
+        // Otherwise append it
         return `${prev.trim()}\n\nFinding: ${val}`;
       });
       setOtherScenarioText("");
@@ -252,7 +255,6 @@ export default function SubmissionDetails() {
   const handleOtherScenarioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value;
     setOtherScenarioText(text);
-    // When typing "Other", we don't necessarily want to replace everything, but for the registry we track it
   };
 
   const currentChecklist = useMemo(() => {
@@ -318,7 +320,6 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
         const docFolder = zip.folder("case_assets");
         for (const docObj of documents) {
           try {
-            // For prototype purposes, if url is #, we fetch a placeholder image/pdf
             const sourceUrl = docObj.url === '#' 
               ? (docObj.name.toLowerCase().endsWith('.pdf') 
                   ? 'https://placehold.co/1200x1600/png?text=Institutional+PDF+Content' 
@@ -796,11 +797,19 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                             {new Date(entry.timestamp).toLocaleString()}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-700 leading-relaxed font-medium italic">"{entry.comment}"</p>
+                        <p className={cn(
+                          "text-sm leading-relaxed font-medium italic",
+                          entry.action === 'Amended' ? "text-red-600 font-bold" : "text-slate-700"
+                        )}>
+                          "{entry.comment}"
+                        </p>
                         <div className="flex items-center gap-2 pt-1">
                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Action:</span>
-                          <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-primary/20 text-primary bg-white">
-                            {entry.action}
+                          <Badge variant="outline" className={cn(
+                            "text-[9px] font-black uppercase tracking-widest bg-white",
+                            entry.action === 'Amended' ? "border-red-200 text-red-600" : "border-primary/20 text-primary"
+                          )}>
+                            {entry.action === 'Amended' ? 'Action Required' : entry.action}
                           </Badge>
                         </div>
                       </div>
