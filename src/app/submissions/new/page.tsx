@@ -77,7 +77,7 @@ export default function NewSubmission() {
   const db = useFirestore();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [customerName, setCustomerName] = useState("");
-  const [entityType, setEntityType] = useState("individual");
+  const [entityType, setEntityType] = useState(""); // Changed: Removed default "individual"
   const [remarks, setRemarks] = useState("");
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -135,6 +135,17 @@ export default function NewSubmission() {
     e.preventDefault();
     if (!db || !user) return;
     
+    // Mandatory field validations
+    if (!customerName.trim()) {
+      toast({ variant: "destructive", title: "Validation Error", description: "Customer Full Name is required." });
+      return;
+    }
+
+    if (!entityType) {
+      toast({ variant: "destructive", title: "Classification Required", description: "Please select an account category." });
+      return;
+    }
+
     if (uploadedFiles.length === 0) {
       toast({ variant: "destructive", title: "Missing Documents", description: "Upload at least one document." });
       return;
@@ -225,7 +236,7 @@ export default function NewSubmission() {
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Account Classification</Label>
               <Select value={entityType} onValueChange={setEntityType}>
                 <SelectTrigger className="h-11">
-                  <SelectValue placeholder="Select classification" />
+                  <SelectValue placeholder="Select account category" />
                 </SelectTrigger>
                 <SelectContent>
                   {entityClassifications.map((classification) => (
