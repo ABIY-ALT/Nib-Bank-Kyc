@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -49,6 +48,7 @@ import { subDays, startOfDay, endOfDay, format, isWithinInterval } from "date-fn
 import JSZip from 'jszip';
 import { KYCSubmission, Document } from "@/lib/kyc-data";
 import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS = [
   { id: 'Approved', label: 'Approved' },
@@ -169,7 +169,7 @@ INVENTORY OF EXPORTED CASES:
         setProgress(Math.round(((i + 1) / filteredSubmissions.length) * 100));
       }
 
-      zip.file("NIB_BANK_MASTER_MANIFEST.txt", manifestHeader + caseList);
+      zip.file("nib_bank_manifest.txt", manifestHeader + caseList);
 
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
