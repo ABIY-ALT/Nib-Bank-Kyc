@@ -54,6 +54,19 @@
       },
       "required": ["customerName", "branch", "status", "submittedBy"]
     },
+    "BundleDownload": {
+      "title": "Bundle Download Log",
+      "description": "Audit record of a case bundle export.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "bundleName": { "type": "string" },
+        "sourceDistrict": { "type": "string" },
+        "sourceBranch": { "type": "string" }
+      }
+    },
     "FollowUpVerification": {
       "title": "Follow-up Verification",
       "description": "Head Office audit record for an approved KYC case.",
@@ -111,6 +124,10 @@
     "/submissions/{submissionId}": {
       "schema": "#/entities/KYCSubmission",
       "description": "Top-level collection of all KYC submissions."
+    },
+    "/submissions/{submissionId}/bundle_downloads/{logId}": {
+      "schema": "#/entities/BundleDownload",
+      "description": "Logs of when case bundles were downloaded."
     },
     "/follow_up_verifications/{verifyId}": {
       "schema": "#/entities/FollowUpVerification",

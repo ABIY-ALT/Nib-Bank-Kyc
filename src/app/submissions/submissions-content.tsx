@@ -45,7 +45,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
   const { user } = useAuth();
 
   const handleDownloadBundle = async (sub: KYCSubmission) => {
-    if (!db) return;
+    if (!db || !user) return;
 
     const now = new Date();
     const timestamp = format(now, 'yyyyMMdd_HHmmss');
@@ -53,7 +53,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
     const branchName = sub.branch.replace(/\s+/g, '_');
     const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
-    // Log action to submission sub-collection
+    // Log action to submission sub-collection (Non-blocking)
     const logRef = doc(collection(doc(db, "submissions", sub.id), "bundle_downloads"));
     const logData = {
       id: logRef.id,
@@ -64,15 +64,22 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
       sourceBranch: sub.branch
     };
 
-    await setDoc(logRef, logData).catch(() => {});
+    setDoc(logRef, logData).catch(() => {});
 
-    // Simulate Institutional Zip Download
+    // Generate Institutional Bundle Simulation
     const blob = new Blob([`Nib Institutional KYC Bundle\nGenerated: ${now.toLocaleString()}\nCase: ${sub.id}\nSource: ${sub.district} / ${sub.branch}`], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', `${bundleName}.zip`);
+    
+    // Ensure link is attached to body for full browser support
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+    
+    // Cleanup memory
+    setTimeout(() => URL.revokeObjectURL(url), 100);
 
     toast({
       title: "Generating Institutional Bundle",

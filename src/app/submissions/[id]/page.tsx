@@ -210,12 +210,12 @@ export default function SubmissionDetails() {
   const { data: downloadHistory } = useCollection<BundleDownloadLog>(downloadsQuery);
 
   // Role Definitions
-  const isAdmin = user.role === 'Admin';
-  const isKYCOfficer = user.role === 'KYC Officer'; 
-  const isReviewer = ['KYC Officer', 'Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
-  const isSeniorReviewer = ['Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
-  const isOwner = submission?.submittedBy === user.name;
-  const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
+  const isAdmin = user?.role === 'Admin';
+  const isKYCOfficer = user?.role === 'KYC Officer'; 
+  const isReviewer = ['KYC Officer', 'Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user?.role || '');
+  const isSeniorReviewer = ['Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user?.role || '');
+  const isOwner = submission?.submittedBy === user?.name;
+  const isBranchMgr = user?.role === 'Branch Manager' || isAdmin;
 
   useEffect(() => {
     if (submission && (submission.status === 'Pending') && isReviewer && submissionRef && !submission.isResubmitted && !submission.isExceptional) {
@@ -270,47 +270,61 @@ export default function SubmissionDetails() {
   };
 
   const handleDownloadBundle = async () => {
-    if (!submission || !db || !submissionRef) return;
+    if (!submission || !db || !submissionRef || !user) return;
     setIsDownloading(true);
 
-    const now = new Date();
-    const timestamp = format(now, 'yyyyMMdd_HHmmss');
-    const districtName = submission.district.replace(/\s+/g, '_');
-    const branchName = submission.branch.replace(/\s+/g, '_');
-    const bundleName = `${districtName}_${branchName}_${timestamp}`;
+    try {
+      const now = new Date();
+      const timestamp = format(now, 'yyyyMMdd_HHmmss');
+      const districtName = submission.district.replace(/\s+/g, '_');
+      const branchName = submission.branch.replace(/\s+/g, '_');
+      const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
-    // 1. Log the download session for audit trail
-    const logRef = doc(collection(submissionRef, "bundle_downloads"));
-    const logData = {
-      id: logRef.id,
-      performedBy: user.name,
-      timestamp: now.toISOString(),
-      bundleName: bundleName,
-      sourceDistrict: submission.district,
-      sourceBranch: submission.branch
-    };
+      // 1. Log the download session for audit trail
+      const logRef = doc(collection(submissionRef, "bundle_downloads"));
+      const logData = {
+        id: logRef.id,
+        performedBy: user.name,
+        timestamp: now.toISOString(),
+        bundleName: bundleName,
+        sourceDistrict: submission.district,
+        sourceBranch: submission.branch
+      };
 
-    await setDoc(logRef, logData).catch(() => {});
+      // Firestore Write (Non-blocking)
+      setDoc(logRef, logData).catch(() => {});
 
-    // 2. Simulated real-world bundle generation
-    // In production, this would trigger a backend function to zip actual Firebase Storage blobs.
-    // Here we simulate the institutional delivery of the folder structure.
-    const mockContent = `NIB Institutional KYC Bundle\nGenerated: ${now.toLocaleString()}\nID: ${submission.id}\nSource: ${submission.district} District / ${submission.branch} Branch\n\nIncluded Documents:\n${documents?.map(d => `- [${d.type}] ${d.name}`).join('\n') || 'No documents'}`;
-    
-    const blob = new Blob([mockContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${bundleName}.zip`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      // 2. Simulated real-world bundle generation
+      const mockContent = `NIB Institutional KYC Bundle\nGenerated: ${now.toLocaleString()}\nID: ${submission.id}\nSource: ${submission.district} District / ${submission.branch} Branch\n\nIncluded Documents:\n${documents?.map(d => `- [${d.type}] ${d.name}`).join('\n') || 'No documents'}`;
+      
+      const blob = new Blob([mockContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${bundleName}.zip`);
+      
+      // Mandatory DOM attachment for cross-browser reliability
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Cleanup
+      setTimeout(() => URL.revokeObjectURL(url), 100);
 
-    toast({
-      title: "Bundle Downloaded",
-      description: `Archive ${bundleName} has been exported with institutional source headers.`,
-    });
-    setIsDownloading(false);
+      toast({
+        title: "Bundle Generated",
+        description: `Institutional archive ${bundleName} is ready.`,
+      });
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast({
+        variant: "destructive",
+        title: "Download Error",
+        description: "An unexpected error occurred during institutional bundle generation."
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
@@ -332,7 +346,7 @@ export default function SubmissionDetails() {
   };
 
   const handleAction = (action: string) => {
-    if (!submissionRef || !db) return;
+    if (!submissionRef || !db || !user) return;
 
     if (action === 'Pending' && submission.status === 'Amended' && (isOwner || isAdmin)) {
       if (newFiles.some(f => !f.type)) {
@@ -389,7 +403,7 @@ export default function SubmissionDetails() {
   };
 
   const handleTriggerExceptional = () => {
-    if (!submissionRef || !db || !memoFile) {
+    if (!submissionRef || !db || !memoFile || !user) {
       toast({ variant: "destructive", title: "Missing Evidence", description: "The approval memo (PDF) is mandatory for exceptions." });
       return;
     }
@@ -437,7 +451,7 @@ export default function SubmissionDetails() {
   };
 
   const handleExceptionalApproval = (action: 'Approved' | 'Rejected' | 'Clarification' | 'ForwardChief') => {
-    if (!submissionRef || !db || !submission.exceptionalData) return;
+    if (!submissionRef || !db || !submission.exceptionalData || !user) return;
     
     const isMemoRequiredRole = ['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
     if (action === 'Approved' && isMemoRequiredRole && !decisionMemoFile && !isAdmin) {
@@ -537,10 +551,10 @@ export default function SubmissionDetails() {
     submission.exceptionalStatus === 'Awaiting Division' ? 'Division Manager' :
     submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
 
-  const isCurrentExceptionalApprover = user.role === currentExceptionalRole || isAdmin;
+  const isCurrentExceptionalApprover = user?.role === currentExceptionalRole || isAdmin;
 
-  const showDirectorButtons = submission.exceptionalStatus === 'Awaiting Director' && (user.role === 'Branch Banking Director' || isAdmin);
-  const showChiefButtons = submission.exceptionalStatus === 'Awaiting Chief' && (user.role === 'Chief Retail & SME Banking Officer' || isAdmin);
+  const showDirectorButtons = submission.exceptionalStatus === 'Awaiting Director' && (user?.role === 'Branch Banking Director' || isAdmin);
+  const showChiefButtons = submission.exceptionalStatus === 'Awaiting Chief' && (user?.role === 'Chief Retail & SME Banking Officer' || isAdmin);
 
   const steps = submission.isExceptional 
     ? [
@@ -659,12 +673,12 @@ export default function SubmissionDetails() {
               <CardHeader className="bg-yellow-600 text-white">
                 <CardTitle className="text-xl flex items-center gap-2">
                   <Shield className="w-5 h-5" /> 
-                  Institutional Review: {isAdmin && currentExceptionalRole ? `${currentExceptionalRole} (via Admin Override)` : user.role}
+                  Institutional Review: {isAdmin && currentExceptionalRole ? `${currentExceptionalRole} (via Admin Override)` : user?.role}
                 </CardTitle>
                 <CardDescription className="text-yellow-100 font-medium">Provide your determination and upload supporting documentation for the audit trail.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
-                {['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '') || isAdmin ? (
+                {['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user?.role || '') || isAdmin ? (
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Mandatory Supporting Memo (PDF)</Label>
                     <div 
@@ -683,7 +697,7 @@ export default function SubmissionDetails() {
                       ) : (
                         <div className="flex flex-col items-center gap-2">
                           <Upload className="w-6 h-6 text-yellow-600" />
-                          <p className="text-xs font-bold text-slate-600">Upload Official {user.role} Authorization Memo</p>
+                          <p className="text-xs font-bold text-slate-600">Upload Official {user?.role} Authorization Memo</p>
                         </div>
                       )}
                     </div>
@@ -714,7 +728,7 @@ export default function SubmissionDetails() {
                         Approve & Forward to Division
                       </Button>
                       <Button variant="secondary" className="bg-primary hover:bg-primary/90 text-white font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('ForwardChief')}>
-                        Forward to Chief Officer
+                        Forward to Chief for High-Risk Review
                       </Button>
                     </>
                   ) : showChiefButtons ? (
@@ -1030,7 +1044,7 @@ export default function SubmissionDetails() {
                     {(!isCurrentlyEscalated || canResolveEscalation) && <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold">Approve</Button>}
                     {(!isCurrentlyEscalated || canResolveEscalation) && <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold border-[#E67E22]/30">Request Fix</Button>}
                     {(!isCurrentlyEscalated && (isKYCOfficer || isAdmin)) && <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold">Escalate</Button>}
-                    {(isSeniorReviewer && user.role !== 'KYC Officer') && <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Reject</Button>}
+                    {(isSeniorReviewer && user?.role !== 'KYC Officer') && <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Reject</Button>}
                   </div>
                 )}
               </CardContent>
