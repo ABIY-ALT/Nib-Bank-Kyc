@@ -21,7 +21,8 @@ import {
   Clock,
   RefreshCw,
   Archive,
-  Zap
+  Zap,
+  FileArchive
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -33,14 +34,49 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
+import { useFirestore } from "@/firebase";
+import { doc, collection, setDoc } from "firebase/firestore";
+import { useAuth } from "@/lib/auth-mock";
+import { format } from "date-fns";
 
 export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmission[] }) {
   const { toast } = useToast();
+  const db = useFirestore();
+  const { user } = useAuth();
 
-  const handleDownloadBundle = (sub: KYCSubmission) => {
+  const handleDownloadBundle = async (sub: KYCSubmission) => {
+    if (!db) return;
+
+    const now = new Date();
+    const timestamp = format(now, 'yyyyMMdd_HHmmss');
+    const districtName = sub.district.replace(/\s+/g, '_');
+    const branchName = sub.branch.replace(/\s+/g, '_');
+    const bundleName = `${districtName}_${branchName}_${timestamp}`;
+
+    // Log action to submission sub-collection
+    const logRef = doc(collection(doc(db, "submissions", sub.id), "bundle_downloads"));
+    const logData = {
+      id: logRef.id,
+      performedBy: user.name,
+      timestamp: now.toISOString(),
+      bundleName: bundleName,
+      sourceDistrict: sub.district,
+      sourceBranch: sub.branch
+    };
+
+    await setDoc(logRef, logData).catch(() => {});
+
+    // Simulate Institutional Zip Download
+    const blob = new Blob([`Nib Institutional KYC Bundle\nGenerated: ${now.toLocaleString()}\nCase: ${sub.id}\nSource: ${sub.district} / ${sub.branch}`], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${bundleName}.zip`);
+    link.click();
+
     toast({
       title: "Generating Institutional Bundle",
-      description: `Compiling Case ${sub.id} verification assets for ${sub.customerName}.`,
+      description: `Compiling archive ${bundleName} for ${sub.customerName}.`,
     });
   };
 
@@ -119,7 +155,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
                   <span>{sub.id}</span>
                   {sub.amendmentCycles && sub.amendmentCycles > 0 && (
                     <div className="flex items-center gap-1 text-[9px] text-orange-600 font-black uppercase">
-                      <RefreshCw className="w-2 h-2" /> Cycle {sub.amendmentCycles}
+                      <RefreshCw className="w-2" /> Cycle {sub.amendmentCycles}
                     </div>
                   )}
                 </div>
@@ -155,7 +191,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
                       className="rounded-md focus:bg-primary/5 cursor-pointer py-3 px-3"
                     >
                       <div className="flex items-center gap-3 font-bold text-slate-700">
-                        <Archive className="w-4 h-4 text-slate-500" />
+                        <FileArchive className="w-4 h-4 text-slate-500" />
                         Download Case Bundle
                       </div>
                     </DropdownMenuItem>

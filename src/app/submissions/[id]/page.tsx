@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -46,17 +47,20 @@ import {
   Info,
   ChevronRight,
   TrendingUp,
-  ListFilter
+  ListFilter,
+  MapPin,
+  FileArchive,
+  Building2
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, updateDoc, collection, setDoc, increment, arrayUnion } from "firebase/firestore";
+import { doc, updateDoc, collection, setDoc, increment, arrayUnion, query, orderBy, limit } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { KYCSubmission, Document, ExceptionalStatus, AMENDMENT_SCENARIOS } from "@/lib/kyc-data";
+import { KYCSubmission, Document, ExceptionalStatus, AMENDMENT_SCENARIOS, BundleDownloadLog } from "@/lib/kyc-data";
 import { 
   Select, 
   SelectContent, 
@@ -76,6 +80,7 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
+import { format } from "date-fns";
 
 const CHECKLIST_CONFIGS: Record<string, { id: string; label: string; mandatory: boolean }[]> = {
   "individual": [
@@ -161,6 +166,7 @@ export default function SubmissionDetails() {
   const [correctionNote, setCorrectionNote] = useState("");
   const [newFiles, setNewFiles] = useState<{file: File, type: string}[]>([]);
   const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   
   // Exceptional Request State
   const [isExceptionDialogOpen, setIsExceptionDialogOpen] = useState(false);
@@ -195,6 +201,13 @@ export default function SubmissionDetails() {
   }, [submissionRef]);
 
   const { data: documents } = useCollection<Document>(docsQuery);
+
+  const downloadsQuery = useMemoFirebase(() => {
+    if (!submissionRef) return null;
+    return query(collection(submissionRef, "bundle_downloads"), orderBy("timestamp", "desc"), limit(5));
+  }, [submissionRef]);
+
+  const { data: downloadHistory } = useCollection<BundleDownloadLog>(downloadsQuery);
 
   // Role Definitions
   const isAdmin = user.role === 'Admin';
@@ -254,6 +267,50 @@ export default function SubmissionDetails() {
       title: value ? "All Items Verified" : "Checklist Reset",
       description: value ? "All items have been marked as verified." : "Verification status has been cleared for all items."
     });
+  };
+
+  const handleDownloadBundle = async () => {
+    if (!submission || !db || !submissionRef) return;
+    setIsDownloading(true);
+
+    const now = new Date();
+    const timestamp = format(now, 'yyyyMMdd_HHmmss');
+    const districtName = submission.district.replace(/\s+/g, '_');
+    const branchName = submission.branch.replace(/\s+/g, '_');
+    const bundleName = `${districtName}_${branchName}_${timestamp}`;
+
+    // 1. Log the download session for audit trail
+    const logRef = doc(collection(submissionRef, "bundle_downloads"));
+    const logData = {
+      id: logRef.id,
+      performedBy: user.name,
+      timestamp: now.toISOString(),
+      bundleName: bundleName,
+      sourceDistrict: submission.district,
+      sourceBranch: submission.branch
+    };
+
+    await setDoc(logRef, logData).catch(() => {});
+
+    // 2. Simulated real-world bundle generation
+    // In production, this would trigger a backend function to zip actual Firebase Storage blobs.
+    // Here we simulate the institutional delivery of the folder structure.
+    const mockContent = `NIB Institutional KYC Bundle\nGenerated: ${now.toLocaleString()}\nID: ${submission.id}\nSource: ${submission.district} District / ${submission.branch} Branch\n\nIncluded Documents:\n${documents?.map(d => `- [${d.type}] ${d.name}`).join('\n') || 'No documents'}`;
+    
+    const blob = new Blob([mockContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${bundleName}.zip`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Bundle Downloaded",
+      description: `Archive ${bundleName} has been exported with institutional source headers.`,
+    });
+    setIsDownloading(false);
   };
 
   if (subLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Retrieving case file...</div>;
@@ -573,8 +630,13 @@ export default function SubmissionDetails() {
                <Zap className="w-4 h-4 mr-2" /> Trigger Hierarchy Approval
              </Button>
            )}
-           <Button variant="outline" size="sm" className="shadow-sm border-slate-200 bg-white font-bold px-4 h-10" onClick={() => toast({ title: "Generating Bundle..." })}>
-            <Archive className="w-4 h-4 mr-2" /> Download Case Bundle
+           <Button 
+            className="bg-primary hover:bg-primary/90 text-white font-bold px-6 shadow-lg h-10" 
+            onClick={handleDownloadBundle}
+            disabled={isDownloading}
+           >
+            {isDownloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileArchive className="w-4 h-4 mr-2" />}
+            Download Case Bundle
            </Button>
         </div>
       </div>
@@ -796,6 +858,29 @@ export default function SubmissionDetails() {
         </div>
 
         <div className="space-y-6">
+          <Card className="shadow-lg border-primary/20 bg-primary/5 overflow-hidden">
+            <CardHeader className="bg-primary/10 border-b border-primary/10">
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                Institutional Source
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Region</p>
+                  <p className="font-black text-slate-900">{submission.district} District</p>
+                </div>
+                <Building2 className="w-8 h-8 text-primary/20" />
+              </div>
+              <Separator className="bg-primary/10" />
+              <div className="space-y-0.5">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Node</p>
+                <p className="font-black text-slate-900">{submission.branch} Branch</p>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="shadow-lg border-slate-200 overflow-hidden">
             <CardHeader className="bg-slate-50/50 border-b py-6 px-8"><CardTitle className="text-lg font-bold text-slate-800 uppercase tracking-widest">Case Lifecycle</CardTitle></CardHeader>
             <CardContent className="pt-8 pb-10 px-8">
@@ -821,6 +906,31 @@ export default function SubmissionDetails() {
                     </div>
                   );
                 })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-slate-50 border-b">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <History className="w-4 h-4 text-slate-400" />
+                Bundle Transfer History
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 px-0">
+              <div className="divide-y">
+                {downloadHistory?.map((log) => (
+                  <div key={log.id} className="p-4 space-y-1">
+                    <p className="text-[11px] font-black text-slate-900 truncate">{log.bundleName}</p>
+                    <div className="flex items-center justify-between text-[10px] font-bold">
+                      <span className="text-slate-500 uppercase">{log.performedBy}</span>
+                      <span className="text-slate-400">{new Date(log.timestamp).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+                {(!downloadHistory || downloadHistory.length === 0) && (
+                  <p className="p-8 text-center text-xs text-muted-foreground italic">No bundle transfers logged.</p>
+                )}
               </div>
             </CardContent>
           </Card>

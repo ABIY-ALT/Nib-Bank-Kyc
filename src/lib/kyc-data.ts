@@ -45,6 +45,15 @@ export interface Document {
   url: string;
 }
 
+export interface BundleDownloadLog {
+  id: string;
+  performedBy: string;
+  timestamp: string;
+  bundleName: string;
+  sourceDistrict: string;
+  sourceBranch: string;
+}
+
 export interface AuditLog {
   id: string;
   action: string;
