@@ -1,11 +1,11 @@
 'use client';
 
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, doc, setDoc, limit, getDocs } from "firebase/firestore";
+import { collection, query, where, orderBy, doc, setDoc, limit } from "firebase/firestore";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuth, User } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth-mock";
 import { 
   ShieldCheck, 
   RefreshCw, 
@@ -19,48 +19,28 @@ import {
   Calendar,
   History,
   FileText,
-  UserPlus,
-  Users,
-  Check
+  Zap,
+  ChevronRight
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { KYCSubmission, FollowUpVerification } from "@/lib/kyc-data";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 export default function FollowUpDashboard() {
   const db = useFirestore();
   const { user } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
   const [isSampling, setIsSampling] = useState(false);
-  const [isAssigning, setIsAssigning] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   
-  // Assignment form state
-  const [selectedSubmissionId, setSelectedSubmissionId] = useState("");
-  const [selectedAuditorId, setSelectedAuditorId] = useState("");
-
   // Date range state: Default to last 30 days
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -72,21 +52,14 @@ export default function FollowUpDashboard() {
 
   const { data: verifications, loading: vLoading } = useCollection<FollowUpVerification>(verificationsQuery);
 
-  // 2. Fetch pending verifications
+  // 2. Fetch pending verifications (Shared Pool)
   const pendingQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "follow_up_verifications"), where("status", "==", "Pending")) : null;
   }, [db]);
 
   const { data: pendingVerifications, loading: pLoading } = useCollection<FollowUpVerification>(pendingQuery);
 
-  // 3. Fetch Follow-up Team users
-  const auditorsQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "users"), where("role", "==", "Follow-up Team")) : null;
-  }, [db]);
-
-  const { data: auditors } = useCollection<User>(auditorsQuery);
-
-  // 4. Fetch Approved Submissions within range for assignment
+  // 3. Fetch Approved Submissions within range for sampling
   const approvedQuery = useMemoFirebase(() => {
     if (!db) return null;
     const start = startOfDay(new Date(fromDate)).toISOString();
@@ -111,49 +84,6 @@ export default function FollowUpDashboard() {
     ]);
     return approvedSubmissions.filter(s => !existingIds.has(s.id));
   }, [approvedSubmissions, verifications, pendingVerifications]);
-
-  // 5. Assignment Logic
-  const handleAssignAudit = async () => {
-    if (!db || !selectedSubmissionId || !selectedAuditorId) return;
-    setIsAssigning(true);
-
-    try {
-      const submission = assignableSubmissions.find(s => s.id === selectedSubmissionId);
-      const auditor = auditors?.find(a => a.id === selectedAuditorId);
-
-      if (!submission || !auditor) throw new Error("Invalid selection");
-
-      const verifyId = `audit-${Date.now()}-${submission.id}`;
-      const ref = doc(db, "follow_up_verifications", verifyId);
-      
-      await setDoc(ref, {
-        id: verifyId,
-        submissionId: submission.id,
-        customerName: submission.customerName,
-        branch: submission.branch,
-        officer: submission.submittedBy,
-        accountType: submission.entityType || "individual",
-        status: "Pending",
-        verifiedAt: new Date().toISOString(),
-        assignedTo: auditor.id,
-        assignedToName: auditor.name
-      });
-
-      toast({
-        title: "Audit Assigned",
-        description: `Case ${submission.id} assigned to ${auditor.name}.`,
-      });
-      
-      setIsDialogOpen(false);
-      setSelectedSubmissionId("");
-      setSelectedAuditorId("");
-    } catch (e) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Assignment Failed", description: "Could not dispatch the audit task." });
-    } finally {
-      setIsAssigning(false);
-    }
-  };
 
   const handleSampleCases = async () => {
     if (!db) return;
@@ -188,15 +118,25 @@ export default function FollowUpDashboard() {
       }
 
       toast({ 
-        title: "Sample Generated", 
-        description: `Added ${selected.length} random cases to the queue.` 
+        title: "Random Sample Generated", 
+        description: `Added ${selected.length} cases to the institutional pool.` 
       });
     } catch (e) {
       console.error(e);
-      toast({ variant: "destructive", title: "Query Error", description: "Ensure indices are ready." });
+      toast({ variant: "destructive", title: "Query Error", description: "Internal service error during sampling." });
     } finally {
       setIsSampling(false);
     }
+  };
+
+  const handleStartRandomAudit = () => {
+    if (!pendingVerifications || pendingVerifications.length === 0) {
+      toast({ variant: "destructive", title: "Queue Empty", description: "Generate a new random sample first." });
+      return;
+    }
+    const randomIndex = Math.floor(Math.random() * pendingVerifications.length);
+    const randomCase = pendingVerifications[randomIndex];
+    router.push(`/head-office/follow-up/${randomCase.id}`);
   };
 
   // 6. Analytics Data
@@ -264,73 +204,17 @@ export default function FollowUpDashboard() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Follow-up Verification</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Head Office quality control and institutional audit workspace.</p>
+          <p className="text-muted-foreground text-lg font-medium">Head Office shared pool for quality control and random audit.</p>
         </div>
         <div className="flex gap-3">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="h-12 px-6 font-black bg-primary hover:bg-primary/90 text-white shadow-lg gap-2">
-                <UserPlus className="w-5 h-5" />
-                Assign Audit Case
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                  <Users className="w-6 h-6 text-primary" />
-                  Manual Dispatch
-                </DialogTitle>
-                <DialogDescription>Assign an approved case to a specific Head Office specialist.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-6 pt-4">
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Select Approved Case</Label>
-                  <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
-                    <SelectTrigger className="h-12">
-                      <SelectValue placeholder="Select case to verify..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assignableSubmissions.map(s => (
-                        <SelectItem key={s.id} value={s.id} className="font-bold">
-                          {s.id} - {s.customerName} ({s.branch})
-                        </SelectItem>
-                      ))}
-                      {assignableSubmissions.length === 0 && (
-                        <div className="p-4 text-center text-xs text-muted-foreground italic">No new un-audited cases available.</div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Assign To Auditor</Label>
-                  <Select value={selectedAuditorId} onValueChange={setSelectedAuditorId}>
-                    <SelectTrigger className="h-12">
-                      <SelectValue placeholder="Select specialist..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {auditors?.map(a => (
-                        <SelectItem key={a.id} value={a.id} className="font-bold">{a.name}</SelectItem>
-                      ))}
-                      {(!auditors || auditors.length === 0) && (
-                        <div className="p-4 text-center text-xs text-muted-foreground italic">No specialists found in Follow-up Team.</div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter className="pt-6 border-t mt-4">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
-                <Button 
-                  className="bg-primary hover:bg-primary/90 font-black px-8 h-11 shadow-lg"
-                  disabled={isAssigning || !selectedSubmissionId || !selectedAuditorId}
-                  onClick={handleAssignAudit}
-                >
-                  {isAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
-                  Dispatch Audit
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button 
+            onClick={handleStartRandomAudit}
+            disabled={!pendingVerifications || pendingVerifications.length === 0}
+            className="h-12 px-8 font-black bg-primary hover:bg-primary/90 text-white shadow-xl gap-2 transition-all active:scale-95"
+          >
+            <Zap className="w-5 h-5 fill-white" />
+            Start Next Random Audit
+          </Button>
 
           <Button 
             variant="outline"
@@ -379,10 +263,10 @@ export default function FollowUpDashboard() {
             <Button 
               onClick={handleSampleCases} 
               disabled={isSampling || !fromDate || !toDate}
-              className="bg-[#B89334] hover:bg-[#A6822D] text-white font-black h-11 px-8 gap-3 shadow-xl transition-all active:scale-95 min-w-[200px]"
+              className="bg-[#B89334] hover:bg-[#A6822D] text-white font-black h-11 px-8 gap-3 shadow-xl transition-all active:scale-95 min-w-[240px]"
             >
               {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
-              Generate Random Sample
+              Seed Shared Audit Pool
             </Button>
           </div>
         </CardContent>
@@ -424,12 +308,12 @@ export default function FollowUpDashboard() {
 
         <Card className="shadow-lg border-slate-200 overflow-hidden group">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50">
-            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-blue-600">Active Queue</CardTitle>
+            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-blue-600">Shared Queue</CardTitle>
             <RefreshCw className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent className="pt-4">
             <div className="text-3xl font-black text-blue-600">{pendingVerifications?.length || 0}</div>
-            <p className="text-[10px] text-muted-foreground font-bold mt-1 uppercase">Awaiting verification</p>
+            <p className="text-[10px] text-muted-foreground font-bold mt-1 uppercase">Awaiting pick-up</p>
           </CardContent>
         </Card>
       </div>
@@ -438,18 +322,18 @@ export default function FollowUpDashboard() {
         <Card className="lg:col-span-4 shadow-xl border-slate-200 overflow-hidden min-h-[400px]">
           <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-xl">Verification Sample Queue</CardTitle>
-              <CardDescription>Cases sampled or assigned for review.</CardDescription>
+              <CardTitle className="text-xl">Institutional Shared Pool</CardTitle>
+              <CardDescription>Sampled cases available for any Head Office specialist.</CardDescription>
             </div>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-3">
-              {pendingVerifications?.length || 0} Cases
+              {pendingVerifications?.length || 0} Cases Available
             </Badge>
           </CardHeader>
           <CardContent className="p-0">
             {pLoading ? (
               <div className="flex flex-col items-center justify-center py-32 text-muted-foreground gap-4">
                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                <p className="font-bold">Synchronizing institutional queue...</p>
+                <p className="font-bold">Synchronizing institutional pool...</p>
               </div>
             ) : pendingVerifications && pendingVerifications.length > 0 ? (
               <div className="divide-y">
@@ -459,19 +343,14 @@ export default function FollowUpDashboard() {
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-slate-900">{v.customerName}</p>
                         <Badge variant="outline" className="text-[9px] font-black uppercase border-slate-200">{v.accountType}</Badge>
-                        {v.assignedToName && (
-                          <Badge variant="secondary" className="text-[9px] font-bold bg-primary/10 text-primary border-none">
-                            Assigned: {v.assignedToName}
-                          </Badge>
-                        )}
                       </div>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
                         {v.submissionId} • {v.branch} • By: {v.officer}
                       </p>
                     </div>
-                    <Button asChild size="sm" className="font-bold shadow-sm rounded-lg bg-slate-900">
+                    <Button asChild size="sm" className="font-bold shadow-sm rounded-lg bg-slate-900 group-hover:bg-primary transition-colors">
                       <Link href={`/head-office/follow-up/${v.id}`}>
-                        Execute Audit <TrendingUp className="w-3.5 h-3.5 ml-2" />
+                        Pick Case <ChevronRight className="w-3.5 h-3.5 ml-2" />
                       </Link>
                     </Button>
                   </div>
@@ -483,8 +362,8 @@ export default function FollowUpDashboard() {
                   <Dices className="w-12 h-12 text-slate-300" />
                 </div>
                 <div className="space-y-1">
-                  <p className="font-bold text-slate-900">Queue Exhausted</p>
-                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">Use "Assign Audit Case" or "Generate Random Sample" to populate the quality control list.</p>
+                  <p className="font-bold text-slate-900">Pool Exhausted</p>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">Use "Seed Shared Audit Pool" to pull new random cases from the institutional archive.</p>
                 </div>
               </div>
             )}
@@ -532,7 +411,7 @@ export default function FollowUpDashboard() {
             <CardHeader className="border-b border-white/10">
               <CardTitle className="text-lg font-bold flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-primary" />
-                Jurisdictional Risks
+                Regional Discrepancies
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
@@ -553,8 +432,4 @@ export default function FollowUpDashboard() {
       </div>
     </div>
   );
-}
-
-function cn(...classes: any[]) {
-  return classes.filter(Boolean).join(' ');
 }
