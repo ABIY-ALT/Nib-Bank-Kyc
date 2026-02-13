@@ -218,10 +218,17 @@ export default function SubmissionDetails() {
   // Role Definitions
   const isAdmin = user?.role === 'Admin';
   const isKYCOfficer = user?.role === 'KYC Officer'; 
-  const isReviewer = ['KYC Officer', 'Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user?.role || '');
-  const isSeniorReviewer = ['Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user?.role || '');
+  const isReviewer = ['KYC Officer', 'Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Branch Manager', 'District Director', 'Chief'].includes(user?.role || '');
+  const isSeniorReviewer = ['Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer', 'District Director', 'Chief'].includes(user?.role || '');
   const isOwner = submission?.submittedBy === user?.name;
   const isBranchMgr = user?.role === 'Branch Manager' || isAdmin;
+
+  // Initialize remarks from existing submission
+  useEffect(() => {
+    if (submission && remarks === "") {
+      setRemarks(submission.remarks || "");
+    }
+  }, [submission]);
 
   useEffect(() => {
     if (submission && (submission.status === 'Pending') && isReviewer && submissionRef && !submission.isResubmitted && !submission.isExceptional) {
@@ -232,17 +239,20 @@ export default function SubmissionDetails() {
   const handleScenarioChange = (val: string) => {
     setSelectedScenario(val);
     if (val !== "19. Other (specify)") {
-      setRemarks(val);
+      setRemarks(prev => {
+        if (!prev || prev.trim() === "" || AMENDMENT_SCENARIOS.includes(prev)) {
+          return val;
+        }
+        return `${prev.trim()}\n\nFinding: ${val}`;
+      });
       setOtherScenarioText("");
-    } else {
-      setRemarks("");
     }
   };
 
   const handleOtherScenarioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value;
     setOtherScenarioText(text);
-    setRemarks(`Other Finding: ${text}`);
+    // When typing "Other", we don't necessarily want to replace everything, but for the registry we track it
   };
 
   const currentChecklist = useMemo(() => {
@@ -903,18 +913,40 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Amendment Scenario Registry</Label>
                       <Select value={selectedScenario} onValueChange={handleScenarioChange}>
-                        <SelectTrigger className="h-11 bg-slate-50/50 border-slate-200"><SelectValue placeholder="Select institutional finding..." /></SelectTrigger>
-                        <SelectContent className="max-h-[300px]">{AMENDMENT_SCENARIOS.map((scenario) => (<SelectItem key={scenario} value={scenario} className="text-xs font-medium">{scenario}</SelectItem>))}</SelectContent>
+                        <SelectTrigger className="h-11 bg-slate-50/50 border-slate-200">
+                          <SelectValue placeholder="Select institutional finding..." />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px]">
+                          {AMENDMENT_SCENARIOS.map((scenario) => (
+                            <SelectItem key={scenario} value={scenario} className="text-xs font-medium">
+                              {scenario}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
                     {selectedScenario === "19. Other (specify)" && (
-                      <div className="space-y-2"><Label className="text-[10px] font-black uppercase tracking-widest text-primary">Specify Custom Finding</Label><Input placeholder="Detail bespoke amendment..." value={otherScenarioText} onChange={handleOtherScenarioChange} className="h-11 border-primary/20" /></div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Specify Custom Finding</Label>
+                        <Input 
+                          placeholder="Detail bespoke amendment..." 
+                          value={otherScenarioText} 
+                          onChange={handleOtherScenarioChange} 
+                          className="h-11 border-primary/20" 
+                        />
+                      </div>
                     )}
                   </div>
                 )}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Decision Remarks</Label>
-                  <Textarea placeholder={isReviewer || isAdmin ? "Provide verification feedback..." : "No remarks."} value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[140px]" disabled={!isReviewer && !isAdmin} />
+                  <Textarea 
+                    placeholder={isReviewer || isAdmin ? "Provide verification feedback..." : "No remarks."} 
+                    value={remarks} 
+                    onChange={(e) => setRemarks(e.target.value)} 
+                    className="min-h-[140px]" 
+                    disabled={!isReviewer && !isAdmin} 
+                  />
                 </div>
                 {(isReviewer || isAdmin) && (
                   <div className="grid grid-cols-2 gap-2 pt-2">
