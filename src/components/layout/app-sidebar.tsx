@@ -68,6 +68,9 @@ export function AppSidebar() {
   const { user, loginAs, allUsers } = useAuth()
   const counts = useSidebarCounts(user)
 
+  // Critical Check: Handle unauthenticated or loading states
+  if (!user) return null;
+
   // Role Checks
   const isBranchOfficer = user.role === 'Branch Officer'
   const isKYCOfficer = user.role === 'KYC Officer'

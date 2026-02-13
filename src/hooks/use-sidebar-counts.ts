@@ -8,7 +8,7 @@ import { User } from "@/lib/auth-mock";
 /**
  * Hook to fetch real-time counts for sidebar badges.
  */
-export function useSidebarCounts(user: User) {
+export function useSidebarCounts(user: User | null) {
   const db = useFirestore();
   const [counts, setCounts] = useState({
     mySubmissions: 0,
