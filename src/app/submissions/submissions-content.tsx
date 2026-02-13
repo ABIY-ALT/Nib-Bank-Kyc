@@ -250,13 +250,6 @@ ${docList.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No do
                         Download Case Bundle
                       </div>
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator className="my-1" />
-                    <DropdownMenuItem className="text-destructive focus:bg-destructive/5 focus:text-destructive rounded-md cursor-pointer py-3 px-3">
-                      <div className="flex items-center gap-3 font-medium">
-                        <AlertCircle className="w-4 h-4" />
-                        Cancel Submission
-                      </div>
-                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
