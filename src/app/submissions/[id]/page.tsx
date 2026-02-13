@@ -201,6 +201,10 @@ export default function SubmissionDetails() {
     return settings?.documentTypes || DEFAULT_DOC_TYPES;
   }, [settings]);
 
+  const currentChecklist = useMemo(() => {
+    return CHECKLIST_CONFIGS[submission?.entityType || "individual"] || CHECKLIST_CONFIGS["individual"];
+  }, [submission?.entityType]);
+
   const docsQuery = useMemoFirebase(() => {
     if (!submissionRef) return null;
     return collection(submissionRef, "documents");
@@ -208,7 +212,6 @@ export default function SubmissionDetails() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
-  // Role Definitions
   const isAdmin = user?.role === 'Admin';
   const isKYCOfficer = user?.role === 'KYC Officer'; 
   const isReviewer = ['KYC Officer', 'Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Branch Manager', 'District Director', 'Chief'].includes(user?.role || '');
@@ -239,10 +242,6 @@ export default function SubmissionDetails() {
     const text = e.target.value;
     setOtherScenarioText(text);
   };
-
-  const currentChecklist = useMemo(() => {
-    return CHECKLIST_CONFIGS[submission?.entityType || "individual"] || CHECKLIST_CONFIGS["individual"];
-  }, [submission?.entityType]);
 
   const handleSelectAllChecklist = (value: boolean) => {
     if (!submissionRef || (!isKYCOfficer && !isAdmin)) return;
@@ -283,7 +282,7 @@ export default function SubmissionDetails() {
       const branchName = submission.branch.replace(/\s+/g, '_');
       const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
-      const manifest = `NIB Institutional KYC Bundle
+      const manifest = `Nib Bank KYC Bundle
 Generated: ${now.toLocaleString()}
 Case ID: ${submission.id}
 Customer: ${submission.customerName}
@@ -295,7 +294,7 @@ Total Files: ${documents?.length || 0}
 --- DOCUMENT INVENTORY ---
 ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploadedAt).toLocaleDateString()})`).join('\n') || 'No documents discovered.'}
 `;
-      zip.file("institutional_manifest.txt", manifest);
+      zip.file("nib_bank_manifest.txt", manifest);
 
       if (documents && documents.length > 0) {
         const docFolder = zip.folder("case_assets");
@@ -339,14 +338,14 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
 
       toast({
         title: "Bundle Download Complete",
-        description: `Institutional archive ${bundleName} contains ${documents?.length || 0} files.`,
+        description: `Nib Bank archive ${bundleName} contains ${documents?.length || 0} files.`,
       });
     } catch (error) {
       console.error("Bundle generation failed:", error);
       toast({
         variant: "destructive",
         title: "Archive Error",
-        description: "An error occurred during institutional bundle compilation."
+        description: "An error occurred during bundle compilation."
       });
     } finally {
       setIsDownloading(false);
@@ -389,7 +388,6 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
 
     const now = new Date().toISOString();
     
-    // Determine the history comment
     let finalComment = remarks;
     if (!remarks.trim()) {
       if (action === 'Approved') finalComment = "Case verified and approved institutional standards.";
@@ -407,7 +405,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
 
     const updateData: any = {
       status: action,
-      remarks: action === 'Approved' ? "" : (remarks || ""), // Clear active findings on approval
+      remarks: action === 'Approved' ? "" : (remarks || ""), 
       commentHistory: arrayUnion(historyEntry)
     };
 
@@ -700,7 +698,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
             <CardContent className="pt-6 space-y-8">
               <div className="grid gap-4">
                 {documents?.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all group border-slate-200">
+                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/30 transition-all group border-slate-200">
                       <div className="flex items-center gap-4">
                         <div className={cn("p-2 rounded-lg", doc.type.includes('Memo') ? "bg-yellow-100 text-yellow-700" : "bg-primary/10 text-primary")}>
                           {doc.type.includes('Memo') ? <Zap className="w-6 h-6" /> : <FileText className="w-6 h-6" />}

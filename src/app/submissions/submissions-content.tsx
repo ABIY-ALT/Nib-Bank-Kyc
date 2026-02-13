@@ -60,12 +60,10 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
       const branchName = sub.branch.replace(/\s+/g, '_');
       const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
-      // 1. Fetch documents sub-collection
       const docsSnap = await getDocs(collection(doc(db, "submissions", sub.id), "documents"));
       const docList = docsSnap.docs.map(d => ({ ...d.data(), id: d.id }) as Document);
 
-      // 2. Create Manifest
-      const manifest = `NIB Institutional KYC Bundle
+      const manifest = `Nib Bank KYC Bundle
 Generated: ${now.toLocaleString()}
 Case ID: ${sub.id}
 Customer: ${sub.customerName}
@@ -76,9 +74,8 @@ Inventory Count: ${docList.length}
 --- DOCUMENTS ---
 ${docList.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No documents discovered.'}
 `;
-      zip.file("bundle_manifest.txt", manifest);
+      zip.file("nib_bank_manifest.txt", manifest);
 
-      // 3. Package Actual Files
       if (docList.length > 0) {
         const assets = zip.folder("captured_assets");
         for (const docObj of docList) {
@@ -99,7 +96,6 @@ ${docList.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No do
         }
       }
 
-      // 4. Trigger Download
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const link = document.body.appendChild(document.createElement('a'));
@@ -109,7 +105,6 @@ ${docList.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No do
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 100);
 
-      // 5. Audit Log (Non-blocking)
       const logRef = doc(collection(doc(db, "submissions", sub.id), "bundle_downloads"));
       setDoc(logRef, {
         id: logRef.id,
@@ -122,7 +117,7 @@ ${docList.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No do
 
       toast({
         title: "Bundle Compiled",
-        description: `Institutional archive ${bundleName} is ready.`,
+        description: `Nib Bank archive ${bundleName} is ready.`,
       });
     } catch (error) {
       console.error("Archive failure:", error);

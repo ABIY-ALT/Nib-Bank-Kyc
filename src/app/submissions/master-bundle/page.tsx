@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -70,7 +71,6 @@ export default function MasterBundleDownloadPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  // 1. Fetch metadata for filters
   const branchesQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "branches"), orderBy("name")) : null;
   }, [db]);
@@ -81,14 +81,12 @@ export default function MasterBundleDownloadPage() {
   }, [db]);
   const { data: districts } = useCollection<{id: string, name: string}>(districtsQuery);
 
-  // 2. Main Query for submissions
   const submissionsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(collection(db, "submissions"), orderBy("submittedAt", "desc"));
   }, [db]);
   const { data: allSubmissions, loading: subsLoading } = useCollection<KYCSubmission>(submissionsQuery);
 
-  // 3. Client-side filtering logic
   const filteredSubmissions = useMemo(() => {
     if (!allSubmissions) return [];
     
@@ -121,10 +119,9 @@ export default function MasterBundleDownloadPage() {
       const zip = new JSZip();
       const now = new Date();
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      const bundleName = `NIB_MASTER_KYC_EXPORT_${timestamp}`;
+      const bundleName = `NIB_BANK_MASTER_KYC_EXPORT_${timestamp}`;
 
-      // Create Master Manifest
-      const manifestHeader = `NIB INSTITUTIONAL MASTER KYC EXPORT
+      const manifestHeader = `NIB BANK MASTER KYC EXPORT
 --------------------------------------------------
 AUTHORIZING OFFICIAL: ${user.name}
 INSTITUTIONAL ROLE: ${user.role}
@@ -138,7 +135,6 @@ INVENTORY OF EXPORTED CASES:
 `;
       let caseList = "";
 
-      // Process each submission
       for (let i = 0; i < filteredSubmissions.length; i++) {
         const sub = filteredSubmissions[i];
         const statusFolder = sub.status === 'In Review' ? 'Pending' : sub.status;
@@ -146,7 +142,6 @@ INVENTORY OF EXPORTED CASES:
         
         caseList += `- [${sub.status}] ${sub.id} | ${sub.customerName} | ${sub.branch} | Submitted: ${new Date(sub.submittedAt).toLocaleDateString()}\n`;
 
-        // Fetch documents for this specific case
         const docsSnap = await getDocs(collection(doc(db, "submissions", sub.id), "documents"));
         const docList = docsSnap.docs.map(d => ({ ...d.data(), id: d.id }) as Document);
 
@@ -168,17 +163,14 @@ INVENTORY OF EXPORTED CASES:
             }
           }
         } else {
-          // Create empty folder placeholder if no docs
           zip.folder(subPath);
         }
 
-        // Update progress
         setProgress(Math.round(((i + 1) / filteredSubmissions.length) * 100));
       }
 
-      zip.file("MASTER_EXPORT_MANIFEST.txt", manifestHeader + caseList);
+      zip.file("NIB_BANK_MASTER_MANIFEST.txt", manifestHeader + caseList);
 
-      // Generate and Download
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const link = document.createElement('a');
@@ -235,7 +227,6 @@ INVENTORY OF EXPORTED CASES:
             <CardDescription>Define criteria for institutional bulk archiving.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6 space-y-8">
-            {/* Status Selection */}
             <div className="space-y-4">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Workflow Queues</Label>
               <div className="grid gap-3">
@@ -254,7 +245,6 @@ INVENTORY OF EXPORTED CASES:
               </div>
             </div>
 
-            {/* Region/Branch Filters */}
             <div className="space-y-4 pt-4 border-t">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Regional District</Label>
@@ -285,7 +275,6 @@ INVENTORY OF EXPORTED CASES:
               </div>
             </div>
 
-            {/* Date Filters */}
             <div className="space-y-4 pt-4 border-t">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

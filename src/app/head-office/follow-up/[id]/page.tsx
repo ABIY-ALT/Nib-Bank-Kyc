@@ -67,21 +67,18 @@ export default function FollowUpVerificationDetail() {
   const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // 1. Fetch the audit record
   const verifyRef = useMemoFirebase(() => {
     return db && params.id ? doc(db, "follow_up_verifications", params.id as string) : null;
   }, [db, params.id]);
 
   const { data: verification, loading: vLoading } = useDoc<FollowUpVerification>(verifyRef);
 
-  // 2. Fetch the linked submission
   const submissionRef = useMemoFirebase(() => {
     return db && verification ? doc(db, "submissions", verification.submissionId) : null;
   }, [db, verification]);
 
   const { data: submission, loading: sLoading } = useDoc<KYCSubmission>(submissionRef);
 
-  // 3. Fetch documents
   const docsQuery = useMemoFirebase(() => {
     return submissionRef ? collection(submissionRef, "documents") : null;
   }, [submissionRef]);
@@ -121,7 +118,7 @@ export default function FollowUpVerificationDetail() {
       const branchName = submission.branch.replace(/\s+/g, '_');
       const bundleName = `${districtName}_${branchName}_AUDIT_${timestamp}`;
 
-      const manifest = `NIB Head Office Audit Bundle
+      const manifest = `Nib Bank Head Office Audit Bundle
 Generated: ${now.toLocaleString()}
 Auditor: ${user.name}
 Case ID: ${submission.id}
@@ -132,7 +129,7 @@ Total Files: ${documents?.length || 0}
 --- DOCUMENT INVENTORY ---
 ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No documents discovered.'}
 `;
-      zip.file("audit_manifest.txt", manifest);
+      zip.file("nib_bank_audit_manifest.txt", manifest);
 
       if (documents && documents.length > 0) {
         const docFolder = zip.folder("case_assets");
@@ -166,14 +163,14 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No
 
       toast({
         title: "Audit Bundle Complete",
-        description: `Institutional archive ${bundleName} exported successfully.`,
+        description: `Nib Bank archive ${bundleName} exported successfully.`,
       });
     } catch (error) {
       console.error("Bundle generation failed:", error);
       toast({
         variant: "destructive",
         title: "Archive Error",
-        description: "An error occurred during institutional bundle compilation."
+        description: "An error occurred during bundle compilation."
       });
     } finally {
       setIsDownloading(false);
