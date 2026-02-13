@@ -3,7 +3,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, updateDoc, collection } from "firebase/firestore";
+import { doc, updateDoc, collection, setDoc, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-mock";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -30,7 +30,9 @@ import {
   Calendar,
   Loader2,
   FolderArchive,
-  Info
+  Info,
+  FileArchive,
+  X
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { KYCSubmission, Document, FollowUpVerification } from "@/lib/kyc-data";
@@ -40,8 +42,19 @@ import {
   Dialog, 
   DialogContent, 
   DialogHeader, 
-  DialogTitle 
+  DialogTitle,
+  DialogDescription
 } from "@/components/ui/dialog";
+import { format } from "date-fns";
+import JSZip from 'jszip';
+
+interface PreviewDoc {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  isPdf?: boolean;
+}
 
 export default function FollowUpVerificationDetail() {
   const params = useParams();
@@ -51,7 +64,8 @@ export default function FollowUpVerificationDetail() {
   const { user } = useAuth();
   
   const [remarks, setRemarks] = useState("");
-  const [previewDoc, setPreviewDoc] = useState<any>(null);
+  const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // 1. Fetch the audit record
   const verifyRef = useMemoFirebase(() => {
@@ -85,7 +99,7 @@ export default function FollowUpVerificationDetail() {
     const updateData = {
       result,
       remarks,
-      verifiedBy: user.name,
+      verifiedBy: user?.name || 'Unknown Auditor',
       verifiedAt: new Date().toISOString(),
       status: 'Completed'
     };
@@ -93,6 +107,77 @@ export default function FollowUpVerificationDetail() {
     await updateDoc(verifyRef, updateData);
     toast({ title: "Audit Logged", description: `Case verification marked as ${result}.` });
     router.back();
+  };
+
+  const handleDownloadBundle = async () => {
+    if (!submission || !db || !submissionRef || !user) return;
+    setIsDownloading(true);
+
+    try {
+      const zip = new JSZip();
+      const now = new Date();
+      const timestamp = format(now, 'yyyyMMdd_HHmmss');
+      const districtName = submission.district.replace(/\s+/g, '_');
+      const branchName = submission.branch.replace(/\s+/g, '_');
+      const bundleName = `${districtName}_${branchName}_AUDIT_${timestamp}`;
+
+      const manifest = `NIB Head Office Audit Bundle
+Generated: ${now.toLocaleString()}
+Auditor: ${user.name}
+Case ID: ${submission.id}
+Customer: ${submission.customerName}
+Source: ${submission.district} District / ${submission.branch} Branch
+Total Files: ${documents?.length || 0}
+
+--- DOCUMENT INVENTORY ---
+${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No documents discovered.'}
+`;
+      zip.file("audit_manifest.txt", manifest);
+
+      if (documents && documents.length > 0) {
+        const docFolder = zip.folder("case_assets");
+        for (const docObj of documents) {
+          try {
+            const sourceUrl = docObj.url === '#' 
+              ? (docObj.name.toLowerCase().endsWith('.pdf') 
+                  ? 'https://placehold.co/1200x1600/png?text=Institutional+PDF+Content' 
+                  : `https://picsum.photos/seed/${docObj.id}/1200/1600`)
+              : docObj.url;
+
+            const response = await fetch(sourceUrl);
+            const blob = await response.blob();
+            docFolder?.file(docObj.name, blob);
+          } catch (err) {
+            console.error(`Fetch failed for ${docObj.name}:`, err);
+            docFolder?.file(`${docObj.name}_ERROR.txt`, `Institutional error: Source file could not be retrieved.`);
+          }
+        }
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${bundleName}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+
+      toast({
+        title: "Audit Bundle Complete",
+        description: `Institutional archive ${bundleName} exported successfully.`,
+      });
+    } catch (error) {
+      console.error("Bundle generation failed:", error);
+      toast({
+        variant: "destructive",
+        title: "Archive Error",
+        description: "An error occurred during institutional bundle compilation."
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (vLoading || sLoading) {
@@ -103,19 +188,29 @@ export default function FollowUpVerificationDetail() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ArrowLeft className="w-5 h-5" /></Button>
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-3xl font-black font-headline tracking-tight">Audit: {submission.id}</h1>
-            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-black uppercase text-[10px] tracking-widest">
-              {verification.status} Audit
-            </Badge>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ArrowLeft className="w-5 h-5" /></Button>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-3xl font-black font-headline tracking-tight">Audit: {submission.id}</h1>
+              <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-black uppercase text-[10px] tracking-widest">
+                {verification.status} Audit
+              </Badge>
+            </div>
+            <p className="text-muted-foreground font-medium flex items-center gap-2">
+              <Building2 className="w-4 h-4" /> {submission.branch} Branch • Quality Control Session
+            </p>
           </div>
-          <p className="text-muted-foreground font-medium flex items-center gap-2">
-            <Building2 className="w-4 h-4" /> {submission.branch} Branch • Quality Control Session
-          </p>
         </div>
+        <Button 
+          className="bg-primary hover:bg-primary/90 text-white font-bold px-6 shadow-lg h-11 gap-2" 
+          onClick={handleDownloadBundle} 
+          disabled={isDownloading}
+        >
+          {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileArchive className="w-4 h-4" />}
+          Download Case Bundle
+        </Button>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
@@ -144,11 +239,13 @@ export default function FollowUpVerificationDetail() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setPreviewDoc(doc)}>
+                      <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setPreviewFile({ id: doc.id, name: doc.name, type: doc.type, url: doc.url === '#' ? 'https://picsum.photos/seed/doc/1200/1600' : doc.url, isPdf: doc.name.toLowerCase().endsWith('.pdf') })}>
                         <Eye className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon" asChild className="rounded-full">
-                        <a href={doc.url === '#' ? 'https://picsum.photos/seed/doc/1200/1600' : doc.url} download={doc.name}><Download className="w-4 h-4" /></a>
+                        <a href={doc.url === '#' ? (doc.name.toLowerCase().endsWith('.pdf') ? 'https://placehold.co/1200x1600/png?text=PDF+Asset' : 'https://picsum.photos/seed/doc/1200/1600') : doc.url} download={doc.name}>
+                          <Download className="w-4 h-4" />
+                        </a>
                       </Button>
                     </div>
                   </div>
@@ -249,15 +346,30 @@ export default function FollowUpVerificationDetail() {
         </div>
       </div>
 
-      <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
-        <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 overflow-hidden bg-black/95 border-none">
-          <DialogHeader className="p-4 bg-slate-900 text-white flex flex-row items-center justify-between space-y-0 border-b border-white/5 pr-12">
-            <DialogTitle className="text-sm font-bold flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary" /> {previewDoc?.name}
-            </DialogTitle>
+      <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
+        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none bg-[#1a1a1a]">
+          <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between border-b border-white/5 pr-14">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/20 rounded-lg"><FileText className="w-5 h-5 text-primary" /></div>
+              <div className="flex flex-col">
+                <DialogTitle className="text-base font-bold text-slate-100">{previewFile?.name}</DialogTitle>
+                <DialogDescription className="text-slate-400 text-[10px] uppercase font-black tracking-widest">
+                  Auditor Inspection • {previewFile?.isPdf ? 'application/pdf' : 'image/preview'}
+                </DialogDescription>
+              </div>
+            </div>
+            <Button asChild variant="outline" size="sm" className="bg-white/5 border-white/10 text-white h-9 font-bold px-4">
+              <a href={previewFile?.url} download={previewFile?.name}><Download className="w-4 h-4 mr-2" /> Download Original</a>
+            </Button>
           </DialogHeader>
-          <div className="flex-1 overflow-auto flex items-center justify-center p-8 bg-[#121212]">
-            <img src={previewDoc?.url === '#' ? 'https://picsum.photos/seed/doc/1200/1600' : previewDoc?.url} alt="Document Preview" className="max-w-full max-h-full object-contain shadow-2xl" />
+          <div className="flex-1 bg-[#121212] overflow-hidden flex flex-col">
+            {previewFile?.isPdf ? (
+              <iframe src={`${previewFile.url}#toolbar=1`} className="w-full h-full border-none" title="PDF Preview" />
+            ) : (
+              <div className="w-full h-full overflow-auto flex items-center justify-center p-8">
+                <img src={previewFile?.url} alt="Preview" className="max-w-full max-h-full object-contain shadow-2xl" />
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
