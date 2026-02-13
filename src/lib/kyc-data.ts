@@ -100,11 +100,13 @@ export interface FollowUpVerification {
   branch: string;
   officer: string;
   accountType: string;
-  verifiedBy: string;
+  verifiedBy?: string;
   verifiedAt: string;
-  result: 'Correct' | 'Discrepancy';
-  remarks: string;
+  result?: 'Correct' | 'Discrepancy';
+  remarks?: string;
   status: 'Pending' | 'Completed';
+  assignedTo?: string;
+  assignedToName?: string;
 }
 
 export interface KYCFinding {

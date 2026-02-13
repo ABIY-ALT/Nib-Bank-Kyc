@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
@@ -6,7 +5,7 @@ import { collection, query, where, orderBy, doc, setDoc, limit, getDocs } from "
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth, User } from "@/lib/auth-mock";
 import { 
   ShieldCheck, 
   RefreshCw, 
@@ -20,7 +19,9 @@ import {
   Calendar,
   History,
   FileText,
-  ArrowRight
+  UserPlus,
+  Users,
+  Check
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { KYCSubmission, FollowUpVerification } from "@/lib/kyc-data";
@@ -31,68 +32,144 @@ import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function FollowUpDashboard() {
   const db = useFirestore();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSampling, setIsSampling] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   
+  // Assignment form state
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState("");
+  const [selectedAuditorId, setSelectedAuditorId] = useState("");
+
   // Date range state: Default to last 30 days
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  // 1. Fetch completed verifications for analytics and reporting
+  // 1. Fetch completed verifications for analytics
   const verificationsQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "follow_up_verifications"), orderBy("verifiedAt", "desc")) : null;
   }, [db]);
 
   const { data: verifications, loading: vLoading } = useCollection<FollowUpVerification>(verificationsQuery);
 
-  // 2. Fetch pending verifications (The Sample Queue)
+  // 2. Fetch pending verifications
   const pendingQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "follow_up_verifications"), where("status", "==", "Pending")) : null;
   }, [db]);
 
   const { data: pendingVerifications, loading: pLoading } = useCollection<FollowUpVerification>(pendingQuery);
 
-  // 3. Sampling Logic: Select random approved cases within custom date range
+  // 3. Fetch Follow-up Team users
+  const auditorsQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "users"), where("role", "==", "Follow-up Team")) : null;
+  }, [db]);
+
+  const { data: auditors } = useCollection<User>(auditorsQuery);
+
+  // 4. Fetch Approved Submissions within range for assignment
+  const approvedQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    const start = startOfDay(new Date(fromDate)).toISOString();
+    const end = endOfDay(new Date(toDate)).toISOString();
+    return query(
+      collection(db, "submissions"),
+      where("status", "==", "Approved"),
+      where("submittedAt", ">=", start),
+      where("submittedAt", "<=", end),
+      limit(100)
+    );
+  }, [db, fromDate, toDate]);
+
+  const { data: approvedSubmissions } = useCollection<KYCSubmission>(approvedQuery);
+
+  // Filter approved submissions that aren't already in the follow-up system
+  const assignableSubmissions = useMemo(() => {
+    if (!approvedSubmissions) return [];
+    const existingIds = new Set([
+      ...(verifications?.map(v => v.submissionId) || []),
+      ...(pendingVerifications?.map(v => v.submissionId) || [])
+    ]);
+    return approvedSubmissions.filter(s => !existingIds.has(s.id));
+  }, [approvedSubmissions, verifications, pendingVerifications]);
+
+  // 5. Assignment Logic
+  const handleAssignAudit = async () => {
+    if (!db || !selectedSubmissionId || !selectedAuditorId) return;
+    setIsAssigning(true);
+
+    try {
+      const submission = assignableSubmissions.find(s => s.id === selectedSubmissionId);
+      const auditor = auditors?.find(a => a.id === selectedAuditorId);
+
+      if (!submission || !auditor) throw new Error("Invalid selection");
+
+      const verifyId = `audit-${Date.now()}-${submission.id}`;
+      const ref = doc(db, "follow_up_verifications", verifyId);
+      
+      await setDoc(ref, {
+        id: verifyId,
+        submissionId: submission.id,
+        customerName: submission.customerName,
+        branch: submission.branch,
+        officer: submission.submittedBy,
+        accountType: submission.entityType || "individual",
+        status: "Pending",
+        verifiedAt: new Date().toISOString(),
+        assignedTo: auditor.id,
+        assignedToName: auditor.name
+      });
+
+      toast({
+        title: "Audit Assigned",
+        description: `Case ${submission.id} assigned to ${auditor.name}.`,
+      });
+      
+      setIsDialogOpen(false);
+      setSelectedSubmissionId("");
+      setSelectedAuditorId("");
+    } catch (e) {
+      console.error(e);
+      toast({ variant: "destructive", title: "Assignment Failed", description: "Could not dispatch the audit task." });
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   const handleSampleCases = async () => {
     if (!db) return;
     setIsSampling(true);
     
     try {
-      const start = startOfDay(new Date(fromDate)).toISOString();
-      const end = endOfDay(new Date(toDate)).toISOString();
-
-      // Fetch approved cases submitted within the range
-      const q = query(
-        collection(db, "submissions"), 
-        where("status", "==", "Approved"), 
-        where("submittedAt", ">=", start),
-        where("submittedAt", "<=", end),
-        limit(100)
-      );
-
-      const snapshot = await getDocs(q);
-      const approvedCases = snapshot.docs.map(d => d.data() as KYCSubmission);
-      
-      // Filter out those already in verification or currently pending
-      const existingIds = new Set(verifications?.map(v => v.submissionId) || []);
-      const pendingIds = new Set(pendingVerifications?.map(v => v.submissionId) || []);
-      const pool = approvedCases.filter(c => !existingIds.has(c.id) && !pendingIds.has(c.id));
-
-      if (pool.length === 0) {
+      if (assignableSubmissions.length === 0) {
         toast({ 
           variant: "destructive", 
           title: "Sampling Pool Empty", 
-          description: `No new approved cases discovered between ${fromDate} and ${toDate}.` 
+          description: `No new un-audited cases discovered between ${fromDate} and ${toDate}.` 
         });
         return;
       }
 
-      // Select up to 5 random cases
-      const shuffled = pool.sort(() => 0.5 - Math.random());
+      const shuffled = [...assignableSubmissions].sort(() => 0.5 - Math.random());
       const selected = shuffled.slice(0, 5);
 
       for (const caseData of selected) {
@@ -112,17 +189,17 @@ export default function FollowUpDashboard() {
 
       toast({ 
         title: "Sample Generated", 
-        description: `Added ${selected.length} random cases from the selected period to the queue.` 
+        description: `Added ${selected.length} random cases to the queue.` 
       });
     } catch (e) {
       console.error(e);
-      toast({ variant: "destructive", title: "Query Error", description: "Could not fetch cases. Ensure date range is valid and indices are ready." });
+      toast({ variant: "destructive", title: "Query Error", description: "Ensure indices are ready." });
     } finally {
       setIsSampling(false);
     }
   };
 
-  // 4. Analytics Data
+  // 6. Analytics Data
   const analytics = useMemo(() => {
     if (!verifications) return { rate: 0, total: 0, discrepancies: 0, byBranch: {} as Record<string, number> };
     
@@ -139,7 +216,7 @@ export default function FollowUpDashboard() {
     return { rate, total, discrepancies, byBranch };
   }, [verifications]);
 
-  // 5. Export Logic
+  // 7. Export Logic
   const handleExportReport = () => {
     if (!verifications || verifications.filter(v => v.status === 'Completed').length === 0) {
       toast({ variant: "destructive", title: "No Data", description: "There are no completed audit records to export." });
@@ -173,7 +250,7 @@ export default function FollowUpDashboard() {
 
     toast({
       title: "Follow-up Report Exported",
-      description: `Institutional record of ${completed.length} audits saved to CSV.`,
+      description: `Institutional record of ${completed.length} audits saved.`,
     });
   };
 
@@ -189,14 +266,81 @@ export default function FollowUpDashboard() {
           </div>
           <p className="text-muted-foreground text-lg font-medium">Head Office quality control and institutional audit workspace.</p>
         </div>
-        <Button 
-          variant="outline"
-          onClick={handleExportReport}
-          className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200 bg-white"
-        >
-          <FileDown className="w-5 h-5 text-primary" />
-          Export Follow-up Report
-        </Button>
+        <div className="flex gap-3">
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-12 px-6 font-black bg-primary hover:bg-primary/90 text-white shadow-lg gap-2">
+                <UserPlus className="w-5 h-5" />
+                Assign Audit Case
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                  <Users className="w-6 h-6 text-primary" />
+                  Manual Dispatch
+                </DialogTitle>
+                <DialogDescription>Assign an approved case to a specific Head Office specialist.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6 pt-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Select Approved Case</Label>
+                  <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
+                    <SelectTrigger className="h-12">
+                      <SelectValue placeholder="Select case to verify..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignableSubmissions.map(s => (
+                        <SelectItem key={s.id} value={s.id} className="font-bold">
+                          {s.id} - {s.customerName} ({s.branch})
+                        </SelectItem>
+                      ))}
+                      {assignableSubmissions.length === 0 && (
+                        <div className="p-4 text-center text-xs text-muted-foreground italic">No new un-audited cases available.</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Assign To Auditor</Label>
+                  <Select value={selectedAuditorId} onValueChange={setSelectedAuditorId}>
+                    <SelectTrigger className="h-12">
+                      <SelectValue placeholder="Select specialist..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {auditors?.map(a => (
+                        <SelectItem key={a.id} value={a.id} className="font-bold">{a.name}</SelectItem>
+                      ))}
+                      {(!auditors || auditors.length === 0) && (
+                        <div className="p-4 text-center text-xs text-muted-foreground italic">No specialists found in Follow-up Team.</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter className="pt-6 border-t mt-4">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
+                <Button 
+                  className="bg-primary hover:bg-primary/90 font-black px-8 h-11 shadow-lg"
+                  disabled={isAssigning || !selectedSubmissionId || !selectedAuditorId}
+                  onClick={handleAssignAudit}
+                >
+                  {isAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                  Dispatch Audit
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Button 
+            variant="outline"
+            onClick={handleExportReport}
+            className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200 bg-white"
+          >
+            <FileDown className="w-5 h-5 text-primary" />
+            Export Report
+          </Button>
+        </div>
       </div>
 
       {/* Sampling Control Bar */}
@@ -295,7 +439,7 @@ export default function FollowUpDashboard() {
           <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-xl">Verification Sample Queue</CardTitle>
-              <CardDescription>Cases sampled for review.</CardDescription>
+              <CardDescription>Cases sampled or assigned for review.</CardDescription>
             </div>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-3">
               {pendingVerifications?.length || 0} Cases
@@ -315,6 +459,11 @@ export default function FollowUpDashboard() {
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-slate-900">{v.customerName}</p>
                         <Badge variant="outline" className="text-[9px] font-black uppercase border-slate-200">{v.accountType}</Badge>
+                        {v.assignedToName && (
+                          <Badge variant="secondary" className="text-[9px] font-bold bg-primary/10 text-primary border-none">
+                            Assigned: {v.assignedToName}
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
                         {v.submissionId} • {v.branch} • By: {v.officer}
@@ -335,7 +484,7 @@ export default function FollowUpDashboard() {
                 </div>
                 <div className="space-y-1">
                   <p className="font-bold text-slate-900">Queue Exhausted</p>
-                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">Configure a date range above and generate a new sample to begin quality control.</p>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">Use "Assign Audit Case" or "Generate Random Sample" to populate the quality control list.</p>
                 </div>
               </div>
             )}
@@ -347,7 +496,7 @@ export default function FollowUpDashboard() {
             <CardHeader className="bg-slate-50/50 border-b">
               <CardTitle className="text-xl flex items-center gap-2">
                 <History className="w-5 h-5 text-primary" />
-                Audit Log
+                Audit History
               </CardTitle>
               <CardDescription>Recently completed institutional verifications.</CardDescription>
             </CardHeader>
