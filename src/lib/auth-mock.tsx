@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
@@ -55,7 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { auth } = useFirebase();
   const db = useFirestore();
   const router = useRouter();
-  const pathname = usePathname();
   const { toast } = useToast();
   
   const [user, setUser] = useState<User | null>(null);
@@ -87,7 +85,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser({ ...userData, id: fbUser.uid });
           }
         } else {
-          // If no doc exists, create a default for this demo context
           const newUser: User = {
             id: fbUser.uid,
             name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Bank User',
@@ -117,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       if (user && now - lastActivity > SESSION_TIMEOUT_MINUTES * 60 * 1000) {
         toast({ title: 'Session Expired', description: 'Institutional session timed out due to inactivity.' });
-        logout();
+        logout('Session Timeout');
       }
     }, 60000);
 
@@ -128,16 +125,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user, lastActivity]);
 
-  const logAuthEvent = async (action: string, details?: string) => {
-    if (!db || !user) return;
+  const logAuthEvent = async (action: string, currentUser: User | null, details?: string) => {
+    if (!db || !currentUser) return;
     const logRef = doc(collection(db, "audit_logs"));
     await setDoc(logRef, {
       id: logRef.id,
-      userId: user.id,
-      userEmail: user.email,
+      userId: currentUser.id,
+      userEmail: currentUser.email,
+      userRole: currentUser.role || 'Unassigned',
+      userBranch: currentUser.branch || 'N/A',
       action,
       timestamp: new Date().toISOString(),
-      ipAddress: "10.128." + Math.floor(Math.random() * 255) + "." + Math.floor(Math.random() * 255), // Simulated Internal IP
+      ipAddress: "10.128." + Math.floor(Math.random() * 255) + "." + Math.floor(Math.random() * 255),
       details: details || ""
     });
   };
@@ -148,21 +147,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Institutional access restricted to @bank.com domains.');
     }
     
-    await signInWithEmailAndPassword(auth, email, pass);
-    // User profile check is handled in the onAuthStateChanged listener
-    await logAuthEvent('Login', 'Successful institutional authentication');
+    const credential = await signInWithEmailAndPassword(auth, email, pass);
+    // Real-time log will happen in onAuthStateChanged after profile fetch
   };
 
-  const logout = async () => {
+  const logout = async (reason: string = 'User Logout') => {
     if (!auth) return;
-    await logAuthEvent('Logout', 'Session terminated by user');
-    await signOut(auth);
-    setUser(null);
-    router.push('/login');
+    
+    // Capture user details for the final audit log before clearing state
+    const userToLog = user;
+    
+    try {
+      if (userToLog) {
+        await logAuthEvent('Logout', userToLog, reason);
+      }
+      await signOut(auth);
+      setUser(null);
+      router.push('/login');
+      toast({ title: 'Logged Out', description: 'Institutional session terminated safely.' });
+    } catch (error) {
+      console.error("Logout error:", error);
+      setUser(null);
+      router.push('/login');
+    }
   };
 
   const loginAs = async (userId: string) => {
-    // Prototyping tool: Switch profiles instantly
     const profile = MOCK_PROFILES.find(p => p.id === userId);
     if (profile) {
       setUser(profile);

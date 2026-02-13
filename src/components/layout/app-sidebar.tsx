@@ -65,7 +65,7 @@ import { useSidebarCounts } from "@/hooks/use-sidebar-counts"
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { user, loginAs, allUsers } = useAuth()
+  const { user, loginAs, logout, allUsers } = useAuth()
   const counts = useSidebarCounts(user)
 
   // Critical Check: Handle unauthenticated or loading states
@@ -495,7 +495,10 @@ export function AppSidebar() {
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive font-bold cursor-pointer">
+            <DropdownMenuItem 
+              className="text-destructive font-bold cursor-pointer"
+              onClick={() => logout()}
+            >
               <LogOut className="w-4 h-4 mr-2" /> Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
