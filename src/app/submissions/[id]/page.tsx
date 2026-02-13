@@ -50,7 +50,10 @@ import {
   ListFilter,
   MapPin,
   FileArchive,
-  Building2
+  Building2,
+  Calendar,
+  Layers,
+  UserCheck
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -873,24 +876,69 @@ export default function SubmissionDetails() {
 
         <div className="space-y-6">
           <Card className="shadow-lg border-primary/20 bg-primary/5 overflow-hidden">
-            <CardHeader className="bg-primary/10 border-b border-primary/10">
-              <CardTitle className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
+            <CardHeader className="bg-primary/10 border-b border-primary/10 py-4">
+              <CardTitle className="text-[11px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
                 <MapPin className="w-4 h-4" />
                 Institutional Source
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Region</p>
+            <CardContent className="p-0">
+              <div className="divide-y divide-primary/10">
+                <div className="p-5 space-y-1 relative group">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer</p>
+                    <User className="w-4 h-4 text-primary/20" />
+                  </div>
+                  <p className="font-black text-slate-900 text-lg leading-tight">{submission.customerName}</p>
+                </div>
+
+                <div className="p-5 space-y-1 relative group bg-white/30">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account Classification</p>
+                    <Layers className="w-4 h-4 text-primary/20" />
+                  </div>
+                  <p className="font-black text-slate-900 uppercase text-xs tracking-tight">{submission.entityType?.replace(/_/g, ' ') || 'Individual Account'}</p>
+                </div>
+
+                <div className="p-5 space-y-1 relative group">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Region</p>
+                    <Globe className="w-4 h-4 text-primary/20" />
+                  </div>
                   <p className="font-black text-slate-900">{submission.district} District</p>
                 </div>
-                <Building2 className="w-8 h-8 text-primary/20" />
-              </div>
-              <Separator className="bg-primary/10" />
-              <div className="space-y-0.5">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Node</p>
-                <p className="font-black text-slate-900">{submission.branch} Branch</p>
+
+                <div className="p-5 space-y-1 relative group bg-white/30">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Node</p>
+                    <Building2 className="w-4 h-4 text-primary/20" />
+                  </div>
+                  <p className="font-black text-slate-900">{submission.branch} Branch</p>
+                </div>
+
+                <div className="p-5 space-y-1 relative group">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Originating Officer</p>
+                    <UserCheck className="w-4 h-4 text-primary/20" />
+                  </div>
+                  <p className="font-black text-slate-900">{submission.submittedBy}</p>
+                </div>
+
+                <div className="p-5 space-y-1 relative group bg-white/30">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Submitted On</p>
+                    <Calendar className="w-4 h-4 text-primary/20" />
+                  </div>
+                  <p className="font-black text-slate-900 text-sm tabular-nums">
+                    {new Date(submission.submittedAt).toLocaleDateString(undefined, { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
