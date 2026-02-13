@@ -172,7 +172,6 @@ export default function SubmissionDetails() {
   const [correctionNote, setCorrectionNote] = useState("");
   const [newFiles, setNewFiles] = useState<{file: File, type: string}[]>([]);
   const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
-  const isDownloadingRef = useRef(false);
   const [isDownloading, setIsDownloading] = useState(false);
   
   // Exceptional Request State
@@ -209,13 +208,6 @@ export default function SubmissionDetails() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
-  const downloadsQuery = useMemoFirebase(() => {
-    if (!submissionRef) return null;
-    return query(collection(submissionRef, "bundle_downloads"), orderBy("timestamp", "desc"), limit(5));
-  }, [submissionRef]);
-
-  const { data: downloadHistory } = useCollection<BundleDownloadLog>(downloadsQuery);
-
   // Role Definitions
   const isAdmin = user?.role === 'Admin';
   const isKYCOfficer = user?.role === 'KYC Officer'; 
@@ -223,13 +215,6 @@ export default function SubmissionDetails() {
   const isSeniorReviewer = ['Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer', 'District Director', 'Chief'].includes(user?.role || '');
   const isOwner = submission?.submittedBy === user?.name;
   const isBranchMgr = user?.role === 'Branch Manager' || isAdmin;
-
-  // Initialize remarks from existing submission
-  useEffect(() => {
-    if (submission && remarks === "") {
-      setRemarks(submission.remarks || "");
-    }
-  }, [submission]);
 
   useEffect(() => {
     if (submission && (submission.status === 'Pending') && isReviewer && submissionRef && !submission.isResubmitted && !submission.isExceptional) {
@@ -241,11 +226,9 @@ export default function SubmissionDetails() {
     setSelectedScenario(val);
     if (val !== "19. Other (specify)") {
       setRemarks(prev => {
-        // If the current remarks are empty or just another scenario, replace it
         if (!prev || prev.trim() === "" || AMENDMENT_SCENARIOS.includes(prev.split('\n\n')[0]) || AMENDMENT_SCENARIOS.includes(prev)) {
           return val;
         }
-        // Otherwise append it
         return `${prev.trim()}\n\nFinding: ${val}`;
       });
       setOtherScenarioText("");
@@ -300,7 +283,6 @@ export default function SubmissionDetails() {
       const branchName = submission.branch.replace(/\s+/g, '_');
       const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
-      // 1. Add Institutional Manifest
       const manifest = `NIB Institutional KYC Bundle
 Generated: ${now.toLocaleString()}
 Case ID: ${submission.id}
@@ -315,7 +297,6 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
 `;
       zip.file("institutional_manifest.txt", manifest);
 
-      // 2. Package Documents
       if (documents && documents.length > 0) {
         const docFolder = zip.folder("case_assets");
         for (const docObj of documents) {
@@ -336,7 +317,6 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
         }
       }
 
-      // 3. Generate and Trigger
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const link = document.createElement('a');
@@ -347,7 +327,6 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 100);
 
-      // 4. Log Action (Non-blocking)
       const logRef = doc(collection(submissionRef, "bundle_downloads"));
       setDoc(logRef, {
         id: logRef.id,
@@ -409,17 +388,26 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
     }
 
     const now = new Date().toISOString();
+    
+    // Determine the history comment
+    let finalComment = remarks;
+    if (!remarks.trim()) {
+      if (action === 'Approved') finalComment = "Case verified and approved institutional standards.";
+      else if (action === 'Pending') finalComment = correctionNote || "Documents resubmitted for review.";
+      else finalComment = `Workflow action: ${action}`;
+    }
+
     const historyEntry: CommentHistoryEntry = {
       role: user.role || 'Bank User',
       performedBy: user.name,
       timestamp: now,
-      comment: action === 'Pending' ? (correctionNote || "Documents resubmitted for review.") : (remarks || "Status updated."),
+      comment: finalComment,
       action: action
     };
 
     const updateData: any = {
       status: action,
-      remarks: remarks || submission.remarks || "",
+      remarks: action === 'Approved' ? "" : (remarks || ""), // Clear active findings on approval
       commentHistory: arrayUnion(historyEntry)
     };
 
@@ -450,6 +438,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
 
     toast({ title: "Workflow Updated", description: `Case moved to ${action}.` });
     setRemarks("");
+    setSelectedScenario("");
     setCorrectionNote("");
     setNewFiles([]);
   };
