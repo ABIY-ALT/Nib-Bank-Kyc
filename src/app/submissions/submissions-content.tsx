@@ -1,7 +1,7 @@
 
 "use client"
 
-import { KYCSubmission } from "@/lib/kyc-data";
+import { KYCSubmission, Document } from "@/lib/kyc-data";
 import { 
   Table, 
   TableBody, 
@@ -22,7 +22,8 @@ import {
   RefreshCw,
   Archive,
   Zap,
-  FileArchive
+  FileArchive,
+  Loader2
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -35,60 +36,107 @@ import {
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestore } from "@/firebase";
-import { doc, collection, setDoc } from "firebase/firestore";
+import { doc, collection, setDoc, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-mock";
 import { format } from "date-fns";
+import JSZip from 'jszip';
+import { useState } from "react";
 
 export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmission[] }) {
   const { toast } = useToast();
   const db = useFirestore();
   const { user } = useAuth();
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const handleDownloadBundle = async (sub: KYCSubmission) => {
     if (!db || !user) return;
+    setDownloadingId(sub.id);
 
-    const now = new Date();
-    const timestamp = format(now, 'yyyyMMdd_HHmmss');
-    const districtName = sub.district.replace(/\s+/g, '_');
-    const branchName = sub.branch.replace(/\s+/g, '_');
-    const bundleName = `${districtName}_${branchName}_${timestamp}`;
+    try {
+      const zip = new JSZip();
+      const now = new Date();
+      const timestamp = format(now, 'yyyyMMdd_HHmmss');
+      const districtName = sub.district.replace(/\s+/g, '_');
+      const branchName = sub.branch.replace(/\s+/g, '_');
+      const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
-    // Log action to submission sub-collection (Non-blocking)
-    const logRef = doc(collection(doc(db, "submissions", sub.id), "bundle_downloads"));
-    const logData = {
-      id: logRef.id,
-      performedBy: user.name,
-      timestamp: now.toISOString(),
-      bundleName: bundleName,
-      sourceDistrict: sub.district,
-      sourceBranch: sub.branch
-    };
+      // 1. Fetch documents sub-collection
+      const docsSnap = await getDocs(collection(doc(db, "submissions", sub.id), "documents"));
+      const docList = docsSnap.docs.map(d => ({ ...d.data(), id: d.id }) as Document);
 
-    setDoc(logRef, logData).catch(() => {});
+      // 2. Create Manifest
+      const manifest = `NIB Institutional KYC Bundle
+Generated: ${now.toLocaleString()}
+Case ID: ${sub.id}
+Customer: ${sub.customerName}
+Source: ${sub.district} District / ${sub.branch} Branch
+Officer: ${sub.submittedBy}
+Inventory Count: ${docList.length}
 
-    // Generate Institutional Bundle Simulation
-    const blob = new Blob([`Nib Institutional KYC Bundle\nGenerated: ${now.toLocaleString()}\nCase: ${sub.id}\nSource: ${sub.district} / ${sub.branch}`], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${bundleName}.zip`);
-    
-    // Ensure link is attached to body for full browser support
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // Cleanup memory
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+--- DOCUMENTS ---
+${docList.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No documents discovered.'}
+`;
+      zip.file("bundle_manifest.txt", manifest);
 
-    toast({
-      title: "Generating Institutional Bundle",
-      description: `Compiling archive ${bundleName} for ${sub.customerName}.`,
-    });
+      // 3. Package Actual Files
+      if (docList.length > 0) {
+        const assets = zip.folder("captured_assets");
+        for (const docObj of docList) {
+          try {
+            const sourceUrl = docObj.url === '#' 
+              ? (docObj.name.toLowerCase().endsWith('.pdf') 
+                  ? 'https://placehold.co/1200x1600/png?text=Institutional+PDF+Source' 
+                  : `https://picsum.photos/seed/${docObj.id}/1200/1600`)
+              : docObj.url;
+
+            const response = await fetch(sourceUrl);
+            const blob = await response.blob();
+            assets?.file(docObj.name, blob);
+          } catch (err) {
+            console.error(`Failed to package ${docObj.name}:`, err);
+            assets?.file(`${docObj.name}_ERROR.txt`, `Institutional error: File capture failed for ${docObj.name}`);
+          }
+        }
+      }
+
+      // 4. Trigger Download
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.body.appendChild(document.createElement('a'));
+      link.href = url;
+      link.download = `${bundleName}.zip`;
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+
+      // 5. Audit Log (Non-blocking)
+      const logRef = doc(collection(doc(db, "submissions", sub.id), "bundle_downloads"));
+      setDoc(logRef, {
+        id: logRef.id,
+        performedBy: user.name,
+        timestamp: now.toISOString(),
+        bundleName: bundleName,
+        sourceDistrict: sub.district,
+        sourceBranch: sub.branch
+      }).catch(() => {});
+
+      toast({
+        title: "Bundle Compiled",
+        description: `Institutional archive ${bundleName} is ready.`,
+      });
+    } catch (error) {
+      console.error("Archive failure:", error);
+      toast({
+        variant: "destructive",
+        title: "Bundle Error",
+        description: "Failed to compile the institutional document bundle."
+      });
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   const getStatusBadge = (sub: KYCSubmission) => {
-    // Priority 1: Exceptional Status
     if (sub.isExceptional && sub.exceptionalStatus !== 'Completed' && sub.exceptionalStatus !== 'None' && sub.exceptionalStatus) {
       return (
         <Badge className="bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100 flex items-center gap-1.5 w-fit font-bold px-3 py-1">
@@ -181,8 +229,8 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-200 transition-colors">
-                      <MoreVertical className="h-4 w-4 text-slate-400 group-hover:text-slate-600" />
+                    <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-200 transition-colors" disabled={downloadingId === sub.id}>
+                      {downloadingId === sub.id ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <MoreVertical className="h-4 w-4 text-slate-400 group-hover:text-slate-600" />}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64 p-2">

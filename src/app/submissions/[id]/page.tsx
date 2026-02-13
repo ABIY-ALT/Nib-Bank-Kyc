@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -53,7 +54,8 @@ import {
   Calendar,
   Layers,
   UserCheck,
-  MessagesSquare
+  MessagesSquare,
+  Globe
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -84,6 +86,7 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 import { format } from "date-fns";
+import JSZip from 'jszip';
 
 const CHECKLIST_CONFIGS: Record<string, { id: string; label: string; mandatory: boolean }[]> = {
   "individual": [
@@ -277,48 +280,83 @@ export default function SubmissionDetails() {
     setIsDownloading(true);
 
     try {
+      const zip = new JSZip();
+      
       const now = new Date();
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
       const districtName = submission.district.replace(/\s+/g, '_');
       const branchName = submission.branch.replace(/\s+/g, '_');
       const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
+      // 1. Add Institutional Manifest
+      const manifest = `NIB Institutional KYC Bundle
+Generated: ${now.toLocaleString()}
+Case ID: ${submission.id}
+Customer: ${submission.customerName}
+Classification: ${submission.entityType?.replace(/_/g, ' ') || 'Individual'}
+Source: ${submission.district} District / ${submission.branch} Branch
+Officer: ${submission.submittedBy}
+Total Files: ${documents?.length || 0}
+
+--- DOCUMENT INVENTORY ---
+${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploadedAt).toLocaleDateString()})`).join('\n') || 'No documents discovered.'}
+`;
+      zip.file("institutional_manifest.txt", manifest);
+
+      // 2. Package Documents
+      if (documents && documents.length > 0) {
+        const docFolder = zip.folder("case_assets");
+        for (const docObj of documents) {
+          try {
+            // For prototype purposes, if url is #, we fetch a placeholder image/pdf
+            const sourceUrl = docObj.url === '#' 
+              ? (docObj.name.toLowerCase().endsWith('.pdf') 
+                  ? 'https://placehold.co/1200x1600/png?text=Institutional+PDF+Content' 
+                  : `https://picsum.photos/seed/${docObj.id}/1200/1600`)
+              : docObj.url;
+
+            const response = await fetch(sourceUrl);
+            const blob = await response.blob();
+            docFolder?.file(docObj.name, blob);
+          } catch (err) {
+            console.error(`Fetch failed for ${docObj.name}:`, err);
+            docFolder?.file(`${docObj.name}_ERROR.txt`, `Institutional error: Source file could not be retrieved from ${docObj.url}`);
+          }
+        }
+      }
+
+      // 3. Generate and Trigger
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${bundleName}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+
+      // 4. Log Action (Non-blocking)
       const logRef = doc(collection(submissionRef, "bundle_downloads"));
-      const logData = {
+      setDoc(logRef, {
         id: logRef.id,
         performedBy: user.name,
         timestamp: now.toISOString(),
         bundleName: bundleName,
         sourceDistrict: submission.district,
         sourceBranch: submission.branch
-      };
-
-      setDoc(logRef, logData).catch(() => {});
-
-      const mockContent = `NIB Institutional KYC Bundle\nGenerated: ${now.toLocaleString()}\nID: ${submission.id}\nSource: ${submission.district} District / ${submission.branch} Branch\n\nIncluded Documents:\n${documents?.map(d => `- [${d.type}] ${d.name}`).join('\n') || 'No documents'}`;
-      
-      const blob = new Blob([mockContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${bundleName}.zip`);
-      
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      setTimeout(() => URL.revokeObjectURL(url), 100);
+      }).catch(() => {});
 
       toast({
-        title: "Bundle Generated",
-        description: `Institutional archive ${bundleName} is ready.`,
+        title: "Bundle Download Complete",
+        description: `Institutional archive ${bundleName} contains ${documents?.length || 0} files.`,
       });
     } catch (error) {
-      console.error("Download failed:", error);
+      console.error("Bundle generation failed:", error);
       toast({
         variant: "destructive",
-        title: "Download Error",
-        description: "An unexpected error occurred during institutional bundle generation."
+        title: "Archive Error",
+        description: "An error occurred during institutional bundle compilation."
       });
     } finally {
       setIsDownloading(false);
