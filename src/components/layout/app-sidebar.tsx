@@ -435,14 +435,6 @@ export function AppSidebar() {
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/brd'}>
-                          <Link href="/admin/brd">
-                            <FileBadge className="w-4 h-4 mr-2 text-primary" />
-                            <span>System BRD</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={pathname === '/admin/users'}>
                           <Link href="/admin/users">
                             <Users className="w-4 h-4 mr-2" />
