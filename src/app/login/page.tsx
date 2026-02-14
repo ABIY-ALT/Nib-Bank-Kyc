@@ -57,21 +57,23 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#FCFAF7] flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in-95 duration-500">
-        <div className="flex flex-col items-center text-center space-y-2">
-          <div className="p-5 bg-primary rounded-2xl shadow-xl mb-4 flex items-center justify-center">
-            <ShieldCheck className="w-12 h-12 text-white" />
+        <div className="flex flex-col items-center text-center space-y-2 mb-4">
+          <div className="p-4 bg-primary/10 rounded-2xl mb-4 flex items-center justify-center">
+            <ShieldCheck className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tighter">Nib Kyc</h1>
-          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Identity Management Gateway</p>
+          <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tight">Welcome Back</h1>
+          <p className="text-slate-500 text-lg font-medium">Enter your credentials to access your account.</p>
         </div>
 
         <Card className="shadow-2xl border-slate-200 overflow-hidden">
           <CardHeader className="bg-slate-50/50 border-b p-8">
-            <CardTitle className="text-xl font-bold flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-primary" />
-              Institutional Login
-            </CardTitle>
-            <CardDescription className="font-medium">Enter your bank credentials to access the KYC environment.</CardDescription>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xl font-bold flex items-center gap-2 text-slate-800">
+                <Building2 className="w-5 h-5 text-primary" />
+                Institutional Login
+              </CardTitle>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nib Kyc</span>
+            </div>
           </CardHeader>
           <CardContent className="pt-8 px-8">
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -124,12 +126,12 @@ export default function LoginPage() {
 
               <Button 
                 type="submit" 
-                className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-bold text-lg shadow-xl shadow-primary/20 gap-2"
+                className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-black text-lg shadow-xl shadow-primary/20 gap-2 transition-all active:scale-[0.98]"
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
                 Login
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-5 h-5" />
               </Button>
             </form>
           </CardContent>
