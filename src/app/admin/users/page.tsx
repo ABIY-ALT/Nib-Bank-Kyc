@@ -24,10 +24,12 @@ import {
   Phone,
   Settings2,
   UserCheck,
+  UserX,
   X,
   ShieldCheck,
   Layers,
-  ArrowRight
+  ArrowRight,
+  CheckCircle
 } from "lucide-react";
 import { 
   Dialog, 
@@ -182,10 +184,24 @@ export default function UserManagementPage() {
     setIsDialogOpen(false);
   };
 
-  const handleDeactivate = (id: string, name: string) => {
-    if (!db || !confirm(`Deactivate ${name}?`)) return;
-    updateDoc(doc(db, "users", id), { status: 'Inactive' }).catch(() => {});
-    toast({ title: "User Deactivated" });
+  const handleToggleStatus = (id: string, currentStatus: string, name: string) => {
+    if (!db) return;
+    const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    if (!confirm(`Are you sure you want to change ${name}'s status to ${newStatus}?`)) return;
+    
+    updateDoc(doc(db, "users", id), { status: newStatus })
+      .catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `users/${id}`,
+          operation: 'update',
+          requestResourceData: { status: newStatus }
+        }));
+      });
+
+    toast({ 
+      title: newStatus === 'Active' ? "User Restored" : "User Deactivated",
+      description: `${name} status updated to ${newStatus}.`
+    });
   };
 
   const showSingleBranchField = formData.role && ['Branch Officer', 'Branch Manager'].includes(formData.role);
@@ -289,11 +305,16 @@ export default function UserManagementPage() {
                     <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary rounded-full hover:bg-primary/5 h-9 w-9">
                       <Settings2 className="w-4 h-4" />
                     </Button>
-                    {user.status === 'Active' && (
-                      <Button variant="ghost" size="icon" onClick={() => handleDeactivate(user.id, user.name)} className="text-destructive rounded-full hover:bg-destructive/5 h-9 w-9">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
+                    
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleToggleStatus(user.id, user.status || 'Active', user.name)} 
+                      className={user.status === 'Active' ? "text-destructive rounded-full hover:bg-destructive/5 h-9 w-9" : "text-emerald-600 rounded-full hover:bg-emerald-50 h-9 w-9"}
+                      title={user.status === 'Active' ? "Deactivate User" : "Activate User"}
+                    >
+                      {user.status === 'Active' ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -351,7 +372,7 @@ export default function UserManagementPage() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Status</Label>
-                      <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val})}>
+                      <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val as any})}>
                         <SelectTrigger className="h-11 border-slate-200"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Active">Active</SelectItem>
