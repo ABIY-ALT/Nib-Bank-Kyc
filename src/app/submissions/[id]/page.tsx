@@ -55,7 +55,8 @@ import {
   Layers,
   UserCheck,
   MessagesSquare,
-  Globe
+  Globe,
+  RotateCcw
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -151,6 +152,14 @@ const DEFAULT_DOC_TYPES = [
   { id: "other", label: "Other Document" },
 ];
 
+interface PreviewDoc {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  isPdf?: boolean;
+}
+
 export default function SubmissionDetails() {
   const params = useParams();
   const router = useRouter();
@@ -221,7 +230,7 @@ export default function SubmissionDetails() {
 
   const handleScenarioChange = (val: string) => {
     setSelectedScenario(val);
-    if (val !== "19. Other (specify)") {
+    if (val && val !== "19. Other (specify)") {
       setRemarks(prev => {
         if (!prev || prev.trim() === "" || AMENDMENT_SCENARIOS.includes(prev.split('\n\n')[0]) || AMENDMENT_SCENARIOS.includes(prev)) {
           return val;
@@ -229,6 +238,15 @@ export default function SubmissionDetails() {
         return `${prev.trim()}\n\nFinding: ${val}`;
       });
       setOtherScenarioText("");
+    }
+  };
+
+  const handleClearScenario = () => {
+    setSelectedScenario("");
+    setOtherScenarioText("");
+    // If remarks purely contained the scenario, clear it.
+    if (AMENDMENT_SCENARIOS.includes(remarks) || remarks.startsWith("Finding: ")) {
+      setRemarks("");
     }
   };
 
@@ -363,6 +381,16 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
 
   const handleAction = (action: string) => {
     if (!submissionRef || !db || !user || isTerminal) return;
+
+    // INCONSISTENCY GUARD: Prevent Approval if an amendment scenario is selected
+    if (action === 'Approved' && selectedScenario) {
+      toast({ 
+        variant: "destructive", 
+        title: "Workflow Conflict", 
+        description: "You cannot approve a case with active findings. Please clear the selection or 'Request Fix'." 
+      });
+      return;
+    }
 
     if (action === 'Pending' && submission.status === 'Amended' && (isOwner || isAdmin)) {
       if (newFiles.some(f => !f.type)) {
@@ -901,9 +929,16 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                 {(isReviewer || isAdmin) && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Amendment Scenario Registry</Label>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Amendment Scenario Registry</Label>
+                        {selectedScenario && (
+                          <Button variant="ghost" size="sm" onClick={handleClearScenario} className="h-6 text-[9px] font-black uppercase text-red-600 hover:bg-red-50">
+                            <RotateCcw className="w-3 h-3 mr-1" /> Clear Finding
+                          </Button>
+                        )}
+                      </div>
                       <Select value={selectedScenario} onValueChange={handleScenarioChange}>
-                        <SelectTrigger className="h-11 bg-slate-50/50 border-slate-200">
+                        <SelectTrigger className={cn("h-11 bg-slate-50/50 border-slate-200", selectedScenario && "border-orange-300 bg-orange-50/30")}>
                           <SelectValue placeholder="Select institutional finding..." />
                         </SelectTrigger>
                         <SelectContent className="max-h-[300px]">
@@ -940,7 +975,18 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                 </div>
                 {(isReviewer || isAdmin) && (
                   <div className="grid grid-cols-2 gap-2 pt-2">
-                    {(!isCurrentlyEscalated || canResolveEscalation) && <Button onClick={() => handleAction('Approved')} className="bg-[#4CAF50] hover:bg-[#43A047] font-bold">Approve</Button>}
+                    {(!isCurrentlyEscalated || canResolveEscalation) && (
+                      <Button 
+                        onClick={() => handleAction('Approved')} 
+                        disabled={!!selectedScenario}
+                        className={cn(
+                          "bg-[#4CAF50] hover:bg-[#43A047] font-bold",
+                          !!selectedScenario && "opacity-50 grayscale cursor-not-allowed"
+                        )}
+                      >
+                        {!!selectedScenario ? "Clear finding to Approve" : "Approve"}
+                      </Button>
+                    )}
                     {(!isCurrentlyEscalated || canResolveEscalation) && <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold border-[#E67E22]/30">Request Fix</Button>}
                     {(!isCurrentlyEscalated && (isKYCOfficer || isAdmin)) && <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold">Escalate</Button>}
                     {(isSeniorReviewer && user?.role !== 'KYC Officer') && <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Reject</Button>}
