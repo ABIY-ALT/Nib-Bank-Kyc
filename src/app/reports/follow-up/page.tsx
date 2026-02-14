@@ -37,7 +37,8 @@ import {
   AlertTriangle,
   History,
   FileText,
-  Loader2
+  Loader2,
+  ShieldCheck
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
@@ -106,12 +107,12 @@ export default function FollowUpReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `nib-followup-audit-report-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `nib-followup-compliance-report-${new Date().toISOString().split('T')[0]}.csv`);
     link.click();
 
     toast({
       title: "Export Successful",
-      description: "Follow-up audit trail has been saved to CSV.",
+      description: "Institutional audit report has been saved to CSV.",
     });
   };
 
@@ -131,7 +132,7 @@ export default function FollowUpReportsPage() {
             disabled={!reportDataActive || filteredData.length === 0}
             onClick={handleExportCSV}
           >
-            <Download className="w-4 h-4" /> Export Results
+            <ShieldCheck className="w-4 h-4" /> Download Compliance Report
           </Button>
         </div>
       </div>

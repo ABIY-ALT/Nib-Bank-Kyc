@@ -156,7 +156,7 @@ export default function FollowUpDashboard() {
     return { rate, total, discrepancies, byBranch };
   }, [verifications]);
 
-  // 7. Export Logic
+  // 7. Export Logic - Changed label to Export History
   const handleExportReport = () => {
     if (!verifications || verifications.filter(v => v.status === 'Completed').length === 0) {
       toast({ variant: "destructive", title: "No Data", description: "There are no completed audit records to export." });
@@ -182,15 +182,15 @@ export default function FollowUpDashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `nib-kyc-followup-audit-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `nib-kyc-followup-audit-history-${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
     toast({
-      title: "Follow-up Report Exported",
-      description: `Institutional record of ${completed.length} audits saved.`,
+      title: "History Exported",
+      description: `Institutional record of ${completed.length} recent audits saved.`,
     });
   };
 
@@ -221,8 +221,8 @@ export default function FollowUpDashboard() {
             onClick={handleExportReport}
             className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200 bg-white"
           >
-            <FileDown className="w-5 h-5 text-primary" />
-            Export Report
+            <History className="w-5 h-5 text-primary" />
+            Export History
           </Button>
         </div>
       </div>
