@@ -3,7 +3,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, updateDoc, collection, setDoc, getDocs } from "firebase/firestore";
+import { doc, updateDoc, collection } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-mock";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -11,8 +11,7 @@ import {
   CardHeader, 
   CardTitle, 
   CardContent, 
-  CardDescription, 
-  CardFooter 
+  CardDescription 
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +22,6 @@ import {
   FileText, 
   Download, 
   Eye, 
-  History, 
   ShieldCheck,
   User,
   Building2,
@@ -34,7 +32,7 @@ import {
   FileArchive,
   X
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { KYCSubmission, Document, FollowUpVerification } from "@/lib/kyc-data";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -47,6 +45,8 @@ import {
 } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import JSZip from 'jszip';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 interface PreviewDoc {
   id: string;
@@ -86,7 +86,7 @@ export default function FollowUpVerificationDetail() {
 
   const { data: documents } = useCollection<Document>(docsQuery);
 
-  const handleAction = async (result: 'Correct' | 'Discrepancy') => {
+  const handleAction = (result: 'Correct' | 'Discrepancy') => {
     if (!verifyRef || !db || isSubmitting) return;
 
     if (result === 'Discrepancy' && !remarks.trim()) {
@@ -96,25 +96,27 @@ export default function FollowUpVerificationDetail() {
 
     setIsSubmitting(result);
 
-    try {
-      const updateData = {
-        result,
-        remarks,
-        verifiedBy: user?.name || 'Unknown Auditor',
-        verifiedAt: new Date().toISOString(),
-        status: 'Completed'
-      };
+    const updateData = {
+      result,
+      remarks,
+      verifiedBy: user?.name || 'Unknown Auditor',
+      verifiedAt: new Date().toISOString(),
+      status: 'Completed'
+    };
 
-      await updateDoc(verifyRef, updateData);
-      toast({ title: "Audit Logged", description: `Case verification marked as ${result}.` });
-      
-      // Explicitly push to the dashboard to allow selection of the next case
-      router.push('/head-office/follow-up');
-    } catch (e) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Persistence Error", description: "Failed to log institutional determination. Please retry." });
-      setIsSubmitting(null);
-    }
+    updateDoc(verifyRef, updateData)
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: verifyRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        setIsSubmitting(null);
+      });
+
+    toast({ title: "Audit Logged", description: `Case verification marked as ${result}.` });
+    router.push('/head-office/follow-up');
   };
 
   const handleDownloadBundle = async () => {

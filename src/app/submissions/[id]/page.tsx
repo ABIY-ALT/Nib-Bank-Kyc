@@ -174,6 +174,7 @@ export default function SubmissionDetails() {
   const [newFiles, setNewFiles] = useState<{file: File, type: string}[]>([]);
   const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isActioning, setIsActioning] = useState<string | null>(null);
   
   // Exceptional Request State
   const [isExceptionDialogOpen, setIsExceptionDialogOpen] = useState(false);
@@ -231,11 +232,9 @@ export default function SubmissionDetails() {
   const handleScenarioChange = (val: string) => {
     setSelectedScenario(val);
     if (val && val !== "19. Other (specify)") {
-      // Standard Institutional Finding selected: Auto-fill remarks and lock
       setRemarks(`Finding: ${val}`);
       setOtherScenarioText("");
     } else {
-      // Custom finding or cleared: Allow user input
       setRemarks("");
       setOtherScenarioText("");
     }
@@ -377,7 +376,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
   };
 
   const handleAction = (action: string) => {
-    if (!submissionRef || !db || !user || isTerminal) return;
+    if (!submissionRef || !db || !user || isTerminal || isActioning) return;
 
     if (action === 'Approved' && selectedScenario) {
       toast({ 
@@ -404,15 +403,14 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
       return;
     }
 
+    setIsActioning(action);
     const now = new Date().toISOString();
-    
     let finalComment = remarks;
     
     if (selectedScenario) {
       if (selectedScenario === "19. Other (specify)") {
         finalComment = `[FINDING] ${otherScenarioText}${remarks ? `\n\n[DETAILS] ${remarks}` : ''}`;
       } else {
-        // Standard scenario: remarks already contains "Finding: ..." and is locked
         finalComment = `[FINDING] ${selectedScenario}`;
       }
     }
@@ -454,13 +452,16 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
        });
     }
 
-    updateDoc(submissionRef, updateData).catch(async (error) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: submissionRef.path,
-        operation: 'update',
-        requestResourceData: updateData
-      }));
-    });
+    updateDoc(submissionRef, updateData)
+      .then(() => setIsActioning(null))
+      .catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: submissionRef.path,
+          operation: 'update',
+          requestResourceData: updateData
+        }));
+        setIsActioning(null);
+      });
 
     toast({ title: "Workflow Updated", description: `Case moved to ${action}.` });
     setRemarks("");
@@ -520,7 +521,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
   };
 
   const handleExceptionalApproval = (action: 'Approved' | 'Rejected' | 'Clarification' | 'ForwardChief') => {
-    if (!submissionRef || !db || !submission.exceptionalData || !user || isTerminal) return;
+    if (!submissionRef || !db || !submission.exceptionalData || !user || isTerminal || isActioning) return;
     
     const isMemoRequiredRole = ['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
     if (action === 'Approved' && isMemoRequiredRole && !decisionMemoFile && !isAdmin) {
@@ -533,6 +534,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
       return;
     }
 
+    setIsActioning(action);
     const now = new Date().toISOString();
     const currentStatus = submission.exceptionalStatus;
     let nextStatus: ExceptionalStatus = 'Completed';
@@ -576,13 +578,16 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
       updateData.isResubmitted = false; 
     }
 
-    updateDoc(submissionRef, updateData).catch(async (error) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: submissionRef.path,
-        operation: 'update',
-        requestResourceData: updateData
-      }));
-    });
+    updateDoc(submissionRef, updateData)
+      .then(() => setIsActioning(null))
+      .catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: submissionRef.path,
+          operation: 'update',
+          requestResourceData: updateData
+        }));
+        setIsActioning(null);
+      });
 
     if (decisionMemoFile) {
       const docRef = doc(collection(submissionRef, "documents"));
@@ -636,9 +641,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
   const isCurrentlyEscalated = submission.status === 'Escalated';
   const canResolveEscalation = isSeniorReviewer;
 
-  // Enforce read-only logic for standard scenarios 1-18
   const isStandardScenario = selectedScenario && selectedScenario !== "19. Other (specify)";
-  const isFindingValid = selectedScenario && (selectedScenario !== "19. Other (specify)" || otherScenarioText.trim().length > 0);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -684,12 +687,12 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                 {['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user?.role || '') || isAdmin ? (
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Mandatory Supporting Memo (PDF)</Label>
-                    <div onClick={() => decisionMemoInputRef.current?.click()} className={cn("border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all bg-white shadow-sm", decisionMemoFile ? "border-emerald-300 bg-emerald-50/20" : "border-yellow-300 hover:bg-yellow-50/50")}>
+                    <div onClick={() => !isActioning && decisionMemoInputRef.current?.click()} className={cn("border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all bg-white shadow-sm", decisionMemoFile ? "border-emerald-300 bg-emerald-50/20" : "border-yellow-300 hover:bg-yellow-50/50", isActioning && "opacity-50 cursor-not-allowed")}>
                       {decisionMemoFile ? (
                         <div className="flex items-center justify-center gap-3 text-emerald-700">
                           <CheckCircle2 className="w-5 h-5" />
                           <span className="text-sm font-bold truncate">{decisionMemoFile.name}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setDecisionMemoFile(null); }}><X className="w-3 h-3" /></Button>
+                          {!isActioning && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setDecisionMemoFile(null); }}><X className="w-3 h-3" /></Button>}
                         </div>
                       ) : (
                         <div className="flex flex-col items-center gap-2">
@@ -703,21 +706,39 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                 ) : null}
                 <div className="space-y-2">
                   <Label className="font-bold text-slate-700">Decision Remarks (Mandatory)</Label>
-                  <Textarea placeholder="Provide context for your determination..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[120px]" />
+                  <Textarea placeholder="Provide context for your determination..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[120px]" disabled={!!isActioning} />
                 </div>
                 <div className="flex flex-wrap gap-3">
                   {showDirectorButtons ? (
                     <>
-                      <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>Approve & Forward</Button>
-                      <Button variant="secondary" className="bg-primary hover:bg-primary/90 text-white font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('ForwardChief')}>Forward to Chief</Button>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')} disabled={!!isActioning}>
+                        {isActioning === 'Approved' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                        Approve & Forward
+                      </Button>
+                      <Button variant="secondary" className="bg-primary hover:bg-primary/90 text-white font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('ForwardChief')} disabled={!!isActioning}>
+                        {isActioning === 'ForwardChief' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                        Forward to Chief
+                      </Button>
                     </>
                   ) : showChiefButtons ? (
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 w-full shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>Approve & Return</Button>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 w-full shadow-lg" onClick={() => handleExceptionalApproval('Approved')} disabled={!!isActioning}>
+                      {isActioning === 'Approved' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                      Approve & Return
+                    </Button>
                   ) : (
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')}>{currentExceptionalRole === 'Supervisor' ? 'Confirm & Dispatch' : 'Approve Level'}</Button>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 shadow-lg" onClick={() => handleExceptionalApproval('Approved')} disabled={!!isActioning}>
+                      {isActioning === 'Approved' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                      {currentExceptionalRole === 'Supervisor' ? 'Confirm & Dispatch' : 'Approve Level'}
+                    </Button>
                   )}
-                  <Button variant="outline" className="text-orange-600 border-orange-600 bg-white font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Clarification')}>Request Info</Button>
-                  <Button variant="destructive" className="font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Rejected')}>Reject Flow</Button>
+                  <Button variant="outline" className="text-orange-600 border-orange-600 bg-white font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Clarification')} disabled={!!isActioning}>
+                    {isActioning === 'Clarification' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Request Info
+                  </Button>
+                  <Button variant="destructive" className="font-bold h-12 px-6" onClick={() => handleExceptionalApproval('Rejected')} disabled={!!isActioning}>
+                    {isActioning === 'Rejected' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Reject Flow
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -906,18 +927,18 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
               <CardContent className="pt-6 space-y-6">
                 <div className="space-y-4">
                   <input type="file" className="hidden" ref={correctionInputRef} multiple onChange={handleCorrectionFileChange} />
-                  <div onClick={() => correctionInputRef.current?.click()} className="border-2 border-dashed border-orange-300 rounded-2xl p-8 text-center cursor-pointer hover:bg-orange-50 bg-white shadow-sm">
+                  <div onClick={() => !isActioning && correctionInputRef.current?.click()} className={cn("border-2 border-dashed border-orange-300 rounded-2xl p-8 text-center cursor-pointer hover:bg-orange-50 bg-white shadow-sm", isActioning && "opacity-50 cursor-not-allowed")}>
                     <Upload className="w-5 h-5 text-orange-600 mx-auto mb-2" />
                     <p className="text-xs font-bold text-orange-900">Attach Corrected Files</p>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Response Note / Clarification</Label>
-                    <Textarea placeholder="Explain correction or provide context..." value={correctionNote} onChange={(e) => setCorrectionNote(e.target.value)} className="min-h-[100px]" />
+                    <Textarea placeholder="Explain correction or provide context..." value={correctionNote} onChange={(e) => setCorrectionNote(e.target.value)} className="min-h-[100px]" disabled={!!isActioning} />
                   </div>
                   {newFiles.map((f, idx) => (
                     <div key={idx} className="p-3 border rounded-xl bg-white shadow-sm space-y-3">
-                      <div className="flex items-center justify-between"><span className="text-[11px] font-bold truncate flex-1">{f.file.name}</span><button onClick={() => removeNewFile(idx)}><X className="w-3 h-3" /></button></div>
-                      <Select value={f.type} onValueChange={(val) => updateNewFileType(idx, val)}>
+                      <div className="flex items-center justify-between"><span className="text-[11px] font-bold truncate flex-1">{f.file.name}</span>{!isActioning && <button onClick={() => removeNewFile(idx)}><X className="w-3 h-3" /></button>}</div>
+                      <Select value={f.type} onValueChange={(val) => updateNewFileType(idx, val)} disabled={!!isActioning}>
                         <SelectTrigger className="h-9 text-[10px]"><SelectValue placeholder="Categorize..." /></SelectTrigger>
                         <SelectContent>{documentTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}</SelectContent>
                       </Select>
@@ -926,7 +947,10 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                 </div>
               </CardContent>
               <CardFooter className="bg-slate-50 border-t p-6">
-                <Button className="w-full bg-orange-600 hover:bg-orange-700 font-black h-12" onClick={() => handleAction('Pending')} disabled={(!isOwner && !isAdmin) || (newFiles.length === 0 && !correctionNote.trim())}>Submit Corrections</Button>
+                <Button className="w-full bg-orange-600 hover:bg-orange-700 font-black h-12" onClick={() => handleAction('Pending')} disabled={(!isOwner && !isAdmin) || (newFiles.length === 0 && !correctionNote.trim()) || !!isActioning}>
+                  {isActioning === 'Pending' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Submit Corrections
+                </Button>
               </CardFooter>
             </Card>
           )}
@@ -942,13 +966,13 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Amendment Scenario Registry</Label>
-                        {selectedScenario && (
+                        {selectedScenario && !isActioning && (
                           <Button variant="ghost" size="sm" onClick={handleClearScenario} className="h-6 text-[9px] font-black uppercase text-red-600 hover:bg-red-50">
                             <RotateCcw className="w-3 h-3 mr-1" /> Clear Finding
                           </Button>
                         )}
                       </div>
-                      <Select value={selectedScenario} onValueChange={handleScenarioChange}>
+                      <Select value={selectedScenario} onValueChange={handleScenarioChange} disabled={!!isActioning}>
                         <SelectTrigger className={cn("h-11 bg-slate-50/50 border-slate-200", selectedScenario && "border-orange-300 bg-orange-50/30")}>
                           <SelectValue placeholder="Select institutional finding..." />
                         </SelectTrigger>
@@ -969,6 +993,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                           value={otherScenarioText} 
                           onChange={handleOtherScenarioChange} 
                           className="h-11 border-primary/20 font-bold" 
+                          disabled={!!isActioning}
                         />
                         <p className="text-[10px] text-muted-foreground italic">Provide a short, descriptive title for the non-standard error.</p>
                       </div>
@@ -986,7 +1011,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                       isStandardScenario && "bg-slate-50 font-bold text-slate-900 border-primary/20"
                     )} 
                     readOnly={isStandardScenario}
-                    disabled={!isReviewer && !isAdmin} 
+                    disabled={(!isReviewer && !isAdmin) || !!isActioning} 
                   />
                   {isStandardScenario && (
                     <p className="text-[9px] font-black uppercase text-primary tracking-widest animate-in fade-in">Institutional Standard Remark Locked</p>
@@ -997,12 +1022,13 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                     {(!isCurrentlyEscalated || canResolveEscalation) && (
                       <Button 
                         onClick={() => handleAction('Approved')} 
-                        disabled={!!selectedScenario}
+                        disabled={!!selectedScenario || !!isActioning}
                         className={cn(
                           "bg-[#4CAF50] hover:bg-[#43A047] font-bold",
                           !!selectedScenario && "opacity-50 grayscale cursor-not-allowed"
                         )}
                       >
+                        {isActioning === 'Approved' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                         {!!selectedScenario ? "Clear finding to Approve" : "Approve"}
                       </Button>
                     )}
@@ -1010,14 +1036,15 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                       <Button 
                         onClick={() => handleAction('Amended')} 
                         variant="outline" 
-                        disabled={selectedScenario === "19. Other (specify)" && !otherScenarioText.trim()}
+                        disabled={(selectedScenario === "19. Other (specify)" && !otherScenarioText.trim()) || !!isActioning}
                         className="text-[#E67E22] font-bold border-[#E67E22]/30"
                       >
+                        {isActioning === 'Amended' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                         Request Fix
                       </Button>
                     )}
-                    {(!isCurrentlyEscalated && (isKYCOfficer || isAdmin)) && <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold">Escalate</Button>}
-                    {(isSeniorReviewer && user?.role !== 'KYC Officer') && <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Reject</Button>}
+                    {(!isCurrentlyEscalated && (isKYCOfficer || isAdmin)) && <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold" disabled={!!isActioning}>Escalate</Button>}
+                    {(isSeniorReviewer && user?.role !== 'KYC Officer') && <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold" disabled={!!isActioning}>Reject</Button>}
                   </div>
                 )}
               </CardContent>
