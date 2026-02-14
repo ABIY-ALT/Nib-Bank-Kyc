@@ -86,7 +86,7 @@ export default function BranchPerformancePage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Branch Performance</h1>
-          <p className="text-muted-foreground text-lg">Cross-network efficiency and compliance audit trail.</p>
+          <p className="text-muted-foreground text-lg">Operational velocity and real-time efficiency metrics across the network.</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
           <DropdownMenu>

@@ -59,7 +59,7 @@ export default function DistrictPerformancePage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">District Performance</h1>
-          <p className="text-muted-foreground text-lg">Regional oversight of KYC efficiency and institutional compliance.</p>
+          <p className="text-muted-foreground text-lg">Regional management oversight of institutional throughput and SLA health.</p>
         </div>
         <div className="flex gap-3 items-center">
           <DropdownMenu>
