@@ -80,12 +80,15 @@ export default function LoginPage() {
               )}
 
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Official Bank Email</Label>
+                <div className="flex justify-between items-center">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Official Bank Email</Label>
+                  <span className="text-[9px] font-bold text-primary">format: First.Last@nibbank.com.et</span>
+                </div>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
                     type="email" 
-                    placeholder="name@bank.com" 
+                    placeholder="Test.Test@nibbank.com.et" 
                     className="pl-10 h-12 bg-slate-50/50 border-slate-200 font-bold"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -125,7 +128,7 @@ export default function LoginPage() {
               <AlertCircle className="w-3.5 h-3.5" /> Security Notice
             </div>
             <p className="text-[10px] text-slate-500 leading-relaxed italic">
-              Accounts will be automatically locked after 5 failed attempts. Session idle timeout enforced (30 mins). All access events are logged for institutional audit.
+              Institutional access is restricted to authorized @nibbank.com.et addresses. All access events are logged for regulatory audit.
             </p>
           </CardFooter>
         </Card>

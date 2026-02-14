@@ -136,6 +136,11 @@ export default function UserManagementPage() {
       return;
     }
 
+    if (!formData.email.toLowerCase().endsWith('@nibbank.com.et')) {
+      toast({ variant: "destructive", title: "Invalid Domain", description: "Personnel email must use @nibbank.com.et domain." });
+      return;
+    }
+
     if (editingUser || formData.role) {
       if (!formData.role) {
         toast({ variant: "destructive", title: "Role Required", description: "Please assign an institutional role." });
@@ -245,8 +250,8 @@ export default function UserManagementPage() {
                     <div className="flex flex-col">
                       <span className="font-bold text-slate-900">{user.name}</span>
                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">
-                        <Phone className="w-2.5 h-2.5" />
-                        {user.phoneNumber}
+                        <Mail className="w-2.5 h-2.5" />
+                        {user.email}
                       </div>
                     </div>
                   </div>
@@ -350,8 +355,8 @@ export default function UserManagementPage() {
                     <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white" placeholder="09..." />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Email</Label>
-                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white" placeholder="name@bank.com" />
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Official Email</Label>
+                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white" placeholder="Test.Test@nibbank.com.et" />
                   </div>
                 </div>
               </div>

@@ -62,10 +62,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // MOCK DATA for switching during prototyping
   const MOCK_PROFILES: User[] = [
-    { id: 'admin-1', name: 'System Admin', email: 'admin@bank.com', role: 'Admin', status: 'Active' },
-    { id: 'chief-1', name: 'Executive Chief', email: 'chief@bank.com', role: 'Chief Retail & SME Banking Officer', status: 'Active' },
-    { id: 'branch-1', name: 'John Doe', email: 'john.branch@bank.com', role: 'Branch Officer', branch: 'Downtown', district: 'Central', status: 'Active' },
-    { id: 'kyc-1', name: 'Jane Smith', email: 'jane.kyc@bank.com', role: 'KYC Officer', assignedBranches: ['Downtown', 'Uptown'], status: 'Active' },
+    { id: 'admin-1', name: 'System Admin', email: 'Admin.User@nibbank.com.et', role: 'Admin', status: 'Active' },
+    { id: 'chief-1', name: 'Executive Chief', email: 'Executive.Chief@nibbank.com.et', role: 'Chief Retail & SME Banking Officer', status: 'Active' },
+    { id: 'branch-1', name: 'John Doe', email: 'John.Doe@nibbank.com.et', role: 'Branch Officer', branch: 'Downtown', district: 'Central', status: 'Active' },
+    { id: 'kyc-1', name: 'Jane Smith', email: 'Jane.Smith@nibbank.com.et', role: 'KYC Officer', assignedBranches: ['Downtown', 'Uptown'], status: 'Active' },
   ];
 
   useEffect(() => {
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           const newUser: User = {
             id: fbUser.uid,
-            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Bank User',
+            name: fbUser.displayName || fbUser.email?.split('@')[0].replace('.', ' ') || 'Bank User',
             email: fbUser.email || '',
             role: 'Branch Officer',
             status: 'Active'
@@ -143,18 +143,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, pass: string) => {
     if (!auth) return;
-    if (!email.endsWith('@bank.com')) {
-      throw new Error('Institutional access restricted to @bank.com domains.');
+    if (!email.toLowerCase().endsWith('@nibbank.com.et')) {
+      throw new Error('Institutional access restricted to @nibbank.com.et domains.');
     }
     
     const credential = await signInWithEmailAndPassword(auth, email, pass);
-    // Real-time log will happen in onAuthStateChanged after profile fetch
   };
 
   const logout = async (reason: string = 'User Logout') => {
     if (!auth) return;
     
-    // Capture user details for the final audit log before clearing state
     const userToLog = user;
     
     try {
