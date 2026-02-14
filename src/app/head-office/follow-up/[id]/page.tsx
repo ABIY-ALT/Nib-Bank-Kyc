@@ -103,7 +103,9 @@ export default function FollowUpVerificationDetail() {
 
     await updateDoc(verifyRef, updateData);
     toast({ title: "Audit Logged", description: `Case verification marked as ${result}.` });
-    router.back();
+    
+    // Explicitly push to the dashboard to allow selection of the next case
+    router.push('/head-office/follow-up');
   };
 
   const handleDownloadBundle = async () => {
