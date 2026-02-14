@@ -151,14 +151,6 @@ const DEFAULT_DOC_TYPES = [
   { id: "other", label: "Other Document" },
 ];
 
-interface PreviewDoc {
-  id: string;
-  name: string;
-  type: string;
-  url: string;
-  isPdf?: boolean;
-}
-
 export default function SubmissionDetails() {
   const params = useParams();
   const router = useRouter();
@@ -219,6 +211,8 @@ export default function SubmissionDetails() {
   const isOwner = submission?.submittedBy === user?.name;
   const isBranchMgr = user?.role === 'Branch Manager' || isAdmin;
 
+  const isTerminal = submission?.status === 'Approved' || submission?.status === 'Rejected';
+
   useEffect(() => {
     if (submission && (submission.status === 'Pending') && isReviewer && submissionRef && !submission.isResubmitted && !submission.isExceptional) {
       updateDoc(submissionRef, { status: 'In Review' }).catch(() => {});
@@ -244,7 +238,7 @@ export default function SubmissionDetails() {
   };
 
   const handleSelectAllChecklist = (value: boolean) => {
-    if (!submissionRef || (!isKYCOfficer && !isAdmin)) return;
+    if (!submissionRef || (!isKYCOfficer && !isAdmin) || isTerminal) return;
 
     const newState: Record<string, boolean> = {};
     currentChecklist.forEach(item => {
@@ -368,7 +362,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
   };
 
   const handleAction = (action: string) => {
-    if (!submissionRef || !db || !user) return;
+    if (!submissionRef || !db || !user || isTerminal) return;
 
     if (action === 'Pending' && submission.status === 'Amended' && (isOwner || isAdmin)) {
       if (newFiles.some(f => !f.type)) {
@@ -442,8 +436,8 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
   };
 
   const handleTriggerExceptional = () => {
-    if (!submissionRef || !db || !memoFile || !user) {
-      toast({ variant: "destructive", title: "Missing Evidence", description: "The approval memo (PDF) is mandatory for exceptions." });
+    if (!submissionRef || !db || !memoFile || !user || isTerminal) {
+      toast({ variant: "destructive", title: "Action Denied", description: "Hierarchy flow cannot be triggered for terminal cases." });
       return;
     }
     if (!exceptionReason || !riskJustification) {
@@ -491,7 +485,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
   };
 
   const handleExceptionalApproval = (action: 'Approved' | 'Rejected' | 'Clarification' | 'ForwardChief') => {
-    if (!submissionRef || !db || !submission.exceptionalData || !user) return;
+    if (!submissionRef || !db || !submission.exceptionalData || !user || isTerminal) return;
     
     const isMemoRequiredRole = ['District Director', 'Branch Banking Director', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
     if (action === 'Approved' && isMemoRequiredRole && !decisionMemoFile && !isAdmin) {
@@ -567,7 +561,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
   };
 
   const handleToggleChecklistItem = (itemId: string, currentStatus: boolean) => {
-    const canEdit = isKYCOfficer || isAdmin;
+    const canEdit = (isKYCOfficer || isAdmin) && !isTerminal;
     if (!canEdit || !submissionRef) return;
     const newStatus = !currentStatus;
     const updateData = { [`checklistState.${itemId}`]: newStatus };
@@ -584,7 +578,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
     submission.exceptionalStatus === 'Awaiting Division' ? 'Division Manager' :
     submission.exceptionalStatus === 'Awaiting Supervisor' ? 'Supervisor' : null;
 
-  const isCurrentExceptionalApprover = user?.role === currentExceptionalRole || isAdmin;
+  const isCurrentExceptionalApprover = (user?.role === currentExceptionalRole || isAdmin) && !isTerminal;
   const showDirectorButtons = submission.exceptionalStatus === 'Awaiting Director' && (user?.role === 'Branch Banking Director' || isAdmin);
   const showChiefButtons = submission.exceptionalStatus === 'Awaiting Chief' && (user?.role === 'Chief Retail & SME Banking Officer' || isAdmin);
 
@@ -627,7 +621,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
           </div>
         </div>
         <div className="flex gap-2">
-           {isBranchMgr && !submission.isExceptional && (
+           {isBranchMgr && !submission.isExceptional && !isTerminal && (
              <Button className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold" onClick={() => setIsExceptionDialogOpen(true)}>
                <Zap className="w-4 h-4 mr-2" /> Trigger Hierarchy Approval
              </Button>
@@ -722,7 +716,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                     <ClipboardCheck className="w-5 h-5 text-primary" />
                     <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Verification Checklist</h3>
                   </div>
-                  {(isKYCOfficer || isAdmin) && (
+                  {(isKYCOfficer || isAdmin) && !isTerminal && (
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" className="h-7 text-[10px] font-bold" onClick={() => handleSelectAllChecklist(true)}>Select All</Button>
                       <Button variant="outline" size="sm" className="h-7 text-[10px] font-bold" onClick={() => handleSelectAllChecklist(false)}>Reset</Button>
@@ -738,7 +732,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                           <div className={cn("w-5 h-5 rounded flex items-center justify-center border", isVerified ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-200")}>{isVerified && <Check className="w-3 h-3" />}</div>
                           <span className={cn("text-sm font-bold", isVerified ? "text-emerald-900" : "text-slate-700")}>{item.label} {item.mandatory && <span className="text-destructive">*</span>}</span>
                         </div>
-                        <Button variant="ghost" size="sm" disabled={!(isKYCOfficer || isAdmin)} onClick={() => handleToggleChecklistItem(item.id, isVerified)} className={cn("h-8 font-black text-xs px-3 rounded-full transition-all", isVerified ? "bg-emerald-100 text-emerald-700" : "bg-white border text-slate-400")}>
+                        <Button variant="ghost" size="sm" disabled={!(isKYCOfficer || isAdmin) || isTerminal} onClick={() => handleToggleChecklistItem(item.id, isVerified)} className={cn("h-8 font-black text-xs px-3 rounded-full transition-all", isVerified ? "bg-emerald-100 text-emerald-700" : "bg-white border text-slate-400")}>
                           {isVerified ? "✔ VERIFIED" : "✖ PENDING"}
                         </Button>
                       </div>
@@ -865,7 +859,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
             </CardContent>
           </Card>
 
-          {(isOwner || isReviewer || isAdmin) && submission.status === 'Amended' && (
+          {(isOwner || isReviewer || isAdmin) && submission.status === 'Amended' && !isTerminal && (
             <Card className="border-orange-200 shadow-xl bg-orange-50/5 animate-in slide-in-from-right-4 duration-500">
               <CardHeader className="bg-orange-100/50 border-b">
                 <CardTitle className="text-lg flex items-center gap-2"><RefreshCw className="w-5 h-5 text-orange-600" /> Correction Workspace</CardTitle>
@@ -898,7 +892,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
             </Card>
           )}
 
-          {(isReviewer || isOwner || isAdmin) && (['Pending', 'In Review', 'Escalated', 'Amended'].includes(submission.status) || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
+          {!isTerminal && (isReviewer || isOwner || isAdmin) && (['Pending', 'In Review', 'Escalated', 'Amended'].includes(submission.status) || isAdmin) && (!submission.isExceptional || submission.exceptionalStatus === 'Completed' || isAdmin) && (
             <Card className="border-primary/20 shadow-xl overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b">
                 <CardTitle className="text-lg flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" /> KYC Determination</CardTitle>
