@@ -36,7 +36,8 @@ import {
   Layers,
   RotateCcw,
   ListFilter,
-  ExternalLink
+  ExternalLink,
+  ShieldCheck
 } from "lucide-react";
 import { 
   Select, 
@@ -224,7 +225,10 @@ export default function KYCFFQReferencePage() {
     source: "manual"
   });
 
-  const isAdmin = user?.role === 'Admin';
+  // Institutional Authorization Check
+  const canManageFindings = useMemo(() => {
+    return ['Admin', 'Supervisor', 'Branch Banking Director', 'Chief Retail & SME Banking Officer', 'Division Manager'].includes(user?.role || '');
+  }, [user?.role]);
 
   const findingsQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "kyc_findings"), orderBy("code")) : null;
@@ -250,7 +254,7 @@ export default function KYCFFQReferencePage() {
   };
 
   const handleSeedLibrary = () => {
-    if (!db || !isAdmin) return;
+    if (!db || !canManageFindings) return;
     EXAMPLE_FINDINGS.forEach((f, idx) => {
       const id = `fq-seed-${idx}`;
       const ref = doc(db, "kyc_findings", id);
@@ -266,7 +270,7 @@ export default function KYCFFQReferencePage() {
   };
 
   const handleSaveFinding = () => {
-    if (!db) return;
+    if (!db || !canManageFindings) return;
     if (!findingForm.code || !findingForm.title || !findingForm.description) {
       toast({ variant: "destructive", title: "Validation Error", description: "All fields are required for standardization." });
       return;
@@ -302,7 +306,7 @@ export default function KYCFFQReferencePage() {
   };
 
   const handleDelete = (id: string) => {
-    if (!db || !confirm("Caution: Purging this finding will remove it from the institutional reference list. Proceed?")) return;
+    if (!db || !canManageFindings || !confirm("Caution: Purging this finding will remove it from the institutional reference list. Proceed?")) return;
     const ref = doc(db, "kyc_findings", id);
     deleteDoc(ref).catch(() => {});
     toast({ title: "Finding Purged" });
@@ -351,7 +355,7 @@ export default function KYCFFQReferencePage() {
           <p className="text-muted-foreground text-lg font-medium">Standardized institutional knowledge base for verification comments and compliance queries.</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          {isAdmin && (
+          {canManageFindings && (
             <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 bg-primary shadow-xl font-bold">
               <Plus className="w-4 h-4" /> Add Finding
             </Button>
@@ -480,7 +484,7 @@ export default function KYCFFQReferencePage() {
               <div className="space-y-2">
                 <p className="font-bold text-slate-900 text-xl">No Findings Discovered</p>
                 <p className="text-sm text-slate-500 max-w-sm mx-auto">Try adjusting your filters or use the seed button to populate the institutional library.</p>
-                {isAdmin && findings?.length === 0 && (
+                {canManageFindings && findings?.length === 0 && (
                   <Button 
                     variant="outline" 
                     onClick={handleSeedLibrary} 
@@ -522,7 +526,7 @@ export default function KYCFFQReferencePage() {
                         <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200 text-[9px] font-bold">Standardized</Badge>
                       </div>
                       <div className="flex gap-2">
-                        {isAdmin && (
+                        {canManageFindings && (
                           <Button variant="ghost" size="icon" onClick={() => handleDelete(finding.id)} className="h-8 w-8 text-destructive hover:bg-destructive/5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -544,7 +548,7 @@ export default function KYCFFQReferencePage() {
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-              <Plus className="w-6 h-6 text-primary" /> Register New Finding
+              <ShieldCheck className="w-6 h-6 text-primary" /> Register Institutional Finding
             </DialogTitle>
             <DialogDescription>
               Add a standardized comment to the institutional knowledge base.
@@ -633,7 +637,7 @@ export default function KYCFFQReferencePage() {
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Registry Source</Label>
                 <div className="h-10 flex items-center px-3 border rounded-md bg-slate-50 text-xs font-bold uppercase text-slate-400">
-                  Manual Entry
+                  Authorized Entry
                 </div>
               </div>
             </div>
@@ -641,7 +645,7 @@ export default function KYCFFQReferencePage() {
 
           <DialogFooter className="pt-6 border-t mt-4">
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="px-6 font-bold">Cancel</Button>
-            <Button onClick={handleSaveFinding} className="px-10 bg-primary font-black shadow-lg">Save Institutional Finding</Button>
+            <Button onClick={handleSaveFinding} className="px-10 bg-primary font-black shadow-lg">Commit to Registry</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
