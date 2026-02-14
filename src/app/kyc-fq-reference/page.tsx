@@ -35,7 +35,8 @@ import {
   Check,
   Layers,
   RotateCcw,
-  ListFilter
+  ListFilter,
+  ExternalLink
 } from "lucide-react";
 import { 
   Select, 
@@ -223,8 +224,7 @@ export default function KYCFFQReferencePage() {
     source: "manual"
   });
 
-  const isAdmin = user.role === 'Admin';
-  const isBranchOfficer = user.role === 'Branch Officer';
+  const isAdmin = user?.role === 'Admin';
 
   const findingsQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "kyc_findings"), orderBy("code")) : null;
@@ -418,7 +418,6 @@ export default function KYCFFQReferencePage() {
               </Select>
             </div>
 
-            {/* Explicit Search Button as requested */}
             <Button 
               className="w-full gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold h-11 shadow-lg mt-2"
               onClick={() => {
@@ -446,12 +445,23 @@ export default function KYCFFQReferencePage() {
 
             <div className="pt-4 border-t space-y-4">
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                <ClipboardCheck className="w-3.5 h-3.5" /> Compliance Links
+                <ClipboardCheck className="w-3.5 h-3.5" /> Compliance Resource Links
               </div>
               
-              <Button variant="link" onClick={() => toast({ title: "Opening Guidelines..." })} className="p-0 h-auto text-slate-600 font-bold text-sm justify-start">
-                <FileType className="w-3.5 h-3.5 mr-2" /> NBE Document Matrix
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button asChild variant="link" className="p-0 h-auto text-primary font-bold text-sm justify-start">
+                  <a href="https://placehold.co/regulatory-matrix.pdf" target="_blank" rel="noopener noreferrer">
+                    <FileType className="w-3.5 h-3.5 mr-2" /> NBE Document Matrix
+                    <ExternalLink className="w-3 h-3 ml-1 opacity-50" />
+                  </a>
+                </Button>
+                <Button asChild variant="link" className="p-0 h-auto text-slate-600 font-bold text-sm justify-start">
+                  <a href="https://placehold.co/account-opening-policy.pdf" target="_blank" rel="noopener noreferrer">
+                    <BookOpen className="w-3.5 h-3.5 mr-2" /> Internal Account Policy
+                    <ExternalLink className="w-3 h-3 ml-1 opacity-50" />
+                  </a>
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -484,7 +494,7 @@ export default function KYCFFQReferencePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredFindings.map((finding) => {
-                const SeverityIcon = SEVERITY_ICONS[finding.severity] || Info;
+                const SeverityIcon = SEVERITY_ICONS[finding.severity as keyof typeof SEVERITY_ICONS] || Info;
                 return (
                   <Card key={finding.id} className="group hover:border-primary/40 hover:shadow-lg transition-all duration-300 flex flex-col bg-white overflow-hidden border-slate-200">
                     <CardHeader className="bg-slate-50/50 border-b pb-4 pt-5 px-6">
@@ -493,7 +503,7 @@ export default function KYCFFQReferencePage() {
                           <span className="text-[10px] font-black text-primary tracking-tighter uppercase">{finding.code}</span>
                           <CardTitle className="text-lg font-bold leading-tight group-hover:text-primary transition-colors">{finding.title}</CardTitle>
                         </div>
-                        <Badge className={SeverityIcon === AlertTriangle ? "bg-red-50 text-red-700 border-red-100" : SEVERITY_COLORS[finding.severity]}>
+                        <Badge className={SeverityIcon === AlertTriangle ? "bg-red-50 text-red-700 border-red-100" : SEVERITY_COLORS[finding.severity as keyof typeof SEVERITY_COLORS]}>
                           <SeverityIcon className="w-3 h-3 mr-1.5" /> {finding.severity}
                         </Badge>
                       </div>
@@ -530,7 +540,6 @@ export default function KYCFFQReferencePage() {
         </div>
       </div>
 
-      {/* Add Finding Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
