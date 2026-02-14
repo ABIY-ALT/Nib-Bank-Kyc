@@ -119,16 +119,16 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
-        {/* HEAD OFFICE FOLLOW-UP */}
+        {/* HEAD OFFICE */}
         {(isFollowUp || isAdmin) && (
           <SidebarGroup>
-            <SidebarGroupLabel>Head Office Audit</SidebarGroupLabel>
+            <SidebarGroupLabel>Head Office</SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/head-office/follow-up')} tooltip="Follow-up Verification">
+                <SidebarMenuButton asChild isActive={pathname.startsWith('/head-office/follow-up')} tooltip="Follow up">
                   <Link href="/head-office/follow-up">
                     <ClipboardList className="text-primary" />
-                    <span>Follow-up Audit</span>
+                    <span>Follow up</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
