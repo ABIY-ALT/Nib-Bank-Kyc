@@ -123,7 +123,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Workflows</SidebarGroupLabel>
           <SidebarMenu>
-            <Collapsible className="group/collapsible" defaultOpen={true}>
+            <Collapsible className="group/collapsible" defaultOpen={false}>
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton tooltip="Identity Verification">
