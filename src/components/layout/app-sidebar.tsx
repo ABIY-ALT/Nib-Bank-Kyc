@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -100,7 +101,7 @@ export function AppSidebar() {
           <div className="bg-primary p-1.5 rounded-lg shadow-sm shrink-0 flex items-center justify-center">
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
-          <span className="group-data-[collapsible=icon]:hidden truncate text-slate-900 font-headline tracking-tight text-lg">Nib Kyc</span>
+          <span className="group-data-[collapsible=icon]:hidden truncate text-slate-900 font-headline tracking-tight text-lg">Nib Bank KYC</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -117,23 +118,6 @@ export function AppSidebar() {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
-
-        {/* HEAD OFFICE */}
-        {(isFollowUp || isAdmin) && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Head Office</SidebarGroupLabel>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/head-office/follow-up')} tooltip="Follow up">
-                  <Link href="/head-office/follow-up">
-                    <ClipboardList className="text-primary" />
-                    <span>Follow up</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
 
         {/* SUBMISSIONS */}
         <SidebarGroup>
@@ -405,12 +389,22 @@ export function AppSidebar() {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
+                      {(isFollowUp || isAdmin) && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/head-office/follow-up'}>
+                            <Link href="/head-office/follow-up">
+                              <Zap className="w-4 h-4 mr-2 text-primary" />
+                              <span>Follow up</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
                       {(isFollowUp || isAdmin || isSupervisor) && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/follow-up'}>
                             <Link href="/reports/follow-up">
                               <ClipboardList className="w-4 h-4 mr-2 text-primary" />
-                              <span>Follow-up Audit</span>
+                              <span>Follow up Report</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
