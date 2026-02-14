@@ -66,6 +66,7 @@ export default function FollowUpVerificationDetail() {
   const [remarks, setRemarks] = useState("");
   const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
 
   const verifyRef = useMemoFirebase(() => {
     return db && params.id ? doc(db, "follow_up_verifications", params.id as string) : null;
@@ -86,26 +87,34 @@ export default function FollowUpVerificationDetail() {
   const { data: documents } = useCollection<Document>(docsQuery);
 
   const handleAction = async (result: 'Correct' | 'Discrepancy') => {
-    if (!verifyRef || !db) return;
+    if (!verifyRef || !db || isSubmitting) return;
 
     if (result === 'Discrepancy' && !remarks.trim()) {
       toast({ variant: "destructive", title: "Remarks Required", description: "Please explain the identified discrepancy for institutional feedback." });
       return;
     }
 
-    const updateData = {
-      result,
-      remarks,
-      verifiedBy: user?.name || 'Unknown Auditor',
-      verifiedAt: new Date().toISOString(),
-      status: 'Completed'
-    };
+    setIsSubmitting(result);
 
-    await updateDoc(verifyRef, updateData);
-    toast({ title: "Audit Logged", description: `Case verification marked as ${result}.` });
-    
-    // Explicitly push to the dashboard to allow selection of the next case
-    router.push('/head-office/follow-up');
+    try {
+      const updateData = {
+        result,
+        remarks,
+        verifiedBy: user?.name || 'Unknown Auditor',
+        verifiedAt: new Date().toISOString(),
+        status: 'Completed'
+      };
+
+      await updateDoc(verifyRef, updateData);
+      toast({ title: "Audit Logged", description: `Case verification marked as ${result}.` });
+      
+      // Explicitly push to the dashboard to allow selection of the next case
+      router.push('/head-office/follow-up');
+    } catch (e) {
+      console.error(e);
+      toast({ variant: "destructive", title: "Persistence Error", description: "Failed to log institutional determination. Please retry." });
+      setIsSubmitting(null);
+    }
   };
 
   const handleDownloadBundle = async () => {
@@ -274,21 +283,26 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No
                   className="min-h-[140px] bg-slate-50/30 focus:ring-primary border-slate-200"
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
+                  disabled={!!isSubmitting}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Button 
-                  className="bg-emerald-600 hover:bg-emerald-700 h-14 font-black shadow-lg gap-2 text-white"
+                  className="bg-emerald-600 hover:bg-emerald-700 h-14 font-black shadow-lg gap-2 text-white disabled:opacity-70"
                   onClick={() => handleAction('Correct')}
+                  disabled={!!isSubmitting}
                 >
-                  <CheckCircle2 className="w-5 h-5" /> Mark Correct
+                  {isSubmitting === 'Correct' ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                  Mark Correct
                 </Button>
                 <Button 
                   variant="outline"
-                  className="h-14 font-black shadow-md gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
+                  className="h-14 font-black shadow-md gap-2 text-orange-600 border-orange-600 hover:bg-orange-50 disabled:opacity-70"
                   onClick={() => handleAction('Discrepancy')}
+                  disabled={!!isSubmitting}
                 >
-                  <AlertTriangle className="w-5 h-5" /> Log Discrepancy
+                  {isSubmitting === 'Discrepancy' ? <Loader2 className="w-5 h-5 animate-spin" /> : <AlertTriangle className="w-5 h-5" />}
+                  Log Discrepancy
                 </Button>
               </div>
             </CardContent>
