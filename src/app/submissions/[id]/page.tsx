@@ -231,15 +231,12 @@ export default function SubmissionDetails() {
   const handleScenarioChange = (val: string) => {
     setSelectedScenario(val);
     if (val && val !== "19. Other (specify)") {
-      setRemarks(prev => {
-        // If remarks already contains a finding, we replace it or append smartly
-        // For this institutional implementation, we'll keep the remarks field for details
-        // and handle the scenario as a headline in handleAction
-        return prev;
-      });
+      // Standard Institutional Finding selected: Auto-fill remarks and lock
+      setRemarks(`Finding: ${val}`);
       setOtherScenarioText("");
-    } else if (val === "19. Other (specify)") {
-      // Clear specific text if switched to other
+    } else {
+      // Custom finding or cleared: Allow user input
+      setRemarks("");
       setOtherScenarioText("");
     }
   };
@@ -247,6 +244,7 @@ export default function SubmissionDetails() {
   const handleClearScenario = () => {
     setSelectedScenario("");
     setOtherScenarioText("");
+    setRemarks("");
   };
 
   const handleOtherScenarioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -381,7 +379,6 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
   const handleAction = (action: string) => {
     if (!submissionRef || !db || !user || isTerminal) return;
 
-    // INCONSISTENCY GUARD: Prevent Approval if an amendment scenario is selected
     if (action === 'Approved' && selectedScenario) {
       toast({ 
         variant: "destructive", 
@@ -411,10 +408,13 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
     
     let finalComment = remarks;
     
-    // Institutional Formatting for saved history
     if (selectedScenario) {
-      const headline = selectedScenario === "19. Other (specify)" ? otherScenarioText : selectedScenario;
-      finalComment = `[FINDING] ${headline}${remarks ? `\n\n[DETAILS] ${remarks}` : ''}`;
+      if (selectedScenario === "19. Other (specify)") {
+        finalComment = `[FINDING] ${otherScenarioText}${remarks ? `\n\n[DETAILS] ${remarks}` : ''}`;
+      } else {
+        // Standard scenario: remarks already contains "Finding: ..." and is locked
+        finalComment = `[FINDING] ${selectedScenario}`;
+      }
     }
 
     if (!finalComment.trim()) {
@@ -636,7 +636,8 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
   const isCurrentlyEscalated = submission.status === 'Escalated';
   const canResolveEscalation = isSeniorReviewer;
 
-  // New Validation Logic: Only allow Request Fix if standard scenario is picked OR custom scenario has text
+  // Enforce read-only logic for standard scenarios 1-18
+  const isStandardScenario = selectedScenario && selectedScenario !== "19. Other (specify)";
   const isFindingValid = selectedScenario && (selectedScenario !== "19. Other (specify)" || otherScenarioText.trim().length > 0);
 
   return (
@@ -975,14 +976,21 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Detailed Instructions & Remarks</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Decision Remarks</Label>
                   <Textarea 
                     placeholder={isReviewer || isAdmin ? "Provide step-by-step guidance for the Branch Officer..." : "No remarks."} 
                     value={remarks} 
                     onChange={(e) => setRemarks(e.target.value)} 
-                    className="min-h-[140px]" 
+                    className={cn(
+                      "min-h-[140px]",
+                      isStandardScenario && "bg-slate-50 font-bold text-slate-900 border-primary/20"
+                    )} 
+                    readOnly={isStandardScenario}
                     disabled={!isReviewer && !isAdmin} 
                   />
+                  {isStandardScenario && (
+                    <p className="text-[9px] font-black uppercase text-primary tracking-widest animate-in fade-in">Institutional Standard Remark Locked</p>
+                  )}
                 </div>
                 {(isReviewer || isAdmin) && (
                   <div className="grid grid-cols-2 gap-2 pt-2">
