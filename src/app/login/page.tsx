@@ -85,7 +85,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Official Bank Email</Label>
-                  <span className="text-[9px] font-bold text-primary">format: First.Last@nibbank.com.et</span>
+                  <span className="text-[9px] font-bold text-primary">format: Test.Test@nibbank.com.et</span>
                 </div>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -124,12 +124,12 @@ export default function LoginPage() {
 
               <Button 
                 type="submit" 
-                className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-black text-lg shadow-xl shadow-primary/20 gap-2"
+                className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-bold text-lg shadow-xl shadow-primary/20 gap-2"
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
                 Authorize Access
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4" />
               </Button>
             </form>
           </CardContent>
