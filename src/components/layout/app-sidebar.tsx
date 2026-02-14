@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -88,7 +87,7 @@ export function AppSidebar() {
   const isReviewer = isKYCOfficer || isSupervisor || isAdmin
   const isManagement = isBranchBankingDir || isDistDir || isBranchMgr || isSupervisor || isAdmin
   const canSeePerformance = isBranchMgr || isSupervisor || isBranchBankingDir || isDistDir || isAdmin
-  const canSeeReports = isSupervisor || isBranchBankingDir || isAdmin
+  const canSeeReports = isSupervisor || isBranchBankingDir || isAdmin || isFollowUp
   const canSeeExceptional = isDistDir || isBranchBankingDir || isSupervisor || isBranchMgr || isAdmin
   
   // Master Bundle Access: Restricted to senior/HQ roles
@@ -402,6 +401,16 @@ export function AppSidebar() {
                             <Link href="/reports/officer">
                               <Users className="w-4 h-4 mr-2" />
                               <span>Staff Productivity</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+                      {(isFollowUp || isAdmin || isSupervisor) && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/follow-up'}>
+                            <Link href="/reports/follow-up">
+                              <ClipboardList className="w-4 h-4 mr-2 text-primary" />
+                              <span>Follow-up Audit</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
