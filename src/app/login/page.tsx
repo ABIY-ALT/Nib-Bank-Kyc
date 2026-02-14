@@ -69,7 +69,7 @@ export default function LoginPage() {
           <CardHeader className="bg-slate-50/50 border-b p-8">
             <CardTitle className="text-xl font-bold flex items-center gap-2">
               <Building2 className="w-5 h-5 text-primary" />
-              Institutional Sign-in
+              Institutional Login
             </CardTitle>
             <CardDescription className="font-medium">Enter your bank credentials to access the KYC environment.</CardDescription>
           </CardHeader>
@@ -128,7 +128,7 @@ export default function LoginPage() {
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                Authorize Access
+                Login
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </form>
