@@ -10,7 +10,8 @@ import {
   ArrowUpRight, 
   Filter, 
   FileDown, 
-  Calendar as CalendarIcon 
+  Calendar as CalendarIcon,
+  Map
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
