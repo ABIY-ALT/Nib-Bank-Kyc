@@ -232,11 +232,14 @@ export default function SubmissionDetails() {
     setSelectedScenario(val);
     if (val && val !== "19. Other (specify)") {
       setRemarks(prev => {
-        if (!prev || prev.trim() === "" || AMENDMENT_SCENARIOS.includes(prev.split('\n\n')[0]) || AMENDMENT_SCENARIOS.includes(prev)) {
-          return val;
-        }
-        return `${prev.trim()}\n\nFinding: ${val}`;
+        // If remarks already contains a finding, we replace it or append smartly
+        // For this institutional implementation, we'll keep the remarks field for details
+        // and handle the scenario as a headline in handleAction
+        return prev;
       });
+      setOtherScenarioText("");
+    } else if (val === "19. Other (specify)") {
+      // Clear specific text if switched to other
       setOtherScenarioText("");
     }
   };
@@ -244,10 +247,6 @@ export default function SubmissionDetails() {
   const handleClearScenario = () => {
     setSelectedScenario("");
     setOtherScenarioText("");
-    // If remarks purely contained the scenario, clear it.
-    if (AMENDMENT_SCENARIOS.includes(remarks) || remarks.startsWith("Finding: ")) {
-      setRemarks("");
-    }
   };
 
   const handleOtherScenarioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -411,7 +410,14 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
     const now = new Date().toISOString();
     
     let finalComment = remarks;
-    if (!remarks.trim()) {
+    
+    // Institutional Formatting for saved history
+    if (selectedScenario) {
+      const headline = selectedScenario === "19. Other (specify)" ? otherScenarioText : selectedScenario;
+      finalComment = `[FINDING] ${headline}${remarks ? `\n\n[DETAILS] ${remarks}` : ''}`;
+    }
+
+    if (!finalComment.trim()) {
       if (action === 'Approved') finalComment = "Case verified and approved institutional standards.";
       else if (action === 'Pending') finalComment = correctionNote || "Documents resubmitted for review.";
       else finalComment = `Workflow action: ${action}`;
@@ -459,6 +465,7 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
     toast({ title: "Workflow Updated", description: `Case moved to ${action}.` });
     setRemarks("");
     setSelectedScenario("");
+    setOtherScenarioText("");
     setCorrectionNote("");
     setNewFiles([]);
   };
@@ -628,6 +635,9 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
 
   const isCurrentlyEscalated = submission.status === 'Escalated';
   const canResolveEscalation = isSeniorReviewer;
+
+  // New Validation Logic: Only allow Request Fix if standard scenario is picked OR custom scenario has text
+  const isFindingValid = selectedScenario && (selectedScenario !== "19. Other (specify)" || otherScenarioText.trim().length > 0);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -806,12 +816,12 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                             {new Date(entry.timestamp).toLocaleString()}
                           </span>
                         </div>
-                        <p className={cn(
-                          "text-sm leading-relaxed font-medium italic",
-                          entry.action === 'Amended' ? "text-red-600 font-bold" : "text-slate-700"
+                        <div className={cn(
+                          "text-sm leading-relaxed font-medium whitespace-pre-wrap",
+                          entry.action === 'Amended' ? "text-slate-900" : "text-slate-700"
                         )}>
-                          "{entry.comment}"
-                        </p>
+                          {entry.comment}
+                        </div>
                         <div className="flex items-center gap-2 pt-1">
                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Action:</span>
                           <Badge variant="outline" className={cn(
@@ -951,22 +961,23 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                       </Select>
                     </div>
                     {selectedScenario === "19. Other (specify)" && (
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Specify Custom Finding</Label>
+                      <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Custom Finding Headline</Label>
                         <Input 
-                          placeholder="Detail bespoke amendment..." 
+                          placeholder="e.g. Signature missing on page 4" 
                           value={otherScenarioText} 
                           onChange={handleOtherScenarioChange} 
-                          className="h-11 border-primary/20" 
+                          className="h-11 border-primary/20 font-bold" 
                         />
+                        <p className="text-[10px] text-muted-foreground italic">Provide a short, descriptive title for the non-standard error.</p>
                       </div>
                     )}
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Decision Remarks</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Detailed Instructions & Remarks</Label>
                   <Textarea 
-                    placeholder={isReviewer || isAdmin ? "Provide verification feedback..." : "No remarks."} 
+                    placeholder={isReviewer || isAdmin ? "Provide step-by-step guidance for the Branch Officer..." : "No remarks."} 
                     value={remarks} 
                     onChange={(e) => setRemarks(e.target.value)} 
                     className="min-h-[140px]" 
@@ -987,7 +998,16 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name} (${new Date(d.uploa
                         {!!selectedScenario ? "Clear finding to Approve" : "Approve"}
                       </Button>
                     )}
-                    {(!isCurrentlyEscalated || canResolveEscalation) && <Button onClick={() => handleAction('Amended')} variant="outline" className="text-[#E67E22] font-bold border-[#E67E22]/30">Request Fix</Button>}
+                    {(!isCurrentlyEscalated || canResolveEscalation) && (
+                      <Button 
+                        onClick={() => handleAction('Amended')} 
+                        variant="outline" 
+                        disabled={selectedScenario === "19. Other (specify)" && !otherScenarioText.trim()}
+                        className="text-[#E67E22] font-bold border-[#E67E22]/30"
+                      >
+                        Request Fix
+                      </Button>
+                    )}
                     {(!isCurrentlyEscalated && (isKYCOfficer || isAdmin)) && <Button onClick={() => handleAction('Escalated')} variant="outline" className="text-[#8B5CF6] border-[#8B5CF6] font-bold">Escalate</Button>}
                     {(isSeniorReviewer && user?.role !== 'KYC Officer') && <Button onClick={() => handleAction('Rejected')} variant="destructive" className="font-bold">Reject</Button>}
                   </div>
