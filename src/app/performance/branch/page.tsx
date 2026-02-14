@@ -41,24 +41,39 @@ const MOCK_BRANCH_METRICS = [
 ];
 
 const DISTRICTS = ["Central", "Northern", "Eastern", "Southern"];
+const BRANCH_NAMES = Array.from(new Set(MOCK_BRANCH_METRICS.map(b => b.name))).sort();
 
 export default function BranchPerformancePage() {
   const { toast } = useToast();
   const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const filteredMetrics = useMemo(() => {
-    // In a real app, we'd fetch data based on fromDate/toDate
-    if (selectedDistricts.length === 0) return MOCK_BRANCH_METRICS;
-    return MOCK_BRANCH_METRICS.filter(b => selectedDistricts.includes(b.district));
-  }, [selectedDistricts, fromDate, toDate]);
+    return MOCK_BRANCH_METRICS.filter(b => {
+      const matchesDistrict = selectedDistricts.length === 0 || selectedDistricts.includes(b.district);
+      const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(b.name);
+      return matchesDistrict && matchesBranch;
+    });
+  }, [selectedDistricts, selectedBranches, fromDate, toDate]);
 
   const toggleDistrict = (dist: string) => {
     setSelectedDistricts(prev => 
       prev.includes(dist) ? prev.filter(d => d !== dist) : [...prev, dist]
     );
+  };
+
+  const toggleBranch = (branch: string) => {
+    setSelectedBranches(prev => 
+      prev.includes(branch) ? prev.filter(b => b !== branch) : [...prev, branch]
+    );
+  };
+
+  const handleResetFilters = () => {
+    setSelectedDistricts([]);
+    setSelectedBranches([]);
   };
 
   const handleExportCSV = () => {
@@ -81,6 +96,8 @@ export default function BranchPerformancePage() {
     });
   };
 
+  const activeFilterCount = selectedDistricts.length + selectedBranches.length;
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -93,10 +110,10 @@ export default function BranchPerformancePage() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
                 <Filter className="w-4 h-4 text-slate-400" />
-                Filter Regions
-                {selectedDistricts.length > 0 && (
+                Filter Scope
+                {activeFilterCount > 0 && (
                   <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
-                    {selectedDistricts.length}
+                    {activeFilterCount}
                   </Badge>
                 )}
               </Button>
@@ -104,8 +121,10 @@ export default function BranchPerformancePage() {
             <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Regional Scope</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-pointer py-3">
+                  <Map className="w-4 h-4 mr-2 text-slate-400" />
                   <span>Regional District</span>
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="w-56">
@@ -121,9 +140,29 @@ export default function BranchPerformancePage() {
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer py-3">
+                  <Building2 className="w-4 h-4 mr-2 text-slate-400" />
+                  <span>Branch Name</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-64 max-h-[300px] overflow-y-auto">
+                  {BRANCH_NAMES.map((branch) => (
+                    <DropdownMenuCheckboxItem
+                      key={branch}
+                      checked={selectedBranches.includes(branch)}
+                      onCheckedChange={() => toggleBranch(branch)}
+                      className="cursor-pointer py-2.5"
+                    >
+                      {branch}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSelectedDistricts([])} className="text-destructive font-bold cursor-pointer py-3">
-                Reset Geography Filters
+              <DropdownMenuItem onClick={handleResetFilters} className="text-destructive font-bold cursor-pointer py-3">
+                Reset All Filters
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -176,7 +215,7 @@ export default function BranchPerformancePage() {
           <Building2 className="w-16 h-16 text-slate-200" />
           <div className="text-center space-y-1">
             <p className="font-bold text-slate-900 text-xl">No Branches Found</p>
-            <p className="text-sm text-slate-500 max-w-xs mx-auto">Try adjusting your filters to see metrics for other regions.</p>
+            <p className="text-sm text-slate-500 max-w-xs mx-auto">Try adjusting your filters to see metrics for other regions or specific nodes.</p>
           </div>
         </div>
       ) : (
