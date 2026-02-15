@@ -87,7 +87,6 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Official Bank Email</Label>
-                  <span className="text-[9px] font-bold text-primary">format: Test.Test@nibbank.com.et</span>
                 </div>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
