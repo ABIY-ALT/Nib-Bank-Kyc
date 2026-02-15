@@ -50,7 +50,6 @@ export default function OfficerPerformancePage() {
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const filteredOfficers = useMemo(() => {
-    // In real app, filter mock data by date if needed
     return MOCK_OFFICER_METRICS.filter(o => {
       const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(o.branch);
       const matchesOfficer = selectedOfficers.length === 0 || selectedOfficers.includes(o.name);
@@ -187,7 +186,7 @@ export default function OfficerPerformancePage() {
                     type="date" 
                     value={fromDate}
                     onChange={(e) => setFromDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                    className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30"
                   />
                 </div>
               </div>
@@ -199,7 +198,7 @@ export default function OfficerPerformancePage() {
                     type="date" 
                     value={toDate}
                     onChange={(e) => setToDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                    className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30"
                   />
                 </div>
               </div>

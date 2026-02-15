@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from "react";
@@ -53,7 +54,6 @@ export default function FollowUpReportsPage() {
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedResult, setSelectedResult] = useState<string>("all");
-  const [reportDataActive, setReportDataActive] = useState(false);
 
   const followUpQuery = useMemoFirebase(() => {
     if (!db) return null;
@@ -79,14 +79,6 @@ export default function FollowUpReportsPage() {
     });
   }, [allVerifications, fromDate, toDate, selectedResult]);
 
-  const handleGenerateReport = () => {
-    setReportDataActive(true);
-    toast({
-      title: "Follow-up Report Compiled",
-      description: `Analyzed ${filteredData.length} audit records.`,
-    });
-  };
-
   const handleExportCSV = () => {
     if (filteredData.length === 0) return;
     
@@ -106,7 +98,7 @@ export default function FollowUpReportsPage() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
+    link.href = url;
     link.setAttribute('download', `nib-followup-compliance-report-${new Date().toISOString().split('T')[0]}.csv`);
     link.click();
 
@@ -124,77 +116,58 @@ export default function FollowUpReportsPage() {
           <p className="text-muted-foreground text-lg font-medium">Head Office quality control data for regulatory verification and accuracy audits.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 h-11 px-6 font-bold border-slate-200 bg-white" onClick={() => { setReportDataActive(false); setSelectedResult("all"); }}>
+          <Button variant="outline" className="gap-2 h-11 px-6 font-bold border-slate-200 bg-white" onClick={() => { setSelectedResult("all"); setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd')); setToDate(format(new Date(), 'yyyy-MM-dd')); }}>
             <History className="w-4 h-4" /> Reset
           </Button>
           <Button 
             className="gap-2 bg-primary hover:bg-primary/90 h-11 px-6 font-bold shadow-lg" 
-            disabled={!reportDataActive || filteredData.length === 0}
+            disabled={filteredData.length === 0}
             onClick={handleExportCSV}
           >
-            <ShieldCheck className="w-4 h-4" /> Download Compliance Report
+            <ShieldCheck className="w-4 h-4" /> Download Report
           </Button>
         </div>
       </div>
 
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
-        <CardHeader className="bg-slate-50/50 border-b">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <Search className="w-5 h-5 text-primary" /> Audit Discovery
-          </CardTitle>
-          <CardDescription>Filter historical Head Office verifications for institutional reporting.</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
-              <div className="relative">
-                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="pl-10 h-11 font-bold" />
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col md:flex-row items-end gap-6">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">To Date</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Finding</Label>
+                <Select value={selectedResult} onValueChange={setSelectedResult}>
+                  <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="All Results" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Results</SelectItem>
+                    <SelectItem value="Correct" className="text-emerald-600 font-bold">Correct (Compliant)</SelectItem>
+                    <SelectItem value="Discrepancy" className="text-orange-600 font-bold">Discrepancy (Errors)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">To Date</Label>
-              <div className="relative">
-                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="pl-10 h-11 font-bold" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Finding</Label>
-              <Select value={selectedResult} onValueChange={setSelectedResult}>
-                <SelectTrigger className="h-11"><SelectValue placeholder="All Results" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Results</SelectItem>
-                  <SelectItem value="Correct" className="text-emerald-600 font-bold">Correct (Compliant)</SelectItem>
-                  <SelectItem value="Discrepancy" className="text-orange-600 font-bold">Discrepancy (Errors)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="mt-8 flex justify-end">
-            <Button size="lg" className="px-12 h-14 font-black gap-2 shadow-xl bg-primary hover:bg-primary/90" onClick={handleGenerateReport}>
-              <ClipboardCheck className="w-5 h-5" />
-              Execute Data Pull
-            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {!reportDataActive ? (
-        <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50">
-          <CardContent className="flex flex-col items-center justify-center py-20 text-center space-y-6">
-            <div className="p-6 bg-white rounded-full shadow-sm border border-slate-100">
-              <FileText className="w-12 h-12 text-slate-300" />
-            </div>
-            <div className="max-w-md mx-auto space-y-2">
-              <p className="font-bold text-slate-900 text-xl">Audit Report Inactive</p>
-              <p className="text-sm text-slate-500 font-medium">
-                Configure your parameters above and click "Execute Data Pull" to retrieve historical Head Office quality control records.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-40 gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="font-bold text-muted-foreground uppercase tracking-widest text-xs">Compiling Audit Records...</p>
+        </div>
       ) : (
         <Card className="border-slate-200 shadow-xl animate-in slide-in-from-top-4 duration-500 overflow-hidden">
           <CardHeader className="bg-slate-900 text-white p-6">

@@ -256,7 +256,7 @@ export default function SubmissionsPage() {
                     type="date" 
                     value={fromDate}
                     onChange={(e) => setFromDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                    className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30"
                   />
                 </div>
               </div>
@@ -268,7 +268,7 @@ export default function SubmissionsPage() {
                     type="date" 
                     value={toDate}
                     onChange={(e) => setToDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                    className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30"
                   />
                 </div>
               </div>
@@ -278,7 +278,7 @@ export default function SubmissionsPage() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input 
                     placeholder="Search name, ID, or branch..." 
-                    className="pl-10 h-11 border-slate-200 bg-white" 
+                    className="pl-10 h-12 rounded-xl border-slate-200 bg-white" 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
