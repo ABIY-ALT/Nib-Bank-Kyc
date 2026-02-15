@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-mock';
 import { useRouter } from 'next/navigation';
 import { 
@@ -29,7 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
-  const { login, loginAs, allUsers } = useAuth();
+  const { login, loginAs, allUsers, user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   
@@ -38,6 +38,13 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Automatically redirect if user is already authenticated (e.g. after loginAs)
+  useEffect(() => {
+    if (user) {
+      router.push('/');
+    }
+  }, [user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +152,7 @@ export default function LoginPage() {
                 key={u.id} 
                 variant="outline" 
                 size="sm" 
-                className="text-[10px] h-8 font-bold border-slate-200 hover:bg-white"
+                className="text-[10px] h-8 font-bold border-slate-200 hover:bg-white text-slate-600"
                 onClick={() => loginAs(u.id)}
               >
                 {u.role}
