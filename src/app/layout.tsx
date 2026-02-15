@@ -1,16 +1,11 @@
-
 import type {Metadata} from 'next';
 import './globals.css';
-import {SidebarProvider, SidebarTrigger} from '@/components/ui/sidebar';
-import {Separator} from '@/components/ui/separator';
-import {AppSidebar} from '@/components/layout/app-sidebar';
-import {Toaster} from '@/components/ui/toaster';
 import {FirebaseClientProvider} from '@/firebase/client-provider';
 import {FirebaseErrorListener} from '@/components/firebase-error-listener';
 import {AuthProvider} from '@/lib/auth-mock';
 import {ThemeProvider} from '@/components/theme-provider';
-import {ModeToggle} from '@/components/mode-toggle';
 import { AuthGuard } from '@/components/auth-guard';
+import { DashboardShell } from '@/components/layout/dashboard-shell';
 
 export const metadata: Metadata = {
   title: 'Nib Kyc - Secure Identity Verification',
@@ -40,26 +35,9 @@ export default function RootLayout({
             >
               <FirebaseErrorListener />
               <AuthGuard>
-                <SidebarProvider>
-                  <div className="flex min-h-screen w-full">
-                    <AppSidebar />
-                    <main className="flex-1 flex flex-col min-w-0">
-                      <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background/50 backdrop-blur-sm sticky top-0 z-10">
-                        <div className="flex items-center gap-2">
-                          <SidebarTrigger className="-ml-1" />
-                          <Separator orientation="vertical" className="mr-2 h-4" />
-                        </div>
-                        <ModeToggle />
-                      </header>
-                      <div className="flex-1 overflow-y-auto">
-                        <div className="p-4 md:p-8 max-w-7xl mx-auto">
-                          {children}
-                        </div>
-                      </div>
-                    </main>
-                  </div>
-                  <Toaster />
-                </SidebarProvider>
+                <DashboardShell>
+                  {children}
+                </DashboardShell>
               </AuthGuard>
             </ThemeProvider>
           </AuthProvider>
