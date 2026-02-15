@@ -26,7 +26,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/alert";
 
 export default function LoginPage() {
   const { login, loginAs, allUsers } = useAuth();
@@ -75,7 +75,7 @@ export default function LoginPage() {
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nib Kyc</span>
             </div>
           </CardHeader>
-          <CardContent className="pt-8 px-8">
+          <CardContent className="pt-8 px-8 pb-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
                 <Alert variant="destructive" className="animate-in slide-in-from-top-2">
@@ -135,14 +135,6 @@ export default function LoginPage() {
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="bg-slate-50/50 border-t p-6 flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              <AlertCircle className="w-3.5 h-3.5" /> Security Notice
-            </div>
-            <p className="text-[10px] text-slate-500 leading-relaxed italic">
-              Institutional access is restricted to authorized @nibbank.com.et addresses. All access events are logged for regulatory audit.
-            </p>
-          </CardFooter>
         </Card>
 
         {/* Prototype Switching Tool - To be removed in prod */}
