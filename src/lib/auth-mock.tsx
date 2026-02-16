@@ -9,9 +9,10 @@ import {
   signOut, 
   updatePassword as fbUpdatePassword,
 } from 'firebase/auth';
-import { doc, getDoc, updateDoc, collection, query, limit, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, limit, onSnapshot, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { syncUserToSql } from '@/actions/auth';
+import { firebaseConfig } from '@/firebase/config';
 
 export type UserRole = 
   | 'BRANCH_OFFICER' 
@@ -44,6 +45,7 @@ const SESSION_TIMEOUT_MINUTES = 30;
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isMock: boolean;
   login: (email: string, pass: string) => Promise<void>;
   logout: (reason?: string) => Promise<void>;
   changePassword: (newPass: string) => Promise<void>;
@@ -61,6 +63,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lastActivity, setLastActivity] = useState(Date.now());
   const [dbUsers, setDbUsers] = useState<User[]>([]);
+  
+  // Detect if we are in mock mode (no valid API key)
+  const isMockMode = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined' || firebaseConfig.apiKey === 'INITIALIZING';
 
   useEffect(() => {
     if (!db) return;
@@ -73,6 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [db]);
 
   useEffect(() => {
+    if (isMockMode) {
+      const savedUser = localStorage.getItem('nib_mock_user');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
+      }
+      setLoading(false);
+      return;
+    }
+
     if (!auth || !db) return;
 
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
@@ -99,7 +113,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } else {
-          // If Firestore doc doesn't exist, create a basic profile and sync
           const basicUser: User = {
             id: fbUser.uid,
             name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Unknown User',
@@ -117,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [auth, db, toast]);
+  }, [auth, db, toast, isMockMode]);
 
   useEffect(() => {
     const handleActivity = () => setLastActivity(Date.now());
@@ -139,16 +152,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, lastActivity]);
 
   const login = async (email: string, pass: string) => {
-    if (!auth) return;
     if (!email.toLowerCase().endsWith('@nibbank.com.et')) {
       throw new Error('Institutional access restricted to @nibbank.com.et domain.');
     }
+
+    if (isMockMode) {
+      // Developer Fallback: Simulate login if Firebase keys are missing
+      if (pass !== 'nibbank123') throw new Error('Invalid developer credential.');
+      
+      const mockId = `mock-${email.split('@')[0]}`;
+      const mockUser: User = {
+        id: mockId,
+        name: email.split('@')[0].split('.').join(' '),
+        email: email,
+        role: email.toLowerCase().includes('admin') ? 'ADMIN' : 'BRANCH_OFFICER',
+        status: 'ACTIVE'
+      };
+
+      setUser(mockUser);
+      localStorage.setItem('nib_mock_user', JSON.stringify(mockUser));
+      
+      // IMPORTANT: Still sync to SQL database so user can see it in PostgreSQL
+      await syncUserToSql({
+        id: mockUser.id,
+        email: mockUser.email,
+        name: mockUser.name,
+        role: mockUser.role,
+      });
+
+      toast({ title: 'Mock Mode Active', description: 'Authenticated using developer fallback.' });
+      return;
+    }
+
+    if (!auth) return;
     await signInWithEmailAndPassword(auth, email, pass);
   };
 
   const logout = async (reason: string = 'User Logout') => {
     setUser(null);
-    if (auth) {
+    if (isMockMode) {
+      localStorage.removeItem('nib_mock_user');
+    } else if (auth) {
       await signOut(auth);
     }
     window.location.href = '/login';
@@ -156,6 +200,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const changePassword = async (newPass: string) => {
+    if (isMockMode) {
+      setUser(prev => prev ? { ...prev, needsPasswordChange: false } : null);
+      return;
+    }
     if (!db || !user || !auth?.currentUser) return;
     await fbUpdatePassword(auth.currentUser, newPass);
     await updateDoc(doc(db, "users", user.id), { needsPasswordChange: false });
@@ -166,6 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{ 
       user, 
       loading, 
+      isMock: isMockMode,
       login, 
       logout, 
       changePassword, 
