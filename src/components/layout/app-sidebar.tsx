@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -51,6 +50,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-mock"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
