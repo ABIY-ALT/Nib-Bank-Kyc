@@ -41,6 +41,7 @@ export interface User {
 }
 
 const SESSION_TIMEOUT_MINUTES = 30;
+const PROTOTYPE_PASSWORD = 'nibbank123';
 
 interface AuthContextType {
   user: User | null;
@@ -48,7 +49,7 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<void>;
   logout: (reason?: string) => Promise<void>;
   changePassword: (newPass: string) => Promise<void>;
-  allUsers: User[]; // Now dynamic for testing purposes
+  allUsers: User[]; 
   loginAs: (userId: string) => void;
 }
 
@@ -73,14 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     { id: 'kyc-1', name: 'Jane Smith', email: 'Jane.Smith@nibbank.com.et', role: 'KYC Officer', assignedBranches: ['Downtown', 'Uptown'], status: 'Active', needsPasswordChange: false },
   ];
 
-  // Sync users from Firestore for the Prototype Entry Points
   useEffect(() => {
     if (!db) return;
     
     const q = query(collection(db, "users"), limit(20));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-      // Combine mock profiles with dynamic users, avoiding duplicates by ID
       const combined = [...MOCK_PROFILES];
       users.forEach(u => {
         if (!combined.some(m => m.id === u.id)) {
@@ -122,7 +121,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(newUser);
         }
       } else {
-        // If not signed in via Firebase, check if we're in a local prototype session
         const savedUserId = localStorage.getItem('proto_user_id');
         if (savedUserId && !user) {
           const found = dynamicUsers.find(u => u.id === savedUserId);
@@ -133,9 +131,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [auth, db, toast, dynamicUsers]);
+  }, [auth, db, dynamicUsers]);
 
-  // Session Timeout Watchdog
   useEffect(() => {
     const handleActivity = () => setLastActivity(Date.now());
     window.addEventListener('mousemove', handleActivity);
@@ -177,7 +174,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!email.toLowerCase().endsWith('@nibbank.com.et')) {
       throw new Error('Institutional access restricted to @nibbank.com.et domains.');
     }
+
+    // Prototype Logic: Check local dynamic users first for demo purposes
+    const protoUser = dynamicUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
     
+    if (protoUser && pass === PROTOTYPE_PASSWORD) {
+      setUser(protoUser);
+      localStorage.setItem('proto_user_id', protoUser.id);
+      await logAuthEvent('Login', protoUser, 'User authenticated via prototype gateway.');
+      return;
+    }
+    
+    // Fallback to real Firebase Auth
     await signInWithEmailAndPassword(auth, email, pass);
     localStorage.removeItem('proto_user_id');
   };
@@ -205,7 +213,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const changePassword = async (newPass: string) => {
     if (!db || !user) return;
     
-    // If real Firebase Auth user exists, update password
     if (auth?.currentUser) {
       try {
         await fbUpdatePassword(auth.currentUser, newPass);
@@ -214,7 +221,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     
-    // Always update the Firestore profile record to clear the flag
     const userRef = doc(db, "users", user.id);
     await updateDoc(userRef, { needsPasswordChange: false });
     
