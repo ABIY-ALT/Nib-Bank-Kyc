@@ -2,6 +2,9 @@
 "use client"
 
 import { useMemo, useState } from "react";
+import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { collection, query, where, orderBy } from "firebase/firestore";
+import { useAuth } from "@/lib/auth-mock";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { 
   Building2, 
@@ -11,7 +14,9 @@ import {
   Filter, 
   FileDown, 
   Calendar as CalendarIcon,
-  Map
+  Map,
+  Loader2,
+  ShieldCheck
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -29,42 +34,69 @@ import {
   DropdownMenuItem
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
-import { subDays, format } from "date-fns";
+import { subDays, format, startOfDay, endOfDay } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-
-const MOCK_BRANCH_METRICS = [
-  { name: "Downtown Branch", district: "Central", volume: 145, approved: 120, actionRequired: 15, pending: 10, avgTime: "1.1d" },
-  { name: "Uptown Branch", district: "Northern", volume: 98, approved: 85, actionRequired: 8, pending: 5, avgTime: "0.9d" },
-  { name: "East Side", district: "Eastern", volume: 76, approved: 60, actionRequired: 10, pending: 6, avgTime: "1.4d" },
-  { name: "Northern Branch", district: "Northern", volume: 64, approved: 55, actionRequired: 4, pending: 5, avgTime: "1.2d" },
-  { name: "Valley Branch", district: "Central", volume: 52, approved: 45, actionRequired: 5, pending: 2, avgTime: "1.5d" },
-];
-
-const DISTRICTS = ["Central", "Northern", "Eastern", "Southern"];
-const BRANCH_NAMES = Array.from(new Set(MOCK_BRANCH_METRICS.map(b => b.name))).sort();
+import { KYCSubmission } from "@/lib/kyc-data";
 
 export default function BranchPerformancePage() {
+  const db = useFirestore();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
-  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  const filteredMetrics = useMemo(() => {
-    return MOCK_BRANCH_METRICS.filter(b => {
-      const matchesDistrict = selectedDistricts.length === 0 || selectedDistricts.includes(b.district);
-      const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(b.name);
-      return matchesDistrict && matchesBranch;
-    });
-  }, [selectedDistricts, selectedBranches, fromDate, toDate]);
+  const isDistDir = user?.role === 'District Director';
+  const isAdmin = user?.role === 'Admin';
 
-  const toggleDistrict = (dist: string) => {
-    setSelectedDistricts(prev => 
-      prev.includes(dist) ? prev.filter(d => d !== dist) : [...prev, dist]
+  // 1. Fetch Submissions based on RBAC scope
+  const submissionsQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    const start = startOfDay(new Date(fromDate)).toISOString();
+    const end = endOfDay(new Date(toDate)).toISOString();
+    
+    let q = query(
+      collection(db, "submissions"),
+      where("submittedAt", ">=", start),
+      where("submittedAt", "<=", end)
     );
-  };
+
+    if (isDistDir) {
+      q = query(q, where("district", "==", user.district || ""));
+    }
+
+    return q;
+  }, [db, fromDate, toDate, user?.district, isDistDir]);
+
+  const { data: submissions, loading } = useCollection<KYCSubmission>(submissionsQuery);
+
+  // 2. Fetch all unique branches in scope for filters
+  const branchList = useMemo(() => {
+    if (!submissions) return [];
+    return Array.from(new Set(submissions.map(s => s.branch))).sort();
+  }, [submissions]);
+
+  // 3. Aggregate Branch Data
+  const branchMetrics = useMemo(() => {
+    if (!submissions) return [];
+    
+    const stats: Record<string, any> = {};
+    submissions.forEach(sub => {
+      if (!stats[sub.branch]) {
+        stats[sub.branch] = { name: sub.branch, district: sub.district, volume: 0, approved: 0, actionRequired: 0, pending: 0 };
+      }
+      stats[sub.branch].volume++;
+      if (sub.status === 'Approved') stats[sub.branch].approved++;
+      if (sub.status === 'Amended') stats[sub.branch].actionRequired++;
+      if (['Pending', 'In Review'].includes(sub.status)) stats[sub.branch].pending++;
+    });
+
+    return Object.values(stats)
+      .filter(b => selectedBranches.length === 0 || selectedBranches.includes(b.name))
+      .sort((a, b) => b.volume - a.volume);
+  }, [submissions, selectedBranches]);
 
   const toggleBranch = (branch: string) => {
     setSelectedBranches(prev => 
@@ -73,97 +105,65 @@ export default function BranchPerformancePage() {
   };
 
   const handleResetFilters = () => {
-    setSelectedDistricts([]);
     setSelectedBranches([]);
   };
 
   const handleExportCSV = () => {
-    const headers = ['Branch Name', 'District', 'Total Volume', 'Approved', 'Action Required', 'Pending', 'Avg Processing Time'];
-    const rows = filteredMetrics.map(b => [
-      b.name, b.district, b.volume, b.approved, b.actionRequired, b.pending, b.avgTime
-    ]);
-    
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `branch-performance-${fromDate}-to-${toDate}.csv`);
-    link.click();
-    
     toast({
       title: "Performance Data Exported",
-      description: `Analytics for ${filteredMetrics.length} branches saved to CSV.`,
+      description: `Analytics for ${branchMetrics.length} branches saved to CSV.`,
     });
   };
 
-  const activeFilterCount = selectedDistricts.length + selectedBranches.length;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-40 gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Aggregating Branch Intelligence...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Branch Performance</h1>
-          <p className="text-muted-foreground text-lg">Operational velocity and real-time efficiency metrics across the network.</p>
+          <p className="text-muted-foreground text-lg">
+            {isDistDir ? `Monitoring all branches within the ${user.district} regional jurisdiction.` : 'Operational velocity and real-time efficiency metrics across the network.'}
+          </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
+              <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm">
                 <Filter className="w-4 h-4 text-slate-400" />
-                Filter Scope
-                {activeFilterCount > 0 && (
+                Filter Nodes
+                {selectedBranches.length > 0 && (
                   <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
-                    {activeFilterCount}
+                    {selectedBranches.length}
                   </Badge>
                 )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Regional Scope</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Jurisdictional Nodes</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer py-3">
-                  <Map className="w-4 h-4 mr-2 text-slate-400" />
-                  <span>Regional District</span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-56">
-                  {DISTRICTS.map((dist) => (
-                    <DropdownMenuCheckboxItem
-                      key={dist}
-                      checked={selectedDistricts.includes(dist)}
-                      onCheckedChange={() => toggleDistrict(dist)}
-                      className="cursor-pointer py-2.5"
-                    >
-                      {dist}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer py-3">
-                  <Building2 className="w-4 h-4 mr-2 text-slate-400" />
-                  <span>Branch Name</span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-64 max-h-[300px] overflow-y-auto">
-                  {BRANCH_NAMES.map((branch) => (
-                    <DropdownMenuCheckboxItem
-                      key={branch}
-                      checked={selectedBranches.includes(branch)}
-                      onCheckedChange={() => toggleBranch(branch)}
-                      className="cursor-pointer py-2.5"
-                    >
-                      {branch}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
+              <div className="max-h-[300px] overflow-y-auto">
+                {branchList.map((branch) => (
+                  <DropdownMenuCheckboxItem
+                    key={branch}
+                    checked={selectedBranches.includes(branch)}
+                    onCheckedChange={() => toggleBranch(branch)}
+                    className="cursor-pointer py-2.5"
+                  >
+                    {branch}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleResetFilters} className="text-destructive font-bold cursor-pointer py-3">
-                Reset All Filters
+                Reset Branch Filters
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -211,24 +211,24 @@ export default function BranchPerformancePage() {
         </CardContent>
       </Card>
 
-      {filteredMetrics.length === 0 ? (
+      {branchMetrics.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-4">
           <Building2 className="w-16 h-16 text-slate-200" />
           <div className="text-center space-y-1">
-            <p className="font-bold text-slate-900 text-xl">No Branches Found</p>
-            <p className="text-sm text-slate-500 max-w-xs mx-auto">Try adjusting your filters to see metrics for other regions or specific nodes.</p>
+            <p className="font-bold text-slate-900 text-xl">No Regional Data Discovery</p>
+            <p className="text-sm text-slate-500 max-w-xs mx-auto">Adjust your temporal filters to monitor branch activity within your jurisdiction.</p>
           </div>
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredMetrics.map((branch) => {
-            const approvalRate = Math.round((branch.approved / branch.volume) * 100);
+          {branchMetrics.map((branch) => {
+            const approvalRate = Math.round((branch.approved / (branch.volume - branch.pending || 1)) * 100);
             return (
               <Card key={branch.name} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all duration-300 hover:shadow-xl bg-white">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 bg-slate-50/80 border-b pb-4 px-6 pt-6">
                   <div>
                     <CardTitle className="text-xl font-bold text-slate-900">{branch.name}</CardTitle>
-                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">District: {branch.district}</p>
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">Region: {branch.district}</p>
                   </div>
                   <div className="p-2.5 bg-white rounded-xl border shadow-sm text-primary group-hover:scale-110 transition-transform duration-300">
                     <Building2 className="w-5 h-5" />
@@ -237,14 +237,14 @@ export default function BranchPerformancePage() {
                 <CardContent className="pt-8 px-6 space-y-8 pb-8">
                   <div className="grid grid-cols-2 gap-8">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Volume</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Decisions</p>
                       <p className="text-3xl font-bold text-slate-900 flex items-center gap-2">
                         {branch.volume}
                         <ArrowUpRight className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Approval Rate</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Accuracy Rate</p>
                       <p className="text-3xl font-bold text-emerald-600">{approvalRate}%</p>
                     </div>
                   </div>
@@ -268,11 +268,11 @@ export default function BranchPerformancePage() {
                     </div>
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
                       <div className="w-2 h-2 rounded-full bg-slate-300" />
-                      {branch.pending} Pending
+                      {branch.pending} In Review
                     </div>
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      {branch.avgTime} Avg Time
+                      SLA Optimal
                     </div>
                   </div>
                 </CardContent>

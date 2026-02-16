@@ -129,6 +129,26 @@
         "ipAddress": { "type": "string" },
         "details": { "type": "string" }
       }
+    },
+    "Branch": {
+      "title": "Branch Office",
+      "description": "An institutional branch node.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "district": { "type": "string" },
+        "code": { "type": "string" }
+      }
+    },
+    "District": {
+      "title": "Regional District",
+      "description": "A geographical administrative hub.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      }
     }
   },
   "auth": {
@@ -154,6 +174,14 @@
     "/audit_logs/{logId}": {
       "schema": "#/entities/AuditLog",
       "description": "System-wide security audit logs."
+    },
+    "/branches/{branchId}": {
+      "schema": "#/entities/Branch",
+      "description": "Directory of all bank branches."
+    },
+    "/districts/{distId}": {
+      "schema": "#/entities/District",
+      "description": "Directory of regional districts."
     }
   }
 }

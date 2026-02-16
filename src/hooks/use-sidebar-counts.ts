@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -84,8 +85,13 @@ export function useSidebarCounts(user: User | null) {
       
       const filterByScope = (data: any) => {
         if (isAdmin) return true;
+        
+        // District Director sees active cases in their district
+        if (user.role === 'District Director') return data.district === user.district;
+
         const isGlobalReviewer = ['Branch Banking Director', 'Supervisor', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
         if (isGlobalReviewer) return true;
+        
         const assigned = user.assignedBranches || [];
         return assigned.includes(data.branch);
       };
@@ -100,9 +106,11 @@ export function useSidebarCounts(user: User | null) {
 
     // 4. Branch Node Queue
     let unsubBranch = () => {};
-    if (isAdmin || user.branch) {
+    if (isAdmin || user.branch || user.role === 'District Director') {
       const qBranch = isAdmin 
         ? query(collection(db, "submissions"))
+        : user.role === 'District Director'
+        ? query(collection(db, "submissions"), where("district", "==", user.district))
         : query(collection(db, "submissions"), where("branch", "==", user.branch));
         
       unsubBranch = onSnapshot(qBranch, (snapshot) => {
@@ -111,6 +119,7 @@ export function useSidebarCounts(user: User | null) {
           const data = d.data();
           const matchesStatus = activeStatuses.includes(data.status);
           if (isAdmin) return matchesStatus;
+          if (user.role === 'District Director') return matchesStatus && data.district === user.district;
           return matchesStatus && data.branch === user.branch;
         }).length;
         setCounts(prev => ({ ...prev, branchNode: count }));
