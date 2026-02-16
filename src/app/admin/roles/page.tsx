@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -12,18 +13,15 @@ import {
   ShieldCheck, 
   Search,
   UserCog,
-  UserCheck,
   Lock,
   Plus,
-  Settings2,
   CheckCircle2,
   XCircle,
   Edit2,
   Trash2,
-  ChevronRight,
+  RotateCcw,
   ShieldAlert,
-  Save,
-  RotateCcw
+  Info
 } from "lucide-react";
 import { 
   Select, 
@@ -41,6 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { PermissionSet } from "@/hooks/use-permissions";
 
 const DEFAULT_ROLES: UserRole[] = [
   'Branch Officer', 
@@ -55,15 +54,6 @@ const DEFAULT_ROLES: UserRole[] = [
   'Follow-up Team',
   'Chief'
 ];
-
-interface PermissionSet {
-  canSubmit: boolean;
-  canReview: boolean;
-  canEscalate: boolean;
-  canViewReports: boolean;
-  canManageUsers: boolean;
-  canManageSystem: boolean;
-}
 
 interface DynamicRole {
   id: string;
@@ -102,18 +92,14 @@ export default function StaffRolesPage() {
 
     updateDoc(userRef, updateData)
       .catch(async (error) => {
-        const permissionError = new FirestorePermissionError({
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: userRef.path,
           operation: 'update',
           requestResourceData: updateData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
+        }));
       });
 
-    toast({
-      title: "Role Updated",
-      description: `${currentName} is now assigned as ${newRole}.`,
-    });
+    toast({ title: "Role Updated", description: `${currentName} is now assigned as ${newRole}.` });
   };
 
   const handleTogglePermission = (roleId: string, permission: keyof PermissionSet, currentValue: boolean) => {
@@ -123,12 +109,11 @@ export default function StaffRolesPage() {
 
     updateDoc(roleRef, updateData)
       .catch(async (error) => {
-        const permissionError = new FirestorePermissionError({
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: roleRef.path,
           operation: 'update',
           requestResourceData: updateData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
+        }));
       });
   };
 
@@ -152,12 +137,11 @@ export default function StaffRolesPage() {
 
     setDoc(roleRef, data)
       .catch(async (error) => {
-        const permissionError = new FirestorePermissionError({
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: roleRef.path,
           operation: 'create',
           requestResourceData: data,
-        });
-        errorEmitter.emit('permission-error', permissionError);
+        }));
       });
 
     toast({ title: "Role Created", description: `${newRoleName} added to registry.` });
@@ -173,12 +157,11 @@ export default function StaffRolesPage() {
 
     updateDoc(roleRef, updateData)
       .catch(async (error) => {
-        const permissionError = new FirestorePermissionError({
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: roleRef.path,
           operation: 'update',
           requestResourceData: updateData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
+        }));
       });
 
     toast({ title: "Role Renamed", description: `Role is now called ${newRoleName}.` });
@@ -189,9 +172,7 @@ export default function StaffRolesPage() {
 
   const handleDeleteRole = (role: DynamicRole) => {
     if (!db || !confirm(`Caution: Purging the "${role.name}" role will affect assigned users. Proceed?`)) return;
-    
-    const roleRef = doc(db, "roleDefinitions", role.id);
-    deleteDoc(roleRef).catch(() => {});
+    deleteDoc(doc(db, "roleDefinitions", role.id)).catch(() => {});
     toast({ title: "Role Purged" });
   };
 
@@ -287,7 +268,7 @@ export default function StaffRolesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* DEFAULT LOCKED ROLES */}
+                  {/* SYSTEM LOCKED ROLES */}
                   {DEFAULT_ROLES.map(role => (
                     <TableRow key={role} className="border-b last:border-0 hover:bg-slate-50/30 transition-colors">
                       <TableCell className="font-bold text-slate-900 py-6 pl-8 flex items-center gap-3">
@@ -295,6 +276,7 @@ export default function StaffRolesPage() {
                         <span className="text-[15px]">{role}</span>
                         <Badge variant="outline" className="text-[8px] font-black uppercase bg-slate-50 text-slate-400 border-slate-200 tracking-tighter">System Locked</Badge>
                       </TableCell>
+                      {/* Hardcoded visualization of system role capabilities */}
                       <TableCell><PermissionToggle roleId="" permission="canSubmit" value={true} isLocked /></TableCell>
                       <TableCell><PermissionToggle roleId="" permission="canReview" value={['KYC Officer', 'Supervisor', 'Admin'].includes(role)} isLocked /></TableCell>
                       <TableCell><PermissionToggle roleId="" permission="canEscalate" value={['Supervisor', 'Branch Banking Director', 'Admin', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Chief'].includes(role)} isLocked /></TableCell>
@@ -307,7 +289,7 @@ export default function StaffRolesPage() {
                     </TableRow>
                   ))}
 
-                  {/* DYNAMIC CUSTOM ROLES */}
+                  {/* CUSTOM DYNAMIC ROLES */}
                   {dynamicRoles?.map(role => (
                     <TableRow key={role.id} className="border-b last:border-0 hover:bg-primary/5 transition-colors bg-primary/5">
                       <TableCell className="font-black text-primary py-6 pl-8 flex items-center gap-3">
@@ -333,6 +315,16 @@ export default function StaffRolesPage() {
               </Table>
             </CardContent>
           </Card>
+          
+          <div className="mt-6 p-6 rounded-2xl bg-amber-50 border border-amber-200 flex gap-4">
+            <ShieldAlert className="w-6 h-6 text-amber-600 shrink-0" />
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-amber-900">Dynamic Capability Resolution</p>
+              <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                Changes to the Permission Matrix take effect immediately across the institutional interface. Custom roles bypass the standard RBAC logic and rely strictly on these functional toggles.
+              </p>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="assignments">
@@ -356,35 +348,43 @@ export default function StaffRolesPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/50">
-                    <TableHead className="font-bold py-4">Staff Member</TableHead>
-                    <TableHead className="font-bold">Designation</TableHead>
-                    <TableHead className="font-bold">Branch / Office</TableHead>
-                    <TableHead className="text-right font-bold pr-8">Update Assignment</TableHead>
+                    <TableHead className="font-bold py-4 pl-8">Staff Member</TableHead>
+                    <TableHead className="font-bold">Current Designation</TableHead>
+                    <TableHead className="font-bold">Jurisdictional Node</TableHead>
+                    <TableHead className="text-right font-bold pr-8">Update Authorization</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredUsers.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell>
+                    <TableRow key={u.id} className="hover:bg-slate-50 transition-colors">
+                      <TableCell className="pl-8 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
                             {u.name.charAt(0)}
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-slate-900">{u.name}</span>
-                            <span className="text-[10px] text-muted-foreground">{u.email}</span>
+                            <span className="text-[10px] text-muted-foreground font-medium">{u.email}</span>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        {u.role ? <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">{u.role}</Badge> : <Badge variant="outline">Unassigned</Badge>}
+                        {u.role ? (
+                          <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">{u.role}</Badge>
+                        ) : <Badge variant="outline">Unassigned</Badge>}
                       </TableCell>
-                      <TableCell className="text-sm font-medium">{u.branch || 'Central HQ'}</TableCell>
+                      <TableCell className="text-sm font-bold text-slate-600">
+                        {u.branch || u.district || 'Global HQ'}
+                      </TableCell>
                       <TableCell className="text-right pr-8">
                         <Select value={u.role} onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.name)}>
-                          <SelectTrigger className="w-[200px] h-10"><SelectValue placeholder="Select Role" /></SelectTrigger>
+                          <SelectTrigger className="w-[220px] h-10 border-primary/20 bg-white"><SelectValue placeholder="Select Role" /></SelectTrigger>
                           <SelectContent>
-                            {allRoleNames.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                            <DropdownMenuLabel className="text-[10px] uppercase font-black text-slate-400">System Roles</DropdownMenuLabel>
+                            {DEFAULT_ROLES.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-[10px] uppercase font-black text-primary">Custom Roles</DropdownMenuLabel>
+                            {dynamicRoles?.map(role => <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -397,15 +397,15 @@ export default function StaffRolesPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Add Role Dialog */}
+      {/* DIALOGS */}
       <Dialog open={isAddRoleOpen} onOpenChange={setIsAddRoleOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               <UserCog className="w-6 h-6 text-primary" />
-              Institutional Role
+              Register New Role
             </DialogTitle>
-            <DialogDescription>Create a new dynamic role for specialized personnel.</DialogDescription>
+            <DialogDescription>Define a new institutional designation for the permission matrix.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-6">
             <div className="space-y-2">
@@ -413,41 +413,30 @@ export default function StaffRolesPage() {
               <Input 
                 value={newRoleName} 
                 onChange={e => setNewRoleName(e.target.value)} 
-                className="h-12 bg-white font-bold" 
+                className="h-12 bg-white font-bold text-lg" 
                 placeholder="e.g. Risk Auditor"
               />
             </div>
           </div>
           <DialogFooter className="pt-8 border-t mt-6">
             <Button variant="outline" onClick={() => setIsAddRoleOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
-            <Button onClick={handleAddRole} className="font-black bg-primary hover:bg-primary/90 px-8 h-11 shadow-lg">
-              Register Role
-            </Button>
+            <Button onClick={handleAddRole} className="font-black bg-primary hover:bg-primary/90 px-10 h-11 shadow-lg">Register Designation</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Role Name Dialog */}
       <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">Rename Role</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle className="text-2xl font-bold">Rename Designation</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-6">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">New Designation</Label>
-              <Input 
-                value={newRoleName} 
-                onChange={e => setNewRoleName(e.target.value)} 
-                className="h-12 bg-white font-bold"
-              />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">New Label</Label>
+              <Input value={newRoleName} onChange={e => setNewRoleName(e.target.value)} className="h-12 bg-white font-bold" />
             </div>
           </div>
           <DialogFooter className="pt-8 border-t mt-6">
             <Button variant="outline" onClick={() => setIsEditNameOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
-            <Button onClick={handleUpdateRoleName} className="font-black bg-primary hover:bg-primary/90 px-8 h-11 shadow-lg">
-              Save Changes
-            </Button>
+            <Button onClick={handleUpdateRoleName} className="font-black bg-primary hover:bg-primary/90 px-8 h-11 shadow-lg">Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

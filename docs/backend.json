@@ -67,6 +67,26 @@
       },
       "required": ["customerName", "branch", "status", "submittedBy"]
     },
+    "RoleDefinition": {
+      "title": "Role Definition",
+      "description": "A dynamic permission set for specialized staff roles.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "permissions": {
+          "type": "object",
+          "properties": {
+            "canSubmit": { "type": "boolean" },
+            "canReview": { "type": "boolean" },
+            "canEscalate": { "type": "boolean" },
+            "canViewReports": { "type": "boolean" },
+            "canManageUsers": { "type": "boolean" },
+            "canManageSystem": { "type": "boolean" }
+          }
+        }
+      }
+    },
     "BundleDownload": {
       "title": "Bundle Download Log",
       "description": "Audit record of a case bundle export.",
@@ -129,26 +149,6 @@
         "ipAddress": { "type": "string" },
         "details": { "type": "string" }
       }
-    },
-    "Branch": {
-      "title": "Branch Office",
-      "description": "An institutional branch node.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "district": { "type": "string" },
-        "code": { "type": "string" }
-      }
-    },
-    "District": {
-      "title": "Regional District",
-      "description": "A geographical administrative hub.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" }
-      }
     }
   },
   "auth": {
@@ -175,13 +175,9 @@
       "schema": "#/entities/AuditLog",
       "description": "System-wide security audit logs."
     },
-    "/branches/{branchId}": {
-      "schema": "#/entities/Branch",
-      "description": "Directory of all bank branches."
-    },
-    "/districts/{distId}": {
-      "schema": "#/entities/District",
-      "description": "Directory of regional districts."
+    "/roleDefinitions/{roleId}": {
+      "schema": "#/entities/RoleDefinition",
+      "description": "Dynamic role and permission definitions."
     }
   }
 }

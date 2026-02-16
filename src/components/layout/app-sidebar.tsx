@@ -29,8 +29,7 @@ import {
   LayoutList,
   BookOpen,
   ClipboardList,
-  Folders,
-  FileBadge
+  Folders
 } from "lucide-react"
 
 import {
@@ -65,35 +64,33 @@ import { useAuth } from "@/lib/auth-mock"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebarCounts } from "@/hooks/use-sidebar-counts"
+import { usePermissions } from "@/hooks/use-permissions"
 
 export function AppSidebar() {
   const pathname = usePathname()
   const { user, loginAs, logout, allUsers } = useAuth()
   const counts = useSidebarCounts(user)
+  const { permissions, loading: permLoading } = usePermissions(user)
 
-  // Critical Check: Handle unauthenticated or loading states
   if (!user) return null;
 
-  // Role Checks
-  const isBranchOfficer = user.role === 'Branch Officer'
-  const isKYCOfficer = user.role === 'KYC Officer'
-  const isSupervisor = user.role === 'Supervisor'
-  const isBranchMgr = user.role === 'Branch Manager'
-  const isBranchBankingDir = user.role === 'Branch Banking Director'
-  const isDistDir = user.role === 'District Director'
-  const isAdmin = user.role === 'Admin'
-  const isFollowUp = user.role === 'Follow-up Team'
-  const isChief = user.role === 'Chief' || user.role === 'Chief Retail & SME Banking Officer'
-  const isDivisionMgr = user.role === 'Division Manager'
+  // Resolved Permissions
+  const {
+    canSubmit,
+    canReview,
+    canEscalate,
+    canViewReports,
+    canManageUsers,
+    canManageSystem
+  } = permissions;
 
-  const isReviewer = isKYCOfficer || isSupervisor || isAdmin
-  const isManagement = isBranchBankingDir || isDistDir || isBranchMgr || isSupervisor || isAdmin
-  const canSeePerformance = isBranchMgr || isSupervisor || isBranchBankingDir || isDistDir || isAdmin
-  const canSeeReports = isSupervisor || isBranchBankingDir || isAdmin || isFollowUp
-  const canSeeExceptional = isDistDir || isBranchBankingDir || isSupervisor || isBranchMgr || isAdmin
+  // Specific visibility checks
+  const isBranchMgr = user.role === 'Branch Manager' || user.role === 'Admin'
+  const isDistDir = user.role === 'District Director' || user.role === 'Admin'
+  const isAdmin = user.role === 'Admin'
   
-  // Master Bundle Access: Restricted to senior/HQ roles
-  const canDownloadMasterBundle = isAdmin || isSupervisor || isFollowUp || isBranchBankingDir || isChief || isDivisionMgr
+  // Follow-up access is a special permission
+  const isFollowUp = user.role === 'Follow-up Team' || user.role === 'Admin'
 
   return (
     <Sidebar collapsible="icon">
@@ -120,105 +117,124 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
-        {/* SUBMISSIONS */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Workflows</SidebarGroupLabel>
-          <SidebarMenu>
-            <Collapsible className="group/collapsible" defaultOpen={false}>
-              <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip="Identity Verification">
-                    <FileText />
-                    <span>Identity Verification</span>
-                    <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarMenuSub>
-                    {(isBranchOfficer || isAdmin) && (
-                      <>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/new'}>
-                            <Link href="/submissions/new">
-                              <PlusCircle className="w-4 h-4 mr-2" />
-                              <span>Create Submission</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
+        {/* WORKFLOWS */}
+        {(canSubmit || canReview || canEscalate) && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Workflows</SidebarGroupLabel>
+            <SidebarMenu>
+              <Collapsible className="group/collapsible" defaultOpen={true}>
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton tooltip="Identity Verification">
+                      <FileText />
+                      <span>Identity Verification</span>
+                      <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {canSubmit && (
+                        <>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/submissions/new'}>
+                              <Link href="/submissions/new">
+                                <PlusCircle className="w-4 h-4 mr-2" />
+                                <span>Create Submission</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem className="relative">
+                            <SidebarMenuSubButton asChild isActive={pathname === '/submissions/my'}>
+                              <Link href="/submissions/my">
+                                <Inbox className="w-4 h-4 mr-2" />
+                                <span>My Submissions</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                            {counts.mySubmissions > 0 && (
+                              <SidebarMenuBadge className="bg-slate-100 text-slate-600 font-bold">
+                                {counts.mySubmissions}
+                              </SidebarMenuBadge>
+                            )}
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem className="relative">
+                            <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>
+                              <Link href="/submissions/amendment-requests">
+                                <AlertCircle className="w-4 h-4 mr-2 text-orange-600" />
+                                <span>Action Required</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                            {counts.actionRequired > 0 && (
+                              <SidebarMenuBadge className="bg-orange-500 text-white font-bold animate-pulse">
+                                {counts.actionRequired}
+                              </SidebarMenuBadge>
+                            )}
+                          </SidebarMenuSubItem>
+                        </>
+                      )}
+
+                      {isBranchMgr && (
                         <SidebarMenuSubItem className="relative">
-                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/my'}>
-                            <Link href="/submissions/my">
-                              <Inbox className="w-4 h-4 mr-2" />
-                              <span>My Submissions</span>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
+                            <Link href="/submissions/branch-node">
+                              <LayoutList className="w-4 h-4 mr-2 text-[#B89334]" />
+                              <span>Local Node Oversight</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.mySubmissions > 0 && (
-                            <SidebarMenuBadge className="bg-slate-100 text-slate-600 font-bold">
-                              {counts.mySubmissions}
+                          {counts.branchNode > 0 && (
+                            <SidebarMenuBadge className="bg-primary/10 text-primary font-bold">
+                              {counts.branchNode}
                             </SidebarMenuBadge>
                           )}
                         </SidebarMenuSubItem>
+                      )}
+
+                      {canReview && (
+                        <>
+                          <SidebarMenuSubItem className="relative">
+                            <SidebarMenuSubButton asChild isActive={pathname === '/submissions/queue'}>
+                              <Link href="/submissions/queue">
+                                <Search className="w-4 h-4 mr-2" />
+                                <span>Review Queue</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                            {counts.reviewQueue > 0 && (
+                              <SidebarMenuBadge className="bg-primary text-white font-bold">
+                                {counts.reviewQueue}
+                              </SidebarMenuBadge>
+                            )}
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem className="relative">
+                            <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
+                              <Link href="/submissions/amendments">
+                                <History className="w-4 h-4 mr-2" />
+                                <span>Resubmitted Cases</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                            {counts.resubmitted > 0 && (
+                              <SidebarMenuBadge className="bg-blue-600 text-white font-bold">
+                                {counts.resubmitted}
+                              </SidebarMenuBadge>
+                            )}
+                          </SidebarMenuSubItem>
+                        </>
+                      )}
+
+                      {(canEscalate || isAdmin) && (
                         <SidebarMenuSubItem className="relative">
-                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>
-                            <Link href="/submissions/amendment-requests">
-                              <AlertCircle className="w-4 h-4 mr-2 text-orange-600" />
-                              <span>Action Required</span>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/escalated'}>
+                            <Link href="/submissions/escalated">
+                              <ShieldAlert className="w-4 h-4 mr-2 text-destructive" />
+                              <span>Escalated Cases</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.actionRequired > 0 && (
-                            <SidebarMenuBadge className="bg-orange-500 text-white font-bold animate-pulse">
-                              {counts.actionRequired}
+                          {counts.escalated > 0 && (
+                            <SidebarMenuBadge className="bg-destructive text-white font-bold">
+                              {counts.escalated}
                             </SidebarMenuBadge>
                           )}
                         </SidebarMenuSubItem>
-                      </>
-                    )}
-                    {(isBranchMgr || isAdmin) && (
-                      <SidebarMenuSubItem className="relative">
-                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
-                          <Link href="/submissions/branch-node">
-                            <LayoutList className="w-4 h-4 mr-2 text-[#B89334]" />
-                            <span>Local Node Oversight</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                        {counts.branchNode > 0 && (
-                          <SidebarMenuBadge className="bg-primary/10 text-primary font-bold">
-                            {counts.branchNode}
-                          </SidebarMenuBadge>
-                        )}
-                      </SidebarMenuSubItem>
-                    )}
-                    {(isKYCOfficer || isAdmin) && (
-                      <>
-                        <SidebarMenuSubItem className="relative">
-                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/queue'}>
-                            <Link href="/submissions/queue">
-                              <Search className="w-4 h-4 mr-2" />
-                              <span>Review Queue</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                          {counts.reviewQueue > 0 && (
-                            <SidebarMenuBadge className="bg-primary text-white font-bold">
-                              {counts.reviewQueue}
-                            </SidebarMenuBadge>
-                          )}
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem className="relative">
-                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
-                            <Link href="/submissions/amendments">
-                              <History className="w-4 h-4 mr-2" />
-                              <span>Resubmitted Cases</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                          {counts.resubmitted > 0 && (
-                            <SidebarMenuBadge className="bg-blue-600 text-white font-bold">
-                              {counts.resubmitted}
-                            </SidebarMenuBadge>
-                          )}
-                        </SidebarMenuSubItem>
-                      </>
-                    )}
-                    {canSeeExceptional && (
+                      )}
+
                       <SidebarMenuSubItem className="relative">
                         <SidebarMenuSubButton asChild isActive={pathname === '/submissions/exceptional'}>
                           <Link href="/submissions/exceptional">
@@ -232,33 +248,7 @@ export function AppSidebar() {
                           </SidebarMenuBadge>
                         )}
                       </SidebarMenuSubItem>
-                    )}
-                    {(isReviewer) && (
-                      <SidebarMenuSubItem className="relative">
-                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions/escalated'}>
-                          <Link href="/submissions/escalated">
-                            <ShieldAlert className="w-4 h-4 mr-2 text-destructive" />
-                            <span>Escalated Cases</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                        {counts.escalated > 0 && (
-                          <SidebarMenuBadge className="bg-destructive text-white font-bold">
-                            {counts.escalated}
-                          </SidebarMenuBadge>
-                        )}
-                      </SidebarMenuSubItem>
-                    )}
-                    {canDownloadMasterBundle && (
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions/master-bundle'}>
-                          <Link href="/submissions/master-bundle">
-                            <Folders className="w-4 h-4 mr-2 text-emerald-600" />
-                            <span>Master Case Bundle</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    )}
-                    {(isReviewer || isManagement) && (
+
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={pathname === '/submissions'}>
                           <Link href="/submissions">
@@ -267,13 +257,13 @@ export function AppSidebar() {
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
-                    )}
-                  </SidebarMenuSub>
-                </CollapsibleContent>
-              </SidebarMenuItem>
-            </Collapsible>
-          </SidebarMenu>
-        </SidebarGroup>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
 
         {/* KNOWLEDGE BASE */}
         <SidebarGroup>
@@ -290,8 +280,8 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
-        {/* PERFORMANCE */}
-        {canSeePerformance && (
+        {/* OVERSIGHT */}
+        {canViewReports && (
           <SidebarGroup>
             <SidebarGroupLabel>Management</SidebarGroupLabel>
             <SidebarMenu>
@@ -306,7 +296,7 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      {(isBranchBankingDir || isDistDir || isAdmin) && (
+                      {isDistDir && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/performance/district'}>
                             <Link href="/performance/district">
@@ -316,7 +306,7 @@ export function AppSidebar() {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
-                      {(isBranchMgr || isBranchBankingDir || isAdmin) && (
+                      {isBranchMgr && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/performance/branch'}>
                             <Link href="/performance/branch">
@@ -326,16 +316,14 @@ export function AppSidebar() {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
-                      {(isSupervisor || isBranchBankingDir || isAdmin) && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
-                            <Link href="/performance/officer">
-                              <Users className="w-4 h-4 mr-2" />
-                              <span>Officer Productivity</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )}
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
+                          <Link href="/performance/officer">
+                            <Users className="w-4 h-4 mr-2" />
+                            <span>Officer Productivity</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
@@ -344,8 +332,8 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* REPORTING */}
-        {canSeeReports && (
+        {/* COMPLIANCE REPORTS */}
+        {canViewReports && (
           <SidebarGroup>
             <SidebarGroupLabel>Audit & Reporting</SidebarGroupLabel>
             <SidebarMenu>
@@ -370,42 +358,48 @@ export function AppSidebar() {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
-                      {(isBranchBankingDir || isAdmin) && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}>
-                            <Link href="/reports/branch">
-                              <Building2 className="w-4 h-4 mr-2" />
-                              <span>Branch & District</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}>
+                          <Link href="/reports/branch">
+                            <Building2 className="w-4 h-4 mr-2" />
+                            <span>Branch & District</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/reports/officer'}>
+                          <Link href="/reports/officer">
+                            <Users className="w-4 h-4 mr-2" />
+                            <span>Staff Productivity</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      {isFollowUp && (
+                        <>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/head-office/follow-up'}>
+                              <Link href="/head-office/follow-up">
+                                <Zap className="w-4 h-4 mr-2 text-primary" />
+                                <span>Follow up</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/reports/follow-up'}>
+                              <Link href="/reports/follow-up">
+                                <ClipboardList className="w-4 h-4 mr-2 text-primary" />
+                                <span>Follow up Report</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </>
                       )}
-                      {(isSupervisor || isBranchBankingDir || isAdmin) && (
+                      {isAdmin && (
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/officer'}>
-                            <Link href="/reports/officer">
-                              <Users className="w-4 h-4 mr-2" />
-                              <span>Staff Productivity</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )}
-                      {(isFollowUp || isAdmin) && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/head-office/follow-up'}>
-                            <Link href="/head-office/follow-up">
-                              <Zap className="w-4 h-4 mr-2 text-primary" />
-                              <span>Follow up</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )}
-                      {(isFollowUp || isAdmin || isSupervisor) && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/follow-up'}>
-                            <Link href="/reports/follow-up">
-                              <ClipboardList className="w-4 h-4 mr-2 text-primary" />
-                              <span>Follow up Report</span>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/master-bundle'}>
+                            <Link href="/submissions/master-bundle">
+                              <Folders className="w-4 h-4 mr-2 text-emerald-600" />
+                              <span>Master Case Bundle</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -418,8 +412,8 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* ADMINISTRATION */}
-        {isAdmin && (
+        {/* SYSTEM ADMIN */}
+        {(canManageUsers || canManageSystem || isAdmin) && (
           <SidebarGroup>
             <SidebarGroupLabel>System</SidebarGroupLabel>
             <SidebarMenu>
@@ -434,54 +428,62 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/users'}>
-                          <Link href="/admin/users">
-                            <Users className="w-4 h-4 mr-2" />
-                            <span>User Access</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/roles'}>
-                          <Link href="/admin/roles">
-                            <UserCog className="w-4 h-4 mr-2 text-primary" />
-                            <span>Assign Roles</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/assignments'}>
-                          <Link href="/admin/assignments">
-                            <ArrowRightLeft className="w-4 h-4 mr-2 text-primary" />
-                            <span>Staff Assignments</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
-                          <Link href="/admin/branches">
-                            <Building2 className="w-4 h-4 mr-2" />
-                            <span>Branches & Districts</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
-                          <Link href="/admin/settings">
-                            <Settings className="w-4 h-4 mr-2" />
-                            <span>System Settings</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/audit'}>
-                          <Link href="/admin/audit">
-                            <History className="w-4 h-4 mr-2" />
-                            <span>Audit Logs</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                      {canManageUsers && (
+                        <>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/admin/users'}>
+                              <Link href="/admin/users">
+                                <Users className="w-4 h-4 mr-2" />
+                                <span>User Access</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/admin/roles'}>
+                              <Link href="/admin/roles">
+                                <UserCog className="w-4 h-4 mr-2 text-primary" />
+                                <span>Assign Roles</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/admin/assignments'}>
+                              <Link href="/admin/assignments">
+                                <ArrowRightLeft className="w-4 h-4 mr-2 text-primary" />
+                                <span>Staff Assignments</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </>
+                      )}
+                      {canManageSystem && (
+                        <>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
+                              <Link href="/admin/branches">
+                                <Building2 className="w-4 h-4 mr-2" />
+                                <span>Branches & Districts</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
+                              <Link href="/admin/settings">
+                                <Settings className="w-4 h-4 mr-2" />
+                                <span>System Settings</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/admin/audit'}>
+                              <Link href="/admin/audit">
+                                <History className="w-4 h-4 mr-2" />
+                                <span>Audit Logs</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </>
+                      )}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
@@ -511,7 +513,7 @@ export function AppSidebar() {
               <UserCircle className="w-4 h-4" /> Switch Test Profile
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {allUsers.map(u => (
+            {allUsers.slice(0, 10).map(u => (
               <DropdownMenuItem key={u.id} onClick={() => loginAs(u.id)} className="flex flex-col items-start gap-0.5 py-2 cursor-pointer">
                 <span className={`font-bold text-sm ${u.id === user.id ? 'text-primary' : ''}`}>{u.name}</span>
                 <span className="text-[10px] uppercase text-muted-foreground">{u.role}</span>
