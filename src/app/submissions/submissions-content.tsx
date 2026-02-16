@@ -132,40 +132,40 @@ ${docList.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No do
   };
 
   const getStatusBadge = (sub: KYCSubmission) => {
-    if (sub.isExceptional && sub.exceptionalStatus !== 'Completed' && sub.exceptionalStatus !== 'None' && sub.exceptionalStatus) {
+    if (sub.isExceptional && sub.exceptionalStatus !== 'COMPLETED' && sub.exceptionalStatus !== 'NONE' && sub.exceptionalStatus) {
       return (
         <Badge className="bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100 flex items-center gap-1.5 w-fit font-bold px-3 py-1">
-          <Zap className="w-3.5 h-3.5 text-yellow-600" /> {sub.exceptionalStatus}
+          <Zap className="w-3.5 h-3.5 text-yellow-600" /> {sub.exceptionalStatus.replace(/_/g, ' ')}
         </Badge>
       );
     }
 
     const status = sub.status;
-    const isResubmitted = sub.isResubmitted && (status === 'Pending' || status === 'In Review');
+    const isResubmitted = sub.isResubmitted && (status === 'PENDING' || status === 'IN_REVIEW');
 
     switch (status) {
-      case 'Approved': 
+      case 'APPROVED': 
         return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-bold px-3 py-1">Approved</Badge>;
-      case 'Pending': 
-      case 'In Review':
+      case 'PENDING': 
+      case 'IN_REVIEW':
         return isResubmitted ? 
           <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 w-fit shadow-sm font-bold px-3 py-1">
             <History className="w-3.5 h-3.5" /> Pending Review
           </Badge> : 
-          status === 'In Review' ?
+          status === 'IN_REVIEW' ?
           <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-100 font-bold px-3 py-1">In Review</Badge> :
           <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" /> Pending
           </Badge>;
-      case 'Amended': 
+      case 'AMENDED': 
         return (
           <Badge className="bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100 flex items-center gap-1.5 w-fit animate-pulse font-bold px-3 py-1">
             <AlertCircle className="w-3.5 h-3.5" /> Action Required
           </Badge>
         );
-      case 'Rejected': 
+      case 'REJECTED': 
         return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 hover:bg-red-100 font-bold px-3 py-1">Rejected</Badge>;
-      case 'Escalated': 
+      case 'ESCALATED': 
         return <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100 font-bold px-3 py-1">Escalated</Badge>;
       default: 
         return <Badge variant="secondary" className="font-bold px-3 py-1">{status}</Badge>;

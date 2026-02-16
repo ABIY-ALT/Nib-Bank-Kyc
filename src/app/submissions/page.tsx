@@ -44,12 +44,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
 const STATUS_OPTIONS = [
-  { id: 'Approved', label: 'Approved' },
-  { id: 'Pending', label: 'Pending' },
-  { id: 'In Review', label: 'In Review' },
-  { id: 'Amended', label: 'Action Required' },
-  { id: 'Escalated', label: 'Escalated' },
-  { id: 'Rejected', label: 'Rejected' }
+  { id: 'APPROVED', label: 'Approved' },
+  { id: 'PENDING', label: 'Pending' },
+  { id: 'IN_REVIEW', label: 'In Review' },
+  { id: 'AMENDED', label: 'Action Required' },
+  { id: 'ESCALATED', label: 'Escalated' },
+  { id: 'REJECTED', label: 'Rejected' }
 ];
 
 export default function SubmissionsPage() {
@@ -110,7 +110,6 @@ export default function SubmissionsPage() {
     
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', `nib-kyc-archive-${fromDate}-to-${toDate}.csv`);
@@ -145,18 +144,18 @@ export default function SubmissionsPage() {
   const getStatusBadge = (sub: KYCSubmission) => {
     const status = sub.status;
     switch (status) {
-      case 'Approved': 
+      case 'APPROVED': 
         return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-bold px-3 py-1">Approved</Badge>;
-      case 'Pending': 
-      case 'In Review':
+      case 'PENDING': 
+      case 'IN_REVIEW':
         return <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5" /> {status}
+          <Clock className="w-3.5 h-3.5" /> {status.replace(/_/g, ' ')}
         </Badge>;
-      case 'Amended': 
+      case 'AMENDED': 
         return <Badge className="bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100 font-bold px-3 py-1">Action Required</Badge>;
-      case 'Rejected': 
+      case 'REJECTED': 
         return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 hover:bg-red-100 font-bold px-3 py-1">Rejected</Badge>;
-      case 'Escalated': 
+      case 'ESCALATED': 
         return <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100 font-bold px-3 py-1">Escalated</Badge>;
       default: 
         return <Badge variant="secondary" className="font-bold px-3 py-1">{status}</Badge>;

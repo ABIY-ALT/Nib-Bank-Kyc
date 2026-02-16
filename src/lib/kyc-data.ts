@@ -104,7 +104,7 @@ export interface FollowUpVerification {
   verifiedAt?: string;
   result?: 'Correct' | 'Discrepancy';
   remarks?: string;
-  status: 'Pending' | 'Completed';
+  status: 'PENDING' | 'COMPLETED';
   assignedTo?: string;
   assignedToName?: string;
 }
