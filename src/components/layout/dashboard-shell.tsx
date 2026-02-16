@@ -9,6 +9,7 @@ import { AppSidebar } from '@/components/layout/app-sidebar';
 import { Separator } from '@/components/ui/separator';
 import { ModeToggle } from '@/components/mode-toggle';
 import { Toaster } from '@/components/ui/toaster';
+import { ForcePasswordChangeModal } from '@/components/auth/force-password-change-modal';
 
 /**
  * A shell component that conditionally renders the sidebar and header
@@ -20,18 +21,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
   const isLoginPage = pathname === '/login';
-  const isForceChangePage = pathname === '/force-password-change';
 
-  // Force Change Password Logic
-  // If the user is authenticated but needs a password change, redirect them to the secure gate
-  React.useEffect(() => {
-    if (user && user.needsPasswordChange && !isForceChangePage && !isLoginPage) {
-      router.push('/force-password-change');
-    }
-  }, [user, isForceChangePage, isLoginPage, router]);
-
-  // If we're on the login page or force change page, render a clean layout without the sidebar/header
-  if (isLoginPage || isForceChangePage) {
+  // If we're on the login page, render a clean layout without the sidebar/header
+  if (isLoginPage) {
     return (
       <div className="min-h-screen w-full bg-[#FCFAF7]">
         {children}
@@ -40,10 +32,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Determine if we should show the security gate modal
+  const showForceChange = user?.needsPasswordChange && !isLoginPage;
+
   // For all other pages, render the full institutional shell
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
+      <div className="flex min-h-screen w-full bg-background relative">
         <AppSidebar />
         <main className="flex-1 flex flex-col min-w-0">
           <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background/50 backdrop-blur-sm sticky top-0 z-10">
@@ -59,6 +54,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </main>
+
+        {/* Force Password Change Security Gate Overlay */}
+        {showForceChange && <ForcePasswordChangeModal />}
       </div>
       <Toaster />
     </SidebarProvider>
