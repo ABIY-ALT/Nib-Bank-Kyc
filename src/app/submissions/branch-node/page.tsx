@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
@@ -26,7 +25,8 @@ import {
   ChevronRight,
   TrendingDown,
   Activity,
-  FileBarChart
+  FileBarChart,
+  Building2
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
