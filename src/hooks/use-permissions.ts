@@ -60,7 +60,7 @@ export function usePermissions(user: User | null) {
       canSubmit: false, canReview: false, canEscalate: false, canViewReports: true, canManageUsers: false, canManageSystem: false
     };
 
-    if (['BRANCH_MANAGER', 'DISTRICT_DIRECTOR', 'BRANCH_BANKING_DIRECTOR', 'DIVISION_MANAGER', 'CHIEF_RETAIL_SME_BANKING_OFFICER', 'CHIEF'].includes(role || '')) {
+    if (['BRANCH_MANAGER', 'DISTRICT_DIRECTOR', 'BRANCH_BANKING_DIRECTOR', 'DIVISION_MANAGER', 'CHIEF_RETAIL_SME_OFFICER', 'CHIEF'].includes(role || '')) {
       return {
         canSubmit: true, 
         canReview: false, 
