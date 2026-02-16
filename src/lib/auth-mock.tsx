@@ -11,6 +11,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, updateDoc, collection, query, limit, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { syncUserToSql } from '@/actions/auth';
 
 export type UserRole = 
   | 'BRANCH_OFFICER' 
@@ -84,10 +85,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await signOut(auth);
             setUser(null);
           } else {
-            setUser({ ...userData, id: fbUser.uid });
+            const currentUser = { ...userData, id: fbUser.uid };
+            setUser(currentUser);
+            
+            // Sync to SQL database via Server Action
+            await syncUserToSql({
+              id: currentUser.id,
+              email: currentUser.email,
+              name: currentUser.name,
+              role: currentUser.role,
+              branch: currentUser.branch,
+              district: currentUser.district
+            });
           }
         } else {
-          setUser(null);
+          // If Firestore doc doesn't exist, create a basic profile and sync
+          const basicUser: User = {
+            id: fbUser.uid,
+            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Unknown User',
+            email: fbUser.email || '',
+            role: 'BRANCH_OFFICER',
+            status: 'ACTIVE'
+          };
+          setUser(basicUser);
+          await syncUserToSql(basicUser);
         }
       } else {
         setUser(null);
@@ -96,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [auth, db]);
+  }, [auth, db, toast]);
 
   useEffect(() => {
     const handleActivity = () => setLastActivity(Date.now());
