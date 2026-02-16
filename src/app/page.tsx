@@ -18,19 +18,16 @@ import {
   History,
   ShieldCheck,
   Info,
-  Beaker,
   Loader2,
-  CheckCircle2,
   ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { useFirestore, useCollection, useDoc, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, limit, doc, setDoc } from "firebase/firestore";
-import { useMemo, useState } from "react";
-import { KYCSubmission, MOCK_SUBMISSIONS } from "@/lib/kyc-data";
-import { useToast } from "@/hooks/use-toast";
+import { collection, query, where, orderBy, limit, doc } from "firebase/firestore";
+import { useMemo } from "react";
+import { KYCSubmission } from "@/lib/kyc-data";
 import { cn } from "@/lib/utils";
 
 interface Guideline {
@@ -43,61 +40,30 @@ interface Guideline {
 export default function Dashboard() {
   const { user } = useAuth();
   const db = useFirestore();
-  const { toast } = useToast();
-  const [isSeeding, setIsSeeding] = useState(false);
 
-  // Dashboard context: Branch portal for officers, Global portal for management
-  const isAdmin = user?.role === 'Admin';
-  const isManagement = ['Admin', 'Branch Banking Director', 'Supervisor', 'District Director', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Chief'].includes(user?.role || '');
+  const isAdmin = user?.role === 'ADMIN';
+  const isManagement = ['ADMIN', 'BRANCH_BANKING_DIRECTOR', 'SUPERVISOR', 'DISTRICT_DIRECTOR', 'DIVISION_MANAGER', 'CHIEF_RETAIL_SME_BANKING_OFFICER', 'CHIEF'].includes(user?.role || '');
 
   const dashboardQuery = useMemo(() => {
     if (!db || !user) return null;
     
-    // 1. Admins see global activity
     if (isAdmin) {
-      return query(
-        collection(db, "submissions"), 
-        orderBy("submittedAt", "desc"),
-        limit(5)
-      );
+      return query(collection(db, "submissions"), orderBy("submittedAt", "desc"), limit(5));
     }
     
-    // 2. District Directors see their specific region
-    if (user.role === 'District Director') {
-      return query(
-        collection(db, "submissions"),
-        where("district", "==", user.district || ""),
-        orderBy("submittedAt", "desc"),
-        limit(5)
-      );
+    if (user.role === 'DISTRICT_DIRECTOR') {
+      return query(collection(db, "submissions"), where("district", "==", user.district || ""), orderBy("submittedAt", "desc"), limit(5));
     }
 
-    // 3. KYC Officers see their assigned branch portfolio
-    if (user.role === 'KYC Officer' && (user.assignedBranches?.length || 0) > 0) {
-      return query(
-        collection(db, "submissions"),
-        where("branch", "in", user.assignedBranches),
-        orderBy("submittedAt", "desc"),
-        limit(5)
-      );
+    if (user.role === 'KYC_OFFICER' && (user.assignedBranches?.length || 0) > 0) {
+      return query(collection(db, "submissions"), where("branch", "in", user.assignedBranches), orderBy("submittedAt", "desc"), limit(5));
     }
 
-    // 4. Branch Staff see their specific node
     if (user.branch) {
-      return query(
-        collection(db, "submissions"), 
-        where("branch", "==", user.branch),
-        orderBy("submittedAt", "desc"),
-        limit(5)
-      );
+      return query(collection(db, "submissions"), where("branch", "==", user.branch), orderBy("submittedAt", "desc"), limit(5));
     }
 
-    // Fallback
-    return query(
-      collection(db, "submissions"),
-      orderBy("submittedAt", "desc"),
-      limit(5)
-    );
+    return query(collection(db, "submissions"), orderBy("submittedAt", "desc"), limit(5));
   }, [db, user, isAdmin]);
 
   const { data: recentSubmissions, loading: submissionsLoading } = useCollection<KYCSubmission>(dashboardQuery);
@@ -109,8 +75,7 @@ export default function Dashboard() {
   const { data: settings } = useDoc<{ guidelines?: Guideline[] }>(settingsRef);
 
   const stats = useMemo(() => {
-    const scopeLabel = isAdmin ? 'Global' : user?.role === 'District Director' ? 'Regional' : 'Branch';
-    
+    const scopeLabel = isAdmin ? 'Global' : user?.role === 'DISTRICT_DIRECTOR' ? 'Regional' : 'Branch';
     if (!recentSubmissions) return [
       { label: `${scopeLabel} Activity`, value: '0', icon: History, color: 'text-blue-600' },
       { label: 'Approved Cases', value: '0', icon: FileCheck, color: 'text-green-600' },
@@ -118,8 +83,8 @@ export default function Dashboard() {
       { label: 'Network SLA', value: '98%', icon: TrendingUp, color: 'text-purple-600' },
     ];
 
-    const approvedCount = recentSubmissions.filter(s => s.status === 'Approved').length;
-    const amendedCount = recentSubmissions.filter(s => s.status === 'Amended').length;
+    const approvedCount = recentSubmissions.filter(s => s.status === 'APPROVED').length;
+    const amendedCount = recentSubmissions.filter(s => s.status === 'AMENDED').length;
 
     return [
       { label: `${scopeLabel} Active`, value: recentSubmissions.length.toString(), icon: History, color: 'text-blue-600' },
@@ -129,92 +94,19 @@ export default function Dashboard() {
     ];
   }, [recentSubmissions, isAdmin, user]);
 
-  const handleSeedData = async () => {
-    if (!db || isSeeding) return;
-    setIsSeeding(true);
-
-    try {
-      // 1. Seed Submissions
-      for (const sub of MOCK_SUBMISSIONS) {
-        const subRef = doc(db, "submissions", sub.id!);
-        const submissionData = {
-          ...sub,
-          isResubmitted: sub.isResubmitted || false,
-          amendmentCycles: sub.amendmentCycles || 0,
-          isExceptional: sub.isExceptional || false,
-          exceptionalStatus: sub.exceptionalStatus || "None",
-          checklistState: {}
-        };
-        await setDoc(subRef, submissionData);
-
-        // Seed documents subcollection for each
-        const docRef = doc(collection(subRef, "documents"));
-        await setDoc(docRef, {
-          id: docRef.id,
-          name: "Institutional_Record_Scan.pdf",
-          type: "id_card",
-          uploadedAt: sub.submittedAt,
-          status: 'Current',
-          url: "#"
-        });
-      }
-
-      // 2. Seed Districts
-      const districts = ["Central", "Northern", "Southern", "Eastern", "Western"];
-      for (const d of districts) {
-        await setDoc(doc(db, "districts", d.toLowerCase()), { id: d.toLowerCase(), name: d });
-      }
-
-      // 3. Seed Branches
-      const branches = [
-        { id: "dt-1", name: "Downtown", district: "Central", code: "DTN" },
-        { id: "ut-1", name: "Uptown", district: "Central", code: "UPT" },
-        { id: "es-1", name: "East Side", district: "Central", code: "EST" },
-        { id: "nb-1", name: "Northern Branch", district: "Northern", code: "NRB" },
-        { id: "sh-1", name: "Southern Hub", district: "Southern", code: "STH" }
-      ];
-      for (const b of branches) {
-        await setDoc(doc(db, "branches", b.id), b);
-      }
-
-      toast({
-        title: "Operational Data Hydrated",
-        description: "Firestore has been seeded with realistic submissions and institutional mapping.",
-      });
-    } catch (e) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Seeding Failure", description: "Internal error during prototype hydration." });
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-            {isAdmin ? 'Institutional Command' : user?.role === 'District Director' ? `${user.district} District Portal` : `${user?.branch} Branch Portal`}
+            {isAdmin ? 'Institutional Command' : user?.role === 'DISTRICT_DIRECTOR' ? `${user.district} District Portal` : `${user?.branch} Branch Portal`}
           </h1>
-          <p className="text-muted-foreground text-lg">Welcome back, {user?.name}. {isAdmin ? 'Overseeing network-wide KYC compliance.' : 'Monitoring your jurisdictional activities.'}</p>
+          <p className="text-muted-foreground text-lg">Welcome back, {user?.name}. Institutional session active.</p>
         </div>
         <div className="flex items-center gap-3">
-          {isAdmin && (
-            <Button 
-              variant="outline" 
-              onClick={handleSeedData} 
-              disabled={isSeeding}
-              className="border-dashed border-primary/50 text-primary hover:bg-primary/5 h-12 px-6 font-bold"
-            >
-              {isSeeding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Beaker className="w-4 h-4 mr-2" />}
-              Seed Prototype Data
-            </Button>
-          )}
-          {user?.role === 'Branch Officer' && (
+          {user?.role === 'BRANCH_OFFICER' && (
             <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-bold text-lg">
-              <Link href="/submissions/new">
-                Create New Submission
-              </Link>
+              <Link href="/submissions/new">Create New Submission</Link>
             </Button>
           )}
         </div>
@@ -266,20 +158,18 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant={
-                        sub.status === 'Approved' ? 'default' : 
-                        sub.status === 'Amended' ? 'secondary' : 
-                        sub.status === 'Pending' ? 'outline' : 'destructive'
+                        sub.status === 'APPROVED' ? 'default' : 
+                        sub.status === 'AMENDED' ? 'secondary' : 
+                        sub.status === 'PENDING' ? 'outline' : 'destructive'
                       } className={cn(
                         "font-bold",
-                        sub.status === 'Approved' && 'bg-emerald-50 text-emerald-700 border-emerald-100',
-                        sub.status === 'Amended' && 'bg-orange-50 text-orange-700 border-orange-100'
+                        sub.status === 'APPROVED' && 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                        sub.status === 'AMENDED' && 'bg-orange-50 text-orange-700 border-orange-100'
                       )}>
-                        {sub.status === 'Amended' ? 'Action Required' : sub.status}
+                        {sub.status === 'AMENDED' ? 'Action Required' : sub.status}
                       </Badge>
                       <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/5 text-primary">
-                        <Link href={`/submissions/${sub.id}`}>
-                          <ArrowUpRight className="w-5 h-5" />
-                        </Link>
+                        <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>
                       </Button>
                     </div>
                   </div>
@@ -288,7 +178,6 @@ export default function Dashboard() {
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed">
                   <History className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                   <p className="text-sm text-muted-foreground font-bold">No Operational Data Found</p>
-                  {isAdmin && <p className="text-xs text-muted-foreground mt-1">Click "Seed Prototype Data" to initialize the dashboard.</p>}
                 </div>
               )}
             </div>
@@ -304,19 +193,8 @@ export default function Dashboard() {
              <div className="space-y-4">
                 {settings?.guidelines && settings.guidelines.length > 0 ? (
                   settings.guidelines.map((guide) => (
-                    <div 
-                      key={guide.id} 
-                      className={`flex gap-4 p-5 rounded-2xl border ${
-                        guide.type === 'alert' 
-                          ? 'bg-accent/5 border-accent/20' 
-                          : 'bg-blue-50 border-blue-100'
-                      }`}
-                    >
-                      {guide.type === 'alert' ? (
-                        <ShieldCheck className="w-6 h-6 text-accent shrink-0" />
-                      ) : (
-                        <Info className="w-6 h-6 text-blue-600 shrink-0" />
-                      )}
+                    <div key={guide.id} className={`flex gap-4 p-5 rounded-2xl border ${guide.type === 'alert' ? 'bg-accent/5 border-accent/20' : 'bg-blue-50 border-blue-100'}`}>
+                      {guide.type === 'alert' ? <ShieldCheck className="w-6 h-6 text-accent shrink-0" /> : <Info className="w-6 h-6 text-blue-600 shrink-0" />}
                       <div className="text-sm">
                         <p className="font-bold text-slate-900">{guide.title}</p>
                         <p className="text-slate-600 leading-relaxed mt-1 font-medium">{guide.description}</p>
@@ -325,8 +203,7 @@ export default function Dashboard() {
                   ))
                 ) : (
                   <div className="text-center py-10 text-muted-foreground italic">
-                    <Info className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">No guidelines published.</p>
+                    <Info className="w-8 h-8 mx-auto mb-2 opacity-20" /><p className="text-sm">No guidelines published.</p>
                   </div>
                 )}
              </div>

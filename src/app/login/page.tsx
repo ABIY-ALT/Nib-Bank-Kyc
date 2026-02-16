@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,10 +7,8 @@ import { useRouter } from 'next/navigation';
 import { 
   Card, 
   CardContent, 
-  CardDescription, 
   CardHeader, 
   CardTitle,
-  CardFooter
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,13 +24,11 @@ import {
   Eye,
   EyeOff
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
-  const { login, loginAs, allUsers, user } = useAuth();
+  const { login, user } = useAuth();
   const router = useRouter();
-  const { toast } = useToast();
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,7 +36,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Automatically redirect if user is already authenticated (e.g. after loginAs)
   useEffect(() => {
     if (user) {
       router.push('/');
@@ -68,8 +64,8 @@ export default function LoginPage() {
           <div className="p-4 bg-primary/10 rounded-2xl mb-4 flex items-center justify-center">
             <ShieldCheck className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tight">Welcome Back</h1>
-          <p className="text-slate-500 text-lg font-medium">Enter your credentials to access your account.</p>
+          <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tight">Nib Bank Gateway</h1>
+          <p className="text-slate-500 text-lg font-medium">Secure institutional access portal.</p>
         </div>
 
         <Card className="shadow-2xl border-slate-200 overflow-hidden">
@@ -77,9 +73,9 @@ export default function LoginPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-xl font-bold flex items-center gap-2 text-slate-800">
                 <Building2 className="w-5 h-5 text-primary" />
-                Institutional Login
+                Staff Login
               </CardTitle>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nib Kyc</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Secure</span>
             </div>
           </CardHeader>
           <CardContent className="pt-8 px-8 pb-8">
@@ -92,14 +88,12 @@ export default function LoginPage() {
               )}
 
               <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Official Bank Email</Label>
-                </div>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Official Bank Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
                     type="email" 
-                    placeholder="Test.Test@nibbank.com.et" 
+                    placeholder="Firstname.Lastname@nibbank.com.et" 
                     className="pl-10 h-12 bg-slate-50/50 border-slate-200 font-bold"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -109,7 +103,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Password</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Credential</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
@@ -136,30 +130,12 @@ export default function LoginPage() {
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                Login
+                Authenticate Session
                 <ChevronRight className="w-5 h-5" />
               </Button>
             </form>
           </CardContent>
         </Card>
-
-        {/* Prototype Switching Tool - To be removed in prod */}
-        <div className="pt-8 border-t border-dashed space-y-4">
-          <p className="text-center text-[10px] font-black uppercase text-slate-400 tracking-widest">Prototype Entry Points</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {allUsers.map(u => (
-              <Button 
-                key={u.id} 
-                variant="outline" 
-                size="sm" 
-                className="text-[10px] h-8 font-bold border-slate-200 hover:bg-white text-slate-600"
-                onClick={() => loginAs(u.id)}
-              >
-                {u.role}
-              </Button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -8,24 +8,22 @@ import {
   signInWithEmailAndPassword, 
   signOut, 
   updatePassword as fbUpdatePassword,
-  User as FirebaseUser 
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection, onSnapshot, query, limit } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
+import { doc, getDoc, setDoc, updateDoc, collection, query, limit, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 export type UserRole = 
-  | 'Branch Officer' 
-  | 'KYC Officer' 
-  | 'Supervisor' 
-  | 'Branch Banking Director' 
-  | 'Admin' 
-  | 'Branch Manager' 
-  | 'District Director' 
-  | 'Division Manager' 
-  | 'Chief Retail & SME Banking Officer' 
-  | 'Follow-up Team' 
-  | 'Chief';
+  | 'BRANCH_OFFICER' 
+  | 'KYC_OFFICER' 
+  | 'SUPERVISOR' 
+  | 'BRANCH_BANKING_DIRECTOR' 
+  | 'ADMIN' 
+  | 'BRANCH_MANAGER' 
+  | 'DISTRICT_DIRECTOR' 
+  | 'DIVISION_MANAGER' 
+  | 'CHIEF_RETAIL_SME_OFFICER' 
+  | 'FOLLOW_UP_TEAM' 
+  | 'CHIEF';
 
 export interface User {
   id: string;
@@ -36,12 +34,11 @@ export interface User {
   branch?: string;
   assignedBranches?: string[];
   district?: string;
-  status?: 'Active' | 'Inactive' | 'Suspended';
+  status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   needsPasswordChange?: boolean;
 }
 
 const SESSION_TIMEOUT_MINUTES = 30;
-const PROTOTYPE_PASSWORD = 'nibbank123';
 
 interface AuthContextType {
   user: User | null;
@@ -50,7 +47,6 @@ interface AuthContextType {
   logout: (reason?: string) => Promise<void>;
   changePassword: (newPass: string) => Promise<void>;
   allUsers: User[]; 
-  loginAs: (userId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -58,37 +54,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { auth } = useFirebase();
   const db = useFirestore();
-  const router = useRouter();
   const { toast } = useToast();
   
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastActivity, setLastActivity] = useState(Date.now());
-  const [dynamicUsers, setDynamicUsers] = useState<User[]>([]);
-
-  // MOCK DATA for initial bootstrap
-  const MOCK_PROFILES: User[] = [
-    { id: 'admin-1', name: 'System Admin', email: 'Admin.User@nibbank.com.et', role: 'Admin', status: 'Active', needsPasswordChange: false },
-    { id: 'chief-1', name: 'Executive Chief', email: 'Executive.Chief@nibbank.com.et', role: 'Chief Retail & SME Banking Officer', status: 'Active', needsPasswordChange: false },
-    { id: 'branch-1', name: 'John Doe', email: 'John.Doe@nibbank.com.et', role: 'Branch Officer', branch: 'Downtown', district: 'Central', status: 'Active', needsPasswordChange: false },
-    { id: 'kyc-1', name: 'Jane Smith', email: 'Jane.Smith@nibbank.com.et', role: 'KYC Officer', assignedBranches: ['Downtown', 'Uptown'], status: 'Active', needsPasswordChange: false },
-  ];
+  const [dbUsers, setDbUsers] = useState<User[]>([]);
 
   useEffect(() => {
     if (!db) return;
-    
-    const q = query(collection(db, "users"), limit(20));
+    const q = query(collection(db, "users"), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-      const combined = [...MOCK_PROFILES];
-      users.forEach(u => {
-        if (!combined.some(m => m.id === u.id)) {
-          combined.push(u);
-        }
-      });
-      setDynamicUsers(combined);
+      setDbUsers(users);
     });
-
     return () => unsubscribe();
   }, [db]);
 
@@ -100,8 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userDoc = await getDoc(doc(db, "users", fbUser.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data() as User;
-          
-          if (userData.status !== 'Active') {
+          if (userData.status !== 'ACTIVE') {
             toast({ variant: 'destructive', title: 'Access Denied', description: `Your account is currently ${userData.status}.` });
             await signOut(auth);
             setUser(null);
@@ -109,29 +87,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser({ ...userData, id: fbUser.uid });
           }
         } else {
-          const newUser: User = {
-            id: fbUser.uid,
-            name: fbUser.displayName || fbUser.email?.split('@')[0].replace('.', ' ') || 'Bank User',
-            email: fbUser.email || '',
-            role: 'Branch Officer',
-            status: 'Active',
-            needsPasswordChange: true
-          };
-          await setDoc(doc(db, "users", fbUser.uid), newUser);
-          setUser(newUser);
+          setUser(null); // No local profile found for this auth user
         }
       } else {
-        const savedUserId = localStorage.getItem('proto_user_id');
-        if (savedUserId && !user) {
-          const found = dynamicUsers.find(u => u.id === savedUserId);
-          if (found) setUser(found);
-        }
+        setUser(null);
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [auth, db, dynamicUsers]);
+  }, [auth, db]);
 
   useEffect(() => {
     const handleActivity = () => setLastActivity(Date.now());
@@ -141,7 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const interval = setInterval(() => {
       const now = Date.now();
       if (user && now - lastActivity > SESSION_TIMEOUT_MINUTES * 60 * 1000) {
-        toast({ title: 'Session Expired', description: 'Institutional session timed out due to inactivity.' });
         logout('Session Timeout');
       }
     }, 60000);
@@ -153,88 +117,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user, lastActivity]);
 
-  const logAuthEvent = async (action: string, currentUser: User | null, details?: string) => {
-    if (!db || !currentUser) return;
-    const logRef = doc(collection(db, "audit_logs"));
-    await setDoc(logRef, {
-      id: logRef.id,
-      userId: currentUser.id,
-      userEmail: currentUser.email,
-      userRole: currentUser.role || 'Unassigned',
-      userBranch: currentUser.branch || 'N/A',
-      action,
-      timestamp: new Date().toISOString(),
-      ipAddress: "10.128." + Math.floor(Math.random() * 255) + "." + Math.floor(Math.random() * 255),
-      details: details || ""
-    });
-  };
-
   const login = async (email: string, pass: string) => {
     if (!auth) return;
     if (!email.toLowerCase().endsWith('@nibbank.com.et')) {
-      throw new Error('Institutional access restricted to @nibbank.com.et domains.');
+      throw new Error('Institutional access restricted to @nibbank.com.et domain.');
     }
-
-    // Prototype Logic: Check local dynamic users first for demo purposes
-    const protoUser = dynamicUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-    
-    if (protoUser && pass === PROTOTYPE_PASSWORD) {
-      setUser(protoUser);
-      localStorage.setItem('proto_user_id', protoUser.id);
-      await logAuthEvent('Login', protoUser, 'User authenticated via prototype gateway.');
-      return;
-    }
-    
-    // Fallback to real Firebase Auth
     await signInWithEmailAndPassword(auth, email, pass);
-    localStorage.removeItem('proto_user_id');
   };
 
   const logout = async (reason: string = 'User Logout') => {
-    const userToLog = user;
     setUser(null);
-    localStorage.removeItem('proto_user_id');
-    
-    try {
-      if (userToLog) {
-        await logAuthEvent('Logout', userToLog, reason);
-      }
-      if (auth) {
-        await signOut(auth);
-      }
-    } catch (error) {
-      console.error("Institutional logout error:", error);
-    } finally {
-      window.location.href = '/login';
-      toast({ title: 'Logged Out', description: 'Institutional session terminated safely.' });
+    if (auth) {
+      await signOut(auth);
     }
+    window.location.href = '/login';
+    toast({ title: 'Logged Out', description: `Institutional session terminated: ${reason}` });
   };
 
   const changePassword = async (newPass: string) => {
-    if (!db || !user) return;
-    
-    if (auth?.currentUser) {
-      try {
-        await fbUpdatePassword(auth.currentUser, newPass);
-      } catch (e) {
-        console.warn("Auth password update skipped (not a real auth user session)");
-      }
-    }
-    
-    const userRef = doc(db, "users", user.id);
-    await updateDoc(userRef, { needsPasswordChange: false });
-    
+    if (!db || !user || !auth?.currentUser) return;
+    await fbUpdatePassword(auth.currentUser, newPass);
+    await updateDoc(doc(db, "users", user.id), { needsPasswordChange: false });
     setUser(prev => prev ? { ...prev, needsPasswordChange: false } : null);
-    await logAuthEvent('Password Change', user, 'User completed force password change cycle.');
-  };
-
-  const loginAs = async (userId: string) => {
-    const profile = dynamicUsers.find(p => p.id === userId);
-    if (profile) {
-      setUser(profile);
-      localStorage.setItem('proto_user_id', userId);
-      toast({ title: 'Profile Switched', description: `Viewing as ${profile.name} (${profile.role})` });
-    }
   };
 
   return (
@@ -244,8 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login, 
       logout, 
       changePassword, 
-      allUsers: dynamicUsers, 
-      loginAs 
+      allUsers: dbUsers 
     }}>
       {children}
     </AuthContext.Provider>
