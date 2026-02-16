@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useAuth } from "@/lib/auth-mock";
@@ -20,7 +19,8 @@ import {
   Info,
   Beaker,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -30,6 +30,7 @@ import { collection, query, where, orderBy, limit, doc, setDoc } from "firebase/
 import { useMemo, useState } from "react";
 import { KYCSubmission, MOCK_SUBMISSIONS } from "@/lib/kyc-data";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface Guideline {
   id: string;
@@ -45,11 +46,11 @@ export default function Dashboard() {
   const [isSeeding, setIsSeeding] = useState(false);
 
   // Dashboard context: Branch portal for officers, Global portal for management
-  const isAdmin = user.role === 'Admin';
-  const isManagement = ['Admin', 'Branch Banking Director', 'Supervisor', 'District Director', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Chief'].includes(user.role || '');
+  const isAdmin = user?.role === 'Admin';
+  const isManagement = ['Admin', 'Branch Banking Director', 'Supervisor', 'District Director', 'Division Manager', 'Chief Retail & SME Banking Officer', 'Chief'].includes(user?.role || '');
 
   const dashboardQuery = useMemo(() => {
-    if (!db) return null;
+    if (!db || !user) return null;
     if (isAdmin) {
       return query(
         collection(db, "submissions"), 
@@ -81,7 +82,7 @@ export default function Dashboard() {
       orderBy("submittedAt", "desc"),
       limit(5)
     );
-  }, [db, user.branch, user.district, user.role, isAdmin]);
+  }, [db, user, isAdmin]);
 
   const { data: recentSubmissions, loading: submissionsLoading } = useCollection<KYCSubmission>(dashboardQuery);
 
@@ -174,9 +175,9 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-            {isManagement ? 'Institutional Command' : `${user.branch} Branch Portal`}
+            {isManagement ? 'Institutional Command' : `${user?.branch} Branch Portal`}
           </h1>
-          <p className="text-muted-foreground text-lg">Welcome back, {user.name}. {isManagement ? 'Overseeing network-wide KYC compliance.' : 'Managing your branch\'s local submissions.'}</p>
+          <p className="text-muted-foreground text-lg">Welcome back, {user?.name}. {isManagement ? 'Overseeing network-wide KYC compliance.' : 'Managing your branch\'s local submissions.'}</p>
         </div>
         <div className="flex items-center gap-3">
           {isAdmin && (
@@ -190,7 +191,7 @@ export default function Dashboard() {
               Seed Prototype Data
             </Button>
           )}
-          {user.role === 'Branch Officer' && (
+          {user?.role === 'Branch Officer' && (
             <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-bold text-lg">
               <Link href="/submissions/new">
                 Create New Submission
