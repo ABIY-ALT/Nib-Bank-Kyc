@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -170,7 +171,9 @@ export default function UserManagementPage() {
       role: formData.role || null,
       branch: formData.branch || null,
       district: formData.district || null,
-      assignedBranches: formData.assignedBranches || []
+      assignedBranches: formData.assignedBranches || [],
+      // If it's a new user, force them to change password on first login
+      needsPasswordChange: editingUser ? (formData.needsPasswordChange ?? false) : true
     };
 
     setDoc(userRef, data, { merge: true })
@@ -184,7 +187,9 @@ export default function UserManagementPage() {
 
     toast({ 
       title: editingUser ? "Assignment Saved" : "User Registered", 
-      description: "Personnel mapping updated in the institutional directory." 
+      description: editingUser 
+        ? "Personnel mapping updated in the institutional directory."
+        : `User created. Temporary access granted with force-password policy.` 
     });
     setIsDialogOpen(false);
   };
@@ -248,7 +253,12 @@ export default function UserManagementPage() {
                       {user.name.charAt(0)}
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-bold text-slate-900">{user.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900">{user.name}</span>
+                        {user.needsPasswordChange && (
+                          <Badge className="bg-orange-50 text-orange-600 border-orange-100 text-[8px] h-4 font-black uppercase">Force Update</Badge>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">
                         <Mail className="w-2.5 h-2.5" />
                         {user.email}

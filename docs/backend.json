@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "KYCSubmission": {
@@ -111,7 +112,8 @@
         },
         "branch": { "type": "string" },
         "district": { "type": "string" },
-        "status": { "type": "string", "enum": ["Active", "Inactive", "Suspended"] }
+        "status": { "type": "string", "enum": ["Active", "Inactive", "Suspended"] },
+        "needsPasswordChange": { "type": "boolean" }
       }
     },
     "AuditLog": {

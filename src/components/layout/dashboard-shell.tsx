@@ -1,7 +1,8 @@
+
 'use client';
 
 import React from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-mock';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/app-sidebar';
@@ -15,14 +16,24 @@ import { Toaster } from '@/components/ui/toaster';
  */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
 
   const isLoginPage = pathname === '/login';
+  const isForceChangePage = pathname === '/force-password-change';
 
-  // If we're on the login page, render a clean layout without the sidebar/header
-  if (isLoginPage) {
+  // Force Change Password Logic
+  // If the user is authenticated but needs a password change, redirect them to the secure gate
+  React.useEffect(() => {
+    if (user && user.needsPasswordChange && !isForceChangePage && !isLoginPage) {
+      router.push('/force-password-change');
+    }
+  }, [user, isForceChangePage, isLoginPage, router]);
+
+  // If we're on the login page or force change page, render a clean layout without the sidebar/header
+  if (isLoginPage || isForceChangePage) {
     return (
-      <div className="min-h-screen w-full">
+      <div className="min-h-screen w-full bg-[#FCFAF7]">
         {children}
         <Toaster />
       </div>
