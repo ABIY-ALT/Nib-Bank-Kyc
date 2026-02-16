@@ -29,15 +29,20 @@ const MOCK_DISTRICT_METRICS = [
 ];
 
 const PERFORMANCE_TIERS = ["High", "Medium", "Low"];
+const DISTRICT_NAMES = MOCK_DISTRICT_METRICS.map(d => d.name).sort();
 
 export default function DistrictPerformancePage() {
   const { toast } = useToast();
   const [selectedTiers, setSelectedTiers] = useState<string[]>([]);
+  const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
 
   const filteredDistricts = useMemo(() => {
-    if (selectedTiers.length === 0) return MOCK_DISTRICT_METRICS;
-    return MOCK_DISTRICT_METRICS.filter(d => selectedTiers.includes(d.tier));
-  }, [selectedTiers]);
+    return MOCK_DISTRICT_METRICS.filter(d => {
+      const matchesTier = selectedTiers.length === 0 || selectedTiers.includes(d.tier);
+      const matchesName = selectedDistricts.length === 0 || selectedDistricts.includes(d.name);
+      return matchesTier && matchesName;
+    });
+  }, [selectedTiers, selectedDistricts]);
 
   const totalVolume = filteredDistricts.reduce((acc, d) => acc + d.volume, 0);
 
@@ -47,12 +52,25 @@ export default function DistrictPerformancePage() {
     );
   };
 
+  const toggleDistrict = (name: string) => {
+    setSelectedDistricts(prev => 
+      prev.includes(name) ? prev.filter(d => d !== name) : [...prev, name]
+    );
+  };
+
+  const handleResetFilters = () => {
+    setSelectedTiers([]);
+    setSelectedDistricts([]);
+  };
+
   const handleExportCSV = () => {
     toast({
       title: "District Report Exported",
       description: "Regional performance analytics saved to CSV.",
     });
   };
+
+  const activeFilterCount = selectedTiers.length + selectedDistricts.length;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -67,18 +85,39 @@ export default function DistrictPerformancePage() {
               <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
                 <Filter className="w-4 h-4 text-slate-400" />
                 Filter
-                {selectedTiers.length > 0 && (
+                {activeFilterCount > 0 && (
                   <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
-                    {selectedTiers.length}
+                    {activeFilterCount}
                   </Badge>
                 )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Compliance Health</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Institutional Oversight</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="cursor-pointer py-3">
+                  <Map className="w-4 h-4 mr-2 text-slate-400" />
+                  <span>Regional District</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56">
+                  {DISTRICT_NAMES.map((name) => (
+                    <DropdownMenuCheckboxItem
+                      key={name}
+                      checked={selectedDistricts.includes(name)}
+                      onCheckedChange={() => toggleDistrict(name)}
+                      className="cursor-pointer py-2.5"
+                    >
+                      {name} District
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer py-3">
+                  <TrendingUp className="w-4 h-4 mr-2 text-slate-400" />
                   <span>Performance Tier</span>
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="w-56">
@@ -94,8 +133,9 @@ export default function DistrictPerformancePage() {
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSelectedTiers([])} className="text-destructive font-bold cursor-pointer py-3">
+              <DropdownMenuItem onClick={handleResetFilters} className="text-destructive font-bold cursor-pointer py-3">
                 Clear Performance Filters
               </DropdownMenuItem>
             </DropdownMenuContent>
