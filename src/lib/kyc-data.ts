@@ -1,4 +1,3 @@
-
 export type SubmissionStatus = 
   | 'PENDING' 
   | 'IN_REVIEW' 
