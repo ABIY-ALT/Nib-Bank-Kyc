@@ -1,4 +1,7 @@
 
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -86,8 +89,8 @@ model Branch {
 
 model User {
   id                  String      @id @default(cuid())
-  name                String
   email               String      @unique
+  name                String
   phoneNumber         String?
   role                UserRole    @default(BRANCH_OFFICER)
   status              UserStatus  @default(ACTIVE)
@@ -95,41 +98,47 @@ model User {
   branchId            String?
   district            District?   @relation(fields: [districtId], references: [id])
   districtId          String?
-  assignedBranches    String[]
+  assignedBranches    String[]    // List of branch names for KYC Officers
   needsPasswordChange Boolean     @default(true)
+  submissions         Submission[] @relation("SubmittedBy")
+  reviews             Submission[] @relation("ReviewedBy")
+  auditLogs           AuditLog[]
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
-  auditLogs           AuditLog[]
 }
 
 model Submission {
   id                String            @id @default(cuid())
-  customerId        String?
   customerName      String
+  customerId        String?
+  entityType        String
+  status            SubmissionStatus  @default(PENDING)
   branch            Branch            @relation(fields: [branchId], references: [id])
   branchId          String
-  districtName      String
-  submittedBy       String
+  district          String            // Denormalized for fast regional querying
+  submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
+  submittedById     String
   submittedAt       DateTime          @default(now())
-  status            SubmissionStatus  @default(PENDING)
-  isExceptional     Boolean           @default(false)
-  exceptionalStatus ExceptionalStatus @default(NONE)
-  
-  exceptionReason   String?
-  justification     String?
-  memoUrl           String?
-  initiatedBy       String?
-  initiatedAt       DateTime?
-  
-  remarks           String?
-  entityType        String?
-  amendmentCycles   Int               @default(0)
+  reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewedById      String?
+  reviewedAt        DateTime?
   isResubmitted     Boolean           @default(false)
   resubmittedAt     DateTime?
-  checklistState    Json?
+  amendmentCycles   Int               @default(0)
+  remarks           String?           @db.Text
+  checklistState    Json?             // Stores { itemId: boolean }
+  
+  // Exceptional Approval Flow
+  isExceptional     Boolean           @default(false)
+  exceptionalStatus ExceptionalStatus @default(NONE)
+  exceptionalData   Json?             // Stores justification, reason, memo links
   
   documents         Document[]
   comments          Comment[]
+  bundleDownloads   BundleDownload[]
+  followUpAudits    FollowUpVerification[]
+  
+  createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 }
 
@@ -148,36 +157,38 @@ model Comment {
   id           String     @id @default(cuid())
   role         String
   performedBy  String
-  timestamp    DateTime   @default(now())
-  comment      String
+  comment      String     @db.Text
   action       String
   submission   Submission @relation(fields: [submissionId], references: [id])
   submissionId String
+  timestamp    DateTime   @default(now())
 }
 
 model RoleDefinition {
-  id               String  @id @default(cuid())
-  name             String  @unique
-  canSubmit        Boolean @default(false)
-  canReview        Boolean @default(false)
-  canEscalate      Boolean @default(false)
-  canViewReports   Boolean @default(false)
-  canManageUsers   Boolean @default(false)
-  canManageSystem  Boolean @default(false)
+  id              String  @id
+  name            String  @unique
+  canSubmit       Boolean @default(false)
+  canReview       Boolean @default(false)
+  canEscalate     Boolean @default(false)
+  canViewReports  Boolean @default(false)
+  canManageUsers  Boolean @default(false)
+  canManageSystem Boolean @default(false)
 }
 
 model AuditLog {
   id        String   @id @default(cuid())
-  userId    String
   user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  userEmail String
   action    String
+  details   String?  @db.Text
   ipAddress String?
-  details   String?
   timestamp DateTime @default(now())
 }
 
 model FollowUpVerification {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
+  submission   Submission @relation(fields: [submissionId], references: [id])
   submissionId String
   customerName String
   branch       String
@@ -185,30 +196,32 @@ model FollowUpVerification {
   accountType  String
   verifiedBy   String?
   verifiedAt   DateTime?
-  result       String?
-  remarks      String?
-  status       String   @default("Pending")
+  result       String?    // "Correct" or "Discrepancy"
+  remarks      String?    @db.Text
+  status       String     @default("Pending")
+  createdAt    DateTime   @default(now())
 }
 
 model BundleDownload {
-  id             String   @id @default(cuid())
+  id             String     @id @default(cuid())
+  submission     Submission @relation(fields: [submissionId], references: [id])
   submissionId   String
   performedBy    String
-  timestamp      DateTime @default(now())
   bundleName     String
   sourceDistrict String
   sourceBranch   String
+  timestamp      DateTime   @default(now())
 }
 
 model KYCFinding {
   id           String          @id @default(cuid())
   code         String          @unique
   title        String
-  description  String
+  description  String          @db.Text
   category     FindingCategory
   severity     Severity
-  applicableTo String[]
+  applicableTo String[]        // Array of entity types
   active       Boolean         @default(true)
-  createdAt    DateTime        @default(now())
   source       String          @default("manual")
+  createdAt    DateTime        @default(now())
 }
