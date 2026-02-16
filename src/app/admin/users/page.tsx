@@ -259,7 +259,7 @@ export default function UserManagementPage() {
                           <Badge className="bg-orange-50 text-orange-600 border-orange-100 text-[8px] h-4 font-black uppercase">Force Update</Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold tracking-tighter">
                         <Mail className="w-2.5 h-2.5" />
                         {user.email}
                       </div>
