@@ -1,0 +1,226 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  BRANCH_OFFICER
+  KYC_OFFICER
+  SUPERVISOR
+  BRANCH_BANKING_DIRECTOR
+  ADMIN
+  BRANCH_MANAGER
+  DISTRICT_DIRECTOR
+  DIVISION_MANAGER
+  CHIEF_RETAIL_SME_OFFICER
+  FOLLOW_UP_TEAM
+  CHIEF
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum SubmissionStatus {
+  PENDING
+  IN_REVIEW
+  AMENDED
+  APPROVED
+  ESCALATED
+  REJECTED
+}
+
+enum ExceptionalStatus {
+  NONE
+  AWAITING_DISTRICT
+  AWAITING_DIRECTOR
+  AWAITING_CHIEF
+  AWAITING_DIVISION
+  AWAITING_SUPERVISOR
+  COMPLETED
+  REJECTED
+  CLARIFICATION_REQUIRED
+}
+
+enum FindingCategory {
+  IDENTITY
+  DOCUMENTATION
+  COMPLIANCE
+  ACCOUNT_VALIDATION
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model District {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  branches    Branch[]
+  users       User[]
+  submissions Submission[]
+}
+
+model Branch {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  code        String?      @unique
+  districtId  String
+  district    District     @relation(fields: [districtId], references: [id])
+  users       User[]
+  submissions Submission[]
+}
+
+model User {
+  id                  String       @id @default(cuid())
+  name                String
+  email               String       @unique
+  phoneNumber         String?
+  role                UserRole     @default(BRANCH_OFFICER)
+  status              UserStatus   @default(ACTIVE)
+  needsPasswordChange Boolean      @default(true)
+  
+  branchId            String?
+  branch              Branch?      @relation(fields: [branchId], references: [id])
+  districtId          String?
+  district            District?    @relation(fields: [districtId], references: [id])
+  
+  submissionsSubmitted Submission[] @relation("SubmittedBy")
+  submissionsReviewed  Submission[] @relation("ReviewedBy")
+  followUpVerifications FollowUpVerification[]
+  auditLogs            AuditLog[]
+}
+
+model Submission {
+  id                String            @id
+  customerId        String?
+  customerName      String
+  entityType        String
+  status            SubmissionStatus  @default(PENDING)
+  isExceptional     Boolean           @default(false)
+  exceptionalStatus ExceptionalStatus @default(NONE)
+  
+  // Exceptional Data
+  exceptionReason   String?
+  riskJustification String?
+  initiatedBy       String?
+  initiatedAt       DateTime?
+  
+  amendmentCycles   Int               @default(0)
+  isResubmitted     Boolean           @default(false)
+  resubmittedAt     DateTime?
+  reviewedAt        DateTime?
+  remarks           String?
+  submittedAt       DateTime          @default(now())
+  
+  branchId          String
+  branch            Branch            @relation(fields: [branchId], references: [id])
+  districtId        String
+  district          District          @relation(fields: [districtId], references: [id])
+  
+  submittedById     String
+  submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
+  reviewedById      String?
+  reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  
+  documents         Document[]
+  comments          Comment[]
+  followUps         FollowUpVerification[]
+  bundleDownloads   BundleDownload[]
+}
+
+model Document {
+  id           String     @id @default(cuid())
+  name         String
+  type         String
+  uploadedAt   DateTime   @default(now())
+  status       String     @default("Current")
+  url          String
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id])
+}
+
+model Comment {
+  id           String     @id @default(cuid())
+  role         String
+  performedBy  String
+  timestamp    DateTime   @default(now())
+  comment      String
+  action       String
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id])
+}
+
+model RoleDefinition {
+  id                String  @id @default(cuid())
+  name              String  @unique
+  canSubmit         Boolean @default(false)
+  canReview         Boolean @default(false)
+  canEscalate       Boolean @default(false)
+  canViewReports    Boolean @default(false)
+  canManageUsers    Boolean @default(false)
+  canManageSystem   Boolean @default(false)
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  userEmail   String
+  action      String
+  timestamp   DateTime @default(now())
+  ipAddress   String?
+  details     String?
+}
+
+model FollowUpVerification {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  customerName String
+  branch       String
+  officer      String
+  accountType  String
+  verifiedById String?
+  verifiedBy   User?      @relation(fields: [verifiedById], references: [id])
+  verifiedAt   DateTime?
+  result       String?    // Correct / Discrepancy
+  remarks      String?
+  status       String     @default("Pending")
+}
+
+model BundleDownload {
+  id             String     @id @default(cuid())
+  submissionId   String
+  submission     Submission @relation(fields: [submissionId], references: [id])
+  performedBy    String
+  timestamp      DateTime   @default(now())
+  bundleName     String
+  sourceDistrict String
+  sourceBranch   String
+}
+
+model KYCFinding {
+  id           String          @id @default(cuid())
+  code         String          @unique
+  title        String
+  description  String
+  category     FindingCategory
+  severity     Severity
+  applicableTo String[]
+  createdAt    DateTime        @default(now())
+  active       Boolean         @default(true)
+  source       String          @default("manual")
+}
