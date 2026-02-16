@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -15,18 +14,19 @@ interface SyncUserData {
 
 /**
  * Synchronizes a user profile with the SQL database via Prisma.
- * This is called during login and during administrative user management.
+ * This ensures that administrative changes and logins are mirrored in PostgreSQL.
  */
 export async function syncUserToSql(userData: SyncUserData) {
   try {
     console.log(`[SQL Sync] Synchronizing user: ${userData.email}`);
     
-    // Normalize status and role to match Prisma Enums strictly
-    // Defaults are set if the values are missing or invalid
+    // Normalize status and role to match Prisma Enums strictly (UPPER_SNAKE_CASE)
     const status = (userData.status?.toUpperCase() as any) || 'ACTIVE';
-    const rawRole = userData.role?.toUpperCase().replace(/\s+/g, '_') || 'BRANCH_OFFICER';
     
-    // Use type casting to match generated Prisma Enums
+    // Ensure role is normalized to standard SQL enum naming
+    let rawRole = userData.role?.toUpperCase() || 'BRANCH_OFFICER';
+    rawRole = rawRole.replace(/\s+/g, '_');
+    
     const role = rawRole as any;
 
     const user = await prisma.user.upsert({
@@ -36,7 +36,7 @@ export async function syncUserToSql(userData: SyncUserData) {
         name: userData.name,
         role: role,
         status: status,
-        // In this implementation, we store branch/district names as strings if relations aren't fully mapped
+        districtName: userData.district || null,
       },
       create: {
         id: userData.id,
@@ -44,6 +44,7 @@ export async function syncUserToSql(userData: SyncUserData) {
         name: userData.name,
         role: role,
         status: status,
+        districtName: userData.district || null,
       },
     });
 
@@ -53,7 +54,7 @@ export async function syncUserToSql(userData: SyncUserData) {
     console.error('[SQL Sync] Critical Failure:', error);
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Database synchronization failed due to internal connection error' 
+      error: error instanceof Error ? error.message : 'Database connection error. Ensure prisma migrate has been run.' 
     };
   }
 }

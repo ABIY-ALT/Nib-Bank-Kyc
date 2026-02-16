@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, doc, setDoc, updateDoc, query, orderBy, getDoc } from "firebase/firestore";
 import { 
@@ -17,20 +16,15 @@ import { Button } from "@/components/ui/button";
 import { 
   UserPlus, 
   Mail, 
-  Trash2, 
-  Edit2, 
   Loader2,
   Building2,
   MapPin,
-  Phone,
   Settings2,
   UserCheck,
   UserX,
-  X,
   ShieldCheck,
   Layers,
-  ArrowRight,
-  CheckCircle
+  ArrowRight
 } from "lucide-react";
 import { 
   Dialog, 
@@ -54,8 +48,6 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { User, UserRole } from "@/lib/auth-mock.tsx";
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { syncUserToSql } from '@/actions/auth';
 import Link from 'next/link';
 
@@ -141,7 +133,7 @@ export default function UserManagementPage() {
     if (!db) return;
     
     if (!formData.name || !formData.email) {
-      toast({ variant: "destructive", title: "Missing Information", description: "Identity details required." });
+      toast({ variant: "destructive", title: "Validation Error", description: "Identity details required." });
       return;
     }
 
@@ -210,11 +202,10 @@ export default function UserManagementPage() {
     const newStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     if (!confirm(`Are you sure you want to change ${name}'s status to ${newStatus}?`)) return;
     
+    setIsSyncing(true);
     try {
-      // Update Firestore
       await updateDoc(doc(db, "users", id), { status: newStatus });
       
-      // Fetch fresh data for SQL sync
       const snap = await getDoc(doc(db, "users", id));
       const userData = snap.data();
       if (userData) {
@@ -236,6 +227,8 @@ export default function UserManagementPage() {
     } catch (error: any) {
       console.error("Status toggle error:", error);
       toast({ variant: "destructive", title: "Status Sync Failed", description: error.message });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -352,8 +345,9 @@ export default function UserManagementPage() {
                       onClick={() => handleToggleStatus(user.id, user.status || 'ACTIVE', user.name)} 
                       className={user.status === 'ACTIVE' ? "text-destructive rounded-full hover:bg-destructive/5 h-9 w-9" : "text-emerald-600 rounded-full hover:bg-emerald-50 h-9 w-9"}
                       title={user.status === 'ACTIVE' ? "Deactivate User" : "Activate User"}
+                      disabled={isSyncing}
                     >
-                      {user.status === 'ACTIVE' ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                      {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : (user.status === 'ACTIVE' ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />)}
                     </Button>
                   </div>
                 </TableCell>
