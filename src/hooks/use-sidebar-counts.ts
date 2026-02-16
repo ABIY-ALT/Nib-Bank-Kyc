@@ -6,9 +6,6 @@ import { useFirestore } from "@/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { User } from "@/lib/auth-mock";
 
-/**
- * Hook to fetch real-time counts for sidebar badges.
- */
 export function useSidebarCounts(user: User | null) {
   const db = useFirestore();
   const [counts, setCounts] = useState({
@@ -35,9 +32,8 @@ export function useSidebarCounts(user: User | null) {
       return;
     }
 
-    const isAdmin = user.role === 'Admin';
+    const isAdmin = user.role === 'ADMIN';
 
-    // 1. My Submissions & Action Required
     const qMy = isAdmin 
       ? query(collection(db, "submissions"))
       : query(collection(db, "submissions"), where("submittedBy", "==", user.name));
@@ -47,11 +43,10 @@ export function useSidebarCounts(user: User | null) {
       setCounts(prev => ({ 
         ...prev, 
         mySubmissions: isAdmin ? allDocs.length : allDocs.filter(d => d.submittedBy === user.name).length,
-        actionRequired: allDocs.filter(d => d.status === 'Amended' && (isAdmin || d.submittedBy === user.name)).length
+        actionRequired: allDocs.filter(d => d.status === 'AMENDED' && (isAdmin || d.submittedBy === user.name)).length
       }));
     });
 
-    // 2. Exceptional Approvals
     const qExceptional = query(
       collection(db, "submissions"),
       where("isExceptional", "==", true)
@@ -59,37 +54,34 @@ export function useSidebarCounts(user: User | null) {
     const unsubExceptional = onSnapshot(qExceptional, (snapshot) => {
       const activeExceptions = snapshot.docs.filter(doc => {
         const data = doc.data();
-        const isClosed = ["Completed", "Rejected", "None"].includes(data.exceptionalStatus);
+        const isClosed = ["COMPLETED", "REJECTED", "NONE"].includes(data.exceptionalStatus);
         if (isClosed) return false;
 
         if (isAdmin) return true;
-        if (user.role === 'District Director') return data.exceptionalStatus === 'Awaiting District' && data.district === user.district;
-        if (user.role === 'Branch Banking Director') return data.exceptionalStatus === 'Awaiting Director';
-        if (user.role === 'Chief Retail & SME Banking Officer') return data.exceptionalStatus === 'Awaiting Chief';
-        if (user.role === 'Division Manager') return data.exceptionalStatus === 'Awaiting Division';
-        if (user.role === 'Supervisor') return data.exceptionalStatus === 'Awaiting Supervisor';
+        if (user.role === 'DISTRICT_DIRECTOR') return data.exceptionalStatus === 'AWAITING_DISTRICT' && data.district === user.district;
+        if (user.role === 'BRANCH_BANKING_DIRECTOR') return data.exceptionalStatus === 'AWAITING_DIRECTOR';
+        if (user.role === 'CHIEF_RETAIL_SME_OFFICER') return data.exceptionalStatus === 'AWAITING_CHIEF';
+        if (user.role === 'DIVISION_MANAGER') return data.exceptionalStatus === 'AWAITING_DIVISION';
+        if (user.role === 'SUPERVISOR') return data.exceptionalStatus === 'AWAITING_SUPERVISOR';
         
-        const scope = user.role === 'Branch Manager' ? [user.branch] : (user.assignedBranches || []);
+        const scope = user.role === 'BRANCH_MANAGER' ? [user.branch] : (user.assignedBranches || []);
         return scope.includes(data.branch);
       });
       setCounts(prev => ({ ...prev, exceptional: activeExceptions.length }));
     });
 
-    // 3. Review Queues
     const qAllActive = query(
       collection(db, "submissions"),
-      where("status", "in", ["Pending", "In Review", "Escalated"])
+      where("status", "in", ["PENDING", "IN_REVIEW", "ESCALATED"])
     );
     const unsubQueues = onSnapshot(qAllActive, (snapshot) => {
       const docs = snapshot.docs.map(d => d.data());
       
       const filterByScope = (data: any) => {
         if (isAdmin) return true;
-        
-        // District Director sees active cases in their district
-        if (user.role === 'District Director') return data.district === user.district;
+        if (user.role === 'DISTRICT_DIRECTOR') return data.district === user.district;
 
-        const isGlobalReviewer = ['Branch Banking Director', 'Supervisor', 'Division Manager', 'Chief Retail & SME Banking Officer'].includes(user.role || '');
+        const isGlobalReviewer = ['BRANCH_BANKING_DIRECTOR', 'SUPERVISOR', 'DIVISION_MANAGER', 'CHIEF_RETAIL_SME_OFFICER'].includes(user.role || '');
         if (isGlobalReviewer) return true;
         
         const assigned = user.assignedBranches || [];
@@ -98,28 +90,27 @@ export function useSidebarCounts(user: User | null) {
 
       setCounts(prev => ({
         ...prev,
-        reviewQueue: docs.filter(d => d.status !== 'Escalated' && d.isResubmitted === false && d.isExceptional === false && filterByScope(d)).length,
-        resubmitted: docs.filter(d => d.status !== 'Escalated' && d.isResubmitted === true && filterByScope(d)).length,
-        escalated: docs.filter(d => d.status === 'Escalated' && filterByScope(d)).length
+        reviewQueue: docs.filter(d => d.status !== 'ESCALATED' && d.isResubmitted === false && d.isExceptional === false && filterByScope(d)).length,
+        resubmitted: docs.filter(d => d.status !== 'ESCALATED' && d.isResubmitted === true && filterByScope(d)).length,
+        escalated: docs.filter(d => d.status === 'ESCALATED' && filterByScope(d)).length
       }));
     });
 
-    // 4. Branch Node Queue
     let unsubBranch = () => {};
-    if (isAdmin || user.branch || user.role === 'District Director') {
+    if (isAdmin || user.branch || user.role === 'DISTRICT_DIRECTOR') {
       const qBranch = isAdmin 
         ? query(collection(db, "submissions"))
-        : user.role === 'District Director'
+        : user.role === 'DISTRICT_DIRECTOR'
         ? query(collection(db, "submissions"), where("district", "==", user.district))
         : query(collection(db, "submissions"), where("branch", "==", user.branch));
         
       unsubBranch = onSnapshot(qBranch, (snapshot) => {
-        const activeStatuses = ["Pending", "In Review", "Amended"];
+        const activeStatuses = ["PENDING", "IN_REVIEW", "AMENDED"];
         const count = snapshot.docs.filter(d => {
           const data = d.data();
           const matchesStatus = activeStatuses.includes(data.status);
           if (isAdmin) return matchesStatus;
-          if (user.role === 'District Director') return matchesStatus && data.district === user.district;
+          if (user.role === 'DISTRICT_DIRECTOR') return matchesStatus && data.district === user.district;
           return matchesStatus && data.branch === user.branch;
         }).length;
         setCounts(prev => ({ ...prev, branchNode: count }));

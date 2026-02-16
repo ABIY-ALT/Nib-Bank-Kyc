@@ -9,7 +9,7 @@ import {
   signOut, 
   updatePassword as fbUpdatePassword,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection, query, limit, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, limit, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 export type UserRole = 
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser({ ...userData, id: fbUser.uid });
           }
         } else {
-          setUser(null); // No local profile found for this auth user
+          setUser(null);
         }
       } else {
         setUser(null);

@@ -42,7 +42,6 @@ export default function Dashboard() {
   const db = useFirestore();
 
   const isAdmin = user?.role === 'ADMIN';
-  const isManagement = ['ADMIN', 'BRANCH_BANKING_DIRECTOR', 'SUPERVISOR', 'DISTRICT_DIRECTOR', 'DIVISION_MANAGER', 'CHIEF_RETAIL_SME_BANKING_OFFICER', 'CHIEF'].includes(user?.role || '');
 
   const dashboardQuery = useMemo(() => {
     if (!db || !user) return null;

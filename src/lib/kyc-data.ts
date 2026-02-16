@@ -145,4 +145,4 @@ export const AMENDMENT_SCENARIOS = [
   "19. Other (specify)"
 ];
 
-export const MOCK_SUBMISSIONS: Partial<KYCSubmission>[] = []; // Clear mock data for production alignment
+export const MOCK_SUBMISSIONS: Partial<KYCSubmission>[] = [];
