@@ -1,4 +1,3 @@
-
 "use client"
 
 import { KYCSubmission, Document } from "@/lib/kyc-data";
