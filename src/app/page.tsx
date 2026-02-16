@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from "@/lib/auth-mock";
@@ -51,6 +52,8 @@ export default function Dashboard() {
 
   const dashboardQuery = useMemo(() => {
     if (!db || !user) return null;
+    
+    // 1. Admins see global activity
     if (isAdmin) {
       return query(
         collection(db, "submissions"), 
@@ -59,6 +62,7 @@ export default function Dashboard() {
       );
     }
     
+    // 2. District Directors see their specific region
     if (user.role === 'District Director') {
       return query(
         collection(db, "submissions"),
@@ -68,6 +72,17 @@ export default function Dashboard() {
       );
     }
 
+    // 3. KYC Officers see their assigned branch portfolio
+    if (user.role === 'KYC Officer' && (user.assignedBranches?.length || 0) > 0) {
+      return query(
+        collection(db, "submissions"),
+        where("branch", "in", user.assignedBranches),
+        orderBy("submittedAt", "desc"),
+        limit(5)
+      );
+    }
+
+    // 4. Branch Staff see their specific node
     if (user.branch) {
       return query(
         collection(db, "submissions"), 
@@ -77,6 +92,7 @@ export default function Dashboard() {
       );
     }
 
+    // Fallback
     return query(
       collection(db, "submissions"),
       orderBy("submittedAt", "desc"),
@@ -93,8 +109,10 @@ export default function Dashboard() {
   const { data: settings } = useDoc<{ guidelines?: Guideline[] }>(settingsRef);
 
   const stats = useMemo(() => {
+    const scopeLabel = isAdmin ? 'Global' : user?.role === 'District Director' ? 'Regional' : 'Branch';
+    
     if (!recentSubmissions) return [
-      { label: isManagement ? 'Global Activity' : 'Branch Activity', value: '0', icon: History, color: 'text-blue-600' },
+      { label: `${scopeLabel} Activity`, value: '0', icon: History, color: 'text-blue-600' },
       { label: 'Approved Cases', value: '0', icon: FileCheck, color: 'text-green-600' },
       { label: 'Action Required', value: '0', icon: AlertCircle, color: 'text-orange-600' },
       { label: 'Network SLA', value: '98%', icon: TrendingUp, color: 'text-purple-600' },
@@ -104,12 +122,12 @@ export default function Dashboard() {
     const amendedCount = recentSubmissions.filter(s => s.status === 'Amended').length;
 
     return [
-      { label: isManagement ? 'Global Active' : 'Branch Active', value: recentSubmissions.length.toString(), icon: History, color: 'text-blue-600' },
-      { label: 'Approved Today', value: approvedCount.toString(), icon: FileCheck, color: 'text-green-600' },
+      { label: `${scopeLabel} Active`, value: recentSubmissions.length.toString(), icon: History, color: 'text-blue-600' },
+      { label: 'Approved Recently', value: approvedCount.toString(), icon: FileCheck, color: 'text-green-600' },
       { label: 'Action Required', value: amendedCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
       { label: 'Network SLA', value: '98.4%', icon: TrendingUp, color: 'text-purple-600' },
     ];
-  }, [recentSubmissions, isManagement]);
+  }, [recentSubmissions, isAdmin, user]);
 
   const handleSeedData = async () => {
     if (!db || isSeeding) return;
@@ -119,20 +137,21 @@ export default function Dashboard() {
       // 1. Seed Submissions
       for (const sub of MOCK_SUBMISSIONS) {
         const subRef = doc(db, "submissions", sub.id!);
-        await setDoc(subRef, {
+        const submissionData = {
           ...sub,
-          isResubmitted: false,
+          isResubmitted: sub.isResubmitted || false,
           amendmentCycles: sub.amendmentCycles || 0,
           isExceptional: sub.isExceptional || false,
           exceptionalStatus: sub.exceptionalStatus || "None",
           checklistState: {}
-        });
+        };
+        await setDoc(subRef, submissionData);
 
-        // Seed some documents for each
+        // Seed documents subcollection for each
         const docRef = doc(collection(subRef, "documents"));
         await setDoc(docRef, {
           id: docRef.id,
-          name: "National_ID_Scan.pdf",
+          name: "Institutional_Record_Scan.pdf",
           type: "id_card",
           uploadedAt: sub.submittedAt,
           status: 'Current',
@@ -160,7 +179,7 @@ export default function Dashboard() {
 
       toast({
         title: "Operational Data Hydrated",
-        description: "Firestore has been seeded with 20+ submissions, regional branches, and districts.",
+        description: "Firestore has been seeded with realistic submissions and institutional mapping.",
       });
     } catch (e) {
       console.error(e);
@@ -175,9 +194,9 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-            {isManagement ? 'Institutional Command' : `${user?.branch} Branch Portal`}
+            {isAdmin ? 'Institutional Command' : user?.role === 'District Director' ? `${user.district} District Portal` : `${user?.branch} Branch Portal`}
           </h1>
-          <p className="text-muted-foreground text-lg">Welcome back, {user?.name}. {isManagement ? 'Overseeing network-wide KYC compliance.' : 'Managing your branch\'s local submissions.'}</p>
+          <p className="text-muted-foreground text-lg">Welcome back, {user?.name}. {isAdmin ? 'Overseeing network-wide KYC compliance.' : 'Monitoring your jurisdictional activities.'}</p>
         </div>
         <div className="flex items-center gap-3">
           {isAdmin && (
@@ -220,11 +239,11 @@ export default function Dashboard() {
           <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
             <div>
               <CardTitle>Recent Activity Stream</CardTitle>
-              <CardDescription>Live tracking for {isManagement ? 'jurisdictional' : 'branch'} submissions.</CardDescription>
+              <CardDescription>Live tracking for authorized jurisdictional submissions.</CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-primary font-bold">
               <Link href="/submissions" className="flex items-center gap-1">
-                View All <ChevronRight className="w-4 h-4" />
+                View Archive <ChevronRight className="w-4 h-4" />
               </Link>
             </Button>
           </CardHeader>
@@ -243,7 +262,7 @@ export default function Dashboard() {
                         <p className="font-bold text-slate-900 group-hover:text-primary transition-colors">{sub.customerName}</p>
                         {sub.isExceptional && <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 text-[8px] h-4 font-black uppercase">Hierarchy</Badge>}
                       </div>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{sub.id} • {sub.branch} Branch</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{sub.id} • {sub.branch} Node</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant={
