@@ -9,7 +9,7 @@ import {
   User as FirebaseUser 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection } from 'firebase/firestore';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
 export type UserRole = 
@@ -43,7 +43,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (reason?: string) => Promise<void>;
   allUsers: User[]; // For testing purposes in this prototype
   loginAs: (userId: string) => void;
 }
@@ -151,22 +151,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async (reason: string = 'User Logout') => {
-    if (!auth) return;
-    
     const userToLog = user;
     
+    // 1. Immediate UI Feedback
+    setUser(null);
+    
     try {
+      // 2. Log institutional event if we have a user context
       if (userToLog) {
         await logAuthEvent('Logout', userToLog, reason);
       }
-      await signOut(auth);
-      setUser(null);
-      router.push('/login');
-      toast({ title: 'Logged Out', description: 'Institutional session terminated safely.' });
+      
+      // 3. Terminate Firebase session if it exists
+      if (auth) {
+        await signOut(auth);
+      }
     } catch (error) {
-      console.error("Logout error:", error);
-      setUser(null);
-      router.push('/login');
+      console.error("Institutional logout error:", error);
+    } finally {
+      // 4. Hard Redirect to clean state and ensure no cached views remain
+      window.location.href = '/login';
+      toast({ title: 'Logged Out', description: 'Institutional session terminated safely.' });
     }
   };
 
