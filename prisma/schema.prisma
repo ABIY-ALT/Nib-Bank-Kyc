@@ -1,4 +1,3 @@
-
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -67,71 +66,67 @@ enum Severity {
 }
 
 model District {
-  id        String   @id @default(cuid())
-  name      @unique String
-  branches  Branch[]
-  users     User[]
-  createdAt DateTime @default(now())
+  id          String       @id @default(cuid())
+  name        String       @unique
+  branches    Branch[]
+  users       User[]
+  submissions Submission[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Branch {
   id          String       @id @default(cuid())
-  name        @unique String
+  name        String       @unique
   code        String?      @unique
   districtId  String
   district    District     @relation(fields: [districtId], references: [id])
   users       User[]
   submissions Submission[]
   createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model User {
-  id                  String      @id
-  email               String      @unique
-  name                String
-  phoneNumber         String?
-  role                UserRole    @default(BRANCH_OFFICER)
-  status              UserStatus  @default(ACTIVE)
-  branchId            String?
-  branch              Branch?     @relation(fields: [branchId], references: [id])
-  districtId          String?
-  district            District?   @relation(fields: [districtId], references: [id])
-  assignedBranches    String[]    // Names of branches for KYC Officers
-  needsPasswordChange Boolean     @default(true)
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
-  submissions         Submission[] @relation("SubmittedBy")
-  reviews             Submission[] @relation("ReviewedBy")
+  id               String      @id
+  name             String
+  email            String      @unique
+  phoneNumber      String?
+  role             UserRole    @default(BRANCH_OFFICER)
+  status           UserStatus  @default(ACTIVE)
+  branchId         String?
+  branch           Branch?     @relation(fields: [branchId], references: [id])
+  districtId       String?
+  district         District?   @relation(fields: [districtId], references: [id])
+  assignedBranches String[]    // Array of branch names for KYC Officers
+  submissions      Submission[] @relation("SubmittedBy")
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 }
 
 model Submission {
   id                String            @id
-  customerName      String
   customerId        String?
-  entityType        String
+  customerName      String
   branchId          String
   branch            Branch            @relation(fields: [branchId], references: [id])
-  district          String
+  districtId        String
+  district          District          @relation(fields: [districtId], references: [id])
   submittedById     String
   submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
   submittedAt       DateTime          @default(now())
   status            SubmissionStatus  @default(PENDING)
-  remarks           String?
-  isResubmitted     Boolean           @default(false)
-  resubmittedAt     DateTime?
-  amendmentCycles   Int               @default(0)
-  reviewedById      String?
-  reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
-  reviewedAt        DateTime?
-  
-  // Exceptional / Hierarchy Flow
   isExceptional     Boolean           @default(false)
   exceptionalStatus ExceptionalStatus @default(NONE)
-  exceptionalData   Json?             // Stores reasoning, justification, etc.
-  
-  checklistState    Json?             // Verification checklist values
+  remarks           String?           @db.Text
+  entityType        String?
+  amendmentCycles   Int               @default(0)
+  isResubmitted     Boolean           @default(false)
+  resubmittedAt     DateTime?
+  checklistState    Json?             // Stores the verification checklist progress
   documents         Document[]
   comments          Comment[]
+  bundleDownloads   BundleDownload[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 }
@@ -141,38 +136,39 @@ model Document {
   name         String
   type         String
   url          String
+  uploadedAt   DateTime   @default(now())
   status       String     @default("Current")
   submissionId String
   submission   Submission @relation(fields: [submissionId], references: [id])
-  uploadedAt   DateTime   @default(now())
 }
 
 model Comment {
   id           String     @id @default(cuid())
   role         String
   performedBy  String
-  comment      String
+  timestamp    DateTime   @default(now())
+  comment      String     @db.Text
   action       String
   submissionId String
   submission   Submission @relation(fields: [submissionId], references: [id])
-  timestamp    DateTime   @default(now())
 }
 
 model RoleDefinition {
-  id          String   @id
+  id          String   @id @default(cuid())
   name        String   @unique
   permissions Json     // Stores the PermissionSet object
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String
-  userEmail String
-  action    String
-  details   String?
-  ipAddress String?
-  timestamp DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String
+  userEmail   String
+  action      String
+  timestamp   DateTime @default(now())
+  ipAddress   String?
+  details     String?  @db.Text
 }
 
 model FollowUpVerification {
@@ -184,31 +180,31 @@ model FollowUpVerification {
   accountType  String
   verifiedBy   String?
   verifiedAt   DateTime?
-  result       String?  // "Correct" | "Discrepancy"
-  remarks      String?
-  status       String   @default("PENDING")
-  createdAt    DateTime @default(now())
+  result       String?  // "Correct" or "Discrepancy"
+  remarks      String?  @db.Text
+  status       String   @default("PENDING") // "PENDING" or "COMPLETED"
 }
 
 model BundleDownload {
-  id             String   @id @default(cuid())
-  submissionId   String
+  id             String     @id @default(cuid())
   performedBy    String
+  timestamp      DateTime   @default(now())
   bundleName     String
   sourceDistrict String
   sourceBranch   String
-  timestamp      DateTime @default(now())
+  submissionId   String
+  submission     Submission @relation(fields: [submissionId], references: [id])
 }
 
 model KYCFinding {
   id           String          @id @default(cuid())
   code         String          @unique
   title        String
-  description  String
+  description  String          @db.Text
   category     FindingCategory
   severity     Severity
   applicableTo String[]        // List of entity types
-  active       Boolean         @default(true)
-  source       String          @default("manual")
   createdAt    DateTime        @default(now())
+  active       Boolean         @default(true)
+  source       String          @default("manual") // "manual" or "auto"
 }
