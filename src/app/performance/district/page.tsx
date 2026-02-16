@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState } from "react"
@@ -52,7 +51,7 @@ import {
   PieChart,
   Pie
 } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { useToast } from "@/hooks/use-toast"
 import { subDays, format, startOfDay, endOfDay } from "date-fns";
 import { KYCSubmission } from "@/lib/kyc-data";
@@ -67,6 +66,13 @@ const STATUS_COLORS = {
   Rejected: "#EF4444",
   Escalated: "#8B5CF6"
 };
+
+const chartConfig = {
+  Approved: { label: "Approved", color: STATUS_COLORS.Approved },
+  Pending: { label: "Pending", color: STATUS_COLORS.Pending },
+  Amended: { label: "Action Required", color: STATUS_COLORS.Amended },
+  Rejected: { label: "Rejected", color: STATUS_COLORS.Rejected },
+} satisfies ChartConfig;
 
 export default function DistrictPerformancePage() {
   const db = useFirestore();
@@ -366,26 +372,24 @@ export default function DistrictPerformancePage() {
               <CardDescription>Breakdown of case determinations.</CardDescription>
             </CardHeader>
             <CardContent className="pt-8 flex flex-col items-center">
-              <div className="h-[240px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={analytics?.byStatus || []}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {analytics?.byStatus.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} stroke="none" />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip content={<ChartTooltipContent />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartContainer config={chartConfig} className="h-[240px] w-full">
+                <PieChart>
+                  <Pie
+                    data={analytics?.byStatus || []}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {analytics?.byStatus.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} stroke="none" />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                </PieChart>
+              </ChartContainer>
               <div className="grid grid-cols-2 gap-4 w-full pt-6">
                 {analytics?.byStatus.map(status => (
                   <div key={status.name} className="flex items-center gap-2">

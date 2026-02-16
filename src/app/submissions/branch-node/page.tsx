@@ -49,7 +49,7 @@ import {
   PieChart,
   Pie
 } from "recharts";
-import { ChartTooltipContent } from "@/components/ui/chart";
+import { type ChartConfig, ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import Link from "next/link";
 import { SubmissionsPageContent } from "../submissions-content";
 
@@ -60,6 +60,17 @@ const STATUS_COLORS = {
   Rejected: "#EF4444",
   Escalated: "#8B5CF6"
 };
+
+const chartConfig = {
+  Approved: { label: "Approved", color: STATUS_COLORS.Approved },
+  Pending: { label: "Pending", color: STATUS_COLORS.Pending },
+  Amended: { label: "Action Required", color: STATUS_COLORS.Amended },
+  Rejected: { label: "Rejected", color: STATUS_COLORS.Rejected },
+} satisfies ChartConfig;
+
+const volumeConfig = {
+  count: { label: "Volume", color: "hsl(var(--primary))" }
+} satisfies ChartConfig;
 
 export default function BranchNodeOversightPage() {
   const db = useFirestore();
@@ -321,26 +332,24 @@ export default function BranchNodeOversightPage() {
                 <CardDescription>Breakdown of verification determinations at this node.</CardDescription>
               </CardHeader>
               <CardContent className="pt-8 flex flex-col items-center">
-                <div className="h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={analytics?.byStatus || []}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={70}
-                        outerRadius={100}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {analytics?.byStatus.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} stroke="none" />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip content={<ChartTooltipContent />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+                <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                  <PieChart>
+                    <Pie
+                      data={analytics?.byStatus || []}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={70}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {analytics?.byStatus.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} stroke="none" />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip content={<ChartTooltipContent />} />
+                  </PieChart>
+                </ChartContainer>
                 <div className="grid grid-cols-2 gap-x-12 gap-y-4 w-full max-w-sm pt-6">
                   {analytics?.byStatus.map(status => (
                     <div key={status.name} className="flex items-center gap-3">
@@ -358,15 +367,15 @@ export default function BranchNodeOversightPage() {
                 <CardTitle className="text-xl">Node Volume Trend</CardTitle>
                 <CardDescription>Historical submission traffic for the selected period.</CardDescription>
               </CardHeader>
-              <CardContent className="pt-8 h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <CardContent className="pt-8">
+                <ChartContainer config={volumeConfig} className="h-[400px] w-full">
                   <BarChart data={analytics?.volumeHistory || []}>
                     <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
                     <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
                     <RechartsTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               </CardContent>
             </Card>
           </div>
