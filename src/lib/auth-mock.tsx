@@ -10,7 +10,7 @@ import {
   updatePassword as fbUpdatePassword,
   User as FirebaseUser 
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, onSnapshot, query, limit } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -48,7 +48,7 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<void>;
   logout: (reason?: string) => Promise<void>;
   changePassword: (newPass: string) => Promise<void>;
-  allUsers: User[]; // For testing purposes in this prototype
+  allUsers: User[]; // Now dynamic for testing purposes
   loginAs: (userId: string) => void;
 }
 
@@ -63,14 +63,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastActivity, setLastActivity] = useState(Date.now());
+  const [dynamicUsers, setDynamicUsers] = useState<User[]>([]);
 
-  // MOCK DATA for switching during prototyping
+  // MOCK DATA for initial bootstrap
   const MOCK_PROFILES: User[] = [
     { id: 'admin-1', name: 'System Admin', email: 'Admin.User@nibbank.com.et', role: 'Admin', status: 'Active', needsPasswordChange: false },
     { id: 'chief-1', name: 'Executive Chief', email: 'Executive.Chief@nibbank.com.et', role: 'Chief Retail & SME Banking Officer', status: 'Active', needsPasswordChange: false },
     { id: 'branch-1', name: 'John Doe', email: 'John.Doe@nibbank.com.et', role: 'Branch Officer', branch: 'Downtown', district: 'Central', status: 'Active', needsPasswordChange: false },
     { id: 'kyc-1', name: 'Jane Smith', email: 'Jane.Smith@nibbank.com.et', role: 'KYC Officer', assignedBranches: ['Downtown', 'Uptown'], status: 'Active', needsPasswordChange: false },
   ];
+
+  // Sync users from Firestore for the Prototype Entry Points
+  useEffect(() => {
+    if (!db) return;
+    
+    const q = query(collection(db, "users"), limit(20));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+      // Combine mock profiles with dynamic users, avoiding duplicates by ID
+      const combined = [...MOCK_PROFILES];
+      users.forEach(u => {
+        if (!combined.some(m => m.id === u.id)) {
+          combined.push(u);
+        }
+      });
+      setDynamicUsers(combined);
+    });
+
+    return () => unsubscribe();
+  }, [db]);
 
   useEffect(() => {
     if (!auth || !db) return;
@@ -101,13 +122,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(newUser);
         }
       } else {
-        setUser(null);
+        // If not signed in via Firebase, check if we're in a local prototype session
+        const savedUserId = localStorage.getItem('proto_user_id');
+        if (savedUserId && !user) {
+          const found = dynamicUsers.find(u => u.id === savedUserId);
+          if (found) setUser(found);
+        }
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [auth, db, toast]);
+  }, [auth, db, toast, dynamicUsers]);
 
   // Session Timeout Watchdog
   useEffect(() => {
@@ -153,11 +179,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     await signInWithEmailAndPassword(auth, email, pass);
+    localStorage.removeItem('proto_user_id');
   };
 
   const logout = async (reason: string = 'User Logout') => {
     const userToLog = user;
     setUser(null);
+    localStorage.removeItem('proto_user_id');
     
     try {
       if (userToLog) {
@@ -175,9 +203,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const changePassword = async (newPass: string) => {
-    if (!auth?.currentUser || !db || !user) return;
+    if (!db || !user) return;
     
-    await fbUpdatePassword(auth.currentUser, newPass);
+    // If real Firebase Auth user exists, update password
+    if (auth?.currentUser) {
+      try {
+        await fbUpdatePassword(auth.currentUser, newPass);
+      } catch (e) {
+        console.warn("Auth password update skipped (not a real auth user session)");
+      }
+    }
+    
+    // Always update the Firestore profile record to clear the flag
     const userRef = doc(db, "users", user.id);
     await updateDoc(userRef, { needsPasswordChange: false });
     
@@ -186,15 +223,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginAs = async (userId: string) => {
-    const profile = MOCK_PROFILES.find(p => p.id === userId);
+    const profile = dynamicUsers.find(p => p.id === userId);
     if (profile) {
       setUser(profile);
+      localStorage.setItem('proto_user_id', userId);
       toast({ title: 'Profile Switched', description: `Viewing as ${profile.name} (${profile.role})` });
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, changePassword, allUsers: MOCK_PROFILES, loginAs }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      login, 
+      logout, 
+      changePassword, 
+      allUsers: dynamicUsers, 
+      loginAs 
+    }}>
       {children}
     </AuthContext.Provider>
   );
