@@ -56,20 +56,21 @@ import { useToast } from "@/hooks/use-toast";
 import { User, UserRole } from "@/lib/auth-mock.tsx";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { syncUserToSql } from '@/actions/auth';
 import Link from 'next/link';
 
 const SYSTEM_ROLES: UserRole[] = [
-  'Branch Officer', 
-  'KYC Officer', 
-  'Supervisor', 
-  'Branch Banking Director', 
-  'Admin', 
-  'Branch Manager', 
-  'District Director',
-  'Division Manager',
-  'Chief Retail & SME Banking Officer',
-  'Follow-up Team',
-  'Chief'
+  'BRANCH_OFFICER', 
+  'KYC_OFFICER', 
+  'SUPERVISOR', 
+  'BRANCH_BANKING_DIRECTOR', 
+  'ADMIN', 
+  'BRANCH_MANAGER', 
+  'DISTRICT_DIRECTOR',
+  'DIVISION_MANAGER',
+  'CHIEF_RETAIL_SME_OFFICER',
+  'FOLLOW_UP_TEAM',
+  'CHIEF'
 ];
 
 export default function UserManagementPage() {
@@ -77,12 +78,13 @@ export default function UserManagementPage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [formData, setFormData] = useState<Partial<User>>({
     name: '',
     email: '',
     phoneNumber: '',
     role: undefined,
-    status: 'Active',
+    status: 'ACTIVE',
     branch: '',
     assignedBranches: [],
     district: ''
@@ -131,7 +133,7 @@ export default function UserManagementPage() {
         email: '', 
         phoneNumber: '', 
         role: undefined, 
-        status: 'Active', 
+        status: 'ACTIVE', 
         branch: '', 
         assignedBranches: [],
         district: '' 
@@ -140,7 +142,7 @@ export default function UserManagementPage() {
     setIsDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!db) return;
     
     if (!formData.name || !formData.email) {
@@ -153,6 +155,7 @@ export default function UserManagementPage() {
       return;
     }
 
+    setIsSyncing(true);
     const userId = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
     const userRef = doc(db, "users", userId);
     
@@ -161,7 +164,7 @@ export default function UserManagementPage() {
       name: formData.name || "",
       email: formData.email || "",
       phoneNumber: formData.phoneNumber || "",
-      status: formData.status || 'Active',
+      status: formData.status || 'ACTIVE',
       role: formData.role || null,
       branch: formData.branch || null,
       district: formData.district || null,
@@ -169,47 +172,80 @@ export default function UserManagementPage() {
       needsPasswordChange: editingUser ? (formData.needsPasswordChange ?? false) : true
     };
 
-    setDoc(userRef, data, { merge: true })
-      .catch(async (error) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-          path: userRef.path, 
-          operation: editingUser ? 'update' : 'create', 
-          requestResourceData: data 
-        }));
+    try {
+      // 1. Save to Real-time Store (Firestore)
+      await setDoc(userRef, data, { merge: true });
+
+      // 2. Synchronize to Relational Store (PostgreSQL)
+      const syncResult = await syncUserToSql({
+        id: userId,
+        email: data.email,
+        name: data.name,
+        role: data.role,
+        branch: data.branch,
+        district: data.district,
+        status: data.status
       });
 
-    toast({ 
-      title: editingUser ? "Assignment Saved" : "User Registered", 
-      description: editingUser 
-        ? "Personnel mapping updated in the institutional directory."
-        : `User created. Temporary access granted with force-password policy.` 
-    });
-    setIsDialogOpen(false);
+      if (!syncResult.success) {
+        throw new Error(syncResult.error);
+      }
+
+      toast({ 
+        title: editingUser ? "Assignment Saved" : "User Registered", 
+        description: editingUser 
+          ? "Personnel mapping updated in both institutional registries."
+          : `User created and synced to SQL database.` 
+      });
+      setIsDialogOpen(false);
+    } catch (error: any) {
+      console.error("Save failure:", error);
+      toast({ 
+        variant: "destructive", 
+        title: "Synchronization Error", 
+        description: error.message || "Failed to commit changes to institutional database." 
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
-  const handleToggleStatus = (id: string, currentStatus: string, name: string) => {
+  const handleToggleStatus = async (id: string, currentStatus: string, name: string) => {
     if (!db) return;
-    const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    const newStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     if (!confirm(`Are you sure you want to change ${name}'s status to ${newStatus}?`)) return;
     
-    updateDoc(doc(db, "users", id), { status: newStatus })
-      .catch(async (error) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `users/${id}`,
-          operation: 'update',
-          requestResourceData: { status: newStatus }
-        }));
-      });
+    try {
+      // Update Firestore
+      await updateDoc(doc(db, "users", id), { status: newStatus });
+      
+      // Sync to SQL
+      const userDoc = await (await doc(db, "users", id)).id;
+      // We'll fetch the full doc to be safe for sync
+      const snap = await (await getDoc(doc(db, "users", id)));
+      const userData = snap.data();
+      if (userData) {
+        await syncUserToSql({
+          id: id,
+          email: userData.email,
+          name: userData.name,
+          role: userData.role,
+          status: newStatus
+        });
+      }
 
-    toast({ 
-      title: newStatus === 'Active' ? "User Restored" : "User Deactivated",
-      description: `${name} status updated to ${newStatus}.`
-    });
+      toast({ 
+        title: newStatus === 'ACTIVE' ? "User Restored" : "User Deactivated",
+        description: `${name} status updated across all systems.`
+      });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Status Sync Failed" });
+    }
   };
 
-  const showSingleBranchField = formData.role && ['Branch Officer', 'Branch Manager'].includes(formData.role);
-  const showDistrictField = formData.role && ['Branch Officer', 'Branch Manager', 'District Director'].includes(formData.role);
-  const isKYCOfficer = formData.role === 'KYC Officer';
+  const showSingleBranchField = formData.role && ['BRANCH_OFFICER', 'BRANCH_MANAGER'].includes(formData.role);
+  const showDistrictField = formData.role && ['BRANCH_OFFICER', 'BRANCH_MANAGER', 'DISTRICT_DIRECTOR'].includes(formData.role);
+  const isKYCOfficer = formData.role === 'KYC_OFFICER';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -262,13 +298,13 @@ export default function UserManagementPage() {
                 <TableCell>
                   {user.role ? (
                     <Badge variant="secondary" className="bg-primary/5 text-primary font-bold flex items-center gap-1.5 w-fit">
-                      <UserCheck className="w-3 h-3" /> {user.role}
+                      <UserCheck className="w-3 h-3" /> {user.role.replace(/_/g, ' ')}
                     </Badge>
                   ) : <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 font-bold">Awaiting Role</Badge>}
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1">
-                    {user.role === 'KYC Officer' ? (
+                    {user.role === 'KYC_OFFICER' ? (
                       <div className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase text-primary tracking-widest mb-0.5">Assigned Portfolio</span>
                         <div className="flex flex-wrap gap-1 max-w-[240px]">
@@ -304,7 +340,7 @@ export default function UserManagementPage() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={user.status === 'Active' ? 'text-green-600 border-green-200 bg-green-50 font-bold' : 'text-slate-400 border-slate-200 bg-slate-50 font-bold'}>
+                  <Badge variant="outline" className={user.status === 'ACTIVE' ? 'text-green-600 border-green-200 bg-green-50 font-bold' : 'text-slate-400 border-slate-200 bg-slate-50 font-bold'}>
                     {user.status}
                   </Badge>
                 </TableCell>
@@ -317,11 +353,11 @@ export default function UserManagementPage() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      onClick={() => handleToggleStatus(user.id, user.status || 'Active', user.name)} 
-                      className={user.status === 'Active' ? "text-destructive rounded-full hover:bg-destructive/5 h-9 w-9" : "text-emerald-600 rounded-full hover:bg-emerald-50 h-9 w-9"}
-                      title={user.status === 'Active' ? "Deactivate User" : "Activate User"}
+                      onClick={() => handleToggleStatus(user.id, user.status || 'ACTIVE', user.name)} 
+                      className={user.status === 'ACTIVE' ? "text-destructive rounded-full hover:bg-destructive/5 h-9 w-9" : "text-emerald-600 rounded-full hover:bg-emerald-50 h-9 w-9"}
+                      title={user.status === 'ACTIVE' ? "Deactivate User" : "Activate User"}
                     >
-                      {user.status === 'Active' ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                      {user.status === 'ACTIVE' ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                     </Button>
                   </div>
                 </TableCell>
@@ -350,16 +386,16 @@ export default function UserManagementPage() {
               <div className="space-y-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Legal Name</Label>
-                  <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 bg-white" placeholder="e.g. Michael Smith" />
+                  <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 bg-white" placeholder="e.g. Michael Smith" disabled={isSyncing} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Phone</Label>
-                    <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white" placeholder="09..." />
+                    <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white" placeholder="09..." disabled={isSyncing} />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Official Email</Label>
-                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white" placeholder="Test.Test@nibbank.com.et" />
+                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white" placeholder="Test.Test@nibbank.com.et" disabled={isSyncing} />
                   </div>
                 </div>
               </div>
@@ -369,14 +405,14 @@ export default function UserManagementPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest text-primary">System Role</Label>
-                      <Select value={formData.role || ""} onValueChange={val => setFormData({...formData, role: val as UserRole})}>
+                      <Select value={formData.role || ""} onValueChange={val => setFormData({...formData, role: val as UserRole})} disabled={isSyncing}>
                         <SelectTrigger className="h-11 border-primary/30 bg-primary/5">
                           <SelectValue placeholder="Assign Role" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
                             <SelectLabel className="text-[10px] uppercase font-black text-slate-400">System Roles</SelectLabel>
-                            {SYSTEM_ROLES.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                            {SYSTEM_ROLES.map(role => <SelectItem key={role} value={role}>{role.replace(/_/g, ' ')}</SelectItem>)}
                           </SelectGroup>
                           <SelectSeparator />
                           {customRoles && customRoles.length > 0 && (
@@ -390,11 +426,11 @@ export default function UserManagementPage() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Status</Label>
-                      <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val as any})}>
+                      <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val as any})} disabled={isSyncing}>
                         <SelectTrigger className="h-11 border-slate-200"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Active">Active</SelectItem>
-                          <SelectItem value="Inactive">Inactive</SelectItem>
+                          <SelectItem value="ACTIVE">Active</SelectItem>
+                          <SelectItem value="INACTIVE">Inactive</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -405,7 +441,7 @@ export default function UserManagementPage() {
                       {showDistrictField && (
                         <div className="space-y-2">
                           <Label className="text-sm font-bold text-slate-700">Assigned District</Label>
-                          <Select value={formData.district || ""} onValueChange={val => setFormData({...formData, district: val, branch: ''})}>
+                          <Select value={formData.district || ""} onValueChange={val => setFormData({...formData, district: val, branch: ''})} disabled={isSyncing}>
                             <SelectTrigger className="h-11"><SelectValue placeholder="Select Region" /></SelectTrigger>
                             <SelectContent>
                               {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
@@ -417,7 +453,7 @@ export default function UserManagementPage() {
                       {showSingleBranchField && (
                         <div className="space-y-2">
                           <Label className="text-sm font-bold text-slate-700">Primary Branch Node</Label>
-                          <Select value={formData.branch || ""} onValueChange={val => setFormData({...formData, branch: val})} disabled={!formData.district}>
+                          <Select value={formData.branch || ""} onValueChange={val => setFormData({...formData, branch: val})} disabled={!formData.district || isSyncing}>
                             <SelectTrigger className="h-11"><SelectValue placeholder="Select Node" /></SelectTrigger>
                             <SelectContent>
                               {branches?.filter(b => b.district === formData.district).map(b => (
@@ -453,11 +489,13 @@ export default function UserManagementPage() {
           </div>
 
           <DialogFooter className="p-6 border-t bg-slate-50 shrink-0">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="px-6 font-bold h-11" disabled={isSyncing}>Cancel</Button>
             <Button 
               onClick={handleSave} 
+              disabled={isSyncing}
               className="px-8 font-black bg-[#B89334] hover:bg-[#A6822D] text-white shadow-xl h-11 min-w-[180px]"
             >
+              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {editingUser ? 'Update Assignment' : 'Complete Registration'}
             </Button>
           </DialogFooter>
