@@ -162,7 +162,7 @@ export function AppSidebar() {
                               </Link>
                             </SidebarMenuSubButton>
                             {counts.actionRequired > 0 && (
-                              <SidebarMenuBadge className="bg-orange-500 text-white font-bold animate-pulse">
+                              <SidebarMenuBadge className="bg-orange-50 text-white font-bold animate-pulse">
                                 {counts.actionRequired}
                               </SidebarMenuBadge>
                             )}

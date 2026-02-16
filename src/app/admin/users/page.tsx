@@ -47,7 +47,10 @@ import {
   SelectContent, 
   SelectItem, 
   SelectTrigger, 
-  SelectValue 
+  SelectValue,
+  SelectLabel,
+  SelectGroup,
+  SelectSeparator
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { User, UserRole } from "@/lib/auth-mock.tsx";
@@ -371,7 +374,17 @@ export default function UserManagementPage() {
                           <SelectValue placeholder="Assign Role" />
                         </SelectTrigger>
                         <SelectContent>
-                          {allAvailableRoles.map(role => <SelectItem key={role} value={role} className="font-bold">{role}</SelectItem>)}
+                          <SelectGroup>
+                            <SelectLabel className="text-[10px] uppercase font-black text-slate-400">System Roles</SelectLabel>
+                            {SYSTEM_ROLES.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                          </SelectGroup>
+                          <SelectSeparator />
+                          {customRoles && customRoles.length > 0 && (
+                            <SelectGroup>
+                              <SelectLabel className="text-[10px] uppercase font-black text-primary">Custom Roles</SelectLabel>
+                              {customRoles.map(role => <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>)}
+                            </SelectGroup>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
