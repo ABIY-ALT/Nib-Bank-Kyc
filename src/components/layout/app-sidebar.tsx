@@ -84,12 +84,10 @@ export function AppSidebar() {
     canManageSystem
   } = permissions;
 
-  // Specific visibility checks
+  // Specific visibility checks for specialized operational nodes
   const isBranchMgr = user.role === 'Branch Manager' || user.role === 'Admin'
   const isDistDir = user.role === 'District Director' || user.role === 'Admin'
   const isAdmin = user.role === 'Admin'
-  
-  // Follow-up access is a special permission
   const isFollowUp = user.role === 'Follow-up Team' || user.role === 'Admin'
 
   return (
@@ -219,7 +217,7 @@ export function AppSidebar() {
                         </>
                       )}
 
-                      {(canEscalate || isAdmin) && (
+                      {(canEscalate) && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/escalated'}>
                             <Link href="/submissions/escalated">

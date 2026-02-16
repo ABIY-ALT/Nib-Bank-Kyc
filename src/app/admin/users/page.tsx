@@ -53,12 +53,9 @@ import { useToast } from "@/hooks/use-toast";
 import { User, UserRole } from "@/lib/auth-mock.tsx";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 
-const ROLES: UserRole[] = [
+const SYSTEM_ROLES: UserRole[] = [
   'Branch Officer', 
   'KYC Officer', 
   'Supervisor', 
@@ -94,6 +91,12 @@ export default function UserManagementPage() {
 
   const { data: users, loading } = useCollection<User>(usersQuery);
 
+  const rolesQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "roleDefinitions"), orderBy("name")) : null;
+  }, [db]);
+
+  const { data: customRoles } = useCollection<{id: string, name: string}>(rolesQuery);
+
   const branchesQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "branches"), orderBy("name")) : null;
   }, [db]);
@@ -105,6 +108,11 @@ export default function UserManagementPage() {
   }, [db]);
 
   const { data: districts } = useCollection<{id: string, name: string}>(districtsQuery);
+
+  const allAvailableRoles = useMemo(() => {
+    const dynamicNames = customRoles?.map(r => r.name) || [];
+    return Array.from(new Set([...SYSTEM_ROLES, ...dynamicNames]));
+  }, [customRoles]);
 
   const handleOpenDialog = (user?: User) => {
     if (user) {
@@ -132,7 +140,7 @@ export default function UserManagementPage() {
   const handleSave = () => {
     if (!db) return;
     
-    if (!formData.name || !formData.email || !formData.phoneNumber) {
+    if (!formData.name || !formData.email) {
       toast({ variant: "destructive", title: "Missing Information", description: "Identity details required." });
       return;
     }
@@ -140,23 +148,6 @@ export default function UserManagementPage() {
     if (!formData.email.toLowerCase().endsWith('@nibbank.com.et')) {
       toast({ variant: "destructive", title: "Invalid Domain", description: "Personnel email must use @nibbank.com.et domain." });
       return;
-    }
-
-    if (editingUser || formData.role) {
-      if (!formData.role) {
-        toast({ variant: "destructive", title: "Role Required", description: "Please assign an institutional role." });
-        return;
-      }
-
-      if (['Branch Officer', 'Branch Manager'].includes(formData.role) && (!formData.branch || !formData.district)) {
-        toast({ variant: "destructive", title: "Mapping Required", description: "Branch and District are mandatory for this role." });
-        return;
-      }
-
-      if (formData.role === 'District Director' && !formData.district) {
-        toast({ variant: "destructive", title: "District Required", description: "District Directors must be mapped to a region." });
-        return;
-      }
     }
 
     const userId = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
@@ -172,7 +163,6 @@ export default function UserManagementPage() {
       branch: formData.branch || null,
       district: formData.district || null,
       assignedBranches: formData.assignedBranches || [],
-      // If it's a new user, force them to change password on first login
       needsPasswordChange: editingUser ? (formData.needsPasswordChange ?? false) : true
     };
 
@@ -381,7 +371,7 @@ export default function UserManagementPage() {
                           <SelectValue placeholder="Assign Role" />
                         </SelectTrigger>
                         <SelectContent>
-                          {ROLES.map(role => <SelectItem key={role} value={role} className="font-bold">{role}</SelectItem>)}
+                          {allAvailableRoles.map(role => <SelectItem key={role} value={role} className="font-bold">{role}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
