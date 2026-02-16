@@ -114,11 +114,6 @@ export default function UserManagementPage() {
 
   const { data: districts } = useCollection<{id: string, name: string}>(districtsQuery);
 
-  const allAvailableRoles = useMemo(() => {
-    const dynamicNames = customRoles?.map(r => r.name) || [];
-    return Array.from(new Set([...SYSTEM_ROLES, ...dynamicNames]));
-  }, [customRoles]);
-
   const handleOpenDialog = (user?: User) => {
     if (user) {
       setEditingUser(user);
@@ -223,22 +218,24 @@ export default function UserManagementPage() {
       const snap = await getDoc(doc(db, "users", id));
       const userData = snap.data();
       if (userData) {
-        await syncUserToSql({
+        const syncResult = await syncUserToSql({
           id: id,
           email: userData.email,
           name: userData.name,
           role: userData.role,
           status: newStatus
         });
+        
+        if (!syncResult.success) throw new Error(syncResult.error);
       }
 
       toast({ 
         title: newStatus === 'ACTIVE' ? "User Restored" : "User Deactivated",
         description: `${name} status updated across all systems.`
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Status toggle error:", error);
-      toast({ variant: "destructive", title: "Status Sync Failed" });
+      toast({ variant: "destructive", title: "Status Sync Failed", description: error.message });
     }
   };
 
