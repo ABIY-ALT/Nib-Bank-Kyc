@@ -1,3 +1,6 @@
+// Prisma schema for Nib Bank KYC Flow
+// Standardized for PostgreSQL with institutional enums
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -48,26 +51,26 @@ enum ExceptionalStatus {
   CLARIFICATION_REQUIRED
 }
 
-enum FindingCategory {
-  IDENTITY
-  DOCUMENTATION
-  COMPLIANCE
-  ACCOUNT_VALIDATION
-}
+model User {
+  id                  String     @id
+  email               String     @unique
+  name                String
+  role                UserRole   @default(BRANCH_OFFICER)
+  status              UserStatus @default(ACTIVE)
+  branchName          String?
+  districtName        String?
+  phoneNumber         String?
+  needsPasswordChange Boolean    @default(true)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
-enum Severity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
+  submissions         Submission[] @relation("SubmittedBy")
 }
 
 model District {
   id        String   @id @default(cuid())
   name      String   @unique
   branches  Branch[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model Branch {
@@ -76,146 +79,26 @@ model Branch {
   code        String?      @unique
   district    District     @relation(fields: [districtId], references: [id])
   districtId  String
-  users       User[]
   submissions Submission[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-}
-
-model User {
-  id               String     @id @default(cuid())
-  email            String     @unique
-  name             String
-  phoneNumber      String?
-  role             UserRole   @default(BRANCH_OFFICER)
-  status           UserStatus @default(ACTIVE)
-  branch           Branch?    @relation(fields: [branchId], references: [id])
-  branchId         String?
-  assignedBranches String[]
-  districtName     String?
-  needsPasswordChange Boolean @default(true)
-  
-  submissions      Submission[] @relation("SubmittedBy")
-  reviews          Submission[] @relation("ReviewedBy")
-  comments         Comment[]
-  auditLogs        AuditLog[]
-  
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
 }
 
 model Submission {
   id                String            @id
   customerName      String
-  customerId        String?
   entityType        String
   status            SubmissionStatus  @default(PENDING)
-  branch            Branch            @relation(fields: [branchId], references: [id])
-  branchId          String
-  district          String
-  
-  submittedBy       User              @relation("SubmittedBy", fields: [submittedByUserId], references: [id])
-  submittedByUserId String
   submittedAt       DateTime          @default(now())
   
-  reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedByUserId], references: [id])
-  reviewedByUserId  String?
-  reviewedAt        DateTime?
+  submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
+  submittedById     String
   
+  branch            Branch            @relation(fields: [branchId], references: [id])
+  branchId          String
+  
+  districtName      String
   isExceptional     Boolean           @default(false)
   exceptionalStatus ExceptionalStatus @default(NONE)
-  exceptionalData   Json?
-  
+  amendmentCycles   Int               @default(0)
   isResubmitted     Boolean           @default(false)
   resubmittedAt     DateTime?
-  amendmentCycles   Int               @default(0)
-  checklistState    Json?
-  remarks           String?
-  
-  documents         Document[]
-  comments          Comment[]
-  downloads         BundleDownload[]
-  
-  updatedAt         DateTime          @updatedAt
-}
-
-model Document {
-  id           String     @id @default(cuid())
-  name         String
-  type         String
-  url          String
-  status       String     @default("Current")
-  submission   Submission @relation(fields: [submissionId], references: [id])
-  submissionId String
-  uploadedAt   DateTime   @default(now())
-}
-
-model Comment {
-  id           String     @id @default(cuid())
-  comment      String
-  action       String
-  role         String
-  user         User       @relation(fields: [userId], references: [id])
-  userId       String
-  submission   Submission @relation(fields: [submissionId], references: [id])
-  submissionId String
-  timestamp    DateTime   @default(now())
-}
-
-model RoleDefinition {
-  id          String   @id
-  name        String   @unique
-  permissions Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model AuditLog {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  userEmail String
-  action    String
-  details   String?
-  ipAddress String?
-  timestamp DateTime @default(now())
-}
-
-model FollowUpVerification {
-  id           String   @id @default(cuid())
-  submissionId String
-  customerName String
-  branch       String
-  officer      String
-  accountType  String
-  verifiedBy   String?
-  verifiedAt   DateTime?
-  result       String?
-  remarks      String?
-  status       String   @default("PENDING")
-}
-
-model BundleDownload {
-  id             String     @id @default(cuid())
-  performedBy    String
-  bundleName     String
-  sourceDistrict String
-  sourceBranch   String
-  submission     Submission @relation(fields: [submissionId], references: [id])
-  submissionId   String
-  timestamp      DateTime   @default(now())
-}
-
-model KYCFinding {
-  id           String          @id @default(cuid())
-  code         String          @unique
-  title        String
-  description  String
-  category     FindingCategory
-  severity     Severity
-  applicableTo String[]
-  active       Boolean         @default(true)
-  source       String          @default("manual")
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
 }

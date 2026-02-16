@@ -23,7 +23,6 @@ import {
   UserCheck,
   UserX,
   ShieldCheck,
-  Layers,
   ArrowRight
 } from "lucide-react";
 import { 
@@ -190,7 +189,7 @@ export default function UserManagementPage() {
       toast({ 
         variant: "destructive", 
         title: "Synchronization Error", 
-        description: error.message || "Failed to commit changes to institutional database." 
+        description: error.message || "Failed to commit changes to institutional database. Ensure your database is connected and migrated." 
       });
     } finally {
       setIsSyncing(false);
@@ -268,7 +267,7 @@ export default function UserManagementPage() {
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500">
-                      {user.name.charAt(0)}
+                      {user.name?.charAt(0) || 'U'}
                     </div>
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">

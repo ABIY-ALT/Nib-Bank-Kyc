@@ -37,6 +37,7 @@ export async function syncUserToSql(userData: SyncUserData) {
         role: role,
         status: status,
         districtName: userData.district || null,
+        branchName: userData.branch || null,
       },
       create: {
         id: userData.id,
@@ -45,6 +46,7 @@ export async function syncUserToSql(userData: SyncUserData) {
         role: role,
         status: status,
         districtName: userData.district || null,
+        branchName: userData.branch || null,
       },
     });
 
@@ -54,7 +56,7 @@ export async function syncUserToSql(userData: SyncUserData) {
     console.error('[SQL Sync] Critical Failure:', error);
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Database connection error. Ensure prisma migrate has been run.' 
+      error: error instanceof Error ? error.message : 'Database connection error. Ensure "npx prisma migrate dev" has been run.' 
     };
   }
 }
