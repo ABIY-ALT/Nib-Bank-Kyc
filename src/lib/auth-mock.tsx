@@ -68,14 +68,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isMockMode = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined' || firebaseConfig.apiKey === 'INITIALIZING';
 
   useEffect(() => {
-    if (!db) return;
+    if (!db || isMockMode) return;
+    
     const q = query(collection(db, "users"), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
       setDbUsers(users);
+    }, (error) => {
+      console.warn("User list sync bypassed:", error.message);
     });
     return () => unsubscribe();
-  }, [db]);
+  }, [db, isMockMode]);
 
   useEffect(() => {
     if (isMockMode) {
@@ -91,37 +94,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        const userDoc = await getDoc(doc(db, "users", fbUser.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data() as User;
-          if (userData.status !== 'ACTIVE') {
-            toast({ variant: 'destructive', title: 'Access Denied', description: `Your account is currently ${userData.status}.` });
-            await signOut(auth);
-            setUser(null);
+        try {
+          const userDoc = await getDoc(doc(db, "users", fbUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data() as User;
+            if (userData.status !== 'ACTIVE') {
+              toast({ variant: 'destructive', title: 'Access Denied', description: `Your account is currently ${userData.status}.` });
+              await signOut(auth);
+              setUser(null);
+            } else {
+              const currentUser = { ...userData, id: fbUser.uid };
+              setUser(currentUser);
+              
+              await syncUserToSql({
+                id: currentUser.id,
+                email: currentUser.email,
+                name: currentUser.name,
+                role: currentUser.role,
+                branch: currentUser.branch,
+                district: currentUser.district
+              });
+            }
           } else {
-            const currentUser = { ...userData, id: fbUser.uid };
-            setUser(currentUser);
-            
-            // Sync to SQL database via Server Action
-            await syncUserToSql({
-              id: currentUser.id,
-              email: currentUser.email,
-              name: currentUser.name,
-              role: currentUser.role,
-              branch: currentUser.branch,
-              district: currentUser.district
-            });
+            const basicUser: User = {
+              id: fbUser.uid,
+              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Unknown User',
+              email: fbUser.email || '',
+              role: 'BRANCH_OFFICER',
+              status: 'ACTIVE'
+            };
+            setUser(basicUser);
+            await syncUserToSql(basicUser);
           }
-        } else {
-          const basicUser: User = {
-            id: fbUser.uid,
-            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Unknown User',
-            email: fbUser.email || '',
-            role: 'BRANCH_OFFICER',
-            status: 'ACTIVE'
-          };
-          setUser(basicUser);
-          await syncUserToSql(basicUser);
+        } catch (e) {
+          console.error("Auth profile sync failed:", e);
         }
       } else {
         setUser(null);
@@ -157,7 +163,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (isMockMode) {
-      // Developer Fallback: Simulate login if Firebase keys are missing
       if (pass !== 'nibbank123') throw new Error('Invalid developer credential.');
       
       const mockId = `mock-${email.split('@')[0]}`;
@@ -172,7 +177,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(mockUser);
       localStorage.setItem('nib_mock_user', JSON.stringify(mockUser));
       
-      // IMPORTANT: Still sync to SQL database so user can see it in PostgreSQL
       await syncUserToSql({
         id: mockUser.id,
         email: mockUser.email,

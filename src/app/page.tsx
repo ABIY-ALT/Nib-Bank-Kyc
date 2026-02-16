@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from "@/lib/auth-mock";
@@ -37,48 +38,53 @@ interface Guideline {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isMock } = useAuth();
   const db = useFirestore();
 
   const isAdmin = user?.role === 'ADMIN';
 
   const dashboardQuery = useMemo(() => {
-    if (!db || !user) return null;
+    if (!db || !user || isMock) return null;
     
-    if (isAdmin) {
+    try {
+      if (isAdmin) {
+        return query(collection(db, "submissions"), orderBy("submittedAt", "desc"), limit(5));
+      }
+      
+      if (user.role === 'DISTRICT_DIRECTOR' && user.district) {
+        return query(collection(db, "submissions"), where("district", "==", user.district), orderBy("submittedAt", "desc"), limit(5));
+      }
+
+      if (user.role === 'KYC_OFFICER' && (user.assignedBranches?.length || 0) > 0) {
+        return query(collection(db, "submissions"), where("branch", "in", user.assignedBranches), orderBy("submittedAt", "desc"), limit(5));
+      }
+
+      if (user.branch) {
+        return query(collection(db, "submissions"), where("branch", "==", user.branch), orderBy("submittedAt", "desc"), limit(5));
+      }
+
       return query(collection(db, "submissions"), orderBy("submittedAt", "desc"), limit(5));
+    } catch (e) {
+      console.warn("Dashboard query construction failed:", e);
+      return null;
     }
-    
-    if (user.role === 'DISTRICT_DIRECTOR') {
-      return query(collection(db, "submissions"), where("district", "==", user.district || ""), orderBy("submittedAt", "desc"), limit(5));
-    }
-
-    if (user.role === 'KYC_OFFICER' && (user.assignedBranches?.length || 0) > 0) {
-      return query(collection(db, "submissions"), where("branch", "in", user.assignedBranches), orderBy("submittedAt", "desc"), limit(5));
-    }
-
-    if (user.branch) {
-      return query(collection(db, "submissions"), where("branch", "==", user.branch), orderBy("submittedAt", "desc"), limit(5));
-    }
-
-    return query(collection(db, "submissions"), orderBy("submittedAt", "desc"), limit(5));
-  }, [db, user, isAdmin]);
+  }, [db, user, isAdmin, isMock]);
 
   const { data: recentSubmissions, loading: submissionsLoading } = useCollection<KYCSubmission>(dashboardQuery);
 
   const settingsRef = useMemoFirebase(() => {
-    return db ? doc(db, "settings", "global") : null;
-  }, [db]);
+    return db && !isMock ? doc(db, "settings", "global") : null;
+  }, [db, isMock]);
 
   const { data: settings } = useDoc<{ guidelines?: Guideline[] }>(settingsRef);
 
   const stats = useMemo(() => {
     const scopeLabel = isAdmin ? 'Global' : user?.role === 'DISTRICT_DIRECTOR' ? 'Regional' : 'Branch';
-    if (!recentSubmissions) return [
+    if (!recentSubmissions || recentSubmissions.length === 0) return [
       { label: `${scopeLabel} Activity`, value: '0', icon: History, color: 'text-blue-600' },
       { label: 'Approved Cases', value: '0', icon: FileCheck, color: 'text-green-600' },
       { label: 'Action Required', value: '0', icon: AlertCircle, color: 'text-orange-600' },
-      { label: 'Network SLA', value: '98%', icon: TrendingUp, color: 'text-purple-600' },
+      { label: 'Network SLA', value: '100%', icon: TrendingUp, color: 'text-purple-600' },
     ];
 
     const approvedCount = recentSubmissions.filter(s => s.status === 'APPROVED').length;
@@ -97,7 +103,7 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-            {isAdmin ? 'Institutional Command' : user?.role === 'DISTRICT_DIRECTOR' ? `${user.district} District Portal` : `${user?.branch} Branch Portal`}
+            {isAdmin ? 'Institutional Command' : user?.role === 'DISTRICT_DIRECTOR' ? `${user.district || 'Regional'} District Portal` : `${user?.branch || 'Local'} Branch Portal`}
           </h1>
           <p className="text-muted-foreground text-lg">Welcome back, {user?.name}. Institutional session active.</p>
         </div>
@@ -175,7 +181,7 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed">
                   <History className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground font-bold">No Operational Data Found</p>
+                  <p className="text-sm text-muted-foreground font-bold">{isMock ? 'Demo Mode Active' : 'No Operational Data Found'}</p>
                 </div>
               )}
             </div>

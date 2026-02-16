@@ -1,9 +1,11 @@
+
 'use client';
 
 import { useFirestore, useDoc, useMemoFirebase } from "@/firebase";
 import { doc } from "firebase/firestore";
 import { User } from "@/lib/auth-mock.tsx";
 import { useMemo } from "react";
+import { firebaseConfig } from "@/firebase/config";
 
 export interface PermissionSet {
   canSubmit: boolean;
@@ -17,13 +19,15 @@ export interface PermissionSet {
 export function usePermissions(user: User | null) {
   const db = useFirestore();
   
+  const isMockMode = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined' || firebaseConfig.apiKey === 'INITIALIZING';
+
   const roleId = useMemo(() => {
     return user?.role?.toLowerCase().replace(/\s+/g, '-') || null;
   }, [user?.role]);
 
   const roleRef = useMemoFirebase(() => {
-    return db && roleId ? doc(db, "roleDefinitions", roleId) : null;
-  }, [db, roleId]);
+    return db && roleId && !isMockMode ? doc(db, "roleDefinitions", roleId) : null;
+  }, [db, roleId, isMockMode]);
 
   const { data: dynamicRole, loading } = useDoc<{ permissions: PermissionSet }>(roleRef);
 
@@ -75,9 +79,14 @@ export function usePermissions(user: User | null) {
     }
 
     return {
-      canSubmit: false, canReview: false, canEscalate: false, canViewReports: false, canManageUsers: false, canManageSystem: false
+      canSubmit: false,
+      canReview: false,
+      canEscalate: false,
+      canViewReports: false,
+      canManageUsers: false,
+      canManageSystem: false
     };
   }, [user, dynamicRole]);
 
-  return { permissions, loading };
+  return { permissions, loading: isMockMode ? false : loading };
 }

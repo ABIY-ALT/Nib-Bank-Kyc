@@ -1,9 +1,11 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useFirestore } from "@/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { User } from "@/lib/auth-mock";
+import { firebaseConfig } from "@/firebase/config";
 
 export function useSidebarCounts(user: User | null) {
   const db = useFirestore();
@@ -17,8 +19,10 @@ export function useSidebarCounts(user: User | null) {
     branchNode: 0
   });
 
+  const isMockMode = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined' || firebaseConfig.apiKey === 'INITIALIZING';
+
   useEffect(() => {
-    if (!db || !user?.name) {
+    if (!db || !user?.name || isMockMode) {
       setCounts({
         mySubmissions: 0,
         actionRequired: 0,
@@ -44,7 +48,7 @@ export function useSidebarCounts(user: User | null) {
         mySubmissions: isAdmin ? allDocs.length : allDocs.filter(d => d.submittedBy === user.name).length,
         actionRequired: allDocs.filter(d => d.status === 'AMENDED' && (isAdmin || d.submittedBy === user.name)).length
       }));
-    });
+    }, (err) => console.warn("My queue sync bypassed:", err.message));
 
     const qExceptional = query(
       collection(db, "submissions"),
@@ -67,7 +71,7 @@ export function useSidebarCounts(user: User | null) {
         return scope.includes(data.branch);
       });
       setCounts(prev => ({ ...prev, exceptional: activeExceptions.length }));
-    });
+    }, (err) => console.warn("Exceptional sync bypassed:", err.message));
 
     const qAllActive = query(
       collection(db, "submissions"),
@@ -93,7 +97,7 @@ export function useSidebarCounts(user: User | null) {
         resubmitted: docs.filter(d => d.status !== 'ESCALATED' && d.isResubmitted === true && filterByScope(d)).length,
         escalated: docs.filter(d => d.status === 'ESCALATED' && filterByScope(d)).length
       }));
-    });
+    }, (err) => console.warn("Review queue sync bypassed:", err.message));
 
     let unsubBranch = () => {};
     if (isAdmin || user.branch || user.role === 'DISTRICT_DIRECTOR') {
@@ -113,7 +117,7 @@ export function useSidebarCounts(user: User | null) {
           return matchesStatus && data.branch === user.branch;
         }).length;
         setCounts(prev => ({ ...prev, branchNode: count }));
-      });
+      }, (err) => console.warn("Branch sync bypassed:", err.message));
     }
 
     return () => {
@@ -122,7 +126,7 @@ export function useSidebarCounts(user: User | null) {
       unsubQueues();
       unsubBranch();
     };
-  }, [db, user?.name, user?.role, user?.assignedBranches, user?.district, user?.branch]);
+  }, [db, user?.name, user?.role, user?.assignedBranches, user?.district, user?.branch, isMockMode]);
 
   return counts;
 }
