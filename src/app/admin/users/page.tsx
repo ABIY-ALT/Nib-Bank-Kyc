@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, doc, setDoc, updateDoc, query, orderBy } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, query, orderBy, getDoc } from "firebase/firestore";
 import { 
   Table, 
   TableBody, 
@@ -219,10 +219,8 @@ export default function UserManagementPage() {
       // Update Firestore
       await updateDoc(doc(db, "users", id), { status: newStatus });
       
-      // Sync to SQL
-      const userDoc = await (await doc(db, "users", id)).id;
-      // We'll fetch the full doc to be safe for sync
-      const snap = await (await getDoc(doc(db, "users", id)));
+      // Fetch fresh data for SQL sync
+      const snap = await getDoc(doc(db, "users", id));
       const userData = snap.data();
       if (userData) {
         await syncUserToSql({
@@ -239,6 +237,7 @@ export default function UserManagementPage() {
         description: `${name} status updated across all systems.`
       });
     } catch (error) {
+      console.error("Status toggle error:", error);
       toast({ variant: "destructive", title: "Status Sync Failed" });
     }
   };

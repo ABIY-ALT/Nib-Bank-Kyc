@@ -89,17 +89,15 @@ model User {
   email               String       @unique
   name                String
   phoneNumber         String?
-  role                UserRole     @default(BRANCH_OFFICER)
+  role                UserRole     @default(BRANCH_OFF_TEAM)
   status              UserStatus   @default(ACTIVE)
   branch              Branch?      @relation(fields: [branchId], references: [id])
   branchId            String?
   district            District?    @relation(fields: [districtId], references: [id])
   districtId          String?
-  assignedBranches    String[]     @default([])
-  needsPasswordChange Boolean      @default(false)
+  needsPasswordChange Boolean      @default(true)
   submissions         Submission[] @relation("SubmittedBy")
   reviews             Submission[] @relation("ReviewedBy")
-  auditLogs           AuditLog[]
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 }
@@ -108,27 +106,25 @@ model Submission {
   id                String            @id
   customerName      String
   customerId        String?
-  entityType        String?
+  entityType        String
   status            SubmissionStatus  @default(PENDING)
   branch            Branch            @relation(fields: [branchId], references: [id])
   branchId          String
-  district          String
   submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
   submittedById     String
   submittedAt       DateTime          @default(now())
   reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
   reviewedById      String?
   reviewedAt        DateTime?
-  remarks           String?           @db.Text
-  amendmentCycles   Int               @default(0)
   isResubmitted     Boolean           @default(false)
   resubmittedAt     DateTime?
+  amendmentCycles   Int               @default(0)
   isExceptional     Boolean           @default(false)
   exceptionalStatus ExceptionalStatus @default(NONE)
   checklistState    Json?
+  remarks           String?
   documents         Document[]
   comments          Comment[]
-  createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 }
 
@@ -138,51 +134,76 @@ model Document {
   type         String
   url          String
   status       String     @default("Current")
+  uploadedAt   DateTime   @default(now())
   submission   Submission @relation(fields: [submissionId], references: [id])
   submissionId String
-  uploadedAt   DateTime   @default(now())
 }
 
 model Comment {
   id           String     @id @default(cuid())
+  comment      String
+  action       String
   role         String
   performedBy  String
-  comment      String     @db.Text
-  action       String
+  timestamp    DateTime   @default(now())
   submission   Submission @relation(fields: [submissionId], references: [id])
   submissionId String
-  timestamp    DateTime   @default(now())
 }
 
 model RoleDefinition {
-  id                String  @id
-  name              String  @unique
-  canSubmit         Boolean @default(false)
-  canReview         Boolean @default(false)
-  canEscalate       Boolean @default(false)
-  canViewReports    Boolean @default(false)
-  canManageUsers    Boolean @default(false)
-  canManageSystem   Boolean @default(false)
+  id               String  @id
+  name             String  @unique
+  canSubmit        Boolean @default(false)
+  canReview        Boolean @default(false)
+  canEscalate      Boolean @default(false)
+  canViewReports   Boolean @default(false)
+  canManageUsers   Boolean @default(false)
+  canManageSystem  Boolean @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  action    String
-  details   String?  @db.Text
-  ipAddress String?
-  timestamp DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String
+  userEmail   String
+  action      String
+  timestamp   DateTime @default(now())
+  ipAddress   String?
+  details     String?
+}
+
+model FollowUpVerification {
+  id           String   @id @default(cuid())
+  submissionId String
+  customerName String
+  branch       String
+  officer      String
+  accountType  String
+  verifiedBy   String?
+  verifiedAt   DateTime?
+  result       String?
+  remarks      String?
+  status       String   @default("PENDING")
+}
+
+model BundleDownload {
+  id             String   @id @default(cuid())
+  performedBy    String
+  timestamp      DateTime @default(now())
+  bundleName     String
+  sourceDistrict String
+  sourceBranch   String
 }
 
 model KYCFinding {
-  id           String          @id @default(cuid())
-  code         String          @unique
-  title        String
-  description  String          @db.Text
-  category     FindingCategory
-  severity     Severity
+  id          String          @id @default(cuid())
+  code        String          @unique
+  title       String
+  description String
+  category    FindingCategory
+  severity    Severity
   applicableTo String[]
-  active       Boolean         @default(true)
-  createdAt    DateTime        @default(now())
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
 }
