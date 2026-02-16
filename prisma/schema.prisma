@@ -10,6 +10,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// --- ENUMS ---
+
 enum UserRole {
   BRANCH_OFFICER
   KYC_OFFICER
@@ -65,22 +67,29 @@ enum Severity {
   CRITICAL
 }
 
+// --- MODELS ---
+
 model District {
   id          String       @id @default(cuid())
   name        String       @unique
   branches    Branch[]
-  users       User[]
+  users       User[]       @relation("UserDistrict")
   submissions Submission[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Branch {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  code        String?      @unique
-  districtId  String
-  district    District     @relation(fields: [districtId], references: [id])
-  users       User[]
-  submissions Submission[]
+  id               String       @id @default(cuid())
+  name             String
+  code             String       @unique
+  district         District     @relation(fields: [districtId], references: [id])
+  districtId       String
+  users            User[]       @relation("UserBranch")
+  assignedOfficers User[]       @relation("KYCAssignments")
+  submissions      Submission[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
 
 model User {
@@ -90,126 +99,166 @@ model User {
   phoneNumber         String?
   role                UserRole     @default(BRANCH_OFFICER)
   status              UserStatus   @default(ACTIVE)
-  needsPasswordChange Boolean      @default(true)
   
+  // Jurisdictional Mapping
+  branch              Branch?      @relation("UserBranch", fields: [branchId], references: [id])
   branchId            String?
-  branch              Branch?      @relation(fields: [branchId], references: [id])
+  district            District?    @relation("UserDistrict", fields: [districtId], references: [id])
   districtId          String?
-  district            District?    @relation(fields: [districtId], references: [id])
   
-  submissionsSubmitted Submission[] @relation("SubmittedBy")
-  submissionsReviewed  Submission[] @relation("ReviewedBy")
-  followUpVerifications FollowUpVerification[]
-  auditLogs            AuditLog[]
+  // KYC Officer multi-branch portfolio
+  assignedBranches    Branch[]     @relation("KYCAssignments")
+  
+  // Activity Relations
+  submissions         Submission[] @relation("SubmittedBy")
+  reviewedSubmissions Submission[] @relation("ReviewedBy")
+  comments            Comment[]
+  auditLogs           AuditLog[]
+  verifications       FollowUpVerification[] @relation("VerifiedBy")
+  bundleDownloads     BundleDownload[]
+  
+  needsPasswordChange Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 }
 
 model Submission {
-  id                String            @id
-  customerId        String?
-  customerName      String
-  entityType        String
-  status            SubmissionStatus  @default(PENDING)
-  isExceptional     Boolean           @default(false)
-  exceptionalStatus ExceptionalStatus @default(NONE)
+  id                  String            @id // e.g. BR-KYC-1234
+  customerId          String?
+  customerName        String
+  status              SubmissionStatus  @default(PENDING)
   
-  // Exceptional Data
-  exceptionReason   String?
-  riskJustification String?
-  initiatedBy       String?
-  initiatedAt       DateTime?
+  // Institutional Hierarchy
+  branch              Branch            @relation(fields: [branchId], references: [id])
+  branchId            String
+  district            District          @relation(fields: [districtId], references: [id])
+  districtId          String
   
-  amendmentCycles   Int               @default(0)
-  isResubmitted     Boolean           @default(false)
-  resubmittedAt     DateTime?
-  reviewedAt        DateTime?
-  remarks           String?
-  submittedAt       DateTime          @default(now())
+  // Ownership & Audit
+  submittedBy         User              @relation("SubmittedBy", fields: [submittedByUserId], references: [id])
+  submittedByUserId   String
+  submittedAt         DateTime          @default(now())
   
-  branchId          String
-  branch            Branch            @relation(fields: [branchId], references: [id])
-  districtId        String
-  district          District          @relation(fields: [districtId], references: [id])
+  reviewedBy          User?             @relation("ReviewedBy", fields: [reviewedByUserId], references: [id])
+  reviewedByUserId    String?
+  reviewedAt          DateTime?
   
-  submittedById     String
-  submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
-  reviewedById      String?
-  reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  // Exceptional Flow
+  isExceptional       Boolean           @default(false)
+  exceptionalStatus   ExceptionalStatus @default(NONE)
+  exceptionalReason   String?
+  exceptionalJustification String?
+  exceptionalMemoUrl  String?
+  exceptionalInitiatedAt DateTime?
   
-  documents         Document[]
-  comments          Comment[]
-  followUps         FollowUpVerification[]
-  bundleDownloads   BundleDownload[]
+  // State Tracking
+  remarks             String?
+  entityType          String            @default("individual")
+  amendmentCycles     Int               @default(0)
+  isResubmitted       Boolean           @default(false)
+  resubmittedAt       DateTime?
+  checklistState      Json?             // Stores verification flags
+  
+  // Sub-collections
+  documents           Document[]
+  comments            Comment[]
+  bundleDownloads     BundleDownload[]
+  followUpAudits      FollowUpVerification[]
+  
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 }
 
 model Document {
   id           String     @id @default(cuid())
   name         String
   type         String
-  uploadedAt   DateTime   @default(now())
-  status       String     @default("Current")
   url          String
-  submissionId String
+  status       String     @default("Current")
   submission   Submission @relation(fields: [submissionId], references: [id])
+  submissionId String
+  uploadedAt   DateTime   @default(now())
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model Comment {
   id           String     @id @default(cuid())
   role         String
-  performedBy  String
-  timestamp    DateTime   @default(now())
   comment      String
   action       String
-  submissionId String
+  timestamp    DateTime   @default(now())
+  
+  performedBy  User       @relation(fields: [performedByUserId], references: [id])
+  performedByUserId String
+  
   submission   Submission @relation(fields: [submissionId], references: [id])
+  submissionId String
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model RoleDefinition {
-  id                String  @id @default(cuid())
-  name              String  @unique
-  canSubmit         Boolean @default(false)
-  canReview         Boolean @default(false)
-  canEscalate       Boolean @default(false)
-  canViewReports    Boolean @default(false)
-  canManageUsers    Boolean @default(false)
-  canManageSystem   Boolean @default(false)
+  id               String   @id @default(cuid())
+  name             String   @unique
+  canSubmit        Boolean  @default(false)
+  canReview        Boolean  @default(false)
+  canEscalate      Boolean  @default(false)
+  canViewReports   Boolean  @default(false)
+  canManageUsers   Boolean  @default(false)
+  canManageSystem  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  userEmail   String
-  action      String
-  timestamp   DateTime @default(now())
-  ipAddress   String?
-  details     String?
+  id           String   @id @default(cuid())
+  userEmail    String
+  action       String
+  ipAddress    String?
+  details      String?
+  timestamp    DateTime @default(now())
+  
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model FollowUpVerification {
   id           String     @id @default(cuid())
-  submissionId String
-  submission   Submission @relation(fields: [submissionId], references: [id])
-  customerName String
-  branch       String
-  officer      String
-  accountType  String
-  verifiedById String?
-  verifiedBy   User?      @relation(fields: [verifiedById], references: [id])
-  verifiedAt   DateTime?
-  result       String?    // Correct / Discrepancy
+  result       String?    // "Correct" or "Discrepancy"
   remarks      String?
   status       String     @default("Pending")
+  verifiedAt   DateTime?
+  
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  submissionId String
+  
+  verifiedBy   User?      @relation("VerifiedBy", fields: [verifiedByUserId], references: [id])
+  verifiedByUserId String?
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model BundleDownload {
-  id             String     @id @default(cuid())
-  submissionId   String
-  submission     Submission @relation(fields: [submissionId], references: [id])
-  performedBy    String
-  timestamp      DateTime   @default(now())
-  bundleName     String
+  id           String     @id @default(cuid())
+  bundleName   String
   sourceDistrict String
-  sourceBranch   String
+  sourceBranch String
+  timestamp    DateTime   @default(now())
+  
+  performedBy  User       @relation(fields: [performedByUserId], references: [id])
+  performedByUserId String
+  
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  submissionId String
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model KYCFinding {
@@ -219,8 +268,9 @@ model KYCFinding {
   description  String
   category     FindingCategory
   severity     Severity
-  applicableTo String[]
-  createdAt    DateTime        @default(now())
+  applicableTo String[]        // List of entity types
   active       Boolean         @default(true)
   source       String          @default("manual")
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
