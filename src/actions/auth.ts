@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -11,11 +12,11 @@ interface SyncUserData {
   branch?: string;
   district?: string;
   status?: string;
+  phoneNumber?: string;
 }
 
 /**
  * Synchronizes a user profile with the SQL database via Prisma.
- * This is the primary entry point for user profile management.
  */
 export async function syncUserToSql(userData: SyncUserData) {
   try {
@@ -35,6 +36,7 @@ export async function syncUserToSql(userData: SyncUserData) {
         status: status,
         districtName: userData.district || null,
         branchName: userData.branch || null,
+        phoneNumber: userData.phoneNumber || null,
       },
       create: {
         id: userData.id,
@@ -44,6 +46,7 @@ export async function syncUserToSql(userData: SyncUserData) {
         status: status,
         districtName: userData.district || null,
         branchName: userData.branch || null,
+        phoneNumber: userData.phoneNumber || null,
       },
     });
 
