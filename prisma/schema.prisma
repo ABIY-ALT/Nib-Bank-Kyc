@@ -1,5 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
@@ -19,7 +18,7 @@ enum UserRole {
   BRANCH_MANAGER
   DISTRICT_DIRECTOR
   DIVISION_MANAGER
-  CHIEF_RETAIL_SME_OFFICER
+  CHIEF_RETAIL_SME_BANKING_OFFICER
   FOLLOW_UP_TEAM
   CHIEF
 }
@@ -66,58 +65,47 @@ enum FindingSeverity {
 }
 
 model User {
-  id                  String       @id
-  email               String       @unique
-  name                String
-  role                UserRole     @default(BRANCH_OFFICER)
-  status              UserStatus   @default(ACTIVE)
-  branchName          String?
-  districtName        String?
-  assignedBranches    String[]     @default([])
+  id                String         @id
+  email             String         @unique
+  name              String
+  phoneNumber       String?
+  role              UserRole       @default(BRANCH_OFFICER)
+  status            UserStatus     @default(ACTIVE)
+  branchName        String?
+  districtName      String?
+  assignedBranches  String[]       @default([])
   needsPasswordChange Boolean      @default(false)
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-
-  submissionsSubmitted Submission[] @relation("SubmittedBy")
-  submissionsReviewed  Submission[] @relation("ReviewedBy")
-}
-
-model District {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  branches  Branch[]
-}
-
-model Branch {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  code         String?  @unique
-  districtName String
-  district     District @relation(fields: [districtName], references: [name])
+  
+  submissions       Submission[]   @relation("SubmittedBy")
+  reviews           Submission[]   @relation("ReviewedBy")
+  auditLogs         AuditLog[]
 }
 
 model Submission {
   id                String            @id
   customerName      String
-  entityType        String
+  entityType        String?
   branchName        String
   districtName      String
+  submittedAt       DateTime          @default(now())
   status            SubmissionStatus  @default(PENDING)
+  remarks           String?
+  
   isExceptional     Boolean           @default(false)
   exceptionalStatus ExceptionalStatus @default(NONE)
-  exceptionalData   Json?             // Stores justification, history, etc.
-  checklistState    Json?             @default("{}")
-  commentHistory    Json?             @default("[]")
-  remarks           String?
-  isResubmitted     Boolean           @default(false)
-  amendmentCycles   Int               @default(0)
-  submittedAt       DateTime          @default(now())
-  reviewedAt        DateTime?
+  exceptionalData   Json?             // Stores reason, justification, memoUrl, approvalHistory
   
-  submittedById     String
+  commentHistory    Json?             // Array of comments
+  amendmentCycles   Int               @default(0)
+  isResubmitted     Boolean           @default(false)
+  checklistState    Json?
+  
   submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
-  reviewedById      String?
+  submittedById     String
+  
   reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewedById      String?
+  reviewedAt        DateTime?
 
   documents         Document[]
   bundleDownloads   BundleDownload[]
@@ -130,46 +118,23 @@ model Document {
   url          String
   status       String     @default("Current")
   uploadedAt   DateTime   @default(now())
+  
+  submission   Submission @relation(fields: [submissionId], references: [id])
   submissionId String
-  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 }
 
-model BundleDownload {
-  id             String     @id @default(cuid())
-  performedBy    String
-  timestamp      DateTime   @default(now())
-  bundleName     String
-  sourceDistrict String
-  sourceBranch   String
-  submissionId   String
-  submission     Submission @relation(fields: [submissionId], references: [id])
+model District {
+  id       String   @id @default(cuid())
+  name     String   @unique
+  branches Branch[]
 }
 
-model FollowUpVerification {
-  id           String   @id
-  submissionId String   @unique
-  customerName String
-  branch       String
-  officer      String
-  accountType  String
-  verifiedBy   String?
-  verifiedAt   DateTime @default(now())
-  result       String?  // "Correct" | "Discrepancy"
-  remarks      String?
-  status       String   @default("PENDING") // "PENDING" | "COMPLETED"
-}
-
-model Finding {
-  id           String          @id @default(cuid())
-  code         String          @unique
-  title        String
-  description  String
-  category     FindingCategory
-  severity     FindingSeverity
-  applicableTo String[]
-  createdAt    DateTime        @default(now())
-  active       Boolean         @default(true)
-  source       String          @default("manual")
+model Branch {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  code         String?
+  district     District @relation(fields: [districtName], references: [name])
+  districtName String
 }
 
 model AuditLog {
@@ -181,17 +146,55 @@ model AuditLog {
   timestamp DateTime @default(now())
   ipAddress String
   details   String
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model GlobalSetting {
-  id              String   @id @default("global")
-  autoEscalation  Boolean  @default(true)
-  escalationHours Int      @default(72)
-  strictSla       Boolean  @default(true)
-  slaHours        Int      @default(24)
-  documentTypes   Json?    @default("[]")
-  entityTypes     Json?    @default("[]")
-  guidelines      Json?    @default("[]")
-  lastUpdated     DateTime @default(now())
-  updatedBy       String?
+  id               String   @id @default("global")
+  autoEscalation   Boolean  @default(true)
+  escalationHours  Int      @default(72)
+  strictSla        Boolean  @default(true)
+  slaHours         Int      @default(24)
+  documentTypes    Json?    // Array of {id, label}
+  entityTypes      Json?    // Array of {id, label}
+  guidelines       Json?    // Array of {id, title, description, type}
+  lastUpdated      DateTime @default(now())
+  updatedBy        String?
+}
+
+model Finding {
+  id           String          @id @default(cuid())
+  code         String          @unique
+  title        String
+  description  String
+  category     FindingCategory
+  severity     FindingSeverity
+  applicableTo String[]        // Array of account types
+  active       Boolean         @default(true)
+  source       String          @default("manual")
+}
+
+model FollowUpVerification {
+  id           String   @id @default(cuid())
+  submissionId String
+  customerName String
+  branch       String
+  officer      String
+  accountType  String
+  verifiedBy   String?
+  verifiedAt   DateTime?
+  result       String?  // "Correct" | "Discrepancy"
+  remarks      String?
+  status       String   @default("PENDING") // "PENDING" | "COMPLETED"
+}
+
+model BundleDownload {
+  id             String     @id @default(cuid())
+  performedBy    String
+  timestamp      DateTime   @default(now())
+  bundleName     String
+  sourceDistrict String
+  sourceBranch   String
+  submission     Submission @relation(fields: [submissionId], references: [id])
+  submissionId   String
 }

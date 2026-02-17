@@ -73,17 +73,30 @@ export default function UserManagementPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [u, b, d] = await Promise.all([getAllUsers(), getBranches(), getDistricts()]);
-    setUsers(u);
-    setBranches(b);
-    setDistricts(d);
-    setLoading(false);
+    try {
+      const [u, b, d] = await Promise.all([getAllUsers(), getBranches(), getDistricts()]);
+      setUsers(u);
+      setBranches(b);
+      setDistricts(d);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Sync Failed", description: "Could not retrieve institutional mapping." });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOpenDialog = (user?: any) => {
     if (user) {
       setEditingUser(user);
-      setFormData({ ...user });
+      setFormData({ 
+        name: user.name || '',
+        email: user.email || '',
+        phoneNumber: user.phoneNumber || '',
+        role: user.role || UserRole.BRANCH_OFFICER,
+        status: user.status || UserStatus.ACTIVE,
+        branchName: user.branchName || '',
+        districtName: user.districtName || ''
+      });
     } else {
       setEditingUser(null);
       setFormData({ 
