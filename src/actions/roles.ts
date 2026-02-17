@@ -22,6 +22,9 @@ export async function upsertRoleDefinition(data: {
   canViewReports: boolean;
   canManageUsers: boolean;
   canManageSystem: boolean;
+  canAccessPerformance: boolean;
+  canAccessFollowUp: boolean;
+  canAccessArchive: boolean;
 }) {
   try {
     const role = await prisma.roleDefinition.upsert({

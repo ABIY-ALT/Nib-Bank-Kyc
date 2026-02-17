@@ -71,13 +71,15 @@ export function AppSidebar() {
     canEscalate,
     canViewReports,
     canManageUsers,
-    canManageSystem
+    canManageSystem,
+    canAccessPerformance,
+    canAccessFollowUp,
+    canAccessArchive
   } = permissions;
 
   const isBranchMgr = user.role === 'BRANCH_MANAGER' || user.role === 'ADMIN'
   const isDistDir = user.role === 'DISTRICT_DIRECTOR' || user.role === 'ADMIN'
   const isAdmin = user.role === 'ADMIN'
-  const isFollowUp = user.role === 'FOLLOW_UP_TEAM' || user.role === 'ADMIN'
 
   return (
     <Sidebar collapsible="icon">
@@ -172,11 +174,13 @@ export function AppSidebar() {
                         </SidebarMenuSubButton>
                         {counts.exceptional > 0 && <SidebarMenuBadge className="bg-yellow-600 text-white font-bold">{counts.exceptional}</SidebarMenuBadge>}
                       </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/submissions'}>
-                          <Link href="/submissions"><Archive className="w-4 h-4 mr-2" /><span>Master Case Archive</span></Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                      {canAccessArchive && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions'}>
+                            <Link href="/submissions"><Archive className="w-4 h-4 mr-2" /><span>Master Case Archive</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
@@ -196,7 +200,7 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
-        {canViewReports && (
+        {(canViewReports || canAccessPerformance || canAccessFollowUp) && (
           <SidebarGroup>
             <SidebarGroupLabel>Audit & Reporting</SidebarGroupLabel>
             <SidebarMenu>
@@ -208,14 +212,21 @@ export function AppSidebar() {
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       {isAdmin && <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/system'}><Link href="/reports/system"><Globe className="w-4 h-4 mr-2 text-primary" /><span>System-wide</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>}
-                      <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}><Link href="/reports/branch"><Building2 className="w-4 h-4 mr-2" /><span>Branch & District</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                      <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/officer'}><Link href="/reports/officer"><Users className="w-4 h-4 mr-2" /><span>Staff Productivity</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                      {isFollowUp && (
+                      
+                      {canAccessPerformance && (
+                        <>
+                          <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}><Link href="/reports/branch"><Building2 className="w-4 h-4 mr-2" /><span>Branch & District</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                          <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/officer'}><Link href="/reports/officer"><Users className="w-4 h-4 mr-2" /><span>Staff Productivity</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        </>
+                      )}
+
+                      {canAccessFollowUp && (
                         <>
                           <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/head-office/follow-up'}><Link href="/head-office/follow-up"><Zap className="w-4 h-4 mr-2 text-primary" /><span>Follow up</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                           <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/follow-up'}><Link href="/reports/follow-up"><ClipboardList className="w-4 h-4 mr-2 text-primary" /><span>Audit Report</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                         </>
                       )}
+
                       {isAdmin && <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/submissions/master-bundle'}><Link href="/submissions/master-bundle"><Folders className="w-4 h-4 mr-2 text-emerald-600" /><span>Master Archive</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>}
                     </SidebarMenuSub>
                   </CollapsibleContent>

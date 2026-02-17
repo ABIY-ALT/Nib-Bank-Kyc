@@ -12,16 +12,47 @@ export interface PermissionSet {
   canViewReports: boolean;
   canManageUsers: boolean;
   canManageSystem: boolean;
+  canAccessPerformance: boolean;
+  canAccessFollowUp: boolean;
+  canAccessArchive: boolean;
 }
 
 const DEFAULT_PERMISSIONS: Record<string, PermissionSet> = {
-  [UserRole.ADMIN]: { canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, canManageUsers: true, canManageSystem: true },
-  [UserRole.KYC_OFFICER]: { canSubmit: true, canReview: true, canEscalate: false, canViewReports: false, canManageUsers: false, canManageSystem: false },
-  [UserRole.SUPERVISOR]: { canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, canManageUsers: false, canManageSystem: false },
-  [UserRole.BRANCH_OFFICER]: { canSubmit: true, canReview: false, canEscalate: false, canViewReports: false, canManageUsers: false, canManageSystem: false },
-  [UserRole.FOLLOW_UP_TEAM]: { canSubmit: false, canReview: false, canEscalate: false, canViewReports: true, canManageUsers: false, canManageSystem: false },
-  [UserRole.BRANCH_MANAGER]: { canSubmit: true, canReview: false, canEscalate: true, canViewReports: true, canManageUsers: false, canManageSystem: false },
-  [UserRole.DISTRICT_DIRECTOR]: { canSubmit: true, canReview: false, canEscalate: true, canViewReports: true, canManageUsers: false, canManageSystem: false }
+  [UserRole.ADMIN]: { 
+    canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, 
+    canManageUsers: true, canManageSystem: true, canAccessPerformance: true,
+    canAccessFollowUp: true, canAccessArchive: true 
+  },
+  [UserRole.KYC_OFFICER]: { 
+    canSubmit: true, canReview: true, canEscalate: false, canViewReports: false, 
+    canManageUsers: false, canManageSystem: false, canAccessPerformance: false,
+    canAccessFollowUp: false, canAccessArchive: true 
+  },
+  [UserRole.SUPERVISOR]: { 
+    canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, 
+    canManageUsers: false, canManageSystem: false, canAccessPerformance: true,
+    canAccessFollowUp: true, canAccessArchive: true 
+  },
+  [UserRole.BRANCH_OFFICER]: { 
+    canSubmit: true, canReview: false, canEscalate: false, canViewReports: false, 
+    canManageUsers: false, canManageSystem: false, canAccessPerformance: false,
+    canAccessFollowUp: false, canAccessArchive: false 
+  },
+  [UserRole.FOLLOW_UP_TEAM]: { 
+    canSubmit: false, canReview: false, canEscalate: false, canViewReports: true, 
+    canManageUsers: false, canManageSystem: false, canAccessPerformance: false,
+    canAccessFollowUp: true, canAccessArchive: false 
+  },
+  [UserRole.BRANCH_MANAGER]: { 
+    canSubmit: true, canReview: false, canEscalate: true, canViewReports: true, 
+    canManageUsers: false, canManageSystem: false, canAccessPerformance: true,
+    canAccessFollowUp: false, canAccessArchive: true 
+  },
+  [UserRole.DISTRICT_DIRECTOR]: { 
+    canSubmit: true, canReview: false, canEscalate: true, canViewReports: true, 
+    canManageUsers: false, canManageSystem: false, canAccessPerformance: true,
+    canAccessFollowUp: false, canAccessArchive: true 
+  }
 };
 
 export function usePermissions(user: UserProfile | null) {
@@ -40,7 +71,8 @@ export function usePermissions(user: UserProfile | null) {
   const permissions = useMemo((): PermissionSet => {
     if (!user) return {
       canSubmit: false, canReview: false, canEscalate: false, 
-      canViewReports: false, canManageUsers: false, canManageSystem: false
+      canViewReports: false, canManageUsers: false, canManageSystem: false,
+      canAccessPerformance: false, canAccessFollowUp: false, canAccessArchive: false
     };
 
     const roleName = user.role;
@@ -55,13 +87,17 @@ export function usePermissions(user: UserProfile | null) {
         canViewReports: dbMatch.canViewReports,
         canManageUsers: dbMatch.canManageUsers,
         canManageSystem: dbMatch.canManageSystem,
+        canAccessPerformance: dbMatch.canAccessPerformance ?? false,
+        canAccessFollowUp: dbMatch.canAccessFollowUp ?? false,
+        canAccessArchive: dbMatch.canAccessArchive ?? false,
       };
     }
 
     // Fallback to defaults
     return DEFAULT_PERMISSIONS[roleName] || {
       canSubmit: true, canReview: false, canEscalate: false, 
-      canViewReports: false, canManageUsers: false, canManageSystem: false
+      canViewReports: false, canManageUsers: false, canManageSystem: false,
+      canAccessPerformance: false, canAccessFollowUp: false, canAccessArchive: false
     };
   }, [user, dbDefinitions]);
 

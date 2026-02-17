@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   XCircle,
   ShieldAlert,
-  UserPlus
 } from "lucide-react";
 import { 
   Select, 
@@ -58,7 +57,10 @@ export default function StaffRolesPage() {
     canEscalate: false,
     canViewReports: false,
     canManageUsers: false,
-    canManageSystem: false
+    canManageSystem: false,
+    canAccessPerformance: false,
+    canAccessFollowUp: false,
+    canAccessArchive: false
   });
 
   useEffect(() => {
@@ -116,7 +118,10 @@ export default function StaffRolesPage() {
       canEscalate: false,
       canViewReports: false,
       canManageUsers: false,
-      canManageSystem: false
+      canManageSystem: false,
+      canAccessPerformance: false,
+      canAccessFollowUp: false,
+      canAccessArchive: false
     });
     setEditingRole(null);
   };
@@ -214,12 +219,14 @@ export default function StaffRolesPage() {
                 <TableHeader className="bg-slate-50/50">
                   <TableRow>
                     <TableHead className="font-bold py-4 pl-8">Role Name</TableHead>
-                    <TableHead className="text-center font-bold">Submit</TableHead>
-                    <TableHead className="text-center font-bold">Review</TableHead>
-                    <TableHead className="text-center font-bold">Escalate</TableHead>
-                    <TableHead className="text-center font-bold">Reports</TableHead>
-                    <TableHead className="text-center font-bold">Users</TableHead>
-                    <TableHead className="text-center font-bold">System</TableHead>
+                    <TableHead className="text-center font-bold">Sub</TableHead>
+                    <TableHead className="text-center font-bold">Rev</TableHead>
+                    <TableHead className="text-center font-bold">Esc</TableHead>
+                    <TableHead className="text-center font-bold">Perf</TableHead>
+                    <TableHead className="text-center font-bold">FU</TableHead>
+                    <TableHead className="text-center font-bold">Arch</TableHead>
+                    <TableHead className="text-center font-bold">User</TableHead>
+                    <TableHead className="text-center font-bold">Sys</TableHead>
                     <TableHead className="text-right font-bold pr-8">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -230,7 +237,9 @@ export default function StaffRolesPage() {
                       <TableCell className="text-center">{def.canSubmit ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-center">{def.canReview ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-center">{def.canEscalate ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-center">{def.canViewReports ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
+                      <TableCell className="text-center">{def.canAccessPerformance ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
+                      <TableCell className="text-center">{def.canAccessFollowUp ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
+                      <TableCell className="text-center">{def.canAccessArchive ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-center">{def.canManageUsers ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-center">{def.canManageSystem ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-right pr-8">
@@ -242,7 +251,7 @@ export default function StaffRolesPage() {
                     </TableRow>
                   ))}
                   {roleDefinitions.length === 0 && (
-                    <TableRow><TableCell colSpan={8} className="py-20 text-center text-muted-foreground italic">No dynamic roles defined.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={10} className="py-20 text-center text-muted-foreground italic">No dynamic roles defined.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -252,7 +261,7 @@ export default function StaffRolesPage() {
       </Tabs>
 
       <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               <ShieldAlert className="w-6 h-6 text-primary" />
@@ -272,24 +281,47 @@ export default function StaffRolesPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { id: 'canSubmit', label: 'Case Submission' },
-                { id: 'canReview', label: 'KYC Review' },
-                { id: 'canEscalate', label: 'Risk Escalation' },
-                { id: 'canViewReports', label: 'Audit Reports' },
-                { id: 'canManageUsers', label: 'User Access' },
-                { id: 'canManageSystem', label: 'System Config' }
-              ].map(perm => (
-                <div key={perm.id} className="flex items-center space-x-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
-                  <Checkbox 
-                    id={perm.id} 
-                    checked={(roleForm as any)[perm.id]} 
-                    onCheckedChange={(val) => setRoleForm({...roleForm, [perm.id]: !!val})} 
-                  />
-                  <label htmlFor={perm.id} className="text-xs font-bold text-slate-700 cursor-pointer">{perm.label}</label>
-                </div>
-              ))}
+            <div className="space-y-4">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Operational Authority</Label>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { id: 'canSubmit', label: 'Case Submission' },
+                  { id: 'canReview', label: 'KYC Review' },
+                  { id: 'canEscalate', label: 'Risk Escalation' },
+                  { id: 'canViewReports', label: 'Audit Reports' },
+                  { id: 'canManageUsers', label: 'User Access' },
+                  { id: 'canManageSystem', label: 'System Config' }
+                ].map(perm => (
+                  <div key={perm.id} className="flex items-center space-x-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
+                    <Checkbox 
+                      id={perm.id} 
+                      checked={(roleForm as any)[perm.id]} 
+                      onCheckedChange={(val) => setRoleForm({...roleForm, [perm.id]: !!val})} 
+                    />
+                    <label htmlFor={perm.id} className="text-xs font-bold text-slate-700 cursor-pointer">{perm.label}</label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-dashed">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-accent">Module Access (By Page)</Label>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { id: 'canAccessPerformance', label: 'Performance Analytics' },
+                  { id: 'canAccessFollowUp', label: 'Follow-up Audit' },
+                  { id: 'canAccessArchive', label: 'Master Archive' }
+                ].map(perm => (
+                  <div key={perm.id} className="flex items-center space-x-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
+                    <Checkbox 
+                      id={perm.id} 
+                      checked={(roleForm as any)[perm.id]} 
+                      onCheckedChange={(val) => setRoleForm({...roleForm, [perm.id]: !!val})} 
+                    />
+                    <label htmlFor={perm.id} className="text-xs font-bold text-slate-700 cursor-pointer">{perm.label}</label>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
