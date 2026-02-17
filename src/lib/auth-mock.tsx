@@ -8,7 +8,7 @@ import {
   signOut, 
 } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { syncUserToSql, getUserProfile } from '@/actions/auth';
+import { syncUserToSql, getUserProfile, getUserByEmail } from '@/actions/auth';
 import { firebaseConfig } from '@/firebase/config';
 import { UserRole, UserStatus } from '@prisma/client';
 
@@ -69,7 +69,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(sqlUser as any);
             }
           } else {
-            // First time login, sync basic profile
             const result = await syncUserToSql({
               id: fbUser.uid,
               email: fbUser.email!,
@@ -90,24 +89,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [auth, toast, isMockMode]);
 
   const login = async (email: string, pass: string) => {
-    if (!email.toLowerCase().endsWith('@nibbank.com.et')) {
+    const normalizedEmail = email.toLowerCase();
+    if (!normalizedEmail.endsWith('@nibbank.com.et')) {
       throw new Error('Institutional access restricted to @nibbank.com.et domain.');
     }
 
     if (isMockMode) {
       if (pass !== 'nibbank123') throw new Error('Invalid developer credential.');
       
-      const emailId = email.split('@')[0];
-      const userId = `mock-${emailId}`;
+      const emailId = normalizedEmail.split('@')[0];
       
-      // Look up existing user in SQL first to preserve role assigned in Directory
-      const existingUser = await getUserProfile(userId);
+      // CRITICAL FIX: Look up by EMAIL, not a constructed mock ID
+      const existingUser = await getUserByEmail(normalizedEmail);
+      
+      const userId = existingUser?.id || `mock-${emailId}`;
       
       const mockUser: any = {
         id: userId,
         name: existingUser?.name || emailId.split('.').join(' '),
-        email: email,
-        role: existingUser?.role || (email.toLowerCase().includes('admin') ? 'ADMIN' : 'BRANCH_OFFICER'),
+        email: normalizedEmail,
+        role: existingUser?.role || (normalizedEmail.includes('admin') ? 'ADMIN' : 'BRANCH_OFFICER'),
         status: existingUser?.status || 'ACTIVE',
         branchName: existingUser?.branchName || null,
         districtName: existingUser?.districtName || null,
@@ -121,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!auth) return;
-    await signInWithEmailAndPassword(auth, email, pass);
+    await signInWithEmailAndPassword(auth, normalizedEmail, pass);
   };
 
   const logout = async (reason: string = 'User Logout') => {

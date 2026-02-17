@@ -28,21 +28,17 @@ import { cn } from "@/lib/utils";
 import { getSubmissions } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { SubmissionStatus, UserRole } from "@prisma/client";
-
-interface Guideline {
-  id: string;
-  title: string;
-  description: string;
-  type: 'alert' | 'info';
-}
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { permissions } = usePermissions(user);
   const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const isAdmin = user?.role === UserRole.ADMIN;
+  const isKYC = user?.role === UserRole.KYC_OFFICER || user?.role === UserRole.SUPERVISOR;
 
   useEffect(() => {
     async function loadDashboard() {
@@ -88,17 +84,24 @@ export default function Dashboard() {
     ];
   }, [recentSubmissions, isAdmin, user]);
 
+  const dashboardTitle = useMemo(() => {
+    if (isAdmin) return 'Institutional Command';
+    if (user?.role === UserRole.DISTRICT_DIRECTOR) return `${user.districtName || 'Regional'} District Portal`;
+    if (isKYC) return 'KYC Verification Hub';
+    return `${user?.branchName || 'Local'} Branch Portal`;
+  }, [isAdmin, user, isKYC]);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-            {isAdmin ? 'Institutional Command' : user?.role === UserRole.DISTRICT_DIRECTOR ? `${user.districtName || 'Regional'} District Portal` : `${user?.branchName || 'Local'} Branch Portal`}
+            {dashboardTitle}
           </h1>
           <p className="text-muted-foreground text-lg">Welcome back, {user?.name}. Institutional session active.</p>
         </div>
         <div className="flex items-center gap-3">
-          {user?.role === UserRole.BRANCH_OFFICER && (
+          {permissions.canSubmit && (
             <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-bold text-lg">
               <Link href="/submissions/new">Create New Submission</Link>
             </Button>
