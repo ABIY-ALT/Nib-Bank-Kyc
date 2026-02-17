@@ -1,9 +1,6 @@
-
 'use client';
 
-import { useState, useMemo } from "react";
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { useState, useMemo, useEffect } from "react";
 import { 
   Card, 
   CardContent, 
@@ -31,50 +28,57 @@ import { Badge } from "@/components/ui/badge";
 import { 
   ClipboardCheck, 
   Download, 
-  Filter, 
-  Calendar as CalendarIcon,
-  Search,
+  History,
   CheckCircle2,
   AlertTriangle,
-  History,
-  FileText,
   Loader2,
-  ShieldCheck
+  ShieldCheck,
+  Calendar as CalendarIcon
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FollowUpVerification } from "@/lib/kyc-data";
+import { getFollowUpVerifications } from "@/actions/follow-up";
 
 export default function FollowUpReportsPage() {
   const { toast } = useToast();
-  const db = useFirestore();
   
+  const [allVerifications, setAllVerifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedResult, setSelectedResult] = useState<string>("all");
 
-  const followUpQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    return query(
-      collection(db, "follow_up_verifications"),
-      where("status", "==", "Completed"),
-      orderBy("verifiedAt", "desc")
-    );
-  }, [db]);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const { data: allVerifications, loading } = useCollection<FollowUpVerification>(followUpQuery);
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const data = await getFollowUpVerifications();
+      setAllVerifications(data);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Sync Error", description: "Failed to fetch audit data." });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredData = useMemo(() => {
     if (!allVerifications) return [];
     
-    const start = startOfDay(new Date(fromDate)).toISOString();
-    const end = endOfDay(new Date(toDate)).toISOString();
+    const start = startOfDay(new Date(fromDate));
+    const end = endOfDay(new Date(toDate));
 
     return allVerifications.filter(v => {
-      const matchesDate = v.verifiedAt && v.verifiedAt >= start && v.verifiedAt <= end;
+      if (v.status !== 'COMPLETED') return false;
+      
+      const verifiedDate = new Date(v.verifiedAt);
+      const matchesDate = verifiedDate >= start && verifiedDate <= end;
       const matchesResult = selectedResult === "all" || v.result === selectedResult;
+      
       return matchesDate && matchesResult;
     });
   }, [allVerifications, fromDate, toDate, selectedResult]);
@@ -90,7 +94,7 @@ export default function FollowUpReportsPage() {
       v.branch,
       v.result,
       v.verifiedBy || 'N/A',
-      v.verifiedAt ? new Date(v.verifiedAt).toLocaleString() : 'N/A',
+      v.verifiedAt ? format(new Date(v.verifiedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A',
       v.remarks ? v.remarks.replace(/,/g, ';') : ''
     ]);
 
@@ -99,7 +103,7 @@ export default function FollowUpReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-followup-compliance-report-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `nib-followup-compliance-report-${format(new Date(), 'yyyyMMdd')}.csv`);
     link.click();
 
     toast({
@@ -214,7 +218,7 @@ export default function FollowUpReportsPage() {
                       </TableCell>
                       <TableCell className="font-bold text-slate-700">{v.verifiedBy || 'System'}</TableCell>
                       <TableCell className="text-right pr-8 text-xs font-bold text-slate-500 tabular-nums">
-                        {v.verifiedAt ? new Date(v.verifiedAt).toLocaleDateString() : 'N/A'}
+                        {v.verifiedAt ? format(new Date(v.verifiedAt), 'MMM dd, yyyy') : 'N/A'}
                       </TableCell>
                     </TableRow>
                   ))}

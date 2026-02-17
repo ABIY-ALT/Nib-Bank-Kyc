@@ -8,15 +8,6 @@ import {
   Loader2, 
   ShieldCheck, 
   Search,
-  UserCog,
-  Lock,
-  Plus,
-  CheckCircle2,
-  XCircle,
-  Edit2,
-  Trash2,
-  RotateCcw,
-  ShieldAlert
 } from "lucide-react";
 import { 
   Select, 
@@ -29,8 +20,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { getAllUsers, updateUserRole } from '@/actions/users';
 import { UserRole } from '@prisma/client';
 
@@ -41,8 +30,6 @@ export default function StaffRolesPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
-  const [newRoleName, setNewRoleName] = useState("");
 
   useEffect(() => {
     loadUsers();
@@ -50,9 +37,14 @@ export default function StaffRolesPage() {
 
   const loadUsers = async () => {
     setLoading(true);
-    const data = await getAllUsers();
-    setUsers(data);
-    setLoading(false);
+    try {
+      const data = await getAllUsers();
+      setUsers(data);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Sync Failed", description: "Could not retrieve SQL staff list." });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRoleChange = async (userId: string, newRole: UserRole, currentName: string) => {
@@ -61,7 +53,7 @@ export default function StaffRolesPage() {
       toast({ title: "Role Updated", description: `${currentName} is now ${newRole.replace(/_/g, ' ')}.` });
       loadUsers();
     } catch (e) {
-      toast({ variant: "destructive", title: "Update Failed" });
+      toast({ variant: "destructive", title: "Update Failed", description: "SQL registration could not be modified." });
     }
   };
 
