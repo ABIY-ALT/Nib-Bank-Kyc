@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -13,7 +13,9 @@ import {
   ShieldAlert,
   Zap,
   Check,
-  CheckCircle2
+  CheckCircle2,
+  X,
+  ListFilter
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -28,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 // INSTITUTIONAL MATRIX CONFIGURATION
 const ROLE_MATRIX_CONFIG = [
@@ -96,6 +99,7 @@ export default function StaffRolesPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [viewRoleDetails, setViewRoleDetails] = useState<any>(null);
   const [editingRole, setEditingRole] = useState<any>(null);
   const [roleForm, setRoleForm] = useState({
     name: '',
@@ -131,7 +135,6 @@ export default function StaffRolesPage() {
   const handleSaveRole = async () => {
     if (!roleForm.name) return;
     
-    // Always include base dashboard access if any role is assigned
     let finalIds = [...roleForm.permissionIds];
     const dashboardPermission = allPermissions.find(p => p.slug === 'DASHBOARD_VIEW');
     if (dashboardPermission && finalIds.length > 0 && !finalIds.includes(dashboardPermission.id)) {
@@ -188,6 +191,17 @@ export default function StaffRolesPage() {
     setIsRoleDialogOpen(true);
   };
 
+  const groupedRolePermissions = useMemo(() => {
+    if (!viewRoleDetails) return {};
+    const groups: Record<string, any[]> = {};
+    viewRoleDetails.permissions.forEach((rp: any) => {
+      const g = rp.permission.group;
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(rp.permission);
+    });
+    return groups;
+  }, [viewRoleDetails]);
+
   if (loading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
 
   return (
@@ -224,7 +238,7 @@ export default function StaffRolesPage() {
               <TableRow className="bg-slate-50/80">
                 <TableHead className="font-bold py-4 pl-8">Role Name</TableHead>
                 <TableHead className="font-bold">Institutional Status</TableHead>
-                <TableHead className="text-center font-bold">Capability Slugs</TableHead>
+                <TableHead className="text-center font-bold">Capability Authority</TableHead>
                 <TableHead className="text-right font-bold pr-8">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -238,10 +252,13 @@ export default function StaffRolesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="font-bold text-slate-700">{role.permissions.length} Rights</span>
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    </div>
+                    <button 
+                      onClick={() => setViewRoleDetails(role)}
+                      className="flex items-center justify-center gap-2 mx-auto hover:scale-105 transition-transform p-2 rounded-lg hover:bg-emerald-50 group"
+                    >
+                      <span className="font-bold text-slate-700 group-hover:text-emerald-700">{role.permissions.length} Rights</span>
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                    </button>
                   </TableCell>
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
@@ -256,6 +273,61 @@ export default function StaffRolesPage() {
         </CardContent>
       </Card>
 
+      {/* DETAIL VIEW DIALOG */}
+      <Dialog open={!!viewRoleDetails} onOpenChange={() => setViewRoleDetails(null)}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
+          <div className="bg-white">
+            <DialogHeader className="p-8 bg-slate-900 text-white space-y-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-primary rounded-2xl">
+                    <ShieldCheck className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-2xl font-black tracking-tight">
+                      {viewRoleDetails?.name.replace(/_/g, ' ')}
+                    </DialogTitle>
+                    <p className="text-primary font-bold text-[10px] uppercase tracking-widest mt-1">Authority Inventory</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setViewRoleDetails(null)} className="text-white/40 hover:text-white hover:bg-white/10 rounded-full">
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </DialogHeader>
+            
+            <div className="p-8">
+              <ScrollArea className="h-[50vh] pr-4">
+                <div className="space-y-8">
+                  {Object.entries(groupedRolePermissions).map(([group, perms]) => (
+                    <div key={group} className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-px flex-1 bg-slate-100" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 whitespace-nowrap">{group}</span>
+                        <div className="h-px flex-1 bg-slate-100" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {perms.map((p: any) => (
+                          <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <span className="text-xs font-bold text-slate-700">{p.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+
+            <DialogFooter className="p-6 bg-slate-50 border-t flex justify-end">
+              <Button onClick={() => setViewRoleDetails(null)} className="bg-slate-900 text-white font-bold px-8">Close Inventory</Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CREATE/EDIT DIALOG */}
       <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
         <DialogContent className="max-w-xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-white">

@@ -87,7 +87,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
                   <Link href="/">
-                    <LayoutDashboard />
+                    <LayoutDashboard className="w-4 h-4" />
                     <span>Dashboard</span>
                   </Link>
                 </SidebarMenuButton>
@@ -105,7 +105,9 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Verification Flow">
-                      <FileText /><span>Verification Flow</span><ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                      <FileText className="w-4 h-4" />
+                      <span>Verification Flow</span>
+                      <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -113,7 +115,10 @@ export function AppSidebar() {
                       {hasPermission('CASE_SUBMIT') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/new'}>
-                            <Link href="/submissions/new"><PlusCircle className="w-4 h-4 mr-2" /><span>Create Submission</span></Link>
+                            <Link href="/submissions/new">
+                              <PlusCircle className="w-4 h-4 mr-2" />
+                              <span>Create Submission</span>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -121,7 +126,10 @@ export function AppSidebar() {
                       {hasPermission('CASE_VIEW_OWN') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/my'}>
-                            <Link href="/submissions/my"><Inbox className="w-4 h-4 mr-2" /><span>My Submissions</span></Link>
+                            <Link href="/submissions/my">
+                              <Inbox className="w-4 h-4 mr-2" />
+                              <span>My Submissions</span>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.mySubmissions > 0 && <SidebarMenuBadge className="bg-white/10 text-white font-bold">{counts.mySubmissions}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
@@ -130,7 +138,10 @@ export function AppSidebar() {
                       {hasPermission('CASE_VIEW_ACTION_REQUIRED') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>
-                            <Link href="/submissions/amendment-requests"><AlertCircle className="w-4 h-4 mr-2 text-orange-400" /><span>Action Required</span></Link>
+                            <Link href="/submissions/amendment-requests">
+                              <AlertCircle className="w-4 h-4 mr-2 text-orange-400" />
+                              <span>Action Required</span>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.actionRequired > 0 && <SidebarMenuBadge className="bg-orange-500 text-white font-bold animate-pulse">{counts.actionRequired}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
@@ -139,7 +150,10 @@ export function AppSidebar() {
                       {hasPermission('CASE_VIEW_BRANCH') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
-                            <Link href="/submissions/branch-node"><LayoutList className="w-4 h-4 mr-2 text-primary" /><span>Local Node Oversight</span></Link>
+                            <Link href="/submissions/branch-node">
+                              <LayoutList className="w-4 h-4 mr-2 text-primary" />
+                              <span>Local Node Oversight</span>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.branchNode > 0 && <SidebarMenuBadge className="bg-primary text-white font-bold">{counts.branchNode}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
@@ -148,7 +162,10 @@ export function AppSidebar() {
                       {hasPermission('KYC_VIEW_QUEUE') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/queue'}>
-                            <Link href="/submissions/queue"><Search className="w-4 h-4 mr-2" /><span>Review Queue</span></Link>
+                            <Link href="/submissions/queue">
+                              <Search className="w-4 h-4 mr-2" />
+                              <span>Review Queue</span>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.reviewQueue > 0 && <SidebarMenuBadge className="bg-primary text-white font-bold">{counts.reviewQueue}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
@@ -157,7 +174,10 @@ export function AppSidebar() {
                       {hasPermission('KYC_VIEW_RESUBMITTED') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
-                            <Link href="/submissions/amendments"><History className="w-4 h-4 mr-2" /><span>Resubmitted Cases</span></Link>
+                            <Link href="/submissions/amendments">
+                              <History className="w-4 h-4 mr-2" />
+                              <span>Resubmitted Cases</span>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.resubmitted > 0 && <SidebarMenuBadge className="bg-blue-500 text-white font-bold">{counts.resubmitted}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
@@ -166,7 +186,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_ESCALATED_CASES') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/escalated'}>
-                            <Link href="/submissions/escalated"><ShieldAlert className="w-4 h-4 mr-2 text-destructive" /><span>Escalated Cases</span></Link>
+                            <Link href="/submissions/escalated">
+                              <ShieldAlert className="w-4 h-4 mr-2 text-destructive" />
+                              <span>Escalated Cases</span>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.escalated > 0 && <SidebarMenuBadge className="bg-destructive text-white font-bold">{counts.escalated}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
@@ -175,7 +198,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_GOVERNANCE_QUEUE') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/exceptional'}>
-                            <Link href="/submissions/exceptional"><Zap className="w-4 h-4 mr-2 text-yellow-400" /><span>Exceptional Cases</span></Link>
+                            <Link href="/submissions/exceptional">
+                              <Zap className="w-4 h-4 mr-2 text-yellow-400" />
+                              <span>Exceptional Cases</span>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.exceptional > 0 && <SidebarMenuBadge className="bg-yellow-500 text-white font-bold">{counts.exceptional}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
@@ -184,7 +210,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_ARCHIVED_CASE') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions'}>
-                            <Link href="/submissions"><Archive className="w-4 h-4 mr-2" /><span>Master Case Archive</span></Link>
+                            <Link href="/submissions">
+                              <Archive className="w-4 h-4 mr-2" />
+                              <span>Master Case Archive</span>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -204,7 +233,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/kyc-fq-reference'} tooltip="KYC F&Q Reference">
                   <Link href="/kyc-fq-reference">
-                    <BookOpen />
+                    <BookOpen className="w-4 h-4" />
                     <span>KYC F&Q Reference</span>
                   </Link>
                 </SidebarMenuButton>
@@ -222,7 +251,7 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Reporting">
-                      <FileBarChart />
+                      <FileBarChart className="w-4 h-4" />
                       <span>Reporting Suite</span>
                       <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                     </SidebarMenuButton>
@@ -293,7 +322,7 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Administration">
-                      <Settings />
+                      <Settings className="w-4 h-4" />
                       <span>System Management</span>
                       <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                     </SidebarMenuButton>
