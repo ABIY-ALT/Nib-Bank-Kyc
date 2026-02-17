@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -166,39 +165,29 @@ export default function NewSubmission() {
       const randomSuffix = Math.floor(1000 + Math.random() * 9000);
       const submissionId = `${branchCode}-KYC-${randomSuffix}`;
       
-      const now = new Date().toISOString();
-      const submissionData = {
-        id: submissionId,
-        customerName,
-        entityType,
-        branchName: user.branchName || "Headquarters",
-        districtName: user.districtName || "Central",
-        submittedById: user.id,
-        submittedAt: now,
-        status: SubmissionStatus.PENDING,
-        remarks,
-        commentHistory: remarks ? [{
-          role: user.role || 'BRANCH_OFFICER',
-          performedBy: user.name,
-          timestamp: now,
-          comment: remarks,
-          action: 'Submission'
-        }] : [],
-        isResubmitted: false,
-        amendmentCycles: 0,
-        isExceptional: false,
-        checklistState: {},
-        documents: uploadedFiles.map(f => ({
-          name: f.file.name,
-          type: f.type,
-          url: "#",
-          status: 'Current'
-        }))
-      };
+      const formData = new FormData();
+      formData.append('id', submissionId);
+      formData.append('customerName', customerName);
+      formData.append('entityType', entityType);
+      formData.append('branchName', user.branchName || "Headquarters");
+      formData.append('districtName', user.districtName || "Central");
+      formData.append('submittedById', user.id);
+      formData.append('submittedByName', user.name);
+      formData.append('remarks', remarks);
 
-      await createSubmission(submissionData);
-      toast({ title: "Submission Created", description: `Case ${submissionId} dispatched.` });
-      router.push('/submissions/my');
+      uploadedFiles.forEach(f => {
+        formData.append('files', f.file);
+        formData.append('types', f.type);
+      });
+
+      const result = await createSubmission(formData);
+      
+      if (result.success) {
+        toast({ title: "Submission Created", description: `Case ${submissionId} dispatched to SQL storage.` });
+        router.push('/submissions/my');
+      } else {
+        throw new Error(result.error);
+      }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Submission Failed", description: error.message });
     } finally {

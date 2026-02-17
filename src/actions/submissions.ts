@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/prisma';
 import { SubmissionStatus, ExceptionalStatus, UserRole } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
+import fs from 'fs/promises';
+import path from 'path';
 
 export async function getSubmissions(filters?: {
   status?: SubmissionStatus[];
@@ -93,18 +95,88 @@ export async function updateSubmissionStatus(id: string, status: SubmissionStatu
   return submission;
 }
 
-export async function createSubmission(data: any) {
-  const { documents, ...rest } = data;
-  const submission = await prisma.submission.create({
-    data: {
-      ...rest,
-      documents: {
-        create: documents
-      }
+export async function createSubmission(formData: FormData) {
+  try {
+    const id = formData.get('id') as string;
+    const customerName = formData.get('customerName') as string;
+    const entityType = formData.get('entityType') as string;
+    const branchName = formData.get('branchName') as string;
+    const districtName = formData.get('districtName') as string;
+    const submittedById = formData.get('submittedById') as string;
+    const submittedByName = formData.get('submittedByName') as string;
+    const remarks = formData.get('remarks') as string;
+    
+    const files = formData.getAll('files') as File[];
+    const types = formData.getAll('types') as string[];
+
+    // Ensure uploads directory exists
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    try {
+      await fs.access(uploadDir);
+    } catch {
+      await fs.mkdir(uploadDir, { recursive: true });
     }
-  });
-  revalidatePath('/submissions');
-  return submission;
+
+    const documentsData = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const type = types[i];
+      
+      // Sanitize and uniquify filename
+      const timestamp = Date.now();
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+      const storedFileName = `${timestamp}_${sanitizedName}`;
+      const filePath = path.join(uploadDir, storedFileName);
+      
+      // Read file into buffer and save to filesystem
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(filePath, buffer);
+
+      documentsData.push({
+        name: file.name,
+        type: type,
+        url: `uploads/${storedFileName}`, // Store relative path in DB
+        status: 'Current'
+      });
+    }
+
+    const now = new Date();
+    const submission = await prisma.submission.create({
+      data: {
+        id,
+        customerName,
+        entityType,
+        branchName,
+        districtName,
+        submittedById,
+        submittedAt: now,
+        status: SubmissionStatus.PENDING,
+        remarks,
+        commentHistory: remarks ? [{
+          role: 'BRANCH_OFFICER',
+          performedBy: submittedByName,
+          timestamp: now.toISOString(),
+          comment: remarks,
+          action: 'Submission'
+        }] : [],
+        isResubmitted: false,
+        amendmentCycles: 0,
+        isExceptional: false,
+        checklistState: {},
+        documents: {
+          create: documentsData
+        }
+      }
+    });
+
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/my');
+    return { success: true, submission };
+  } catch (error: any) {
+    console.error('[SQL Storage Error]:', error);
+    return { success: false, error: error.message || 'Failed to save files to institutional storage.' };
+  }
 }
 
 export async function logBundleDownload(data: {
