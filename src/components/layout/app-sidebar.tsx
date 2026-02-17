@@ -221,32 +221,60 @@ export function AppSidebar() {
               <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="Reporting"><FileBarChart /><span>Reporting Suite</span><ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" /></SidebarMenuButton>
+                    <SidebarMenuButton tooltip="Reporting">
+                      <FileBarChart />
+                      <span>Reporting Suite</span>
+                      <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                    </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       {hasPermission('REPORT_VIEW_SYSTEM') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/system'}><Link href="/reports/system"><Globe className="w-4 h-4 mr-2 text-primary" /><span>System-wide</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/system'}>
+                            <Link href="/reports/system"><Globe className="w-4 h-4 mr-2 text-primary" /><span>System-wide</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
                       
                       {hasPermission('REPORT_VIEW_DISTRICT') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/performance/district'}><Link href="/performance/district"><Building2 className="w-4 h-4 mr-2" /><span>District Command</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/performance/district'}>
+                            <Link href="/performance/district"><Building2 className="w-4 h-4 mr-2" /><span>District Command</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('VIEW_SPECIALIST_PRODUCTIVITY') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}><Link href="/performance/officer"><Users className="w-4 h-4 mr-2" /><span>Specialist Matrix</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
+                            <Link href="/performance/officer"><Users className="w-4 h-4 mr-2" /><span>Specialist Matrix</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('VIEW_AUDIT_POOL') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/head-office/follow-up'}><Link href="/head-office/follow-up"><Zap className="w-4 h-4 mr-2 text-primary" /><span>Follow-up Audit</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/head-office/follow-up'}>
+                            <Link href="/head-office/follow-up"><Zap className="w-4 h-4 mr-2 text-primary" /><span>Follow-up Audit</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('VIEW_AUDIT_LOGS') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/follow-up'}><Link href="/reports/follow-up"><ClipboardList className="w-4 h-4 mr-2 text-primary" /><span>Audit Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/follow-up'}>
+                            <Link href="/reports/follow-up"><ClipboardList className="w-4 h-4 mr-2 text-primary" /><span>Audit Reports</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('DOWNLOAD_MASTER_ARCHIVE') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/submissions/master-bundle'}><Link href="/submissions/master-bundle"><Folders className="w-4 h-4 mr-2 text-emerald-400" /><span>Master Archive</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/master-bundle'}>
+                            <Link href="/submissions/master-bundle"><Folders className="w-4 h-4 mr-2 text-emerald-400" /><span>Master Archive</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
                     </SidebarMenuSub>
                   </CollapsibleContent>
@@ -264,32 +292,60 @@ export function AppSidebar() {
               <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="Administration"><Settings /><span>System Management</span><ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" /></SidebarMenuButton>
+                    <SidebarMenuButton tooltip="Administration">
+                      <Settings />
+                      <span>System Management</span>
+                      <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                    </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       {hasPermission('USER_CREATE') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/admin/users'}><Link href="/admin/users"><Users className="w-4 h-4 mr-2" /><span>User Access</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/users'}>
+                            <Link href="/admin/users"><Users className="w-4 h-4 mr-2" /><span>User Access</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
                       
                       {hasPermission('ROLE_CREATE') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/admin/roles'}><Link href="/admin/roles"><UserCog className="w-4 h-4 mr-2 text-primary" /><span>Assign Roles</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/roles'}>
+                            <Link href="/admin/roles"><UserCog className="w-4 h-4 mr-2 text-primary" /><span>Assign Roles</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('MAP_USERS_TO_BRANCH') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/admin/assignments'}><Link href="/admin/assignments"><ArrowRightLeft className="w-4 h-4 mr-2 text-primary" /><span>Portfolio Mapping</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/assignments'}>
+                            <Link href="/admin/assignments"><ArrowRightLeft className="w-4 h-4 mr-2 text-primary" /><span>Portfolio Mapping</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('MANAGE_BRANCHES') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}><Link href="/admin/branches"><Building2 className="w-4 h-4 mr-2" /><span>Hierarchy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
+                            <Link href="/admin/branches"><Building2 className="w-4 h-4 mr-2" /><span>Hierarchy</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('EDIT_SLA_POLICY') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}><Link href="/admin/settings"><Settings className="w-4 h-4 mr-2" /><span>Configuration</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
+                            <Link href="/admin/settings"><Settings className="w-4 h-4 mr-2" /><span>Configuration</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('VIEW_SYSTEM_AUDIT') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/admin/audit'}><Link href="/admin/audit"><History className="w-4 h-4 mr-2" /><span>Audit Logs</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/audit'}>
+                            <Link href="/admin/audit"><History className="w-4 h-4 mr-2" /><span>Audit Logs</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       )}
                     </SidebarMenuSub>
                   </CollapsibleContent>

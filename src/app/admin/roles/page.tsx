@@ -12,7 +12,8 @@ import {
   Trash2,
   ShieldAlert,
   Zap,
-  Check
+  Check,
+  CheckCircle2
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -237,9 +238,10 @@ export default function StaffRolesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">
-                      {role.permissions.length} Atomic Rights
-                    </Badge>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="font-bold text-slate-700">{role.permissions.length} Rights</span>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    </div>
                   </TableCell>
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
