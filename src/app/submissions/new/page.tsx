@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -32,10 +33,6 @@ import {
   Download,
   Loader2
 } from "lucide-react";
-import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, doc, setDoc, query, where, limit } from "firebase/firestore";
-import { errorEmitter } from "@/firebase/error-emitter";
-import { FirestorePermissionError } from "@/firebase/errors";
 import { useAuth } from "@/lib/auth-mock.tsx";
 import { 
   Dialog, 
@@ -44,6 +41,10 @@ import {
   DialogTitle, 
   DialogDescription 
 } from "@/components/ui/dialog";
+import { getBranches } from "@/actions/hierarchy";
+import { getGlobalSettings } from "@/actions/settings";
+import { createSubmission } from "@/actions/submissions";
+import { SubmissionStatus } from "@prisma/client";
 
 interface UploadedFile {
   id: string;
@@ -74,29 +75,33 @@ export default function NewSubmission() {
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
-  const db = useFirestore();
+  
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [customerName, setCustomerName] = useState("");
-  const [entityType, setEntityType] = useState(""); // Changed: Removed default "individual"
+  const [entityType, setEntityType] = useState("");
   const [remarks, setRemarks] = useState("");
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [branches, setBranches] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const branchQuery = useMemoFirebase(() => {
-    if (!db || !user?.branch) return null;
-    return query(collection(db, "branches"), where("name", "==", user.branch), limit(1));
-  }, [db, user?.branch]);
-
-  const { data: branchData } = useCollection<{code: string}>(branchQuery);
-
-  const settingsRef = useMemoFirebase(() => {
-    return db ? doc(db, "settings", "global") : null;
-  }, [db]);
-
-  const { data: settings, loading: settingsLoading } = useDoc<{ 
-    documentTypes: { id: string, label: string }[],
-    entityTypes: { id: string, label: string }[]
-  }>(settingsRef);
+  useEffect(() => {
+    async function loadConfig() {
+      try {
+        const [b, s] = await Promise.all([getBranches(), getGlobalSettings()]);
+        setBranches(b);
+        setSettings(s);
+      } catch (error) {
+        console.error("Config load failed:", error);
+      } finally {
+        setLoadingConfig(false);
+      }
+    }
+    loadConfig();
+  }, []);
 
   const documentTypes = useMemo(() => {
     return settings?.documentTypes || DEFAULT_DOC_TYPES;
@@ -131,11 +136,10 @@ export default function NewSubmission() {
     setUploadedFiles((prev) => prev.map(f => f.id === id ? { ...f, type: newType } : f));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db || !user) return;
+    if (!user || isSubmitting) return;
     
-    // Mandatory field validations
     if (!customerName.trim()) {
       toast({ variant: "destructive", title: "Validation Error", description: "Customer Full Name is required." });
       return;
@@ -156,64 +160,62 @@ export default function NewSubmission() {
       return;
     }
 
-    const branchCode = branchData?.[0]?.code || user.branch?.substring(0, 3).toUpperCase() || "GEN";
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const submissionId = `${branchCode}-KYC-${randomSuffix}`;
-    
-    const submissionRef = doc(db, "submissions", submissionId);
-    
-    const now = new Date().toISOString();
-    const submissionData = {
-      id: submissionId,
-      customerName,
-      entityType,
-      branch: user.branch || "Headquarters",
-      district: user.district || "Central",
-      submittedBy: user.name,
-      submittedAt: now,
-      status: "Pending",
-      remarks,
-      commentHistory: remarks ? [{
-        role: user.role || 'Branch Officer',
-        performedBy: user.name,
-        timestamp: now,
-        comment: remarks,
-        action: 'Submission'
-      }] : [],
-      isResubmitted: false,
-      amendmentCycles: 0,
-      isExceptional: false,
-      checklistState: {}
-    };
+    setIsSubmitting(true);
+    try {
+      const branchCode = branches.find(b => b.name === user.branchName)?.code || user.branchName?.substring(0, 3).toUpperCase() || "GEN";
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      const submissionId = `${branchCode}-KYC-${randomSuffix}`;
+      
+      const now = new Date().toISOString();
+      const submissionData = {
+        id: submissionId,
+        customerName,
+        entityType,
+        branchName: user.branchName || "Headquarters",
+        districtName: user.districtName || "Central",
+        submittedById: user.id,
+        submittedAt: now,
+        status: SubmissionStatus.PENDING,
+        remarks,
+        commentHistory: remarks ? [{
+          role: user.role || 'BRANCH_OFFICER',
+          performedBy: user.name,
+          timestamp: now,
+          comment: remarks,
+          action: 'Submission'
+        }] : [],
+        isResubmitted: false,
+        amendmentCycles: 0,
+        isExceptional: false,
+        checklistState: {},
+        documents: uploadedFiles.map(f => ({
+          name: f.file.name,
+          type: f.type,
+          url: "#",
+          status: 'Current'
+        }))
+      };
 
-    setDoc(submissionRef, submissionData)
-      .catch(async (error) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-          path: submissionRef.path, 
-          operation: 'create', 
-          requestResourceData: submissionData 
-        }));
-      });
-
-    uploadedFiles.forEach(file => {
-      const docRef = doc(collection(submissionRef, "documents"));
-      setDoc(docRef, {
-        id: docRef.id,
-        name: file.file.name,
-        type: file.type,
-        uploadedAt: new Date().toISOString(),
-        url: "#",
-        status: 'Current'
-      }).catch(async (error) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: docRef.path, operation: 'create' }));
-      });
-    });
-
-    toast({ title: "Submission Created", description: `Case ${submissionId} dispatched.` });
-    router.push('/submissions/my');
+      await createSubmission(submissionData);
+      toast({ title: "Submission Created", description: `Case ${submissionId} dispatched.` });
+      router.push('/submissions/my');
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Submission Failed", description: error.message });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isPdf = previewFile?.file.type === 'application/pdf' || previewFile?.file.name.toLowerCase().endsWith('.pdf');
+
+  if (loadingConfig) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-bold text-muted-foreground">Initializing institutional submission portal...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -239,7 +241,7 @@ export default function NewSubmission() {
                   <SelectValue placeholder="Select account category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {entityClassifications.map((classification) => (
+                  {entityClassifications.map((classification: any) => (
                     <SelectItem key={classification.id} value={classification.id}>
                       {classification.label}
                     </SelectItem>
@@ -263,7 +265,6 @@ export default function NewSubmission() {
              </div>
 
              <div className="space-y-3">
-               {settingsLoading && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Fetching classifications...</div>}
                {uploadedFiles.map((item) => (
                  <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all">
                    <div className="flex items-center gap-4 flex-1">
@@ -281,7 +282,7 @@ export default function NewSubmission() {
                          <SelectValue placeholder="Select file type" />
                        </SelectTrigger>
                        <SelectContent>
-                         {documentTypes.map((type) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}
+                         {documentTypes.map((type: any) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}
                        </SelectContent>
                      </Select>
                      <div className="flex gap-1">
@@ -310,14 +311,17 @@ export default function NewSubmission() {
              <Textarea placeholder="Provide internal context for the KYC Officer (optional)..." className="min-h-[140px]" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           </CardContent>
           <CardFooter className="flex justify-end gap-4 border-t pt-8">
-            <Button variant="outline" type="button" onClick={() => router.back()} className="px-8 h-11 font-bold">Cancel</Button>
-            <Button type="submit" className="px-12 h-11 bg-primary font-bold shadow-lg">Dispatch for Review</Button>
+            <Button variant="outline" type="button" onClick={() => router.back()} className="px-8 h-11 font-bold" disabled={isSubmitting}>Cancel</Button>
+            <Button type="submit" className="px-12 h-11 bg-primary font-bold shadow-lg" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Dispatch for Review
+            </Button>
           </CardFooter>
         </Card>
       </form>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-[#1a1a1a] [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10 [&>button]:h-10 [&>button]:w-10 [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full">
+        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-[#1a1a1a]">
           <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between space-y-0 border-b border-white/5 pr-14">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/20 rounded-lg">
