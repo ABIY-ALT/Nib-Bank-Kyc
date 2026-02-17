@@ -19,7 +19,9 @@ import {
   Users,
   Megaphone,
   AlertTriangle,
-  Info
+  Info,
+  Building2,
+  Layers
 } from "lucide-react";
 import { Textarea } from '@/components/ui/textarea';
 import { 
@@ -70,6 +72,7 @@ export default function SystemSettingsPage() {
   };
 
   const handleAddDocType = () => {
+    if (!newDocLabel.trim()) return;
     const id = newDocLabel.toLowerCase().replace(/\s+/g, '_');
     const updated = [...(localSettings.documentTypes || []), { id, label: newDocLabel }];
     setLocalSettings({ ...localSettings, documentTypes: updated });
@@ -79,6 +82,19 @@ export default function SystemSettingsPage() {
   const handleRemoveDocType = (id: string) => {
     const updated = localSettings.documentTypes.filter((t: any) => t.id !== id);
     setLocalSettings({ ...localSettings, documentTypes: updated });
+  };
+
+  const handleAddEntityType = () => {
+    if (!newEntityLabel.trim()) return;
+    const id = newEntityLabel.toLowerCase().replace(/\s+/g, '_');
+    const updated = [...(localSettings.entityTypes || []), { id, label: newEntityLabel }];
+    setLocalSettings({ ...localSettings, entityTypes: updated });
+    setNewEntityLabel("");
+  };
+
+  const handleRemoveEntityType = (id: string) => {
+    const updated = localSettings.entityTypes.filter((t: any) => t.id !== id);
+    setLocalSettings({ ...localSettings, entityTypes: updated });
   };
 
   if (loading) return <div className="py-24 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
@@ -109,16 +125,74 @@ export default function SystemSettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="shadow-lg border-slate-200">
+            <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-xl flex items-center gap-2"><Building2 className="w-5 h-5 text-primary" /> Account Classifications</CardTitle></CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="New account category (e.g. Individual)..." 
+                  value={newEntityLabel} 
+                  onChange={(e) => setNewEntityLabel(e.target.value)} 
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddEntityType()}
+                />
+                <Button size="icon" onClick={handleAddEntityType} className="bg-primary hover:bg-primary/90">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="grid gap-2">
+                {localSettings.entityTypes?.length > 0 ? (
+                  localSettings.entityTypes.map((type: any) => (
+                    <div key={type.id} className="flex items-center justify-between p-3 border rounded-lg bg-white group hover:border-primary/30 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 bg-slate-50 rounded text-slate-400"><Layers className="w-3.5 h-3.5" /></div>
+                        <span className="text-sm font-bold text-slate-700">{type.label}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => handleRemoveEntityType(type.id)} className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center py-6 text-muted-foreground italic border-2 border-dashed rounded-lg">No entity types defined.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-8">
           <Card className="shadow-lg border-slate-200">
             <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-xl flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Document Classifications</CardTitle></CardHeader>
             <CardContent className="pt-6 space-y-4">
-              <div className="flex gap-2"><Input placeholder="New type..." value={newDocLabel} onChange={(e) => setNewDocLabel(e.target.value)} /><Button size="icon" onClick={handleAddDocType}><Plus className="w-4 h-4" /></Button></div>
-              <div className="grid gap-2">{localSettings.documentTypes?.map((type: any) => (
-                <div key={type.id} className="flex items-center justify-between p-3 border rounded-lg bg-white group hover:border-primary/30 transition-all"><span className="text-sm font-medium text-slate-700">{type.label}</span><Button variant="ghost" size="icon" onClick={() => handleRemoveDocType(type.id)} className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></Button></div>
-              ))}</div>
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="New type (e.g. National ID)..." 
+                  value={newDocLabel} 
+                  onChange={(e) => setNewDocLabel(e.target.value)} 
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddDocType()}
+                />
+                <Button size="icon" onClick={handleAddDocType} className="bg-primary hover:bg-primary/90">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="grid gap-2">
+                {localSettings.documentTypes?.length > 0 ? (
+                  localSettings.documentTypes.map((type: any) => (
+                    <div key={type.id} className="flex items-center justify-between p-3 border rounded-lg bg-white group hover:border-primary/30 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 bg-slate-50 rounded text-slate-400"><FileText className="w-3.5 h-3.5" /></div>
+                        <span className="text-sm font-bold text-slate-700">{type.label}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => handleRemoveDocType(type.id)} className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center py-6 text-muted-foreground italic border-2 border-dashed rounded-lg">No document types defined.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
