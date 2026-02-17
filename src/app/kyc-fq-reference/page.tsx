@@ -52,7 +52,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { KYCFinding } from '@/lib/kyc-data';
 import { getFindings, upsertFinding, deleteFinding, seedFindings } from '@/actions/findings';
-import { FindingCategory, FindingSeverity, UserRole } from '@prisma/client';
+import { FindingCategory, FindingSeverity } from '@prisma/client';
+import { usePermissions } from '@/hooks/use-permissions';
 
 const SEVERITY_COLORS = {
   LOW: "bg-blue-100 text-blue-800",
@@ -97,6 +98,7 @@ const EXAMPLE_FINDINGS: Partial<KYCFinding>[] = [
 
 export default function KYCFFQReferencePage() {
   const { user } = useAuth();
+  const { permissions, loading: permissionsLoading } = usePermissions(user);
   const { toast } = useToast();
   const [findings, setFindings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,9 +129,7 @@ export default function KYCFFQReferencePage() {
     setLoading(false);
   };
 
-  const canManageFindings = useMemo(() => {
-    return [UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.BRANCH_BANKING_DIRECTOR].includes(user?.role as UserRole);
-  }, [user?.role]);
+  const canManageFindings = permissions.canManageFindings;
 
   const filteredFindings = useMemo(() => {
     if (!findings) return [];
@@ -195,6 +195,10 @@ export default function KYCFFQReferencePage() {
       setFindingForm({ ...findingForm, applicableTo: [...current, typeId] });
     }
   };
+
+  if (permissionsLoading) {
+    return <div className="py-32 text-center"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

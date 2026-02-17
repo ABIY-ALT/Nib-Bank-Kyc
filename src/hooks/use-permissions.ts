@@ -1,4 +1,3 @@
-
 'use client';
 
 import { UserProfile } from "@/lib/auth-mock.tsx";
@@ -15,19 +14,21 @@ export interface PermissionSet {
   canAccessPerformance: boolean;
   canAccessFollowUp: boolean;
   canAccessArchive: boolean;
+  canManageFindings: boolean;
 }
 
 const EMPTY_PERMISSIONS: PermissionSet = {
   canSubmit: false, canReview: false, canEscalate: false, 
   canViewReports: false, canManageUsers: false, canManageSystem: false,
-  canAccessPerformance: false, canAccessFollowUp: false, canAccessArchive: false
+  canAccessPerformance: false, canAccessFollowUp: false, canAccessArchive: false,
+  canManageFindings: false
 };
 
 // System protected ADMIN role fallback
 const ADMIN_PERMISSIONS: PermissionSet = { 
   canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, 
   canManageUsers: true, canManageSystem: true, canAccessPerformance: true,
-  canAccessFollowUp: true, canAccessArchive: true 
+  canAccessFollowUp: true, canAccessArchive: true, canManageFindings: true
 };
 
 export function usePermissions(user: UserProfile | null) {
@@ -52,7 +53,7 @@ export function usePermissions(user: UserProfile | null) {
     if (!user) return EMPTY_PERMISSIONS;
     
     // 1. Protected Admin bypass
-    if (user.role === 'ADMIN') return ADMIN_PERMISSIONS;
+    if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') return ADMIN_PERMISSIONS;
 
     // 2. Dynamic lookup in SQL RoleDefinition table
     const dbMatch = dbDefinitions.find(d => d.name === user.role);
@@ -68,6 +69,7 @@ export function usePermissions(user: UserProfile | null) {
         canAccessPerformance: !!dbMatch.canAccessPerformance,
         canAccessFollowUp: !!dbMatch.canAccessFollowUp,
         canAccessArchive: !!dbMatch.canAccessArchive,
+        canManageFindings: !!dbMatch.canManageFindings,
       };
     }
 

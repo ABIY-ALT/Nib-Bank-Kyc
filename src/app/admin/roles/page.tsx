@@ -28,7 +28,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAllUsers, updateUserRole } from '@/actions/users';
 import { getRoleDefinitions, upsertRoleDefinition, deleteRoleDefinition } from '@/actions/roles';
-import { UserRole } from '@prisma/client';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -58,7 +57,8 @@ export default function StaffRolesPage() {
     canManageSystem: false,
     canAccessPerformance: false,
     canAccessFollowUp: false,
-    canAccessArchive: false
+    canAccessArchive: false,
+    canManageFindings: false
   });
 
   useEffect(() => {
@@ -80,7 +80,7 @@ export default function StaffRolesPage() {
 
   const handleRoleChange = async (userId: string, newRole: string, currentName: string) => {
     try {
-      await updateUserRole(userId, newRole as UserRole);
+      await updateUserRole(userId, newRole);
       toast({ title: "Role Updated", description: `${currentName} is now ${newRole.replace(/_/g, ' ')}.` });
       loadData();
     } catch (e) {
@@ -119,13 +119,14 @@ export default function StaffRolesPage() {
       canManageSystem: false,
       canAccessPerformance: false,
       canAccessFollowUp: false,
-      canAccessArchive: false
+      canAccessArchive: false,
+      canManageFindings: false
     });
     setEditingRole(null);
   };
 
   const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) || 
     u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -185,13 +186,13 @@ export default function StaffRolesPage() {
                     <TableRow key={u.id} className="hover:bg-slate-50">
                       <TableCell className="pl-8 py-4">
                         <div className="flex flex-col">
-                          <span className="font-bold text-slate-900">{u.name}</span>
+                          <span className="font-bold text-slate-900">{u.firstName} {u.lastName}</span>
                           <span className="text-[10px] text-muted-foreground font-medium">{u.email}</span>
                         </div>
                       </TableCell>
                       <TableCell><Badge variant="secondary" className="bg-primary/5 text-primary font-bold">{u.role?.replace(/_/g, ' ')}</Badge></TableCell>
                       <TableCell className="text-right pr-8">
-                        <Select value={u.role} onValueChange={(val) => handleRoleChange(u.id, val, u.name)}>
+                        <Select value={u.role} onValueChange={(val) => handleRoleChange(u.id, val, `${u.firstName} ${u.lastName}`)}>
                           <SelectTrigger className="w-[220px] h-10 border-primary/20 bg-white"><SelectValue placeholder="Assign Role" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="ADMIN">ADMIN</SelectItem>
@@ -217,12 +218,13 @@ export default function StaffRolesPage() {
             </CardHeader>
             <CardContent className="p-0">
               <Table>
-                <TableHeader className="bg-slate-50/50">
+                <TableHeader className="bg-slate-50/80">
                   <TableRow>
                     <TableHead className="font-bold py-4 pl-8">Role Name</TableHead>
                     <TableHead className="text-center font-bold">Sub</TableHead>
                     <TableHead className="text-center font-bold">Rev</TableHead>
                     <TableHead className="text-center font-bold">Esc</TableHead>
+                    <TableHead className="text-center font-bold">KB</TableHead>
                     <TableHead className="text-center font-bold">Perf</TableHead>
                     <TableHead className="text-center font-bold">FU</TableHead>
                     <TableHead className="text-center font-bold">Arch</TableHead>
@@ -238,6 +240,7 @@ export default function StaffRolesPage() {
                       <TableCell className="text-center">{def.canSubmit ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-center">{def.canReview ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-center">{def.canEscalate ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
+                      <TableCell className="text-center">{def.canManageFindings ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-center">{def.canAccessPerformance ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-center">{def.canAccessFollowUp ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
                       <TableCell className="text-center">{def.canAccessArchive ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
@@ -252,7 +255,7 @@ export default function StaffRolesPage() {
                     </TableRow>
                   ))}
                   {roleDefinitions.length === 0 && (
-                    <TableRow><TableCell colSpan={10} className="py-20 text-center text-muted-foreground italic">No dynamic roles defined.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={11} className="py-20 text-center text-muted-foreground italic">No dynamic roles defined.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -289,7 +292,7 @@ export default function StaffRolesPage() {
                   { id: 'canSubmit', label: 'Case Submission' },
                   { id: 'canReview', label: 'KYC Review' },
                   { id: 'canEscalate', label: 'Risk Escalation' },
-                  { id: 'canViewReports', label: 'Audit Reports' },
+                  { id: 'canManageFindings', label: 'Knowledge Base (F&amp;Q)' },
                   { id: 'canManageUsers', label: 'User Access' },
                   { id: 'canManageSystem', label: 'System Config' }
                 ].map(perm => (

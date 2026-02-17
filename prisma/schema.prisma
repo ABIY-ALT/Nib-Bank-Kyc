@@ -11,12 +11,26 @@ datasource db {
 // ENUMS
 //////////////////////////////////////////////////////
 
+enum RoleType {
+  SUPER_ADMIN
+  BRANCH_OFFICER
+  KYC_SPECIALIST
+  SENIOR_ASSESSOR
+  DISTRICT_DIRECTOR
+  BRANCH_BANKING_DIRECTOR
+  CHIEF_OFFICER
+  DIVISION_MANAGER
+  SUPERVISOR
+  COMPLIANCE_OFFICER
+  AUDITOR
+  SLA_MANAGER
+}
+
 enum KYCStatus {
   DRAFT
   SUBMITTED
   UNDER_REVIEW
   ACTION_REQUIRED
-  AMENDED
   RESUBMITTED
   ESCALATED
   GOVERNANCE_PENDING
@@ -24,7 +38,6 @@ enum KYCStatus {
   COMPLIANCE_REVIEW
   ACTIVE
   INACTIVE
-  APPROVED
   REJECTED
   FROZEN
 }
@@ -49,12 +62,6 @@ enum AuditAction {
   STATUS_CHANGE
 }
 
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
-
 enum FindingCategory {
   IDENTITY
   DOCUMENTATION
@@ -67,6 +74,12 @@ enum FindingSeverity {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
 }
 
 //////////////////////////////////////////////////////
@@ -101,21 +114,19 @@ model User {
   email         String   @unique
   firstName     String
   lastName      String
+  role          String   // Dynamic string to support custom roles from RoleDefinition
   phoneNumber   String?
-  role          String   @default("BRANCH_OFFICER")
   branchId      String?
   branch        Branch?  @relation(fields: [branchId], references: [id])
   status        UserStatus @default(ACTIVE)
-  
-  assignedBranches String[] // Specialist portfolio mapping (Branch Names)
-  needsPasswordChange Boolean @default(false)
-
+  assignedBranches String[] // For specialist portfolios
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   auditLogs     AuditLog[]
-  createdKycs   KYC[]    @relation("CreatedBy")
-  assignedKycs  KYC[]    @relation("AssignedTo")
+  assignedKycs  KYC[]    @relation("AssignedKYC")
+  createdKycs   KYC[]    @relation("CreatedKYC")
+  memos         Memo[]
 }
 
 model RoleDefinition {
@@ -130,7 +141,7 @@ model RoleDefinition {
   canAccessPerformance Boolean @default(false)
   canAccessFollowUp    Boolean @default(false)
   canAccessArchive     Boolean @default(false)
-  createdAt            DateTime @default(now())
+  canManageFindings    Boolean @default(false)
 }
 
 //////////////////////////////////////////////////////
@@ -141,18 +152,18 @@ model KYC {
   id               String      @id
   customerName     String
   customerIdNumber String
-  entityType       String?
   branchId         String
   branch           Branch      @relation(fields: [branchId], references: [id])
 
   status           KYCStatus   @default(DRAFT)
   riskLevel        RiskLevel   @default(LOW)
+  entityType       String?
 
   createdById      String
-  createdBy        User        @relation("CreatedBy", fields: [createdById], references: [id])
+  createdBy        User        @relation("CreatedKYC", fields: [createdById], references: [id])
 
   assignedToId     String?
-  assignedTo       User?       @relation("AssignedTo", fields: [assignedToId], references: [id])
+  assignedTo       User?       @relation("AssignedKYC", fields: [assignedToId], references: [id])
 
   governanceFlow   GovernanceFlow?
   amendments       Amendment[]
@@ -160,14 +171,12 @@ model KYC {
   auditLogs        AuditLog[]
   auditSamplings   AuditSampling[]
 
-  commentHistory   Json?       // Array of CommentHistoryEntry
-  exceptionalData  Json?       // Governance context
-  
-  amendCycles      Int         @default(0)
-  isResubmitted    Boolean     @default(false)
-  
   slaDueAt         DateTime?
   approvedAt       DateTime?
+  amendCycles      Int         @default(0)
+  isResubmitted    Boolean     @default(false)
+  commentHistory   Json?       @default("[]")
+  checklistState   Json?       @default("{}")
 
   active           Boolean     @default(true) // Zero deletion policy
 
@@ -213,14 +222,15 @@ model GovernanceFlow {
 //////////////////////////////////////////////////////
 
 model Memo {
-  id        String   @id @default(uuid())
-  name      String?
-  type      String?
-  kycId     String
-  kyc       KYC      @relation(fields: [kycId], references: [id])
+  id           String   @id @default(uuid())
+  kycId        String
+  kyc          KYC      @relation(fields: [kycId], references: [id])
+  name         String?
+  type         String?
+  fileUrl      String
   uploadedById String
-  fileUrl   String
-  createdAt DateTime @default(now())
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
 }
 
 //////////////////////////////////////////////////////
@@ -256,18 +266,7 @@ model AuditSampling {
 }
 
 //////////////////////////////////////////////////////
-// SLA CONFIGURATION
-//////////////////////////////////////////////////////
-
-model SLAConfig {
-  id             String   @id @default(uuid())
-  reviewHours    Int
-  escalationHours Int
-  createdAt      DateTime @default(now())
-}
-
-//////////////////////////////////////////////////////
-// KNOWLEDGE BASE
+// KYC KNOWLEDGE BASE
 //////////////////////////////////////////////////////
 
 model Finding {
@@ -277,21 +276,32 @@ model Finding {
   description  String
   category     FindingCategory
   severity     FindingSeverity
-  applicableTo String[]        // List of entity types
+  applicableTo String[]
   active       Boolean         @default(true)
   source       String          @default("manual")
   createdAt    DateTime        @default(now())
 }
 
+//////////////////////////////////////////////////////
+// SYSTEM SETTINGS
+//////////////////////////////////////////////////////
+
 model GlobalSetting {
-  id              String   @id @default("global")
-  autoEscalation  Boolean  @default(true)
-  escalationHours Int      @default(72)
-  strictSla       Boolean  @default(true)
-  slaHours        Int      @default(24)
-  documentTypes   Json?    // Array of {id, label}
-  entityTypes     Json?    // Array of {id, label}
-  guidelines      Json?    // Array of {id, title, description, type}
-  updatedBy       String?
-  lastUpdated     DateTime @default(now())
+  id               String   @id @default("global")
+  autoEscalation   Boolean  @default(true)
+  escalationHours  Int      @default(72)
+  strictSla        Boolean  @default(true)
+  slaHours         Int      @default(24)
+  documentTypes    Json?    @default("[]")
+  entityTypes      Json?    @default("[]")
+  guidelines       Json?    @default("[]")
+  updatedBy        String?
+  lastUpdated      DateTime @default(now())
+}
+
+model SLAConfig {
+  id             String   @id @default(uuid())
+  reviewHours    Int
+  escalationHours Int
+  createdAt      DateTime @default(now())
 }
