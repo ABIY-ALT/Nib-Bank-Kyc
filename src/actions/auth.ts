@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { UserRole, UserStatus } from '@prisma/client';
 
 interface SyncUserData {
   id: string;
@@ -14,20 +15,16 @@ interface SyncUserData {
 
 /**
  * Synchronizes a user profile with the SQL database via Prisma.
- * This ensures that administrative changes and logins are mirrored in PostgreSQL.
+ * This is the primary entry point for user profile management.
  */
 export async function syncUserToSql(userData: SyncUserData) {
   try {
-    console.log(`[SQL Sync] Synchronizing user: ${userData.email}`);
+    const status = (userData.status?.toUpperCase() as UserStatus) || UserStatus.ACTIVE;
     
-    // Normalize status and role to match Prisma Enums strictly (UPPER_SNAKE_CASE)
-    const status = (userData.status?.toUpperCase() as any) || 'ACTIVE';
-    
-    // Ensure role is normalized to standard SQL enum naming
+    // Normalize role string to Prisma Enum
     let rawRole = userData.role?.toUpperCase() || 'BRANCH_OFFICER';
     rawRole = rawRole.replace(/\s+/g, '_');
-    
-    const role = rawRole as any;
+    const role = rawRole as UserRole;
 
     const user = await prisma.user.upsert({
       where: { id: userData.id },
@@ -50,13 +47,23 @@ export async function syncUserToSql(userData: SyncUserData) {
       },
     });
 
-    console.log(`[SQL Sync] Success for ${userData.email} (ID: ${userData.id})`);
     return { success: true, user };
   } catch (error) {
-    console.error('[SQL Sync] Critical Failure:', error);
+    console.error('[SQL Sync] Error:', error);
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Database connection error. Ensure "npx prisma migrate dev" has been run.' 
+      error: error instanceof Error ? error.message : 'Database error.' 
     };
+  }
+}
+
+export async function getUserProfile(userId: string) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    return user;
+  } catch (error) {
+    return null;
   }
 }

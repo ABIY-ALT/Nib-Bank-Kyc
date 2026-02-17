@@ -1,84 +1,48 @@
-
 'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
-import { useFirebase, useFirestore } from '@/firebase';
+import { useFirebase } from '@/firebase';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
   signOut, 
-  updatePassword as fbUpdatePassword,
 } from 'firebase/auth';
-import { doc, getDoc, updateDoc, collection, query, limit, onSnapshot, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { syncUserToSql } from '@/actions/auth';
+import { syncUserToSql, getUserProfile } from '@/actions/auth';
 import { firebaseConfig } from '@/firebase/config';
+import { UserRole, UserStatus } from '@prisma/client';
 
-export type UserRole = 
-  | 'BRANCH_OFFICER' 
-  | 'KYC_OFFICER' 
-  | 'SUPERVISOR' 
-  | 'BRANCH_BANKING_DIRECTOR' 
-  | 'ADMIN' 
-  | 'BRANCH_MANAGER' 
-  | 'DISTRICT_DIRECTOR' 
-  | 'DIVISION_MANAGER' 
-  | 'CHIEF_RETAIL_SME_OFFICER' 
-  | 'FOLLOW_UP_TEAM' 
-  | 'CHIEF';
-
-export interface User {
+export interface UserProfile {
   id: string;
   name: string;
   email: string;
-  phoneNumber?: string;
-  role?: UserRole;
-  branch?: string;
-  assignedBranches?: string[];
-  district?: string;
-  status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
-  needsPasswordChange?: boolean;
+  phoneNumber?: string | null;
+  role: UserRole;
+  branchName?: string | null;
+  assignedBranches: string[];
+  districtName?: string | null;
+  status: UserStatus;
+  needsPasswordChange: boolean;
 }
 
-const SESSION_TIMEOUT_MINUTES = 30;
-
 interface AuthContextType {
-  user: User | null;
+  user: UserProfile | null;
   loading: boolean;
   isMock: boolean;
   login: (email: string, pass: string) => Promise<void>;
   logout: (reason?: string) => Promise<void>;
-  changePassword: (newPass: string) => Promise<void>;
-  allUsers: User[]; 
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { auth } = useFirebase();
-  const db = useFirestore();
   const { toast } = useToast();
   
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [lastActivity, setLastActivity] = useState(Date.now());
-  const [dbUsers, setDbUsers] = useState<User[]>([]);
   
-  // Detect if we are in mock mode (no valid API key)
   const isMockMode = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined' || firebaseConfig.apiKey === 'INITIALIZING';
-
-  useEffect(() => {
-    if (!db || isMockMode) return;
-    
-    const q = query(collection(db, "users"), limit(50));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-      setDbUsers(users);
-    }, (error) => {
-      console.warn("User list sync bypassed:", error.message);
-    });
-    return () => unsubscribe();
-  }, [db, isMockMode]);
 
   useEffect(() => {
     if (isMockMode) {
@@ -90,41 +54,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!auth || !db) return;
+    if (!auth) return;
 
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         try {
-          const userDoc = await getDoc(doc(db, "users", fbUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data() as User;
-            if (userData.status !== 'ACTIVE') {
-              toast({ variant: 'destructive', title: 'Access Denied', description: `Your account is currently ${userData.status}.` });
+          const sqlUser = await getUserProfile(fbUser.uid);
+          if (sqlUser) {
+            if (sqlUser.status !== 'ACTIVE') {
+              toast({ variant: 'destructive', title: 'Access Denied', description: `Account ${sqlUser.status}.` });
               await signOut(auth);
               setUser(null);
             } else {
-              const currentUser = { ...userData, id: fbUser.uid };
-              setUser(currentUser);
-              
-              await syncUserToSql({
-                id: currentUser.id,
-                email: currentUser.email,
-                name: currentUser.name,
-                role: currentUser.role,
-                branch: currentUser.branch,
-                district: currentUser.district
-              });
+              setUser(sqlUser as any);
             }
           } else {
-            const basicUser: User = {
+            // First time login, sync basic profile
+            const result = await syncUserToSql({
               id: fbUser.uid,
-              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Unknown User',
-              email: fbUser.email || '',
-              role: 'BRANCH_OFFICER',
-              status: 'ACTIVE'
-            };
-            setUser(basicUser);
-            await syncUserToSql(basicUser);
+              email: fbUser.email!,
+              name: fbUser.displayName || fbUser.email!.split('@')[0],
+            });
+            if (result.success) setUser(result.user as any);
           }
         } catch (e) {
           console.error("Auth profile sync failed:", e);
@@ -136,26 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [auth, db, toast, isMockMode]);
-
-  useEffect(() => {
-    const handleActivity = () => setLastActivity(Date.now());
-    window.addEventListener('mousemove', handleActivity);
-    window.addEventListener('keydown', handleActivity);
-
-    const interval = setInterval(() => {
-      const now = Date.now();
-      if (user && now - lastActivity > SESSION_TIMEOUT_MINUTES * 60 * 1000) {
-        logout('Session Timeout');
-      }
-    }, 60000);
-
-    return () => {
-      window.removeEventListener('mousemove', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
-      clearInterval(interval);
-    };
-  }, [user, lastActivity]);
+  }, [auth, toast, isMockMode]);
 
   const login = async (email: string, pass: string) => {
     if (!email.toLowerCase().endsWith('@nibbank.com.et')) {
@@ -164,27 +96,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (isMockMode) {
       if (pass !== 'nibbank123') throw new Error('Invalid developer credential.');
-      
-      const mockId = `mock-${email.split('@')[0]}`;
-      const mockUser: User = {
-        id: mockId,
+      const mockUser: any = {
+        id: `mock-${email.split('@')[0]}`,
         name: email.split('@')[0].split('.').join(' '),
         email: email,
         role: email.toLowerCase().includes('admin') ? 'ADMIN' : 'BRANCH_OFFICER',
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        assignedBranches: []
       };
-
       setUser(mockUser);
       localStorage.setItem('nib_mock_user', JSON.stringify(mockUser));
-      
-      await syncUserToSql({
-        id: mockUser.id,
-        email: mockUser.email,
-        name: mockUser.name,
-        role: mockUser.role,
-      });
-
-      toast({ title: 'Mock Mode Active', description: 'Authenticated using developer fallback.' });
+      await syncUserToSql(mockUser);
       return;
     }
 
@@ -200,18 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await signOut(auth);
     }
     window.location.href = '/login';
-    toast({ title: 'Logged Out', description: `Institutional session terminated: ${reason}` });
-  };
-
-  const changePassword = async (newPass: string) => {
-    if (isMockMode) {
-      setUser(prev => prev ? { ...prev, needsPasswordChange: false } : null);
-      return;
-    }
-    if (!db || !user || !auth?.currentUser) return;
-    await fbUpdatePassword(auth.currentUser, newPass);
-    await updateDoc(doc(db, "users", user.id), { needsPasswordChange: false });
-    setUser(prev => prev ? { ...prev, needsPasswordChange: false } : null);
+    toast({ title: 'Logged Out', description: `Session terminated: ${reason}` });
   };
 
   return (
@@ -220,9 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading, 
       isMock: isMockMode,
       login, 
-      logout, 
-      changePassword, 
-      allUsers: dbUsers 
+      logout,
     }}>
       {children}
     </AuthContext.Provider>

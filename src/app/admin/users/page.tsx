@@ -1,8 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, doc, setDoc, updateDoc, query, orderBy, getDoc } from "firebase/firestore";
+import { useState, useEffect } from 'react';
 import { 
   Table, 
   TableBody, 
@@ -23,7 +21,6 @@ import {
   UserCheck,
   UserX,
   ShieldCheck,
-  ArrowRight
 } from "lucide-react";
 import { 
   Dialog, 
@@ -46,203 +43,104 @@ import {
   SelectSeparator
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { User, UserRole } from "@/lib/auth-mock.tsx";
-import { syncUserToSql } from '@/actions/auth';
-import Link from 'next/link';
+import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
+import { getBranches, getDistricts } from '@/actions/hierarchy';
+import { UserRole, UserStatus } from '@prisma/client';
 
-const SYSTEM_ROLES: UserRole[] = [
-  'BRANCH_OFFICER', 
-  'KYC_OFFICER', 
-  'SUPERVISOR', 
-  'BRANCH_BANKING_DIRECTOR', 
-  'ADMIN', 
-  'BRANCH_MANAGER', 
-  'DISTRICT_DIRECTOR',
-  'DIVISION_MANAGER',
-  'CHIEF_RETAIL_SME_OFFICER',
-  'FOLLOW_UP_TEAM',
-  'CHIEF'
-];
+const SYSTEM_ROLES = Object.values(UserRole);
 
 export default function UserManagementPage() {
-  const db = useFirestore();
   const { toast } = useToast();
+  const [users, setUsers] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [districts, setDistricts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [formData, setFormData] = useState<Partial<User>>({
+  
+  const [formData, setFormData] = useState<any>({
     name: '',
     email: '',
-    phoneNumber: '',
-    role: undefined,
-    status: 'ACTIVE',
-    branch: '',
-    assignedBranches: [],
-    district: ''
+    role: UserRole.BRANCH_OFFICER,
+    status: UserStatus.ACTIVE,
+    branchName: '',
+    districtName: ''
   });
 
-  const usersQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "users"), orderBy("name")) : null;
-  }, [db]);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const { data: users, loading } = useCollection<User>(usersQuery);
+  const loadData = async () => {
+    setLoading(true);
+    const [u, b, d] = await Promise.all([getAllUsers(), getBranches(), getDistricts()]);
+    setUsers(u);
+    setBranches(b);
+    setDistricts(d);
+    setLoading(false);
+  };
 
-  const rolesQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "roleDefinitions"), orderBy("name")) : null;
-  }, [db]);
-
-  const { data: customRoles } = useCollection<{id: string, name: string}>(rolesQuery);
-
-  const branchesQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "branches"), orderBy("name")) : null;
-  }, [db]);
-
-  const { data: branches } = useCollection<{id: string, name: string, district: string}>(branchesQuery);
-
-  const districtsQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "districts"), orderBy("name")) : null;
-  }, [db]);
-
-  const { data: districts } = useCollection<{id: string, name: string}>(districtsQuery);
-
-  const handleOpenDialog = (user?: User) => {
+  const handleOpenDialog = (user?: any) => {
     if (user) {
       setEditingUser(user);
-      setFormData({
-        ...user,
-        assignedBranches: user.assignedBranches || []
-      });
+      setFormData({ ...user });
     } else {
       setEditingUser(null);
       setFormData({ 
         name: '', 
         email: '', 
-        phoneNumber: '', 
-        role: undefined, 
-        status: 'ACTIVE', 
-        branch: '', 
-        assignedBranches: [],
-        district: '' 
+        role: UserRole.BRANCH_OFFICER, 
+        status: UserStatus.ACTIVE, 
+        branchName: '', 
+        districtName: '' 
       });
     }
     setIsDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!db) return;
-    
     if (!formData.name || !formData.email) {
       toast({ variant: "destructive", title: "Validation Error", description: "Identity details required." });
       return;
     }
 
-    if (!formData.email.toLowerCase().endsWith('@nibbank.com.et')) {
-      toast({ variant: "destructive", title: "Invalid Domain", description: "Personnel email must use @nibbank.com.et domain." });
-      return;
-    }
-
     setIsSyncing(true);
-    const userId = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
-    const userRef = doc(db, "users", userId);
-    
-    const data: any = {
-      id: userId,
-      name: formData.name || "",
-      email: formData.email || "",
-      phoneNumber: formData.phoneNumber || "",
-      status: formData.status || 'ACTIVE',
-      role: formData.role || null,
-      branch: formData.branch || null,
-      district: formData.district || null,
-      assignedBranches: formData.assignedBranches || [],
-      needsPasswordChange: editingUser ? (formData.needsPasswordChange ?? false) : true
-    };
-
     try {
-      // 1. Save to Real-time Store (Firestore)
-      await setDoc(userRef, data, { merge: true });
-
-      // 2. Synchronize to Relational Store (PostgreSQL)
-      const syncResult = await syncUserToSql({
-        id: userId,
-        email: data.email,
-        name: data.name,
-        role: data.role,
-        branch: data.branch,
-        district: data.district,
-        status: data.status
-      });
-
-      if (!syncResult.success) {
-        throw new Error(syncResult.error);
-      }
-
-      toast({ 
-        title: editingUser ? "Assignment Saved" : "User Registered", 
-        description: editingUser 
-          ? "Personnel mapping updated in both institutional registries."
-          : `User created and synced to SQL database.` 
-      });
+      const id = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
+      await provisionUser({ ...formData, id });
+      toast({ title: "Success", description: "Personnel profile updated in SQL database." });
       setIsDialogOpen(false);
+      loadData();
     } catch (error: any) {
-      console.error("Save failure:", error);
-      toast({ 
-        variant: "destructive", 
-        title: "Synchronization Error", 
-        description: error.message || "Failed to commit changes to institutional database. Ensure your database is connected and migrated." 
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const handleToggleStatus = async (id: string, currentStatus: string, name: string) => {
-    if (!db) return;
-    const newStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    if (!confirm(`Are you sure you want to change ${name}'s status to ${newStatus}?`)) return;
-    
+  const handleToggleStatus = async (user: any) => {
+    const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.INACTIVE : UserStatus.ACTIVE;
     setIsSyncing(true);
     try {
-      await updateDoc(doc(db, "users", id), { status: newStatus });
-      
-      const snap = await getDoc(doc(db, "users", id));
-      const userData = snap.data();
-      if (userData) {
-        const syncResult = await syncUserToSql({
-          id: id,
-          email: userData.email,
-          name: userData.name,
-          role: userData.role,
-          status: newStatus
-        });
-        
-        if (!syncResult.success) throw new Error(syncResult.error);
-      }
-
-      toast({ 
-        title: newStatus === 'ACTIVE' ? "User Restored" : "User Deactivated",
-        description: `${name} status updated across all systems.`
-      });
-    } catch (error: any) {
-      console.error("Status toggle error:", error);
-      toast({ variant: "destructive", title: "Status Sync Failed", description: error.message });
+      await updateUserStatus(user.id, newStatus);
+      toast({ title: "Status Updated" });
+      loadData();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Update Failed", description: e.message });
     } finally {
       setIsSyncing(false);
     }
   };
-
-  const showSingleBranchField = formData.role && ['BRANCH_OFFICER', 'BRANCH_MANAGER'].includes(formData.role);
-  const showDistrictField = formData.role && ['BRANCH_OFFICER', 'BRANCH_MANAGER', 'DISTRICT_DIRECTOR'].includes(formData.role);
-  const isKYCOfficer = formData.role === 'KYC_OFFICER';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Personnel Directory</h1>
-          <p className="text-muted-foreground text-lg font-medium">Register users and manage institutional role assignments.</p>
+          <p className="text-muted-foreground text-lg font-medium">Manage institutional staff profiles in PostgreSQL.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="gap-2 bg-[#B89334] hover:bg-[#A6822D] shadow-lg font-bold h-11 px-6">
+        <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg font-bold h-11 px-6">
           <UserPlus className="w-4 h-4" />
           Provision New User
         </Button>
@@ -262,91 +160,50 @@ export default function UserManagementPage() {
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={5} className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-            ) : users?.map((user) => (
+            ) : users.map((user) => (
               <TableRow key={user.id} className="hover:bg-slate-50 transition-colors">
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500">
-                      {user.name?.charAt(0) || 'U'}
+                      {user.name?.charAt(0)}
                     </div>
                     <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">{user.name}</span>
-                        {user.needsPasswordChange && (
-                          <Badge className="bg-orange-50 text-orange-600 border-orange-100 text-[8px] h-4 font-black uppercase">Force Update</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold tracking-tighter">
-                        <Mail className="w-2.5 h-2.5" />
-                        {user.email}
-                      </div>
+                      <span className="font-bold text-slate-900">{user.name}</span>
+                      <span className="text-[10px] text-muted-foreground font-bold">{user.email}</span>
                     </div>
                   </div>
                 </TableCell>
                 <TableCell>
-                  {user.role ? (
-                    <Badge variant="secondary" className="bg-primary/5 text-primary font-bold flex items-center gap-1.5 w-fit">
-                      <UserCheck className="w-3 h-3" /> {user.role.replace(/_/g, ' ')}
-                    </Badge>
-                  ) : <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 font-bold">Awaiting Role</Badge>}
+                  <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">
+                    {user.role.replace(/_/g, ' ')}
+                  </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-col gap-1">
-                    {user.role === 'KYC_OFFICER' ? (
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black uppercase text-primary tracking-widest mb-0.5">Assigned Portfolio</span>
-                        <div className="flex flex-wrap gap-1 max-w-[240px]">
-                          {user.assignedBranches?.map(b => (
-                            <Badge key={b} variant="secondary" className="text-[9px] h-4.5 px-2 bg-white border-primary/20 text-slate-700 font-bold">
-                              {b}
-                            </Badge>
-                          ))}
-                          {(!user.assignedBranches || user.assignedBranches.length === 0) && (
-                            <span className="text-[10px] font-bold text-slate-300 italic">No nodes mapped</span>
-                          )}
-                        </div>
+                  <div className="space-y-1">
+                    {user.branchName && (
+                      <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400" /> {user.branchName}
                       </div>
-                    ) : (
-                      <div className="space-y-1">
-                        {user.branch && (
-                          <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                            <Building2 className="w-3.5 h-3.5 text-slate-400" /> 
-                            {user.branch} Node
-                          </div>
-                        )}
-                        {user.district && (
-                          <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 uppercase tracking-tight">
-                            <MapPin className="w-3 h-3 text-slate-400" /> 
-                            {user.district} District
-                          </div>
-                        )}
-                        {!user.branch && !user.district && (
-                          <span className="text-[10px] font-bold text-slate-300 italic">Unmapped</span>
-                        )}
+                    )}
+                    {user.districtName && (
+                      <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 uppercase tracking-tight">
+                        <MapPin className="w-3 h-3 text-slate-400" /> {user.districtName}
                       </div>
                     )}
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={user.status === 'ACTIVE' ? 'text-green-600 border-green-200 bg-green-50 font-bold' : 'text-slate-400 border-slate-200 bg-slate-50 font-bold'}>
+                  <Badge variant="outline" className={user.status === UserStatus.ACTIVE ? 'text-green-600 border-green-200 bg-green-50' : 'text-slate-400 border-slate-200 bg-slate-50'}>
                     {user.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right pr-8">
                   <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary rounded-full hover:bg-primary/5 h-9 w-9">
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary rounded-full h-9 w-9">
                       <Settings2 className="w-4 h-4" />
                     </Button>
-                    
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => handleToggleStatus(user.id, user.status || 'ACTIVE', user.name)} 
-                      className={user.status === 'ACTIVE' ? "text-destructive rounded-full hover:bg-destructive/5 h-9 w-9" : "text-emerald-600 rounded-full hover:bg-emerald-50 h-9 w-9"}
-                      title={user.status === 'ACTIVE' ? "Deactivate User" : "Activate User"}
-                      disabled={isSyncing}
-                    >
-                      {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : (user.status === 'ACTIVE' ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />)}
+                    <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9">
+                      {user.status === UserStatus.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                     </Button>
                   </div>
                 </TableCell>
@@ -357,135 +214,77 @@ export default function UserManagementPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl">
-          <DialogHeader className="p-6 border-b shrink-0">
+        <DialogContent className="max-w-md">
+          <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-              {editingUser ? <ShieldCheck className="w-6 h-6 text-[#B89334]" /> : <UserPlus className="w-6 h-6 text-[#B89334]" />}
+              <ShieldCheck className="w-6 h-6 text-primary" />
               {editingUser ? 'Configure Access' : 'Register New User'}
             </DialogTitle>
-            <DialogDescription>
-              {editingUser 
-                ? 'Assign institutional roles and jurisdictional mapping for this staff member.' 
-                : 'Initial identity registration.'}
-            </DialogDescription>
           </DialogHeader>
           
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
-            <div className="space-y-8">
-              <div className="space-y-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Legal Name</Label>
-                  <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11 bg-white" placeholder="e.g. Michael Smith" disabled={isSyncing} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Phone</Label>
-                    <Input value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} className="h-11 bg-white" placeholder="09..." disabled={isSyncing} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Official Email</Label>
-                    <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 bg-white" placeholder="Test.Test@nibbank.com.et" disabled={isSyncing} />
-                  </div>
-                </div>
+          <div className="space-y-6 pt-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">Legal Name</Label>
+                <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-11" />
               </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">Official Email</Label>
+                <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11" />
+              </div>
+            </div>
 
-              {editingUser && (
-                <div className="space-y-8">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-primary">System Role</Label>
-                      <Select value={formData.role || ""} onValueChange={val => setFormData({...formData, role: val as UserRole})} disabled={isSyncing}>
-                        <SelectTrigger className="h-11 border-primary/30 bg-primary/5">
-                          <SelectValue placeholder="Assign Role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectLabel className="text-[10px] uppercase font-black text-slate-400">System Roles</SelectLabel>
-                            {SYSTEM_ROLES.map(role => <SelectItem key={role} value={role}>{role.replace(/_/g, ' ')}</SelectItem>)}
-                          </SelectGroup>
-                          <SelectSeparator />
-                          {customRoles && customRoles.length > 0 && (
-                            <SelectGroup>
-                              <SelectLabel className="text-[10px] uppercase font-black text-primary">Custom Roles</SelectLabel>
-                              {customRoles.map(role => <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>)}
-                            </SelectGroup>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Status</Label>
-                      <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val as any})} disabled={isSyncing}>
-                        <SelectTrigger className="h-11 border-slate-200"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ACTIVE">Active</SelectItem>
-                          <SelectItem value="INACTIVE">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-primary">System Role</Label>
+                <Select value={formData.role} onValueChange={val => setFormData({...formData, role: val})}>
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SYSTEM_ROLES.map(role => <SelectItem key={role} value={role}>{role.replace(/_/g, ' ')}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">Status</Label>
+                <Select value={formData.status} onValueChange={val => setFormData({...formData, status: val})}>
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UserStatus.ACTIVE}>Active</SelectItem>
+                    <SelectItem value={UserStatus.INACTIVE}>Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-                  {formData.role && (
-                    <div className="space-y-6 pt-2 animate-in fade-in duration-500">
-                      {showDistrictField && (
-                        <div className="space-y-2">
-                          <Label className="text-sm font-bold text-slate-700">Assigned District</Label>
-                          <Select value={formData.district || ""} onValueChange={val => setFormData({...formData, district: val, branch: ''})} disabled={isSyncing}>
-                            <SelectTrigger className="h-11"><SelectValue placeholder="Select Region" /></SelectTrigger>
-                            <SelectContent>
-                              {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                      {showSingleBranchField && (
-                        <div className="space-y-2">
-                          <Label className="text-sm font-bold text-slate-700">Primary Branch Node</Label>
-                          <Select value={formData.branch || ""} onValueChange={val => setFormData({...formData, branch: val})} disabled={!formData.district || isSyncing}>
-                            <SelectTrigger className="h-11"><SelectValue placeholder="Select Node" /></SelectTrigger>
-                            <SelectContent>
-                              {branches?.filter(b => b.district === formData.district).map(b => (
-                                <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                      {isKYCOfficer && (
-                        <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 space-y-4 shadow-sm">
-                          <div className="flex items-center gap-2 text-primary">
-                            <Settings2 className="w-5 h-5" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Multi-Branch Portfolio</span>
-                          </div>
-                          <p className="text-[12px] text-slate-600 font-medium leading-relaxed">
-                            Jurisdictional mapping for KYC Officers is managed in Staff Assignments.
-                          </p>
-                          <Button asChild variant="outline" size="sm" className="w-full h-10 font-bold text-primary border-primary/20 hover:bg-primary/5 gap-2">
-                            <Link href="/admin/assignments">
-                              Go to Staff Assignments
-                              <ArrowRight className="w-4 h-4" />
-                            </Link>
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">District</Label>
+                <Select value={formData.districtName || ""} onValueChange={val => setFormData({...formData, districtName: val, branchName: ''})}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Select District" /></SelectTrigger>
+                  <SelectContent>
+                    {districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">Branch Node</Label>
+                <Select value={formData.branchName || ""} onValueChange={val => setFormData({...formData, branchName: val})}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Select Branch" /></SelectTrigger>
+                  <SelectContent>
+                    {branches.filter(b => b.districtName === formData.districtName).map(b => (
+                      <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
-          <DialogFooter className="p-6 border-t bg-slate-50 shrink-0">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="px-6 font-bold h-11" disabled={isSyncing}>Cancel</Button>
-            <Button 
-              onClick={handleSave} 
-              disabled={isSyncing}
-              className="px-8 font-black bg-[#B89334] hover:bg-[#A6822D] text-white shadow-xl h-11 min-w-[180px]"
-            >
+          <DialogFooter className="pt-6">
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSyncing}>Cancel</Button>
+            <Button onClick={handleSave} disabled={isSyncing} className="bg-primary px-8">
               {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              {editingUser ? 'Update Assignment' : 'Complete Registration'}
+              Save Profile
             </Button>
           </DialogFooter>
         </DialogContent>
