@@ -1,7 +1,5 @@
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, doc, setDoc, limit } from "firebase/firestore";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,8 +20,7 @@ import {
   Zap,
   ChevronRight
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { KYCSubmission, FollowUpVerification } from "@/lib/kyc-data";
+import { useMemo, useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
@@ -33,64 +30,50 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { getFollowUpVerifications, seedFollowUpPool } from "@/actions/follow-up";
+import { getSubmissions } from "@/actions/submissions";
+import { SubmissionStatus } from "@prisma/client";
 
 export default function FollowUpDashboard() {
-  const db = useFirestore();
   const { user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+  
+  const [verifications, setVerifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isSampling, setIsSampling] = useState(false);
   
-  // Date range state: Default to last 30 days
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  // 1. Fetch completed verifications for analytics
-  const verificationsQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "follow_up_verifications"), orderBy("verifiedAt", "desc")) : null;
-  }, [db]);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const { data: verifications, loading: vLoading } = useCollection<FollowUpVerification>(verificationsQuery);
+  const loadData = async () => {
+    setLoading(true);
+    const data = await getFollowUpVerifications();
+    setVerifications(data);
+    setLoading(false);
+  };
 
-  // 2. Fetch pending verifications (Shared Pool)
-  const pendingQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "follow_up_verifications"), where("status", "==", "Pending")) : null;
-  }, [db]);
-
-  const { data: pendingVerifications, loading: pLoading } = useCollection<FollowUpVerification>(pendingQuery);
-
-  // 3. Fetch Approved Submissions within range for sampling
-  const approvedQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    const start = startOfDay(new Date(fromDate)).toISOString();
-    const end = endOfDay(new Date(toDate)).toISOString();
-    return query(
-      collection(db, "submissions"),
-      where("status", "==", "Approved"),
-      where("submittedAt", ">=", start),
-      where("submittedAt", "<=", end),
-      limit(100)
-    );
-  }, [db, fromDate, toDate]);
-
-  const { data: approvedSubmissions } = useCollection<KYCSubmission>(approvedQuery);
-
-  // Filter approved submissions that aren't already in the follow-up system
-  const assignableSubmissions = useMemo(() => {
-    if (!approvedSubmissions) return [];
-    const existingIds = new Set([
-      ...(verifications?.map(v => v.submissionId) || []),
-      ...(pendingVerifications?.map(v => v.submissionId) || [])
-    ]);
-    return approvedSubmissions.filter(s => !existingIds.has(s.id));
-  }, [approvedSubmissions, verifications, pendingVerifications]);
+  const pendingVerifications = useMemo(() => 
+    verifications.filter(v => v.status === 'PENDING'), 
+  [verifications]);
 
   const handleSampleCases = async () => {
-    if (!db) return;
     setIsSampling(true);
-    
     try {
-      if (assignableSubmissions.length === 0) {
+      const approved = await getSubmissions({
+        status: [SubmissionStatus.APPROVED],
+        startDate: fromDate,
+        endDate: toDate
+      });
+
+      const existingIds = new Set(verifications.map(v => v.submissionId));
+      const assignable = approved.filter(s => !existingIds.has(s.id));
+
+      if (assignable.length === 0) {
         toast({ 
           variant: "destructive", 
           title: "Sampling Pool Empty", 
@@ -99,51 +82,35 @@ export default function FollowUpDashboard() {
         return;
       }
 
-      const shuffled = [...assignableSubmissions].sort(() => 0.5 - Math.random());
-      const selected = shuffled.slice(0, 5);
+      const selected = assignable.sort(() => 0.5 - Math.random()).slice(0, 5);
+      const poolData = selected.map(s => ({
+        submissionId: s.id,
+        customerName: s.customerName,
+        branch: s.branchName,
+        officer: s.submittedBy?.name || 'Unknown',
+        accountType: s.entityType || "individual",
+        status: "PENDING",
+        verifiedAt: new Date().toISOString()
+      }));
 
-      for (const caseData of selected) {
-        const verifyId = `audit-${Date.now()}-${caseData.id}`;
-        const ref = doc(db, "follow_up_verifications", verifyId);
-        await setDoc(ref, {
-          id: verifyId,
-          submissionId: caseData.id,
-          customerName: caseData.customerName,
-          branch: caseData.branch,
-          officer: caseData.submittedBy,
-          accountType: caseData.entityType || "individual",
-          status: "Pending",
-          verifiedAt: new Date().toISOString()
-        });
-      }
-
-      toast({ 
-        title: "Random Sample Generated", 
-        description: `Added ${selected.length} cases to the institutional pool.` 
-      });
+      await seedFollowUpPool(poolData);
+      toast({ title: "Random Sample Generated", description: `Added ${selected.length} cases to the shared pool.` });
+      loadData();
     } catch (e) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Query Error", description: "Internal service error during sampling." });
+      toast({ variant: "destructive", title: "Sampling Error" });
     } finally {
       setIsSampling(false);
     }
   };
 
   const handleStartRandomAudit = () => {
-    if (!pendingVerifications || pendingVerifications.length === 0) {
-      toast({ variant: "destructive", title: "Queue Empty", description: "Generate a new random sample first." });
-      return;
-    }
-    const randomIndex = Math.floor(Math.random() * pendingVerifications.length);
-    const randomCase = pendingVerifications[randomIndex];
+    if (pendingVerifications.length === 0) return;
+    const randomCase = pendingVerifications[Math.floor(Math.random() * pendingVerifications.length)];
     router.push(`/head-office/follow-up/${randomCase.id}`);
   };
 
-  // 6. Analytics Data
   const analytics = useMemo(() => {
-    if (!verifications) return { rate: 0, total: 0, discrepancies: 0, byBranch: {} as Record<string, number> };
-    
-    const completed = verifications.filter(v => v.status === 'Completed');
+    const completed = verifications.filter(v => v.status === 'COMPLETED');
     const total = completed.length;
     const discrepancies = completed.filter(v => v.result === 'Discrepancy').length;
     const rate = total > 0 ? Math.round(((total - discrepancies) / total) * 100) : 100;
@@ -156,42 +123,20 @@ export default function FollowUpDashboard() {
     return { rate, total, discrepancies, byBranch };
   }, [verifications]);
 
-  // 7. Export Logic - Changed label to Export History
   const handleExportReport = () => {
-    if (!verifications || verifications.filter(v => v.status === 'Completed').length === 0) {
-      toast({ variant: "destructive", title: "No Data", description: "There are no completed audit records to export." });
-      return;
-    }
+    const completed = verifications.filter(v => v.status === 'COMPLETED');
+    if (completed.length === 0) return;
 
-    const completed = verifications.filter(v => v.status === 'Completed');
-    const headers = ['Audit ID', 'Case ID', 'Customer', 'Branch', 'Officer', 'Result', 'Auditor', 'Audit Date', 'Remarks'];
-    const rows = completed.map(v => [
-      v.id,
-      v.submissionId,
-      v.customerName,
-      v.branch,
-      v.officer,
-      v.result,
-      v.verifiedBy || 'N/A',
-      new Date(v.verifiedAt).toLocaleString(),
-      v.remarks ? v.remarks.replace(/,/g, ';') : ''
-    ]);
-
+    const headers = ['Audit ID', 'Case ID', 'Customer', 'Branch', 'Result', 'Auditor', 'Audit Date'];
+    const rows = completed.map(v => [v.id, v.submissionId, v.customerName, v.branch, v.result, v.verifiedBy || 'N/A', format(new Date(v.verifiedAt), 'yyyy-MM-dd')]);
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `nib-kyc-followup-audit-history-${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
+    link.href = url;
+    link.download = `nib-audit-history-${format(new Date(), 'yyyyMMdd')}.csv`;
     link.click();
-    document.body.removeChild(link);
-
-    toast({
-      title: "History Exported",
-      description: `Institutional record of ${completed.length} recent audits saved.`,
-    });
+    toast({ title: "History Exported" });
   };
 
   return (
@@ -209,62 +154,33 @@ export default function FollowUpDashboard() {
         <div className="flex gap-3">
           <Button 
             onClick={handleStartRandomAudit}
-            disabled={!pendingVerifications || pendingVerifications.length === 0}
-            className="h-12 px-8 font-black bg-primary hover:bg-primary/90 text-white shadow-xl gap-2 transition-all active:scale-95"
+            disabled={pendingVerifications.length === 0}
+            className="h-12 px-8 font-black bg-primary hover:bg-primary/90 text-white shadow-xl gap-2"
           >
             <Zap className="w-5 h-5 fill-white" />
             Start Next Random Audit
           </Button>
-
-          <Button 
-            variant="outline"
-            onClick={handleExportReport}
-            className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200 bg-white"
-          >
+          <Button variant="outline" onClick={handleExportReport} className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200">
             <History className="w-5 h-5 text-primary" />
             Export History
           </Button>
         </div>
       </div>
 
-      {/* Sampling Control Bar */}
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6">
           <div className="flex flex-col md:flex-row items-end gap-6">
             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    type="date" 
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
-                  />
-                </div>
+                <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-11 font-bold" />
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    type="date" 
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
-                  />
-                </div>
+                <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-11 font-bold" />
               </div>
             </div>
-            
-            <Separator orientation="vertical" className="hidden md:block h-12 mx-2" />
-            
-            <Button 
-              onClick={handleSampleCases} 
-              disabled={isSampling || !fromDate || !toDate}
-              className="bg-[#B89334] hover:bg-[#A6822D] text-white font-black h-11 px-8 gap-3 shadow-xl transition-all active:scale-95 min-w-[240px]"
-            >
+            <Button onClick={handleSampleCases} disabled={isSampling} className="bg-[#B89334] text-white font-black h-11 px-8 gap-3 shadow-xl min-w-[240px]">
               {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
               Seed Shared Audit Pool
             </Button>
@@ -273,7 +189,7 @@ export default function FollowUpDashboard() {
       </Card>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-lg border-slate-200 overflow-hidden group">
+        <Card className="shadow-lg border-slate-200 overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50">
             <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-500">Compliance Index</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -283,37 +199,28 @@ export default function FollowUpDashboard() {
             <Progress value={analytics.rate} className="h-1.5 mt-3 bg-slate-100" />
           </CardContent>
         </Card>
-
-        <Card className="shadow-lg border-slate-200 overflow-hidden group">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50">
+        <Card className="shadow-lg border-slate-200">
+          <CardHeader className="pb-2 bg-slate-50/50">
             <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Checked</CardTitle>
-            <FileText className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-black text-slate-900">{analytics.total} Cases</div>
-            <p className="text-[10px] text-muted-foreground font-bold mt-1 uppercase">Institutional lifetime</p>
+            <div className="text-3xl font-black text-slate-900">{analytics.total}</div>
           </CardContent>
         </Card>
-
-        <Card className="shadow-lg border-slate-200 overflow-hidden group border-l-4 border-l-orange-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50">
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
+          <CardHeader className="pb-2 bg-slate-50/50">
             <CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Discrepancies</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent className="pt-4">
             <div className="text-3xl font-black text-orange-600">{analytics.discrepancies}</div>
-            <p className="text-[10px] text-muted-foreground font-bold mt-1 uppercase">Actionable errors found</p>
           </CardContent>
         </Card>
-
-        <Card className="shadow-lg border-slate-200 overflow-hidden group">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50">
+        <Card className="shadow-lg border-slate-200">
+          <CardHeader className="pb-2 bg-slate-50/50">
             <CardTitle className="text-[10px] font-black uppercase tracking-widest text-blue-600">Shared Queue</CardTitle>
-            <RefreshCw className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-black text-blue-600">{pendingVerifications?.length || 0}</div>
-            <p className="text-[10px] text-muted-foreground font-bold mt-1 uppercase">Awaiting pick-up</p>
+            <div className="text-3xl font-black text-blue-600">{pendingVerifications.length}</div>
           </CardContent>
         </Card>
       </div>
@@ -326,23 +233,23 @@ export default function FollowUpDashboard() {
               <CardDescription>Sampled cases available for any Head Office specialist.</CardDescription>
             </div>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-3">
-              {pendingVerifications?.length || 0} Cases Available
+              {pendingVerifications.length} Cases Available
             </Badge>
           </CardHeader>
           <CardContent className="p-0">
-            {pLoading ? (
+            {loading ? (
               <div className="flex flex-col items-center justify-center py-32 text-muted-foreground gap-4">
                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                <p className="font-bold">Synchronizing institutional pool...</p>
+                <p className="font-bold">Syncing institutional pool...</p>
               </div>
-            ) : pendingVerifications && pendingVerifications.length > 0 ? (
+            ) : pendingVerifications.length > 0 ? (
               <div className="divide-y">
                 {pendingVerifications.map((v) => (
                   <div key={v.id} className="flex items-center justify-between p-5 hover:bg-slate-50 transition-colors group">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-slate-900">{v.customerName}</p>
-                        <Badge variant="outline" className="text-[9px] font-black uppercase border-slate-200">{v.accountType}</Badge>
+                        <Badge variant="outline" className="text-[9px] font-black uppercase">{v.accountType}</Badge>
                       </div>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
                         {v.submissionId} • {v.branch} • By: {v.officer}
@@ -358,13 +265,8 @@ export default function FollowUpDashboard() {
               </div>
             ) : (
               <div className="py-24 text-center space-y-4">
-                <div className="p-6 bg-slate-50 rounded-full w-fit mx-auto">
-                  <Dices className="w-12 h-12 text-slate-300" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-bold text-slate-900">Pool Exhausted</p>
-                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">Use "Seed Shared Audit Pool" to pull new random cases from the institutional archive.</p>
-                </div>
+                <div className="p-6 bg-slate-50 rounded-full w-fit mx-auto"><Dices className="w-12 h-12 text-slate-300" /></div>
+                <p className="font-bold text-slate-900">Pool Exhausted</p>
               </div>
             )}
           </CardContent>
@@ -377,54 +279,20 @@ export default function FollowUpDashboard() {
                 <History className="w-5 h-5 text-primary" />
                 Audit History
               </CardTitle>
-              <CardDescription>Recently completed institutional verifications.</CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-4">
-                {vLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse py-10 justify-center">
-                    <RefreshCw className="w-4 h-4 animate-spin" /> Syncing history...
-                  </div>
-                ) : verifications?.filter(v => v.status === 'Completed').slice(0, 5).map((v) => (
-                  <div key={v.id} className="flex gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all">
-                    <div className={cn(
-                      "p-2 rounded-lg h-fit",
-                      v.result === 'Correct' ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"
-                    )}>
+                {verifications.filter(v => v.status === 'COMPLETED').slice(0, 5).map((v) => (
+                  <div key={v.id} className="flex gap-4 p-4 border rounded-xl bg-white shadow-sm">
+                    <div className={cn("p-2 rounded-lg h-fit", v.result === 'Correct' ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600")}>
                       {v.result === 'Correct' ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm font-bold text-slate-900 leading-none">{v.customerName}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">{v.branch} Node • {new Date(v.verifiedAt).toLocaleDateString()}</p>
-                      {v.remarks && <p className="text-xs text-slate-600 italic line-clamp-1">"{v.remarks}"</p>}
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">{v.branch} • {format(new Date(v.verifiedAt), 'MMM dd')}</p>
                     </div>
                   </div>
                 ))}
-                {!vLoading && (!verifications || verifications.filter(v => v.status === 'Completed').length === 0) && (
-                  <div className="text-center py-10 text-muted-foreground italic text-sm">No audit history discovered.</div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-xl border-slate-200 overflow-hidden bg-slate-900 text-white">
-            <CardHeader className="border-b border-white/10">
-              <CardTitle className="text-lg font-bold flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-primary" />
-                Regional Discrepancies
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                {Object.entries(analytics.byBranch).sort((a,b) => b[1] - a[1]).slice(0, 3).map(([branch, count]) => (
-                  <div key={branch} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5">
-                    <span className="text-sm font-bold text-slate-300">{branch}</span>
-                    <Badge className="bg-orange-500 text-white border-none font-black">{count} Errors</Badge>
-                  </div>
-                ))}
-                {Object.keys(analytics.byBranch).length === 0 && (
-                  <p className="text-center py-4 text-slate-500 text-xs font-bold uppercase tracking-widest">System nodes compliant</p>
-                )}
               </div>
             </CardContent>
           </Card>
