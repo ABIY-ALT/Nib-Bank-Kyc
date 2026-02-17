@@ -1,64 +1,45 @@
-
 'use client';
 
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
-import { useMemo, useState } from "react";
-import { KYCSubmission } from "@/lib/kyc-data";
 import { Input } from "@/components/ui/input";
 import { Search, Loader2, Inbox, MapPin, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
+import { getSubmissions } from "@/actions/submissions";
+import { SubmissionStatus, UserRole } from "@prisma/client";
 
 export default function ReviewQueuePage() {
-  const db = useFirestore();
   const { user } = useAuth();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const reviewQueueQuery = useMemo(() => {
-    if (!db) return null;
-    
-    const isGlobalReviewer = ['Admin', 'Director', 'Supervisor'].includes(user.role || '');
-    const assigned = user.assignedBranches || [];
+  const isAdmin = user?.role === UserRole.ADMIN;
 
-    if (isGlobalReviewer) {
-      return query(
-        collection(db, "submissions"),
-        where("status", "in", ["Pending", "In Review"]),
-        where("isResubmitted", "==", false)
-      );
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      setLoading(true);
+      const data = await getSubmissions({
+        status: [SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW],
+        isExceptional: false,
+        isResubmitted: false,
+        branch: isAdmin ? undefined : (user.assignedBranches?.length ? undefined : user.branchName || undefined)
+      });
+      setSubmissions(data);
+      setLoading(false);
     }
-
-    if (assigned.length > 0) {
-      return query(
-        collection(db, "submissions"),
-        where("status", "in", ["Pending", "In Review"]),
-        where("branch", "in", assigned),
-        where("isResubmitted", "==", false)
-      );
-    }
-
-    return null;
-  }, [db, user.role, user.assignedBranches]);
-
-  const { data: submissions, loading } = useCollection<KYCSubmission>(reviewQueueQuery);
+    loadData();
+  }, [user, isAdmin]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
-    
     const term = searchTerm.toLowerCase();
-    return submissions
-      .filter(sub => {
-        // Exclude exceptional cases from standard queue
-        const isNotExceptional = sub.isExceptional === false;
-        const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
-        return isNotExceptional && matchesSearch;
-      })
-      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+    return submissions.filter(sub => 
+      sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
+    );
   }, [submissions, searchTerm]);
-
-  const isLocalized = !['Admin', 'Director', 'Supervisor'].includes(user.role || '') && (user.assignedBranches?.length || 0) > 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -70,16 +51,9 @@ export default function ReviewQueuePage() {
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground text-lg">Central hub for processing initial applications.</p>
-            {isLocalized && (
-              <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
-                <MapPin className="w-3 h-3" />
-                Portfolio Coverage ({user.assignedBranches?.length} Branches)
-              </Badge>
-            )}
-            {!isLocalized && ['Admin', 'Director', 'Supervisor'].includes(user.role || '') && (
+            {isAdmin && (
               <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
-                <ShieldCheck className="w-3 h-3" />
-                Global Oversight
+                <ShieldCheck className="w-3 h-3" /> Global Oversight
               </Badge>
             )}
           </div>
@@ -98,7 +72,7 @@ export default function ReviewQueuePage() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="font-medium">Synchronizing jurisdictional queue...</p>
+          <p className="font-medium">Synchronizing review queue...</p>
         </div>
       ) : (
         <SubmissionsPageContent submissions={filteredSubmissions || []} />

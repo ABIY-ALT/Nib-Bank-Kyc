@@ -52,79 +52,99 @@ enum ExceptionalStatus {
 }
 
 model User {
-  id                  String     @id
-  email               String     @unique
-  name                String
-  phoneNumber         String?
-  role                UserRole   @default(BRANCH_OFFICER)
-  status              UserStatus @default(ACTIVE)
-  branchName          String?
-  districtName        String?
-  assignedBranches    String[]   @default([])
-  needsPasswordChange Boolean    @default(false)
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
-
-  submissions         Submission[] @relation("SubmittedBy")
-  reviews             Submission[] @relation("ReviewedBy")
+  id               String       @id
+  email            String       @unique
+  name             String
+  role             UserRole     @default(BRANCH_OFFICER)
+  status           UserStatus   @default(ACTIVE)
+  branchName       String?
+  districtName     String?
+  assignedBranches String[]     @default([])
+  needsPasswordChange Boolean   @default(false)
+  
+  submissions      Submission[] @relation("SubmittedBy")
+  reviews          Submission[] @relation("ReviewedBy")
 }
 
 model District {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  branches  Branch[]
+  id       String   @id @default(cuid())
+  name     String   @unique
+  branches Branch[]
 }
 
 model Branch {
-  id           String       @id @default(cuid())
-  name         String       @unique
-  code         String?      @unique
+  id           String   @id @default(cuid())
+  name         String   @unique
+  code         String?  @unique
   districtName String
-  district     District     @relation(fields: [districtName], references: [name])
-  submissions  Submission[]
+  district     District @relation(fields: [districtName], references: [name])
 }
 
 model Submission {
-  id                String            @id
+  id                String           @id
   customerName      String
-  customerId        String?
   entityType        String?
   branchName        String
   districtName      String
-  status            SubmissionStatus  @default(PENDING)
+  status            SubmissionStatus @default(PENDING)
+  
+  submittedAt       DateTime         @default(now())
   submittedById     String
-  submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
-  submittedAt       DateTime          @default(now())
+  submittedBy       User             @relation("SubmittedBy", fields: [submittedById], references: [id])
   
-  isExceptional     Boolean           @default(false)
-  exceptionalStatus ExceptionalStatus @default(NONE)
+  reviewedAt        DateTime?
+  reviewedById      String?
+  reviewedBy        User?            @relation("ReviewedBy", fields: [reviewedById], references: [id])
   
-  isResubmitted     Boolean           @default(false)
+  isResubmitted     Boolean          @default(false)
   resubmittedAt     DateTime?
-  amendmentCycles   Int               @default(0)
+  amendmentCycles   Int              @default(0)
+  
+  isExceptional     Boolean          @default(false)
+  exceptionalStatus ExceptionalStatus @default(NONE)
+  exceptionalData   Json?            // Store ExceptionalData structure
   
   remarks           String?
-  reviewedById      String?
-  reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
-  reviewedAt        DateTime?
-
+  commentHistory    Json?            // Store CommentHistoryEntry[]
+  checklistState    Json?            // Store Record<string, boolean>
+  
   documents         Document[]
-  commentHistory    Json[]            @default([])
-  checklistState    Json?             @default("{}")
-  exceptionalData   Json?
-
-  branch            Branch            @relation(fields: [branchName], references: [name])
+  bundleDownloads   BundleDownload[]
 }
 
 model Document {
   id           String     @id @default(cuid())
-  submissionId String
-  submission   Submission @relation(fields: [submissionId], references: [id])
   name         String
   type         String
   url          String
-  status       String     @default("Current")
   uploadedAt   DateTime   @default(now())
+  status       String     @default("Current")
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+}
+
+model BundleDownload {
+  id             String     @id @default(cuid())
+  performedBy    String
+  timestamp      DateTime   @default(now())
+  bundleName     String
+  sourceDistrict String
+  sourceBranch   String
+  submissionId   String
+  submission     Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+}
+
+model GlobalSetting {
+  id               String   @id @default("global")
+  autoEscalation   Boolean  @default(true)
+  escalationHours  Int      @default(72)
+  strictSla        Boolean  @default(true)
+  slaHours         Int      @default(24)
+  documentTypes    Json?    // Store ConfigItem[]
+  entityTypes      Json?    // Store ConfigItem[]
+  guidelines       Json?    // Store Guideline[]
+  lastUpdated      DateTime @updatedAt
+  updatedBy        String?
 }
 
 model AuditLog {
@@ -132,20 +152,7 @@ model AuditLog {
   userId    String
   userEmail String
   action    String
-  details   String?
-  ipAddress String?
   timestamp DateTime @default(now())
-}
-
-model GlobalSetting {
-  id              String   @id @default("global")
-  autoEscalation  Boolean  @default(true)
-  escalationHours Int      @default(72)
-  strictSla       Boolean  @default(true)
-  slaHours        Int      @default(24)
-  documentTypes   Json[]   @default([])
-  entityTypes     Json[]   @default([])
-  guidelines      Json[]   @default([])
-  lastUpdated     DateTime @default(now())
-  updatedBy       String?
+  ipAddress String?
+  details   String?
 }

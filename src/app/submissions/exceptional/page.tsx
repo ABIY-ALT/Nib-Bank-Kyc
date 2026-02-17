@@ -1,11 +1,8 @@
-
 "use client"
 
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, doc, updateDoc, setDoc } from "firebase/firestore";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
-import { useMemo, useState, useRef } from "react";
-import { KYCSubmission, ExceptionalStatus } from "@/lib/kyc-data";
+import { KYCSubmission } from "@/lib/kyc-data";
 import { Zap, Loader2, Search, Info, Plus, FileText, Upload, ShieldAlert, FileType, CheckCircle2, Beaker } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
@@ -13,8 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { getSubmissions, initiateExceptionalWorkflow } from "@/actions/submissions";
+import { UserRole, ExceptionalStatus } from "@prisma/client";
 import {
   Dialog,
   DialogContent,
@@ -34,12 +31,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 export default function ExceptionalCasesPage() {
-  const db = useFirestore();
   const { user } = useAuth();
   const { toast } = useToast();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [availableCases, setAvailableCases] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Initiation Dialog State
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [exceptionReason, setExceptionReason] = useState("");
@@ -48,83 +46,26 @@ export default function ExceptionalCasesPage() {
   const [memoFile, setMemoFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = user.role === 'Admin';
+  const isAdmin = user?.role === UserRole.ADMIN;
 
-  // 1. Fetch available cases for Branch Manager/Admin to trigger exception on
-  // Changed: Removing where("isExceptional", "==", false) filter to handle legacy cases missing the field
-  const branchCasesQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    const canTrigger = user.role === 'Branch Manager' || isAdmin;
-    if (!canTrigger) return null;
-
-    if (isAdmin) {
-      return query(collection(db, "submissions"));
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      setLoading(true);
+      const [exceptional, all] = await Promise.all([
+        getSubmissions({ isExceptional: true }),
+        getSubmissions({ isExceptional: false, branch: isAdmin ? undefined : user.branchName || undefined })
+      ]);
+      setSubmissions(exceptional);
+      setAvailableCases(all);
+      setLoading(false);
     }
-
-    return query(
-      collection(db, "submissions"),
-      where("branch", "==", user.branch || "")
-    );
-  }, [db, user.role, user.branch, isAdmin]);
-
-  const { data: rawAvailableCases } = useCollection<KYCSubmission>(branchCasesQuery);
-
-  // Client-side filter to be robust against missing isExceptional flags
-  const availableCases = useMemo(() => {
-    return rawAvailableCases?.filter(c => c.isExceptional !== true) || [];
-  }, [rawAvailableCases]);
+    loadData();
+  }, [user, isAdmin]);
 
   const selectedCase = useMemo(() => 
-    availableCases?.find(c => c.id === selectedCaseId), 
+    availableCases.find(c => c.id === selectedCaseId), 
   [availableCases, selectedCaseId]);
-
-  // 2. Exceptional Queue Query - Institutional Visibility
-  const exceptionalQuery = useMemo(() => {
-    if (!db) return null;
-    
-    // Management & Global Roles
-    if (['Admin', 'Director', 'Supervisor'].includes(user.role || '')) {
-      return query(
-        collection(db, "submissions"),
-        where("isExceptional", "==", true),
-        orderBy("submittedAt", "desc")
-      );
-    }
-
-    // Regional Roles
-    if (user.role === 'District Director') {
-      return query(
-        collection(db, "submissions"),
-        where("isExceptional", "==", true),
-        where("district", "==", user.district || ""),
-        orderBy("submittedAt", "desc")
-      );
-    }
-
-    // Branch Roles (Managers and assigned KYC Officers)
-    if (user.role === 'Branch Manager' && user.branch) {
-      return query(
-        collection(db, "submissions"),
-        where("isExceptional", "==", true),
-        where("branch", "==", user.branch),
-        orderBy("submittedAt", "desc")
-      );
-    }
-
-    const assigned = user.assignedBranches || [];
-    if (user.role === 'KYC Officer' && assigned.length > 0) {
-      return query(
-        collection(db, "submissions"),
-        where("isExceptional", "==", true),
-        where("branch", "in", assigned),
-        orderBy("submittedAt", "desc")
-      );
-    }
-
-    return null;
-  }, [db, user.role, user.branch, user.district, user.assignedBranches]);
-
-  const { data: submissions, loading } = useCollection<KYCSubmission>(exceptionalQuery);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -135,81 +76,30 @@ export default function ExceptionalCasesPage() {
     );
   }, [submissions, searchTerm]);
 
-  // TESTING UTILITY: Seed a sample case that is eligible for the dropdown
-  const handleSeedSampleCase = () => {
-    if (!db) return;
-    const testId = `SEED-KYC-${Math.floor(1000 + Math.random() * 9000)}`;
-    const ref = doc(db, "submissions", testId);
-    const data = {
-      id: testId,
-      customerName: "Sample Test Customer (Auto-Seeded)",
-      entityType: "individual",
-      branch: user.branch || "Headquarters",
-      district: user.district || "Central",
-      submittedBy: user.name,
-      submittedAt: new Date().toISOString(),
-      status: "Pending",
-      isResubmitted: false,
-      amendmentCycles: 0,
-      isExceptional: false // This ensures it shows up in the dropdown
-    };
-
-    setDoc(ref, data).then(() => {
-      toast({ title: "Sample Case Created", description: `Case ${testId} is now eligible for the exception workflow.` });
-    });
-  };
-
-  const handleInitiateException = () => {
-    if (!db || !selectedCaseId || !exceptionReason || !riskJustification || !memoFile) {
-      toast({ variant: "destructive", title: "Validation Error", description: "All fields and the PDF memo are mandatory institutional requirements." });
+  const handleInitiateException = async () => {
+    if (!user || !selectedCaseId || !exceptionReason || !riskJustification || !memoFile) {
+      toast({ variant: "destructive", title: "Validation Error", description: "All fields are required." });
       return;
     }
 
-    const subRef = doc(db, "submissions", selectedCaseId);
-    const updateData = {
-      isExceptional: true,
-      exceptionalStatus: 'Awaiting District' as ExceptionalStatus,
-      remarks: remarks || "",
-      exceptionalData: {
+    try {
+      await initiateExceptionalWorkflow(selectedCaseId, {
         reason: exceptionReason,
         justification: riskJustification,
-        memoUrl: "#", 
+        remarks,
         initiatedBy: user.name,
-        initiatedAt: new Date().toISOString(),
-        approvalHistory: []
-      }
-    };
-
-    updateDoc(subRef, updateData).catch(async (error) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: subRef.path,
-        operation: 'update',
-        requestResourceData: updateData
-      }));
-    });
-
-    // Link memo to document bundle
-    const docRef = doc(collection(subRef, "documents"));
-    const memoData = {
-      id: docRef.id,
-      name: `Exceptional_Memo_${selectedCaseId}.pdf`,
-      type: 'Exceptional Memo',
-      uploadedAt: new Date().toISOString(),
-      url: "#",
-      status: 'Current'
-    };
-    
-    setDoc(docRef, memoData).catch(async (error) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: docRef.path,
-        operation: 'create',
-        requestResourceData: memoData
-      }));
-    });
-    
-    toast({ title: "Exception Initiated", description: `Case ${selectedCaseId} dispatched to District Director.` });
-    setIsAddDialogOpen(false);
-    resetForm();
+        memoData: { name: memoFile.name }
+      });
+      
+      toast({ title: "Exception Initiated", description: "Case dispatched to District Director." });
+      setIsAddDialogOpen(false);
+      resetForm();
+      // Reload
+      const exceptional = await getSubmissions({ isExceptional: true });
+      setSubmissions(exceptional);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Action Failed", description: error.message });
+    }
   };
 
   const resetForm = () => {
@@ -233,17 +123,7 @@ export default function ExceptionalCasesPage() {
           <p className="text-muted-foreground text-lg font-medium">Hierarchy oversight for high-risk and non-standard verification requests.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {isAdmin && (
-            <Button 
-              variant="outline"
-              onClick={handleSeedSampleCase}
-              className="border-dashed border-primary/50 text-primary hover:bg-primary/5 gap-2"
-            >
-              <Beaker className="w-4 h-4" />
-              Seed Sample Case
-            </Button>
-          )}
-          {(user.role === 'Branch Manager' || isAdmin) && (
+          {(user?.role === UserRole.BRANCH_MANAGER || isAdmin) && (
             <Button 
               onClick={() => setIsAddDialogOpen(true)}
               className="bg-[#B89334] hover:bg-[#A6822D] text-white font-bold h-12 px-8 shadow-xl gap-2 rounded-lg transition-all active:scale-95"
@@ -283,7 +163,7 @@ export default function ExceptionalCasesPage() {
           </div>
           <div className="space-y-2">
             <p className="font-bold text-slate-900 text-xl">Exception Queue Empty</p>
-            <p className="text-sm text-slate-500 max-w-xs mx-auto">No high-risk cases currently require hierarchy oversight in your jurisdiction.</p>
+            <p className="text-sm text-slate-500 max-w-xs mx-auto">No high-risk cases currently require hierarchy oversight.</p>
           </div>
         </div>
       ) : (
@@ -298,9 +178,7 @@ export default function ExceptionalCasesPage() {
               <Zap className="w-6 h-6 text-yellow-600 fill-yellow-600" />
               Initiate Exceptional Request
             </DialogTitle>
-            <DialogDescription>
-              Assign a high-level approval workflow to an existing case.
-            </DialogDescription>
+            <DialogDescription>Assign a high-level approval workflow to an existing case.</DialogDescription>
           </DialogHeader>
           
           <div className="space-y-6 pt-4">
@@ -308,31 +186,16 @@ export default function ExceptionalCasesPage() {
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Case ID Selection</Label>
                 <Select value={selectedCaseId} onValueChange={setSelectedCaseId}>
-                  <SelectTrigger className="h-12 border-slate-200">
-                    <SelectValue placeholder="Select Case ID..." />
-                  </SelectTrigger>
+                  <SelectTrigger className="h-12 border-slate-200"><SelectValue placeholder="Select Case ID..." /></SelectTrigger>
                   <SelectContent>
-                    {availableCases?.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.id}</SelectItem>
-                    ))}
-                    {(!availableCases || availableCases.length === 0) && (
-                      <div className="p-4 text-center">
-                        <p className="text-xs text-muted-foreground italic mb-2">No eligible cases found.</p>
-                        {isAdmin && (
-                          <Button variant="outline" size="sm" onClick={handleSeedSampleCase} className="text-[10px] h-7">
-                            Seed Test Case
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                    {availableCases.map(c => <SelectItem key={c.id} value={c.id}>{c.id}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Customer Full Name</Label>
                 <div className="h-12 border rounded-md bg-slate-50 px-3 flex items-center text-sm font-bold text-slate-900 truncate">
-                  {selectedCase ? selectedCase.customerName : "Select Case ID First..."}
+                  {selectedCase ? selectedCase.customerName : "Select Case..."}
                 </div>
               </div>
             </div>
@@ -340,7 +203,7 @@ export default function ExceptionalCasesPage() {
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Exception Reason</Label>
               <Select value={exceptionReason} onValueChange={setExceptionReason}>
-                <SelectTrigger className="h-12 border-slate-200"><SelectValue placeholder="Identify primary reason..." /></SelectTrigger>
+                <SelectTrigger className="h-12 border-slate-200"><SelectValue placeholder="Select reason..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Missing critical documents">Missing critical documents</SelectItem>
                   <SelectItem value="High deposit amount">High deposit amount</SelectItem>
@@ -352,60 +215,24 @@ export default function ExceptionalCasesPage() {
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Risk Justification</Label>
-              <Textarea 
-                placeholder="Explain why this exception should be authorized..." 
-                className="min-h-[80px] bg-white border-slate-200"
-                value={riskJustification}
-                onChange={(e) => setRiskJustification(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Institutional Remarks</Label>
-              <Textarea 
-                placeholder="Additional notes for the District Director..." 
-                className="min-h-[80px] bg-white border-slate-200"
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-              />
+              <Textarea placeholder="Explain why..." className="min-h-[80px]" value={riskJustification} onChange={(e) => setRiskJustification(e.target.value)} />
             </div>
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Supporting Memo (PDF Only)</Label>
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-primary/30 rounded-xl p-8 text-center cursor-pointer hover:bg-primary/5 transition-all group bg-white shadow-sm"
-              >
-                <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+              <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-primary/30 rounded-xl p-8 text-center cursor-pointer hover:bg-primary/5 transition-all bg-white shadow-sm">
+                <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
                   <Upload className="w-6 h-6 text-primary" />
                 </div>
                 <p className="text-sm font-bold text-slate-900">{memoFile ? memoFile.name : "Select Institutional Memo"}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Required: Official signed PDF memo</p>
               </div>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="application/pdf" 
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file && file.type !== 'application/pdf') {
-                    toast({ variant: 'destructive', title: 'Invalid File', description: 'Institutional memos must be in PDF format.' });
-                    return;
-                  }
-                  setMemoFile(file || null);
-                }} 
-              />
+              <input type="file" ref={fileInputRef} className="hidden" accept="application/pdf" onChange={(e) => setMemoFile(e.target.files?.[0] || null)} />
             </div>
           </div>
 
           <DialogFooter className="pt-6 border-t mt-4 gap-2">
-            <Button variant="outline" onClick={() => { setIsAddDialogOpen(false); resetForm(); }} className="px-6 font-bold h-11">Cancel</Button>
-            <Button 
-              className="bg-[#B89334] hover:bg-[#A6822D] text-white font-black px-10 shadow-lg h-11"
-              disabled={!selectedCaseId || !exceptionReason || !riskJustification || !memoFile}
-              onClick={handleInitiateException}
-            >
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
+            <Button className="bg-[#B89334] text-white font-black px-10 shadow-lg h-11" disabled={!selectedCaseId || !memoFile} onClick={handleInitiateException}>
               Dispatch Exception
             </Button>
           </DialogFooter>

@@ -1,10 +1,7 @@
-
 "use client"
 
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
-import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
 import { AlertCircle, Loader2, Search, Zap, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
@@ -12,31 +9,31 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { getSubmissions } from "@/actions/submissions";
+import { SubmissionStatus, UserRole } from "@prisma/client";
 
 export default function AmendmentRequestsPage() {
-  const db = useFirestore();
   const { user } = useAuth();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const isAdmin = user.role === 'Admin';
-  const isBranchMgr = user.role === 'Branch Manager' || isAdmin;
+  const isAdmin = user?.role === UserRole.ADMIN;
+  const isBranchMgr = user?.role === UserRole.BRANCH_MANAGER || isAdmin;
 
-  const amendmentRequestQuery = useMemo(() => {
-    if (!db) return null;
-    if (isAdmin) {
-      return query(
-        collection(db, "submissions"),
-        where("status", "==", "Amended")
-      );
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      setLoading(true);
+      const data = await getSubmissions({
+        status: [SubmissionStatus.AMENDED],
+        submittedBy: isAdmin ? undefined : user.id
+      });
+      setSubmissions(data);
+      setLoading(false);
     }
-    return query(
-      collection(db, "submissions"),
-      where("submittedBy", "==", user.name),
-      where("status", "==", "Amended")
-    );
-  }, [db, user.name, isAdmin]);
-
-  const { data: submissions, loading } = useCollection<KYCSubmission>(amendmentRequestQuery);
+    loadData();
+  }, [user, isAdmin]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -45,8 +42,7 @@ export default function AmendmentRequestsPage() {
       .filter(sub => 
         sub.customerName.toLowerCase().includes(term) || 
         sub.id.toLowerCase().includes(term)
-      )
-      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+      );
   }, [submissions, searchTerm]);
 
   return (

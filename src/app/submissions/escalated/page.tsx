@@ -1,50 +1,43 @@
-
 "use client"
 
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
-import { useMemo, useState } from "react";
-import { KYCSubmission } from "@/lib/kyc-data";
 import { ShieldAlert, Loader2, MapPin, Search, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { getSubmissions } from "@/actions/submissions";
+import { SubmissionStatus, UserRole } from "@prisma/client";
 
 export default function EscalatedCasesPage() {
-  const db = useFirestore();
   const { user } = useAuth();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const escalatedQuery = useMemo(() => {
-    if (!db) return null;
-    return query(
-      collection(db, "submissions"),
-      where("status", "==", "Escalated"),
-      orderBy("submittedAt", "desc")
-    );
-  }, [db]);
+  const isAdmin = user?.role === UserRole.ADMIN;
 
-  const { data: submissions, loading } = useCollection<KYCSubmission>(escalatedQuery);
-
-  const isAdmin = user.role === 'Admin';
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      setLoading(true);
+      const data = await getSubmissions({
+        status: [SubmissionStatus.ESCALATED],
+        branch: (!isAdmin && user.branchName) ? user.branchName : undefined
+      });
+      setSubmissions(data);
+      setLoading(false);
+    }
+    loadData();
+  }, [user, isAdmin]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
-    
     const term = searchTerm.toLowerCase();
-    return submissions.filter(sub => {
-      // Admin sees global escalations, others restricted to branch/portfolio
-      const matchesBranch = isAdmin || 
-                          !user.branch || 
-                          user.branch === 'Central HQ' || 
-                          sub.branch === user.branch ||
-                          (user.assignedBranches || []).includes(sub.branch);
-
-      const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
-      return matchesBranch && matchesSearch;
-    });
-  }, [submissions, user.branch, user.assignedBranches, isAdmin, searchTerm]);
+    return submissions.filter(sub => 
+      sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
+    );
+  }, [submissions, searchTerm]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -61,10 +54,10 @@ export default function EscalatedCasesPage() {
                 <ShieldCheck className="w-3 h-3" />
                 Global Oversight
               </Badge>
-            ) : user.branch && user.branch !== 'Central HQ' && (
+            ) : user?.branchName && (
               <Badge variant="destructive" className="bg-red-50 text-red-700 border-red-100 flex items-center gap-1 px-3 font-bold">
                 <MapPin className="w-3 h-3" />
-                {user.branch} Oversight
+                {user.branchName} Oversight
               </Badge>
             )}
           </div>

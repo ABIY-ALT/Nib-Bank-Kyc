@@ -1,52 +1,43 @@
-
 "use client"
 
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
-import { useMemo, useState } from "react";
-import { KYCSubmission } from "@/lib/kyc-data";
 import { History, Loader2, MapPin, Search, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { getSubmissions } from "@/actions/submissions";
+import { UserRole } from "@prisma/client";
 
 export default function AmendmentReviewPage() {
-  const db = useFirestore();
   const { user } = useAuth();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const amendmentReviewQuery = useMemo(() => {
-    if (!db) return null;
-    return query(
-      collection(db, "submissions"),
-      where("isResubmitted", "==", true)
-    );
-  }, [db]);
+  const isAdmin = user?.role === UserRole.ADMIN;
 
-  const { data: submissions, loading } = useCollection<KYCSubmission>(amendmentReviewQuery);
-
-  const isAdmin = user.role === 'Admin';
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      setLoading(true);
+      const data = await getSubmissions({
+        isResubmitted: true,
+        branch: (!isAdmin && user.branchName) ? user.branchName : undefined
+      });
+      setSubmissions(data);
+      setLoading(false);
+    }
+    loadData();
+  }, [user, isAdmin]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
-    
     const term = searchTerm.toLowerCase();
-    return submissions
-      .filter(sub => {
-        const matchesStatus = ["Pending", "In Review"].includes(sub.status);
-        
-        const matchesBranch = isAdmin || 
-                            !user.branch || 
-                            user.branch === 'Central HQ' || 
-                            sub.branch === user.branch ||
-                            (user.assignedBranches || []).includes(sub.branch);
-
-        const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
-        return matchesStatus && matchesBranch && matchesSearch;
-      })
-      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
-  }, [submissions, user.branch, user.assignedBranches, isAdmin, searchTerm]);
+    return submissions.filter(sub => 
+      sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
+    );
+  }, [submissions, searchTerm]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -57,18 +48,16 @@ export default function AmendmentReviewPage() {
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Amendment Review</h1>
           </div>
           <div className="flex items-center gap-2">
-            <p className="text-muted-foreground text-lg">
-              Prioritized queue for resubmitted cases.
-            </p>
+            <p className="text-muted-foreground text-lg">Prioritized queue for resubmitted cases.</p>
             {isAdmin ? (
               <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
                 <ShieldCheck className="w-3 h-3" />
                 Global Oversight
               </Badge>
-            ) : user.branch && user.branch !== 'Central HQ' && (
+            ) : user?.branchName && (
               <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
                 <MapPin className="w-3 h-3" />
-                {user.branch} Office
+                {user.branchName} Office
               </Badge>
             )}
           </div>

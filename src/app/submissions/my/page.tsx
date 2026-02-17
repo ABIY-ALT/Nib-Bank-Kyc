@@ -1,31 +1,30 @@
-
 "use client"
 
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-mock";
 import { SubmissionsPageContent } from "../submissions-content";
-import { useMemo, useState } from "react";
 import { KYCSubmission } from "@/lib/kyc-data";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Inbox } from "lucide-react";
+import { Search, Inbox, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { getSubmissions } from "@/actions/submissions";
 
 export default function MySubmissionsPage() {
-  const db = useFirestore();
   const { user } = useAuth();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const mySubmissionsQuery = useMemo(() => {
-    if (!db) return null;
-    return query(
-      collection(db, "submissions"),
-      where("submittedBy", "==", user.name),
-      orderBy("submittedAt", "desc")
-    );
-  }, [db, user.name]);
-
-  const { data: submissions, loading } = useCollection<KYCSubmission>(mySubmissionsQuery);
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      setLoading(true);
+      const data = await getSubmissions({ submittedBy: user.id });
+      setSubmissions(data);
+      setLoading(false);
+    }
+    loadData();
+  }, [user]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -62,9 +61,9 @@ export default function MySubmissionsPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-4">
-          <Skeleton className="h-12 w-full rounded-xl" />
-          <Skeleton className="h-64 w-full rounded-xl" />
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="font-bold text-muted-foreground">Retrieving personal vault...</p>
         </div>
       ) : (
         <SubmissionsPageContent submissions={filteredSubmissions || []} />
