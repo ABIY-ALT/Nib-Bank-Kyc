@@ -96,14 +96,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (isMockMode) {
       if (pass !== 'nibbank123') throw new Error('Invalid developer credential.');
+      
+      const emailId = email.split('@')[0];
+      const userId = `mock-${emailId}`;
+      
+      // Look up existing user in SQL first to preserve role assigned in Directory
+      const existingUser = await getUserProfile(userId);
+      
       const mockUser: any = {
-        id: `mock-${email.split('@')[0]}`,
-        name: email.split('@')[0].split('.').join(' '),
+        id: userId,
+        name: existingUser?.name || emailId.split('.').join(' '),
         email: email,
-        role: email.toLowerCase().includes('admin') ? 'ADMIN' : 'BRANCH_OFFICER',
-        status: 'ACTIVE',
-        assignedBranches: []
+        role: existingUser?.role || (email.toLowerCase().includes('admin') ? 'ADMIN' : 'BRANCH_OFFICER'),
+        status: existingUser?.status || 'ACTIVE',
+        branchName: existingUser?.branchName || null,
+        districtName: existingUser?.districtName || null,
+        assignedBranches: existingUser?.assignedBranches || []
       };
+      
       setUser(mockUser);
       localStorage.setItem('nib_mock_user', JSON.stringify(mockUser));
       await syncUserToSql(mockUser);

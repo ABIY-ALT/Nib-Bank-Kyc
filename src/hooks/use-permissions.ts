@@ -24,12 +24,12 @@ const DEFAULT_PERMISSIONS: Record<string, PermissionSet> = {
     canAccessFollowUp: true, canAccessArchive: true 
   },
   [UserRole.KYC_OFFICER]: { 
-    canSubmit: true, canReview: true, canEscalate: false, canViewReports: false, 
+    canSubmit: false, canReview: true, canEscalate: false, canViewReports: false, 
     canManageUsers: false, canManageSystem: false, canAccessPerformance: false,
     canAccessFollowUp: false, canAccessArchive: true 
   },
   [UserRole.SUPERVISOR]: { 
-    canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, 
+    canSubmit: false, canReview: true, canEscalate: true, canViewReports: true, 
     canManageUsers: false, canManageSystem: false, canAccessPerformance: true,
     canAccessFollowUp: true, canAccessArchive: true 
   },
@@ -95,9 +95,15 @@ export function usePermissions(user: UserProfile | null) {
 
     // Fallback to defaults
     return DEFAULT_PERMISSIONS[roleName] || {
-      canSubmit: true, canReview: false, canEscalate: false, 
-      canViewReports: false, canManageUsers: false, canManageSystem: false,
-      canAccessPerformance: false, canAccessFollowUp: false, canAccessArchive: false
+      canSubmit: false, // Default to false for unknown roles
+      canReview: false, 
+      canEscalate: false, 
+      canViewReports: false, 
+      canManageUsers: false, 
+      canManageSystem: false,
+      canAccessPerformance: false,
+      canAccessFollowUp: false, 
+      canAccessArchive: false
     };
   }, [user, dbDefinitions]);
 
