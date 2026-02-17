@@ -7,13 +7,16 @@ import { revalidatePath } from 'next/cache';
 export async function getSubmissions(filters?: {
   status?: SubmissionStatus[];
   branch?: string;
+  district?: string;
   submittedBy?: string;
   isExceptional?: boolean;
+  limit?: number;
 }) {
   return await prisma.submission.findMany({
     where: {
       status: filters?.status ? { in: filters.status } : undefined,
       branchName: filters?.branch,
+      districtName: filters?.district,
       submittedById: filters?.submittedBy,
       isExceptional: filters?.isExceptional
     },
@@ -21,7 +24,8 @@ export async function getSubmissions(filters?: {
       submittedBy: true,
       documents: true
     },
-    orderBy: { submittedAt: 'desc' }
+    orderBy: { submittedAt: 'desc' },
+    take: filters?.limit
   });
 }
 

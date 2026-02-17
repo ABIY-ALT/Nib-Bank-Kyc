@@ -23,11 +23,11 @@ import {
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { useFirestore, useCollection, useDoc, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, limit, doc } from "firebase/firestore";
-import { useMemo } from "react";
-import { KYCSubmission } from "@/lib/kyc-data";
+import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { getSubmissions } from "@/actions/submissions";
+import { getGlobalSettings } from "@/actions/settings";
+import { SubmissionStatus, UserRole } from "@prisma/client";
 
 interface Guideline {
   id: string;
@@ -37,48 +37,39 @@ interface Guideline {
 }
 
 export default function Dashboard() {
-  const { user, isMock } = useAuth();
-  const db = useFirestore();
+  const { user } = useAuth();
+  const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role === UserRole.ADMIN;
 
-  const dashboardQuery = useMemo(() => {
-    if (!db || !user || isMock) return null;
-    
-    try {
-      if (isAdmin) {
-        return query(collection(db, "submissions"), orderBy("submittedAt", "desc"), limit(5));
+  useEffect(() => {
+    async function loadDashboard() {
+      if (!user) return;
+      setLoading(true);
+      try {
+        const [subs, globalSettings] = await Promise.all([
+          getSubmissions({
+            limit: 5,
+            branch: user.role === UserRole.BRANCH_OFFICER ? user.branchName || undefined : undefined,
+            district: user.role === UserRole.DISTRICT_DIRECTOR ? user.districtName || undefined : undefined
+          }),
+          getGlobalSettings()
+        ]);
+        setRecentSubmissions(subs);
+        setSettings(globalSettings);
+      } catch (error) {
+        console.error("Dashboard data fetch failed:", error);
+      } finally {
+        setLoading(false);
       }
-      
-      if (user.role === 'DISTRICT_DIRECTOR' && user.district) {
-        return query(collection(db, "submissions"), where("district", "==", user.district), orderBy("submittedAt", "desc"), limit(5));
-      }
-
-      if (user.role === 'KYC_OFFICER' && (user.assignedBranches?.length || 0) > 0) {
-        return query(collection(db, "submissions"), where("branch", "in", user.assignedBranches), orderBy("submittedAt", "desc"), limit(5));
-      }
-
-      if (user.branch) {
-        return query(collection(db, "submissions"), where("branch", "==", user.branch), orderBy("submittedAt", "desc"), limit(5));
-      }
-
-      return query(collection(db, "submissions"), orderBy("submittedAt", "desc"), limit(5));
-    } catch (e) {
-      console.warn("Dashboard query construction failed:", e);
-      return null;
     }
-  }, [db, user, isAdmin, isMock]);
-
-  const { data: recentSubmissions, loading: submissionsLoading } = useCollection<KYCSubmission>(dashboardQuery);
-
-  const settingsRef = useMemoFirebase(() => {
-    return db && !isMock ? doc(db, "settings", "global") : null;
-  }, [db, isMock]);
-
-  const { data: settings } = useDoc<{ guidelines?: Guideline[] }>(settingsRef);
+    loadDashboard();
+  }, [user]);
 
   const stats = useMemo(() => {
-    const scopeLabel = isAdmin ? 'Global' : user?.role === 'DISTRICT_DIRECTOR' ? 'Regional' : 'Branch';
+    const scopeLabel = isAdmin ? 'Global' : user?.role === UserRole.DISTRICT_DIRECTOR ? 'Regional' : 'Branch';
     if (!recentSubmissions || recentSubmissions.length === 0) return [
       { label: `${scopeLabel} Activity`, value: '0', icon: History, color: 'text-blue-600' },
       { label: 'Approved Cases', value: '0', icon: FileCheck, color: 'text-green-600' },
@@ -86,8 +77,8 @@ export default function Dashboard() {
       { label: 'Network SLA', value: '100%', icon: TrendingUp, color: 'text-purple-600' },
     ];
 
-    const approvedCount = recentSubmissions.filter(s => s.status === 'APPROVED').length;
-    const amendedCount = recentSubmissions.filter(s => s.status === 'AMENDED').length;
+    const approvedCount = recentSubmissions.filter(s => s.status === SubmissionStatus.APPROVED).length;
+    const amendedCount = recentSubmissions.filter(s => s.status === SubmissionStatus.AMENDED).length;
 
     return [
       { label: `${scopeLabel} Active`, value: recentSubmissions.length.toString(), icon: History, color: 'text-blue-600' },
@@ -102,12 +93,12 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-            {isAdmin ? 'Institutional Command' : user?.role === 'DISTRICT_DIRECTOR' ? `${user.district || 'Regional'} District Portal` : `${user?.branch || 'Local'} Branch Portal`}
+            {isAdmin ? 'Institutional Command' : user?.role === UserRole.DISTRICT_DIRECTOR ? `${user.districtName || 'Regional'} District Portal` : `${user?.branchName || 'Local'} Branch Portal`}
           </h1>
           <p className="text-muted-foreground text-lg">Welcome back, {user?.name}. Institutional session active.</p>
         </div>
         <div className="flex items-center gap-3">
-          {user?.role === 'BRANCH_OFFICER' && (
+          {user?.role === UserRole.BRANCH_OFFICER && (
             <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-bold text-lg">
               <Link href="/submissions/new">Create New Submission</Link>
             </Button>
@@ -144,7 +135,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
-              {submissionsLoading ? (
+              {loading ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-primary/30" />
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Querying Operational Vault...</p>
@@ -157,19 +148,19 @@ export default function Dashboard() {
                         <p className="font-bold text-slate-900 group-hover:text-primary transition-colors">{sub.customerName}</p>
                         {sub.isExceptional && <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 text-[8px] h-4 font-black uppercase">Hierarchy</Badge>}
                       </div>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{sub.id} • {sub.branch} Node</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{sub.id} • {sub.branchName} Node</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant={
-                        sub.status === 'APPROVED' ? 'default' : 
-                        sub.status === 'AMENDED' ? 'secondary' : 
-                        sub.status === 'PENDING' ? 'outline' : 'destructive'
+                        sub.status === SubmissionStatus.APPROVED ? 'default' : 
+                        sub.status === SubmissionStatus.AMENDED ? 'secondary' : 
+                        sub.status === SubmissionStatus.PENDING ? 'outline' : 'destructive'
                       } className={cn(
                         "font-bold",
-                        sub.status === 'APPROVED' && 'bg-emerald-50 text-emerald-700 border-emerald-100',
-                        sub.status === 'AMENDED' && 'bg-orange-50 text-orange-700 border-orange-100'
+                        sub.status === SubmissionStatus.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                        sub.status === SubmissionStatus.AMENDED && 'bg-orange-50 text-orange-700 border-orange-100'
                       )}>
-                        {sub.status === 'AMENDED' ? 'Action Required' : sub.status}
+                        {sub.status === SubmissionStatus.AMENDED ? 'Action Required' : sub.status}
                       </Badge>
                       <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/5 text-primary">
                         <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>
@@ -180,7 +171,7 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed">
                   <History className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground font-bold">{isMock ? 'Demo Mode Active' : 'No Operational Data Found'}</p>
+                  <p className="text-sm text-muted-foreground font-bold">No Operational Data Found</p>
                 </div>
               )}
             </div>
@@ -194,8 +185,8 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="pt-6">
              <div className="space-y-4">
-                {settings?.guidelines && settings.guidelines.length > 0 ? (
-                  settings.guidelines.map((guide) => (
+                {settings?.guidelines && (settings.guidelines as any[]).length > 0 ? (
+                  (settings.guidelines as any[]).map((guide) => (
                     <div key={guide.id} className={`flex gap-4 p-5 rounded-2xl border ${guide.type === 'alert' ? 'bg-accent/5 border-accent/20' : 'bg-blue-50 border-blue-100'}`}>
                       {guide.type === 'alert' ? <ShieldCheck className="w-6 h-6 text-accent shrink-0" /> : <Info className="w-6 h-6 text-blue-600 shrink-0" />}
                       <div className="text-sm">
