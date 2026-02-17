@@ -17,29 +17,17 @@ export interface PermissionSet {
   canAccessArchive: boolean;
 }
 
-// System defaults for when the database isn't initialized yet or for critical fallback
-const HARDCODED_DEFAULTS: Record<string, PermissionSet> = {
-  "ADMIN": { 
-    canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, 
-    canManageUsers: true, canManageSystem: true, canAccessPerformance: true,
-    canAccessFollowUp: true, canAccessArchive: true 
-  },
-  "KYC_OFFICER": { 
-    canSubmit: false, canReview: true, canEscalate: false, canViewReports: false, 
-    canManageUsers: false, canManageSystem: false, canAccessPerformance: false,
-    canAccessFollowUp: false, canAccessArchive: true 
-  },
-  "BRANCH_OFFICER": { 
-    canSubmit: true, canReview: false, canEscalate: false, canViewReports: false, 
-    canManageUsers: false, canManageSystem: false, canAccessPerformance: false,
-    canAccessFollowUp: false, canAccessArchive: false 
-  }
-};
-
 const EMPTY_PERMISSIONS: PermissionSet = {
   canSubmit: false, canReview: false, canEscalate: false, 
   canViewReports: false, canManageUsers: false, canManageSystem: false,
   canAccessPerformance: false, canAccessFollowUp: false, canAccessArchive: false
+};
+
+// System protected ADMIN role fallback
+const ADMIN_PERMISSIONS: PermissionSet = { 
+  canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, 
+  canManageUsers: true, canManageSystem: true, canAccessPerformance: true,
+  canAccessFollowUp: true, canAccessArchive: true 
 };
 
 export function usePermissions(user: UserProfile | null) {
@@ -62,10 +50,12 @@ export function usePermissions(user: UserProfile | null) {
 
   const permissions = useMemo((): PermissionSet => {
     if (!user) return EMPTY_PERMISSIONS;
+    
+    // 1. Protected Admin bypass
+    if (user.role === 'ADMIN') return ADMIN_PERMISSIONS;
 
-    // 1. Check for dynamic lookup in SQL RoleDefinition table
-    const roleName = user.role;
-    const dbMatch = dbDefinitions.find(d => d.name === roleName);
+    // 2. Dynamic lookup in SQL RoleDefinition table
+    const dbMatch = dbDefinitions.find(d => d.name === user.role);
     
     if (dbMatch) {
       return {
@@ -81,8 +71,8 @@ export function usePermissions(user: UserProfile | null) {
       };
     }
 
-    // 2. Fallback to baseline hardcoded defaults if DB isn't seeded yet
-    return HARDCODED_DEFAULTS[roleName] || EMPTY_PERMISSIONS;
+    // 3. Secure Default: If role isn't in DB and isn't ADMIN, deny all
+    return EMPTY_PERMISSIONS;
   }, [user, dbDefinitions]);
 
   return { permissions, loading };

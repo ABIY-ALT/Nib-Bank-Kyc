@@ -63,7 +63,7 @@ export default function UserManagementPage() {
     name: '',
     email: '',
     phoneNumber: '',
-    role: 'BRANCH_OFFICER',
+    role: '',
     status: UserStatus.ACTIVE,
     branchName: '',
     districtName: ''
@@ -100,15 +100,15 @@ export default function UserManagementPage() {
         name: user.name || '',
         email: user.email || '',
         phoneNumber: user.phoneNumber || '',
-        role: user.role || 'BRANCH_OFFICER',
+        role: user.role || '',
         status: user.status || UserStatus.ACTIVE,
         branchName: user.branchName || '',
         districtName: user.districtName || ''
       });
     } else {
       setEditingUser(null);
-      // Default to first defined role if available
-      const defaultRole = roleDefinitions.length > 0 ? roleDefinitions[0].name : 'BRANCH_OFFICER';
+      // Default to first defined role if available, otherwise empty
+      const defaultRole = roleDefinitions.length > 0 ? roleDefinitions[0].name : 'ADMIN';
       setFormData({ 
         name: '', 
         email: '', 
@@ -123,12 +123,11 @@ export default function UserManagementPage() {
   };
 
   const handleSave = async () => {
-    if (!formData.name || !formData.email) {
-      toast({ variant: "destructive", title: "Validation Error", description: "Identity details required." });
+    if (!formData.name || !formData.email || !formData.role) {
+      toast({ variant: "destructive", title: "Validation Error", description: "Identity details and role are required." });
       return;
     }
 
-    // Role-based validation: Branch Manager, District Director, and Branch Officer must have District and Branch
     const requiresLocation = [
       'BRANCH_MANAGER',
       'DISTRICT_DIRECTOR',
@@ -307,18 +306,12 @@ export default function UserManagementPage() {
                   <SelectTrigger className="h-11"><SelectValue placeholder="Select Defined Role" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ADMIN">ADMIN</SelectItem>
-                    {/* Map defined roles from the SQL RoleDefinition table */}
+                    {/* Exclusively show dynamic roles from the Permission Matrix */}
                     {roleDefinitions.filter(r => r.name !== 'ADMIN').map(role => (
                       <SelectItem key={role.id} value={role.name}>
                         {role.name.replace(/_/g, ' ')}
                       </SelectItem>
                     ))}
-                    {roleDefinitions.length === 0 && (
-                      <>
-                        <SelectItem value="BRANCH_OFFICER">BRANCH OFFICER</SelectItem>
-                        <SelectItem value="KYC_OFFICER">KYC OFFICER</SelectItem>
-                      </>
-                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -333,13 +326,6 @@ export default function UserManagementPage() {
                 </Select>
               </div>
             </div>
-
-            {roleDefinitions.length === 0 && (
-              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 flex gap-2">
-                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-amber-800 font-bold">Note: No custom roles found in SQL matrix. Using system defaults.</p>
-              </div>
-            )}
 
             <div className="space-y-4 pt-4 border-t border-dashed">
               <div className="space-y-2">
