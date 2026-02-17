@@ -1,9 +1,6 @@
-
 'use client';
 
 import { useParams, useRouter } from "next/navigation";
-import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, updateDoc, collection } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-mock";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -29,283 +26,107 @@ import {
   Loader2,
   FolderArchive,
   Info,
-  FileArchive,
-  X
+  FileArchive
 } from "lucide-react";
-import { useState } from "react";
-import { KYCSubmission, Document, FollowUpVerification } from "@/lib/kyc-data";
+import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogDescription
-} from "@/components/ui/dialog";
-import { format } from "date-fns";
-import JSZip from 'jszip';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-
-interface PreviewDoc {
-  id: string;
-  name: string;
-  type: string;
-  url: string;
-  isPdf?: boolean;
-}
+import { getFollowUpById, updateFollowUp } from "@/actions/follow-up";
+import { getSubmissionById } from "@/actions/submissions";
 
 export default function FollowUpVerificationDetail() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const db = useFirestore();
   const { user } = useAuth();
   
+  const [verification, setVerification] = useState<any>(null);
+  const [submission, setSubmission] = useState<any>(null);
   const [remarks, setRemarks] = useState("");
-  const [previewFile, setPreviewFile] = useState<PreviewDoc | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
 
-  const verifyRef = useMemoFirebase(() => {
-    return db && params.id ? doc(db, "follow_up_verifications", params.id as string) : null;
-  }, [db, params.id]);
+  useEffect(() => {
+    loadData();
+  }, [params.id]);
 
-  const { data: verification, loading: vLoading } = useDoc<FollowUpVerification>(verifyRef);
+  const loadData = async () => {
+    if (!params.id) return;
+    setLoading(true);
+    const v = await getFollowUpById(params.id as string);
+    if (v) {
+      setVerification(v);
+      const s = await getSubmissionById(v.submissionId);
+      setSubmission(s);
+    }
+    setLoading(false);
+  };
 
-  const submissionRef = useMemoFirebase(() => {
-    return db && verification ? doc(db, "submissions", verification.submissionId) : null;
-  }, [db, verification]);
-
-  const { data: submission, loading: sLoading } = useDoc<KYCSubmission>(submissionRef);
-
-  const docsQuery = useMemoFirebase(() => {
-    return submissionRef ? collection(submissionRef, "documents") : null;
-  }, [submissionRef]);
-
-  const { data: documents } = useCollection<Document>(docsQuery);
-
-  const handleAction = (result: 'Correct' | 'Discrepancy') => {
-    if (!verifyRef || !db || isSubmitting) return;
-
+  const handleAction = async (result: 'Correct' | 'Discrepancy') => {
     if (result === 'Discrepancy' && !remarks.trim()) {
-      toast({ variant: "destructive", title: "Remarks Required", description: "Please explain the identified discrepancy for institutional feedback." });
+      toast({ variant: "destructive", title: "Remarks Required" });
       return;
     }
 
     setIsSubmitting(result);
-
-    const updateData = {
+    const res = await updateFollowUp(verification.id, {
       result,
       remarks,
-      verifiedBy: user?.name || 'Unknown Auditor',
-      verifiedAt: new Date().toISOString(),
-      status: 'Completed'
-    };
+      verifiedBy: user?.name,
+      status: 'COMPLETED'
+    });
 
-    updateDoc(verifyRef, updateData)
-      .catch(async (error) => {
-        const permissionError = new FirestorePermissionError({
-          path: verifyRef.path,
-          operation: 'update',
-          requestResourceData: updateData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        setIsSubmitting(null);
-      });
-
-    toast({ title: "Audit Logged", description: `Case verification marked as ${result}.` });
-    router.push('/head-office/follow-up');
-  };
-
-  const handleDownloadBundle = async () => {
-    if (!submission || !db || !submissionRef || !user) return;
-    setIsDownloading(true);
-
-    try {
-      const zip = new JSZip();
-      const now = new Date();
-      const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      const districtName = submission.district.replace(/\s+/g, '_');
-      const branchName = submission.branch.replace(/\s+/g, '_');
-      const bundleName = `${districtName}_${branchName}_AUDIT_${timestamp}`;
-
-      const manifest = `Nib Bank Head Office Audit Bundle
-Generated: ${now.toLocaleString()}
-Auditor: ${user.name}
-Case ID: ${submission.id}
-Customer: ${submission.customerName}
-Source: ${submission.district} District / ${submission.branch} Branch
-Total Files: ${documents?.length || 0}
-
---- DOCUMENT INVENTORY ---
-${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No documents discovered.'}
-`;
-      zip.file("nib_bank_audit_manifest.txt", manifest);
-
-      if (documents && documents.length > 0) {
-        const docFolder = zip.folder("case_assets");
-        for (const docObj of documents) {
-          try {
-            const sourceUrl = docObj.url === '#' 
-              ? (docObj.name.toLowerCase().endsWith('.pdf') 
-                  ? 'https://placehold.co/1200x1600/png?text=Institutional+PDF+Content' 
-                  : `https://picsum.photos/seed/${docObj.id}/1200/1600`)
-              : docObj.url;
-
-            const response = await fetch(sourceUrl);
-            const blob = await response.blob();
-            docFolder?.file(docObj.name, blob);
-          } catch (err) {
-            console.error(`Fetch failed for ${docObj.name}:`, err);
-            docFolder?.file(`${docObj.name}_ERROR.txt`, `Institutional error: Source file could not be retrieved.`);
-          }
-        }
-      }
-
-      const content = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(content);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${bundleName}.zip`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 100);
-
-      toast({
-        title: "Audit Bundle Complete",
-        description: `Nib Bank archive ${bundleName} exported successfully.`,
-      });
-    } catch (error) {
-      console.error("Bundle generation failed:", error);
-      toast({
-        variant: "destructive",
-        title: "Archive Error",
-        description: "An error occurred during bundle compilation."
-      });
-    } finally {
-      setIsDownloading(false);
+    if (res.success) {
+      toast({ title: "Audit Logged" });
+      router.push('/head-office/follow-up');
+    } else {
+      toast({ variant: "destructive", title: "Action Failed" });
+      setIsSubmitting(null);
     }
   };
 
-  if (vLoading || sLoading) {
-    return <div className="py-32 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving audit assets...</div>;
-  }
-
-  if (!verification || !submission) return <div className="p-12 text-center">Audit record missing.</div>;
+  if (loading) return <div className="py-32 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving audit assets...</div>;
+  if (!verification || !submission) return <div className="p-12 text-center">Audit record missing in SQL.</div>;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ArrowLeft className="w-5 h-5" /></Button>
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-3xl font-black font-headline tracking-tight">Audit: {submission.id}</h1>
-              <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-black uppercase text-[10px] tracking-widest">
-                {verification.status} Audit
-              </Badge>
-            </div>
-            <p className="text-muted-foreground font-medium flex items-center gap-2">
-              <Building2 className="w-4 h-4" /> {submission.branch} Branch • Quality Control Session
-            </p>
+            <h1 className="text-3xl font-black font-headline">Audit Session: {submission.id}</h1>
+            <p className="text-muted-foreground font-medium flex items-center gap-2"><Building2 className="w-4 h-4" /> {submission.branchName} Node</p>
           </div>
         </div>
-        <Button 
-          className="bg-primary hover:bg-primary/90 text-white font-bold px-6 shadow-lg h-11 gap-2" 
-          onClick={handleDownloadBundle} 
-          disabled={isDownloading}
-        >
-          {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileArchive className="w-4 h-4" />}
-          Download Case Bundle
-        </Button>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-8">
           <Card className="shadow-lg border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b">
-              <CardTitle className="text-xl flex items-center gap-2">
-                <FolderArchive className="w-5 h-5 text-primary" />
-                Asset Inventory (Read-Only)
-              </CardTitle>
-              <CardDescription>Head Office access to institutional evidence bundle.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="grid gap-4">
-                {documents?.map((doc) => (
-                  <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/30 transition-all group">
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-primary/10 transition-colors">
-                        <FileText className="w-6 h-6 text-slate-400 group-hover:text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900 leading-tight">{doc.name}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase font-black tracking-tighter mt-0.5">
-                          {doc.type.replace(/_/g, ' ')} • {new Date(doc.uploadedAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setPreviewFile({ id: doc.id, name: doc.name, type: doc.type, url: doc.url === '#' ? 'https://picsum.photos/seed/doc/1200/1600' : doc.url, isPdf: doc.name.toLowerCase().endsWith('.pdf') })}>
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" asChild className="rounded-full">
-                        <a href={doc.url === '#' ? (doc.name.toLowerCase().endsWith('.pdf') ? 'https://placehold.co/1200x1600/png?text=PDF+Asset' : 'https://picsum.photos/seed/doc/1200/1600') : doc.url} download={doc.name}>
-                          <Download className="w-4 h-4" />
-                        </a>
-                      </Button>
-                    </div>
+            <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-xl flex items-center gap-2"><FolderArchive className="w-5 h-5 text-primary" /> Asset Inventory</CardTitle></CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              {submission.documents?.map((doc: any) => (
+                <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/30 transition-all group">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-slate-100 rounded-lg"><FileText className="w-6 h-6 text-slate-400" /></div>
+                    <div><p className="font-bold text-slate-900">{doc.name}</p><p className="text-[10px] uppercase font-black text-muted-foreground">{doc.type}</p></div>
                   </div>
-                ))}
-                {(!documents || documents.length === 0) && (
-                  <div className="py-12 text-center text-muted-foreground italic bg-slate-50 rounded-2xl border-2 border-dashed">
-                    No documents discovered in case bundle.
-                  </div>
-                )}
-              </div>
+                  <Button variant="ghost" size="icon" className="rounded-full"><Eye className="w-4 h-4" /></Button>
+                </div>
+              ))}
             </CardContent>
           </Card>
 
           <Card className="shadow-xl border-primary/20 bg-white">
-            <CardHeader className="bg-primary/5 border-b border-primary/10">
-              <CardTitle className="text-xl flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-primary" />
-                Institutional Determination
-              </CardTitle>
-              <CardDescription>Log your audit findings for the Head Office compliance database.</CardDescription>
-            </CardHeader>
+            <CardHeader className="bg-primary/5 border-b border-primary/10"><CardTitle className="text-xl flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" /> Institutional Determination</CardTitle></CardHeader>
             <CardContent className="pt-6 space-y-6">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Remarks & Feedback</Label>
-                <Textarea 
-                  placeholder="Detail any discrepancies found or provide audit confirmation..." 
-                  className="min-h-[140px] bg-slate-50/30 focus:ring-primary border-slate-200"
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  disabled={!!isSubmitting}
-                />
+                <Textarea placeholder="Detail findings..." className="min-h-[140px] bg-slate-50/30" value={remarks} onChange={(e) => setRemarks(e.target.value)} disabled={!!isSubmitting} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Button 
-                  className="bg-emerald-600 hover:bg-emerald-700 h-14 font-black shadow-lg gap-2 text-white disabled:opacity-70"
-                  onClick={() => handleAction('Correct')}
-                  disabled={!!isSubmitting}
-                >
-                  {isSubmitting === 'Correct' ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                  Mark Correct
-                </Button>
-                <Button 
-                  variant="outline"
-                  className="h-14 font-black shadow-md gap-2 text-orange-600 border-orange-600 hover:bg-orange-50 disabled:opacity-70"
-                  onClick={() => handleAction('Discrepancy')}
-                  disabled={!!isSubmitting}
-                >
-                  {isSubmitting === 'Discrepancy' ? <Loader2 className="w-5 h-5 animate-spin" /> : <AlertTriangle className="w-5 h-5" />}
-                  Log Discrepancy
-                </Button>
+                <Button className="bg-emerald-600 hover:bg-emerald-700 h-14 font-black shadow-lg" onClick={() => handleAction('Correct')} disabled={!!isSubmitting}>{isSubmitting === 'Correct' ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5 mr-2" />} Mark Correct</Button>
+                <Button variant="outline" className="h-14 font-black shadow-md text-orange-600 border-orange-600" onClick={() => handleAction('Discrepancy')} disabled={!!isSubmitting}>{isSubmitting === 'Discrepancy' ? <Loader2 className="w-5 h-5 animate-spin" /> : <AlertTriangle className="w-5 h-5 mr-2" />} Log Discrepancy</Button>
               </div>
             </CardContent>
           </Card>
@@ -313,81 +134,17 @@ ${documents?.map(d => `- [${d.type.toUpperCase()}] ${d.name}`).join('\n') || 'No
 
         <div className="space-y-6">
           <Card className="shadow-lg border-slate-200 overflow-hidden sticky top-24">
-            <CardHeader className="bg-slate-900 text-white border-b border-white/10">
-              <CardTitle className="text-lg font-bold uppercase tracking-widest">Audit Context</CardTitle>
-            </CardHeader>
+            <CardHeader className="bg-slate-900 text-white border-b border-white/10"><CardTitle className="text-lg font-bold uppercase tracking-widest">Audit Context</CardTitle></CardHeader>
             <CardContent className="pt-8 space-y-8">
               <div className="space-y-6">
-                <div className="flex gap-4">
-                  <div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><User className="w-5 h-5" /></div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</p>
-                    <p className="font-bold text-slate-900">{submission.customerName}</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><Building2 className="w-5 h-5" /></div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Originating Node</p>
-                    <p className="font-bold text-slate-900">{submission.branch} Branch</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><User className="w-5 h-5" /></div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Processing Officer</p>
-                    <p className="font-bold text-slate-900">{submission.submittedBy}</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><Calendar className="w-5 h-5" /></div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Approval Date</p>
-                    <p className="font-bold text-slate-900">{new Date(submission.submittedAt).toLocaleDateString()}</p>
-                  </div>
-                </div>
+                <div className="flex gap-4"><div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><User className="w-5 h-5" /></div><div><p className="text-[10px] font-black text-slate-400 uppercase">Customer</p><p className="font-bold text-slate-900">{submission.customerName}</p></div></div>
+                <div className="flex gap-4"><div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><Building2 className="w-5 h-5" /></div><div><p className="text-[10px] font-black text-slate-400 uppercase">Originating Node</p><p className="font-bold text-slate-900">{submission.branchName}</p></div></div>
               </div>
-
-              <div className="pt-6 border-t space-y-4">
-                <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest">
-                  <Info className="w-4 h-4" /> Institutional Note
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed font-medium bg-slate-50 p-4 rounded-xl italic">
-                  Head Office audit determines if the branch followed institutional KYC standards and regulatory mandates. Findings here impact branch performance metrics.
-                </p>
-              </div>
+              <div className="pt-6 border-t space-y-4"><p className="text-xs text-slate-500 leading-relaxed font-medium bg-slate-50 p-4 rounded-xl italic">Findings here impact branch performance metrics in SQL Reporting.</p></div>
             </CardContent>
           </Card>
         </div>
       </div>
-
-      <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none bg-[#1a1a1a]">
-          <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between border-b border-white/5 pr-14">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/20 rounded-lg"><FileText className="w-5 h-5 text-primary" /></div>
-              <div className="flex flex-col">
-                <DialogTitle className="text-base font-bold text-slate-100">{previewFile?.name}</DialogTitle>
-                <DialogDescription className="text-slate-400 text-[10px] uppercase font-black tracking-widest">
-                  Auditor Inspection • {previewFile?.isPdf ? 'application/pdf' : 'image/preview'}
-                </DialogDescription>
-              </div>
-            </div>
-            <Button asChild variant="outline" size="sm" className="bg-white/5 border-white/10 text-white h-9 font-bold px-4">
-              <a href={previewFile?.url} download={previewFile?.name}><Download className="w-4 h-4 mr-2" /> Download Original</a>
-            </Button>
-          </DialogHeader>
-          <div className="flex-1 bg-[#121212] overflow-hidden flex flex-col">
-            {previewFile?.isPdf ? (
-              <iframe src={`${previewFile.url}#toolbar=1`} className="w-full h-full border-none" title="PDF Preview" />
-            ) : (
-              <div className="w-full h-full overflow-auto flex items-center justify-center p-8">
-                <img src={previewFile?.url} alt="Preview" className="max-w-full max-h-full object-contain shadow-2xl" />
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

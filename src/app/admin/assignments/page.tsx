@@ -1,13 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, updateDoc, collection, query, orderBy } from "firebase/firestore";
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { User } from "@/lib/auth-mock.tsx";
 import { 
   Loader2, 
   Users, 
@@ -17,8 +14,7 @@ import {
   Search,
   MapPin,
   ShieldAlert,
-  SearchCheck,
-  ChevronDown
+  SearchCheck
 } from "lucide-react";
 import { 
   Select, 
@@ -27,8 +23,6 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -37,78 +31,66 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { getAllUsers, updateUserPortfolio } from '@/actions/users';
+import { getBranches } from '@/actions/hierarchy';
+import { UserRole } from '@prisma/client';
 
 export default function StaffAssignmentsPage() {
-  const db = useFirestore();
   const { toast } = useToast();
-  
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [users, setUsers] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const branchesQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "branches"), orderBy("name")) : null;
-  }, [db]);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const { data: branches, loading: branchesLoading } = useCollection<{id: string, name: string}>(branchesQuery);
-
-  const usersQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "users"), orderBy("name")) : null;
-  }, [db]);
-
-  const { data: allUsers, loading: usersLoading } = useCollection<User>(usersQuery);
-
-  const handleToggleBranchAssignment = (user: User, branchName: string, isAdding: boolean) => {
-    if (!db) return;
-    const userRef = doc(db, "users", user.id);
-    
-    let updatedBranches = user.assignedBranches || [];
-    if (isAdding) {
-      if (!updatedBranches.includes(branchName)) {
-        updatedBranches = [...updatedBranches, branchName];
-      }
-    } else {
-      updatedBranches = updatedBranches.filter(b => b !== branchName);
-    }
-
-    const updateData = { assignedBranches: updatedBranches };
-
-    updateDoc(userRef, updateData)
-      .catch(async (error) => {
-        const permissionError = new FirestorePermissionError({
-          path: userRef.path,
-          operation: 'update',
-          requestResourceData: updateData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      });
-
-    toast({
-      title: isAdding ? "Coverage Assigned" : "Coverage Revoked",
-      description: `${user.name}'s portfolio updated for ${branchName}.`,
-    });
+  const loadData = async () => {
+    setLoading(true);
+    const [u, b] = await Promise.all([getAllUsers(), getBranches()]);
+    setUsers(u);
+    setBranches(b);
+    setLoading(false);
   };
 
-  // Filter for KYC Officers assigned to this specific selected branch
-  const assignedUsers = allUsers?.filter(u => 
-    u.role === 'KYC Officer' && 
+  const handleToggleBranchAssignment = async (user: any, branchName: string, isAdding: boolean) => {
+    let updatedBranches = user.assignedBranches || [];
+    if (isAdding) {
+      if (!updatedBranches.includes(branchName)) updatedBranches = [...updatedBranches, branchName];
+    } else {
+      updatedBranches = updatedBranches.filter((b: string) => b !== branchName);
+    }
+
+    try {
+      await updateUserPortfolio(user.id, updatedBranches);
+      toast({ title: isAdding ? "Coverage Assigned" : "Coverage Revoked" });
+      loadData();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Update Failed", description: e.message });
+    }
+  };
+
+  const assignedUsers = users.filter(u => 
+    u.role === UserRole.KYC_OFFICER && 
     u.assignedBranches?.includes(selectedBranch) && 
     selectedBranch !== ""
-  ) || [];
+  );
 
-  // Filter for KYC Officers NOT at this branch but eligible for assignment
-  const unassignedUsers = allUsers?.filter(u => {
-    const isKYCOfficer = u.role === 'KYC Officer';
+  const unassignedUsers = users.filter(u => {
+    const isKYCOfficer = u.role === UserRole.KYC_OFFICER;
     const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase());
     const isNotAtSelected = !u.assignedBranches?.includes(selectedBranch);
-    const isActive = u.status !== 'Inactive';
+    const isActive = u.status === 'ACTIVE';
     return isKYCOfficer && matchesSearch && isNotAtSelected && isActive;
-  }) || [];
+  });
 
-  if (branchesLoading || usersLoading) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-bold text-muted-foreground">Synchronizing institutional personnel mapping...</p>
+        <p className="font-bold text-muted-foreground">Retrieving SQL mappings...</p>
       </div>
     );
   }
@@ -123,52 +105,31 @@ export default function StaffAssignmentsPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Specialist Coverage</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Manage multi-branch portfolios for verification specialists.</p>
+          <p className="text-muted-foreground text-lg">Manage multi-branch portfolios in SQL.</p>
         </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-12">
         <Card className="lg:col-span-4 shadow-lg border-slate-200 h-fit sticky top-24">
           <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-primary" />
-              Jurisdiction Node
-            </CardTitle>
-            <CardDescription>Select a branch to manage its assigned verification specialists.</CardDescription>
+            <CardTitle className="text-xl flex items-center gap-2"><Building2 className="w-5 h-5 text-primary" /> Jurisdiction Node</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Branch Name</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Select branch..." />
-                  </SelectTrigger>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Select branch..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Central HQ">Central HQ (Main Office)</SelectItem>
-                    {branches?.map(b => (
-                      <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
-                    ))}
+                    {branches.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
 
-              {selectedBranch && (
-                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Active Mapping</span>
-                  <span className="text-lg font-black text-slate-900">{selectedBranch}</span>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="secondary" className="font-bold">{assignedUsers.length} Active KYC Officers</Badge>
-                  </div>
-                </div>
-              )}
-
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
                 <div className="flex gap-2 text-amber-800">
                   <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-                  <p className="text-xs font-medium leading-relaxed">
-                    <strong>Portfolio Protocol:</strong> Specialists can cover multiple branches. Adding a branch here will expand their verification queue without removing existing assignments.
-                  </p>
+                  <p className="text-xs font-medium leading-relaxed"><strong>SLA Protocol:</strong> Portfolio assignments expand verification visibility for shared regional queues.</p>
                 </div>
               </div>
             </div>
@@ -179,24 +140,13 @@ export default function StaffAssignmentsPage() {
           {!selectedBranch ? (
             <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-4">
               <MapPin className="w-16 h-16 text-slate-200" />
-              <div className="text-center space-y-1">
-                <p className="font-bold text-slate-900 text-xl">No Branch Selected</p>
-                <p className="text-sm text-slate-500 max-w-xs mx-auto">Please select a branch to begin managing specialist coverage and verification assignments.</p>
-              </div>
+              <p className="font-bold text-slate-900 text-xl">No Branch Selected</p>
             </div>
           ) : (
             <div className="grid gap-6">
               <Card className="shadow-xl border-slate-200 overflow-hidden">
                 <CardHeader className="bg-slate-50/50 border-b">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle className="text-xl flex items-center gap-2">
-                        <Users className="w-5 h-5 text-primary" />
-                        Mapped KYC Officers
-                      </CardTitle>
-                      <CardDescription>Specialists currently authorized for {selectedBranch}.</CardDescription>
-                    </div>
-                  </div>
+                  <CardTitle className="text-xl flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Mapped KYC Officers</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[300px]">
@@ -204,82 +154,24 @@ export default function StaffAssignmentsPage() {
                       {assignedUsers.map(u => (
                         <div key={u.id} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors group">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
-                              {u.name.charAt(0)}
-                            </div>
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">{u.name.charAt(0)}</div>
                             <div className="flex flex-col">
                               <span className="text-sm font-bold text-slate-900">{u.name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Verification Specialist</span>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <button className="flex items-center hover:opacity-80 transition-opacity focus:outline-none">
-                                      <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white border-primary/30 text-primary font-bold cursor-pointer">
-                                        {u.assignedBranches?.length || 0} Branches Covered
-                                      </Badge>
-                                    </button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-64 p-4 shadow-2xl border-slate-200 bg-white" side="top" align="start">
-                                    <div className="space-y-3">
-                                      <div className="flex items-center gap-2 border-b pb-2">
-                                        <Building2 className="w-3.5 h-3.5 text-primary" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Active Portfolio</span>
-                                      </div>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {u.assignedBranches && u.assignedBranches.length > 0 ? (
-                                          u.assignedBranches.map(branch => (
-                                            <Badge key={branch} variant="secondary" className="text-[10px] font-bold bg-slate-100 text-slate-700 border-none">
-                                              {branch}
-                                            </Badge>
-                                          ))
-                                        ) : (
-                                          <span className="text-[10px] italic text-slate-400">No branches mapped.</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
+                              <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white border-primary/30 text-primary font-bold">{u.assignedBranches?.length || 0} Nodes Covered</Badge>
                             </div>
                           </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-destructive font-bold opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => handleToggleBranchAssignment(u, selectedBranch, false)}
-                          >
-                            <X className="w-4 h-4 mr-2" />
-                            Revoke Authority
-                          </Button>
+                          <Button variant="ghost" size="sm" className="text-destructive font-bold" onClick={() => handleToggleBranchAssignment(u, selectedBranch, false)}><X className="w-4 h-4 mr-2" /> Revoke Authority</Button>
                         </div>
                       ))}
-                      {assignedUsers.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground italic">
-                          No specialists currently mapped to this node.
-                        </div>
-                      )}
                     </div>
                   </ScrollArea>
                 </CardContent>
               </Card>
 
               <Card className="shadow-xl border-slate-200 overflow-hidden">
-                <CardHeader className="bg-slate-50/50 border-b">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                      <CardTitle className="text-xl">Network Specialist Registry</CardTitle>
-                      <CardDescription>Add authorized KYC Officers to cover {selectedBranch}.</CardDescription>
-                    </div>
-                    <div className="relative w-full md:w-64">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <Input 
-                        placeholder="Search specialists..." 
-                        className="pl-9 h-9" 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                      />
-                    </div>
-                  </div>
+                <CardHeader className="bg-slate-50/50 border-b flex justify-between items-center">
+                  <CardTitle className="text-xl">Network Specialist Registry</CardTitle>
+                  <div className="relative w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Search..." className="pl-9 h-9" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[400px]">
@@ -287,61 +179,12 @@ export default function StaffAssignmentsPage() {
                       {unassignedUsers.map(u => (
                         <div key={u.id} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors group">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-primary/5 text-primary flex items-center justify-center font-bold border border-primary/10">
-                              {u.name.charAt(0)}
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-sm font-bold text-slate-900">{u.name}</span>
-                              <div className="flex items-center gap-2 flex-wrap max-w-xs">
-                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">KYC Specialist</span>
-                                <span className="text-slate-200 text-xs">•</span>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <button className="flex items-center hover:opacity-80 transition-opacity focus:outline-none">
-                                      <Badge variant="outline" className="text-[9px] h-4 font-bold bg-white cursor-pointer hover:border-primary/50 transition-colors">
-                                        {u.assignedBranches?.length || 0} Assignments
-                                      </Badge>
-                                    </button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-64 p-4 shadow-2xl border-slate-200 bg-white" side="top" align="start">
-                                    <div className="space-y-3">
-                                      <div className="flex items-center gap-2 border-b pb-2">
-                                        <MapPin className="w-3.5 h-3.5 text-primary" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Current Node Coverage</span>
-                                      </div>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {u.assignedBranches && u.assignedBranches.length > 0 ? (
-                                          u.assignedBranches.map(branch => (
-                                            <Badge key={branch} variant="secondary" className="text-[10px] font-bold bg-primary/5 text-primary border-primary/10">
-                                              {branch}
-                                            </Badge>
-                                          ))
-                                        ) : (
-                                          <span className="text-[10px] italic text-slate-400">Unmapped</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-                            </div>
+                            <div className="w-10 h-10 rounded-full bg-primary/5 text-primary flex items-center justify-center font-bold">{u.name.charAt(0)}</div>
+                            <div className="flex flex-col"><span className="text-sm font-bold text-slate-900">{u.name}</span></div>
                           </div>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="font-bold border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
-                            onClick={() => handleToggleBranchAssignment(u, selectedBranch, true)}
-                          >
-                            <UserPlus className="w-4 h-4 mr-2" />
-                            Add to Coverage
-                          </Button>
+                          <Button variant="outline" size="sm" className="font-bold border-primary/20 text-primary hover:bg-primary hover:text-white" onClick={() => handleToggleBranchAssignment(u, selectedBranch, true)}><UserPlus className="w-4 h-4 mr-2" /> Add to Coverage</Button>
                         </div>
                       ))}
-                      {unassignedUsers.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground italic">
-                          No other specialists available for assignment.
-                        </div>
-                      )}
                     </div>
                   </ScrollArea>
                 </CardContent>
