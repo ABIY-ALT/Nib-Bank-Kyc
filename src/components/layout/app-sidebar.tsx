@@ -14,7 +14,6 @@ import {
   AlertCircle,
   BarChart3,
   History,
-  Map,
   ChevronDown,
   ShieldAlert,
   Search,
@@ -71,36 +70,41 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b h-16 flex items-center px-4">
+      <SidebarHeader className="border-b h-16 flex items-center px-4 bg-sidebar-background">
         <div className="flex items-center gap-3 font-bold">
           <div className="bg-primary p-1.5 rounded-lg shadow-sm shrink-0 flex items-center justify-center">
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
-          <span className="group-data-[collapsible=icon]:hidden truncate text-slate-900 font-headline tracking-tight text-lg">Nib Bank KYC</span>
+          <span className="group-data-[collapsible=icon]:hidden truncate text-white font-headline tracking-tight text-lg">Nib Bank KYC</span>
         </div>
       </SidebarHeader>
       
       <SidebarContent>
         {/* DASHBOARD GROUP */}
-        <SidebarGroup>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
-                <Link href="/"><LayoutDashboard /><span>Dashboard</span></Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
+        {hasPermission('DASHBOARD_VIEW') && (
+          <SidebarGroup>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
+                  <Link href="/">
+                    <LayoutDashboard />
+                    <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
 
-        {/* WORKFLOWS GROUP */}
+        {/* WORKFLOWS GROUP - Identity Verification */}
         {hasAnyInGroup('WORKFLOWS') && (
           <SidebarGroup>
-            <SidebarGroupLabel>Identity Verification</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-white/40">Identity Verification</SidebarGroupLabel>
             <SidebarMenu>
               <Collapsible className="group/collapsible" defaultOpen={true}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="Identity Verification">
+                    <SidebarMenuButton tooltip="Verification Flow">
                       <FileText /><span>Verification Flow</span><ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
@@ -119,25 +123,25 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/my'}>
                             <Link href="/submissions/my"><Inbox className="w-4 h-4 mr-2" /><span>My Submissions</span></Link>
                           </SidebarMenuSubButton>
-                          {counts.mySubmissions > 0 && <SidebarMenuBadge className="bg-slate-100 text-slate-600 font-bold">{counts.mySubmissions}</SidebarMenuBadge>}
+                          {counts.mySubmissions > 0 && <SidebarMenuBadge className="bg-white/10 text-white font-bold">{counts.mySubmissions}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('CASE_VIEW_ACTION_REQUIRED') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>
-                            <Link href="/submissions/amendment-requests"><AlertCircle className="w-4 h-4 mr-2 text-orange-600" /><span>Action Required</span></Link>
+                            <Link href="/submissions/amendment-requests"><AlertCircle className="w-4 h-4 mr-2 text-orange-400" /><span>Action Required</span></Link>
                           </SidebarMenuSubButton>
-                          {counts.actionRequired > 0 && <SidebarMenuBadge className="bg-orange-50 text-white font-bold animate-pulse">{counts.actionRequired}</SidebarMenuBadge>}
+                          {counts.actionRequired > 0 && <SidebarMenuBadge className="bg-orange-500 text-white font-bold animate-pulse">{counts.actionRequired}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
                       )}
 
                       {hasPermission('CASE_VIEW_BRANCH') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
-                            <Link href="/submissions/branch-node"><LayoutList className="w-4 h-4 mr-2 text-[#B89334]" /><span>Local Node Oversight</span></Link>
+                            <Link href="/submissions/branch-node"><LayoutList className="w-4 h-4 mr-2 text-primary" /><span>Local Node Oversight</span></Link>
                           </SidebarMenuSubButton>
-                          {counts.branchNode > 0 && <SidebarMenuBadge className="bg-primary/10 text-primary font-bold">{counts.branchNode}</SidebarMenuBadge>}
+                          {counts.branchNode > 0 && <SidebarMenuBadge className="bg-primary text-white font-bold">{counts.branchNode}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
                       )}
 
@@ -155,7 +159,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
                             <Link href="/submissions/amendments"><History className="w-4 h-4 mr-2" /><span>Resubmitted Cases</span></Link>
                           </SidebarMenuSubButton>
-                          {counts.resubmitted > 0 && <SidebarMenuBadge className="bg-blue-600 text-white font-bold">{counts.resubmitted}</SidebarMenuBadge>}
+                          {counts.resubmitted > 0 && <SidebarMenuBadge className="bg-blue-500 text-white font-bold">{counts.resubmitted}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
                       )}
 
@@ -171,9 +175,9 @@ export function AppSidebar() {
                       {hasPermission('VIEW_GOVERNANCE_QUEUE') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/exceptional'}>
-                            <Link href="/submissions/exceptional"><Zap className="w-4 h-4 mr-2 text-yellow-600" /><span>Exceptional Cases</span></Link>
+                            <Link href="/submissions/exceptional"><Zap className="w-4 h-4 mr-2 text-yellow-400" /><span>Exceptional Cases</span></Link>
                           </SidebarMenuSubButton>
-                          {counts.exceptional > 0 && <SidebarMenuBadge className="bg-yellow-600 text-white font-bold">{counts.exceptional}</SidebarMenuBadge>}
+                          {counts.exceptional > 0 && <SidebarMenuBadge className="bg-yellow-500 text-white font-bold">{counts.exceptional}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
                       )}
 
@@ -195,7 +199,7 @@ export function AppSidebar() {
         {/* REFERENCE GROUP */}
         {hasPermission('VIEW_FQ_LIBRARY') && (
           <SidebarGroup>
-            <SidebarGroupLabel>Reference</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-white/40">Reference</SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/kyc-fq-reference'} tooltip="KYC F&Q Reference">
@@ -212,7 +216,7 @@ export function AppSidebar() {
         {/* AUDIT & REPORTING GROUP */}
         {hasAnyInGroup('REPORTING') && (
           <SidebarGroup>
-            <SidebarGroupLabel>Audit & Reporting</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-white/40">Audit & Reporting</SidebarGroupLabel>
             <SidebarMenu>
               <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
@@ -242,7 +246,7 @@ export function AppSidebar() {
                       )}
 
                       {hasPermission('DOWNLOAD_MASTER_ARCHIVE') && (
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/submissions/master-bundle'}><Link href="/submissions/master-bundle"><Folders className="w-4 h-4 mr-2 text-emerald-600" /><span>Master Archive</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/submissions/master-bundle'}><Link href="/submissions/master-bundle"><Folders className="w-4 h-4 mr-2 text-emerald-400" /><span>Master Archive</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                       )}
                     </SidebarMenuSub>
                   </CollapsibleContent>
@@ -255,7 +259,7 @@ export function AppSidebar() {
         {/* SYSTEM ADMINISTRATION GROUP */}
         {hasAnyInGroup('SYSTEM') && (
           <SidebarGroup>
-            <SidebarGroupLabel>Administration</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-white/40">Administration</SidebarGroupLabel>
             <SidebarMenu>
               <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
@@ -296,18 +300,18 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t p-4 bg-slate-50/50">
+      <SidebarFooter className="border-t p-4 bg-sidebar-background/50">
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0 shadow-lg">
             {user.name.charAt(0)}
           </div>
           <div className="flex-1 overflow-hidden text-left">
-            <p className="text-sm font-bold leading-tight truncate">{user.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate uppercase tracking-tighter mt-0.5">
-              {user.roles?.[0]?.role.name.replace(/_/g, ' ') || 'PROVISIONAL'}
+            <p className="text-sm font-bold leading-tight truncate text-white">{user.name}</p>
+            <p className="text-[10px] text-white/40 truncate uppercase tracking-tighter mt-0.5 font-bold">
+              {user.roles?.[0]?.role.name.replace(/_/g, ' ') || 'OFFICER'}
             </p>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => logout()} className="text-muted-foreground hover:text-destructive">
+          <Button variant="ghost" size="icon" onClick={() => logout()} className="text-white/40 hover:text-destructive hover:bg-transparent">
             <LogOut className="w-4 h-4" />
           </Button>
         </div>

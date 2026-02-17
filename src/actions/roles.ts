@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 /**
  * Institutional Permission Seeding Script
- * Creates permissions and links them to preset roles.
+ * Creates permissions based EXACTLY on the requested blueprint sidebar structure.
  */
 export async function seedInstitutionalPermissions() {
   const permissions = [
@@ -15,7 +15,7 @@ export async function seedInstitutionalPermissions() {
     { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Specific Dashboard', group: 'DASHBOARD' },
     { slug: 'DASHBOARD_VIEW_SYSTEM', name: 'View System-wide Command Dashboard', group: 'DASHBOARD' },
 
-    // Identity Verification (WORKFLOWS)
+    // WORKFLOWS - Identity Verification
     { slug: 'CASE_UPLOAD_DOCUMENT', name: 'Upload Customer Documents', group: 'WORKFLOWS' },
     { slug: 'CASE_SUBMIT', name: 'Submit New KYC Case', group: 'WORKFLOWS' },
     { slug: 'CASE_VIEW_OWN', name: 'View Own Submissions', group: 'WORKFLOWS' },
@@ -24,30 +24,26 @@ export async function seedInstitutionalPermissions() {
     { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Amendment Requests', group: 'WORKFLOWS' },
     { slug: 'CASE_RESPOND_AMENDMENT', name: 'Respond to Amendment Requests', group: 'WORKFLOWS' },
     { slug: 'CASE_VIEW_BRANCH', name: 'View All Branch Cases', group: 'WORKFLOWS' },
-    { slug: 'CASE_VIEW_BRANCH_METRICS', name: 'View Branch Performance Metrics', group: 'WORKFLOWS' },
+    { slug: 'CASE_VIEW_BRANCH_METRICS', name: 'View Branch Metrics', group: 'WORKFLOWS' },
     { slug: 'CASE_APPROVE_BRANCH_LEVEL', name: 'Approve at Branch Level', group: 'WORKFLOWS' },
-
-    // KYC REVIEW
     { slug: 'KYC_VIEW_QUEUE', name: 'View Review Queue', group: 'WORKFLOWS' },
     { slug: 'KYC_VERIFY_CHECKLIST', name: 'Perform Checklist Verification', group: 'WORKFLOWS' },
     { slug: 'KYC_REQUEST_AMENDMENT', name: 'Request Case Amendments', group: 'WORKFLOWS' },
     { slug: 'KYC_APPROVE_STANDARD', name: 'Approve Standard Cases', group: 'WORKFLOWS' },
     { slug: 'KYC_VIEW_RESUBMITTED', name: 'View Resubmitted Queue', group: 'WORKFLOWS' },
     { slug: 'KYC_PROCESS_RESUBMITTED', name: 'Process Resubmitted Cases', group: 'WORKFLOWS' },
-
-    // ESCALATIONS & GOVERNANCE
     { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalation Queue', group: 'WORKFLOWS' },
-    { slug: 'ESCALATE_TO_SENIOR', name: 'Escalate Case to Senior', group: 'WORKFLOWS' },
+    { slug: 'ESCALATE_TO_SENIOR', name: 'Escalate to Senior', group: 'WORKFLOWS' },
     { slug: 'APPROVE_ESCALATED_CASE', name: 'Approve Escalated Case', group: 'WORKFLOWS' },
     { slug: 'REJECT_ESCALATED_CASE', name: 'Reject Escalated Case', group: 'WORKFLOWS' },
-    { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Governance', group: 'WORKFLOWS' },
+    { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
     { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Queue', group: 'WORKFLOWS' },
     { slug: 'APPROVE_GOVERNANCE_LEVEL', name: 'Approve Governance Node', group: 'WORKFLOWS' },
     { slug: 'REJECT_GOVERNANCE_LEVEL', name: 'Reject Governance Node', group: 'WORKFLOWS' },
     { slug: 'UPLOAD_AUTHORIZATION_MEMO', name: 'Upload Institutional Memo', group: 'WORKFLOWS' },
     { slug: 'VIEW_PREVIOUS_GOVERNANCE_DECISIONS', name: 'View Governance History', group: 'WORKFLOWS' },
     { slug: 'VIEW_ARCHIVED_CASE', name: 'View Master Archive', group: 'WORKFLOWS' },
-    { slug: 'EXPORT_CASE_ZIP', name: 'Export Case Bundle (ZIP)', group: 'WORKFLOWS' },
+    { slug: 'EXPORT_CASE_ZIP', name: 'Export Case Zip', group: 'WORKFLOWS' },
 
     // REFERENCE
     { slug: 'VIEW_FQ_LIBRARY', name: 'View F&Q Library', group: 'REFERENCE' },
@@ -55,50 +51,50 @@ export async function seedInstitutionalPermissions() {
     { slug: 'EDIT_FQ_ENTRY', name: 'Edit F&Q Entry', group: 'REFERENCE' },
     { slug: 'DELETE_FQ_ENTRY', name: 'Deactivate F&Q Entry', group: 'REFERENCE' },
 
-    // AUDIT & REPORTING
+    // REPORTING
     { slug: 'REPORT_VIEW_SYSTEM', name: 'View System-wide Reports', group: 'REPORTING' },
     { slug: 'REPORT_EXPORT_SYSTEM', name: 'Export System-wide Reports', group: 'REPORTING' },
-    { slug: 'REPORT_VIEW_DISTRICT', name: 'View District Reports', group: 'REPORTING' },
+    { slug: 'REPORT_VIEW_DISTRICT', name: 'View District Command', group: 'REPORTING' },
     { slug: 'REPORT_EXPORT_DISTRICT', name: 'Export District Reports', group: 'REPORTING' },
     { slug: 'VIEW_SPECIALIST_PRODUCTIVITY', name: 'View Specialist Matrix', group: 'REPORTING' },
-    { slug: 'VIEW_SLA_METRICS', name: 'View SLA Performance', group: 'REPORTING' },
-    { slug: 'VIEW_ACCURACY_INDEX', name: 'View Accuracy Analytics', group: 'REPORTING' },
-    { slug: 'EXPORT_ANALYTICS', name: 'Export Performance Data', group: 'REPORTING' },
-    { slug: 'ACCESS_RANDOM_SAMPLING', name: 'Seed Audit Sampling', group: 'REPORTING' },
-    { slug: 'VIEW_AUDIT_POOL', name: 'View Head Office Audit Pool', group: 'REPORTING' },
+    { slug: 'VIEW_SLA_METRICS', name: 'View SLA Metrics', group: 'REPORTING' },
+    { slug: 'VIEW_ACCURACY_INDEX', name: 'View Accuracy Index', group: 'REPORTING' },
+    { slug: 'EXPORT_ANALYTICS', name: 'Export Analytics', group: 'REPORTING' },
+    { slug: 'ACCESS_RANDOM_SAMPLING', name: 'Access Random Sampling', group: 'REPORTING' },
     { slug: 'ASSIGN_AUDIT_CASE', name: 'Assign Audit Cases', group: 'REPORTING' },
-    { slug: 'LOG_AUDIT_DISCREPANCY', name: 'Log Audit Discrepancies', group: 'REPORTING' },
+    { slug: 'LOG_AUDIT_DISCREPANCY', name: 'Log Audit Discrepancy', group: 'REPORTING' },
     { slug: 'SCORE_BRANCH', name: 'Score Branch Performance', group: 'REPORTING' },
     { slug: 'CLOSE_AUDIT_CASE', name: 'Conclude Audit Session', group: 'REPORTING' },
-    { slug: 'VIEW_AUDIT_LOGS', name: 'View Security Audit Logs', group: 'REPORTING' },
-    { slug: 'EXPORT_AUDIT_LOGS', name: 'Export Security Trails', group: 'REPORTING' },
-    { slug: 'VIEW_IP_ACTIVITY', name: 'Monitor Network Origins', group: 'REPORTING' },
+    { slug: 'VIEW_AUDIT_POOL', name: 'View Audit Pool', group: 'REPORTING' },
+    { slug: 'VIEW_AUDIT_LOGS', name: 'View Audit Logs', group: 'REPORTING' },
+    { slug: 'EXPORT_AUDIT_LOGS', name: 'Export Audit Logs', group: 'REPORTING' },
+    { slug: 'VIEW_IP_ACTIVITY', name: 'View IP Activity', group: 'REPORTING' },
     { slug: 'VIEW_STATUS_TRANSITIONS', name: 'View Lifecycle History', group: 'REPORTING' },
-    { slug: 'BULK_EXPORT_CASES', name: 'Perform Master Bulk Export', group: 'REPORTING' },
-    { slug: 'GENERATE_REGULATORY_PACKAGE', name: 'Compile NBE Audit Package', group: 'REPORTING' },
-    { slug: 'DOWNLOAD_MASTER_ARCHIVE', name: 'Download Multi-case Bundles', group: 'REPORTING' },
+    { slug: 'BULK_EXPORT_CASES', name: 'Bulk Export Cases', group: 'REPORTING' },
+    { slug: 'GENERATE_REGULATORY_PACKAGE', name: 'Generate NBE Package', group: 'REPORTING' },
+    { slug: 'DOWNLOAD_MASTER_ARCHIVE', name: 'Download Master Archive', group: 'REPORTING' },
 
     // SYSTEM
     { slug: 'USER_CREATE', name: 'Provision New Users', group: 'SYSTEM' },
     { slug: 'USER_EDIT', name: 'Edit Personnel Profiles', group: 'SYSTEM' },
-    { slug: 'USER_DEACTIVATE', name: 'Deactivate User Access', group: 'SYSTEM' },
-    { slug: 'USER_ASSIGN_ROLE', name: 'Map User to Role', group: 'SYSTEM' },
+    { slug: 'USER_DEACTIVATE', name: 'Deactivate Users', group: 'SYSTEM' },
+    { slug: 'USER_ASSIGN_ROLE', name: 'Map Users to Roles', group: 'SYSTEM' },
     { slug: 'USER_RESET_PASSWORD', name: 'Force Password Resets', group: 'SYSTEM' },
     { slug: 'ROLE_CREATE', name: 'Define New Role', group: 'SYSTEM' },
     { slug: 'ROLE_EDIT', name: 'Modify Role Definitions', group: 'SYSTEM' },
     { slug: 'MANAGE_PERMISSION_MATRIX', name: 'Manage Permission Matrix', group: 'SYSTEM' },
-    { slug: 'MANAGE_DISTRICTS', name: 'Configure Regional Districts', group: 'SYSTEM' },
-    { slug: 'MANAGE_BRANCHES', name: 'Manage Branch Network', group: 'SYSTEM' },
+    { slug: 'MANAGE_DISTRICTS', name: 'Configure Districts', group: 'SYSTEM' },
+    { slug: 'MANAGE_BRANCHES', name: 'Manage Branches', group: 'SYSTEM' },
     { slug: 'MAP_USERS_TO_BRANCH', name: 'Link Users to Nodes', group: 'SYSTEM' },
-    { slug: 'CONFIG_GOVERNANCE_STRUCTURE', name: 'Configure Hierarchy Groups', group: 'SYSTEM' },
+    { slug: 'CONFIG_GOVERNANCE_STRUCTURE', name: 'Configure Governance Hierarchy', group: 'SYSTEM' },
     { slug: 'EDIT_APPROVAL_SEQUENCE', name: 'Define Approval Nodes', group: 'SYSTEM' },
     { slug: 'EDIT_SLA_POLICY', name: 'Modify Institutional SLA', group: 'SYSTEM' },
     { slug: 'EDIT_SAMPLING_PERCENTAGE', name: 'Set Audit Sampling Ratio', group: 'SYSTEM' },
     { slug: 'CONFIG_RISK_RULES', name: 'Manage Risk Classifications', group: 'SYSTEM' },
     { slug: 'ENABLE_GOVERNANCE_FLOW', name: 'Toggle Exceptional Workflows', group: 'SYSTEM' },
-    { slug: 'SYSTEM_EXPORT_CONFIG', name: 'Manage Archive Settings', group: 'SYSTEM' },
-    { slug: 'VIEW_SYSTEM_AUDIT', name: 'View Master System Audit', group: 'SYSTEM' },
-    { slug: 'EXPORT_SYSTEM_AUDIT', name: 'Export System Audit Records', group: 'SYSTEM' },
+    { slug: 'SYSTEM_EXPORT_CONFIG', name: 'Manage Export Settings', group: 'SYSTEM' },
+    { slug: 'VIEW_SYSTEM_AUDIT', name: 'View Master Audit Log', group: 'SYSTEM' },
+    { slug: 'EXPORT_SYSTEM_AUDIT', name: 'Export System Audit', group: 'SYSTEM' },
   ];
 
   const dbPermissions = [];
@@ -117,7 +113,7 @@ export async function seedInstitutionalPermissions() {
   const presets = [
     { name: 'SUPER_ADMIN', desc: 'Master System Control' },
     { name: 'BRANCH_OFFICER', desc: 'Branch Submission and Correction' },
-    { name: 'KYC_SPECIALIST', desc: 'Verification and Review specialist' },
+    { name: 'KYC_SPECIALIST', desc: 'Verification and Review Specialist' },
     { name: 'SENIOR_ASSESSOR', desc: 'High-risk case determination' },
     { name: 'COMPLIANCE_OFFICER', desc: 'Audit and Regulatory Oversight' },
   ];
@@ -129,15 +125,14 @@ export async function seedInstitutionalPermissions() {
       create: { name: preset.name, description: preset.desc }
     });
 
-    // 3. Link Permissions
+    // 3. Link ALL permissions to SUPER_ADMIN
     if (preset.name === 'SUPER_ADMIN') {
-      // Link ALL
       await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
       await prisma.rolePermission.createMany({
         data: dbPermissions.map(p => ({ roleId: role.id, permissionId: p.id }))
       });
     } else if (preset.name === 'BRANCH_OFFICER') {
-      const slugs = ['DASHBOARD_VIEW', 'CASE_SUBMIT', 'CASE_VIEW_OWN', 'CASE_RESUBMIT', 'CASE_RESPOND_AMENDMENT'];
+      const slugs = ['DASHBOARD_VIEW', 'CASE_UPLOAD_DOCUMENT', 'CASE_SUBMIT', 'CASE_VIEW_OWN', 'CASE_RESUBMIT', 'CASE_RESPOND_AMENDMENT', 'VIEW_ARCHIVED_CASE'];
       const targets = dbPermissions.filter(p => slugs.includes(p.slug));
       await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
       await prisma.rolePermission.createMany({
@@ -173,7 +168,6 @@ export async function upsertRole(data: { id?: string, name: string, description:
         create: { name: data.name, description: data.description }
       });
 
-      // Clear and re-map permissions
       await tx.rolePermission.deleteMany({ where: { roleId: r.id } });
       await tx.rolePermission.createMany({
         data: data.permissionIds.map(pid => ({ roleId: r.id, permissionId: pid }))

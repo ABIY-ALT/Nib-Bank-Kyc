@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -12,23 +12,12 @@ import {
   Trash2,
   ShieldAlert,
   Zap,
-  CheckCircle2,
-  FilePlus,
-  Search,
-  AlertCircle,
-  FileText,
-  Users,
-  Settings,
-  TrendingUp,
-  ClipboardCheck,
-  Archive,
   Check
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getRoleDefinitions, getAllPermissions, upsertRole, deactivateRole, seedInstitutionalPermissions } from '@/actions/roles';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -39,24 +28,61 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
+// INSTITUTIONAL MATRIX CONFIGURATION
 const ROLE_MATRIX_CONFIG = [
   {
     section: "OPERATIONAL AUTHORITY",
     items: [
-      { id: 'case_submission', label: 'Case Submission', slugs: ['CASE_UPLOAD_DOCUMENT', 'CASE_SUBMIT', 'CASE_VIEW_OWN', 'CASE_RESUBMIT', 'DASHBOARD_VIEW_BRANCH'] },
-      { id: 'kyc_review', label: 'KYC Review', slugs: ['KYC_VIEW_QUEUE', 'KYC_VERIFY_CHECKLIST', 'KYC_REQUEST_AMENDMENT', 'KYC_APPROVE_STANDARD'] },
-      { id: 'risk_escalation', label: 'Risk Escalation', slugs: ['VIEW_ESCALATED_CASES', 'ESCALATE_TO_SENIOR', 'APPROVE_ESCALATED_CASE', 'REJECT_ESCALATED_CASE'] },
-      { id: 'audit_reports', label: 'Audit Reports', slugs: ['REPORT_VIEW_SYSTEM', 'REPORT_EXPORT_SYSTEM', 'REPORT_VIEW_DISTRICT', 'REPORT_EXPORT_DISTRICT', 'VIEW_AUDIT_LOGS', 'EXPORT_AUDIT_LOGS', 'VIEW_IP_ACTIVITY', 'VIEW_STATUS_TRANSITIONS', 'DASHBOARD_VIEW_SYSTEM'] },
-      { id: 'user_access', label: 'User Access', slugs: ['USER_CREATE', 'USER_EDIT', 'USER_DEACTIVATE', 'USER_ASSIGN_ROLE', 'USER_RESET_PASSWORD'] },
-      { id: 'system_config', label: 'System Config', slugs: ['ROLE_CREATE', 'ROLE_EDIT', 'MANAGE_PERMISSION_MATRIX', 'MANAGE_DISTRICTS', 'MANAGE_BRANCHES', 'MAP_USERS_TO_BRANCH', 'CONFIG_GOVERNANCE_STRUCTURE', 'EDIT_APPROVAL_SEQUENCE', 'EDIT_SLA_POLICY', 'EDIT_SAMPLING_PERCENTAGE', 'CONFIG_RISK_RULES', 'ENABLE_GOVERNANCE_FLOW', 'SYSTEM_EXPORT_CONFIG', 'VIEW_SYSTEM_AUDIT', 'EXPORT_SYSTEM_AUDIT'] }
+      { 
+        id: 'case_submission', 
+        label: 'Case Submission', 
+        slugs: ['CASE_UPLOAD_DOCUMENT', 'CASE_SUBMIT', 'CASE_VIEW_OWN', 'CASE_VIEW_OWN_HISTORY', 'CASE_RESUBMIT', 'CASE_RESPOND_AMENDMENT'] 
+      },
+      { 
+        id: 'kyc_review', 
+        label: 'KYC Review', 
+        slugs: ['KYC_VIEW_QUEUE', 'KYC_VERIFY_CHECKLIST', 'KYC_REQUEST_AMENDMENT', 'KYC_APPROVE_STANDARD', 'KYC_VIEW_RESUBMITTED', 'KYC_PROCESS_RESUBMITTED'] 
+      },
+      { 
+        id: 'risk_escalation', 
+        label: 'Risk Escalation & Exception', 
+        slugs: ['VIEW_ESCALATED_CASES', 'ESCALATE_TO_SENIOR', 'APPROVE_ESCALATED_CASE', 'REJECT_ESCALATED_CASE', 'TRIGGER_GOVERNANCE_FLOW', 'VIEW_GOVERNANCE_QUEUE', 'APPROVE_GOVERNANCE_LEVEL', 'REJECT_GOVERNANCE_LEVEL', 'UPLOAD_AUTHORIZATION_MEMO', 'VIEW_PREVIOUS_GOVERNANCE_DECISIONS'] 
+      },
+      { 
+        id: 'audit_reports', 
+        label: 'Audit Reporting', 
+        slugs: ['REPORT_VIEW_SYSTEM', 'REPORT_EXPORT_SYSTEM', 'REPORT_VIEW_DISTRICT', 'REPORT_EXPORT_DISTRICT', 'VIEW_AUDIT_LOGS', 'EXPORT_AUDIT_LOGS', 'VIEW_IP_ACTIVITY', 'VIEW_STATUS_TRANSITIONS'] 
+      },
+      { 
+        id: 'user_access', 
+        label: 'User Management', 
+        slugs: ['USER_CREATE', 'USER_EDIT', 'USER_DEACTIVATE', 'USER_ASSIGN_ROLE', 'USER_RESET_PASSWORD'] 
+      },
+      { 
+        id: 'system_config', 
+        label: 'Institutional Config', 
+        slugs: ['ROLE_CREATE', 'ROLE_EDIT', 'MANAGE_PERMISSION_MATRIX', 'MANAGE_DISTRICTS', 'MANAGE_BRANCHES', 'MAP_USERS_TO_BRANCH', 'CONFIG_GOVERNANCE_STRUCTURE', 'EDIT_APPROVAL_SEQUENCE', 'EDIT_SLA_POLICY', 'EDIT_SAMPLING_PERCENTAGE', 'CONFIG_RISK_RULES', 'ENABLE_GOVERNANCE_FLOW', 'SYSTEM_EXPORT_CONFIG', 'VIEW_SYSTEM_AUDIT', 'EXPORT_SYSTEM_AUDIT'] 
+      }
     ]
   },
   {
     section: "MODULE ACCESS (BY PAGE)",
     items: [
-      { id: 'performance', label: 'Performance Analytics', slugs: ['VIEW_SPECIALIST_PRODUCTIVITY', 'VIEW_SLA_METRICS', 'VIEW_ACCURACY_INDEX', 'EXPORT_ANALYTICS', 'DASHBOARD_VIEW_DISTRICT'] },
-      { id: 'follow_up', label: 'Follow-up Audit', slugs: ['ACCESS_RANDOM_SAMPLING', 'ASSIGN_AUDIT_CASE', 'LOG_AUDIT_DISCREPANCY', 'SCORE_BRANCH', 'CLOSE_AUDIT_CASE', 'VIEW_AUDIT_POOL'] },
-      { id: 'master_archive', label: 'Master Archive', slugs: ['VIEW_ARCHIVED_CASE', 'EXPORT_CASE_ZIP', 'BULK_EXPORT_CASES', 'GENERATE_REGULATORY_PACKAGE', 'DOWNLOAD_MASTER_ARCHIVE'] }
+      { 
+        id: 'performance', 
+        label: 'Performance Analytics', 
+        slugs: ['VIEW_SPECIALIST_PRODUCTIVITY', 'VIEW_SLA_METRICS', 'VIEW_ACCURACY_INDEX', 'EXPORT_ANALYTICS', 'DASHBOARD_VIEW_DISTRICT', 'DASHBOARD_VIEW_BRANCH'] 
+      },
+      { 
+        id: 'follow_up', 
+        label: 'Follow-up Audit', 
+        slugs: ['ACCESS_RANDOM_SAMPLING', 'ASSIGN_AUDIT_CASE', 'LOG_AUDIT_DISCREPANCY', 'SCORE_BRANCH', 'CLOSE_AUDIT_CASE', 'VIEW_AUDIT_POOL'] 
+      },
+      { 
+        id: 'master_archive', 
+        label: 'Master Case Archive', 
+        slugs: ['VIEW_ARCHIVED_CASE', 'EXPORT_CASE_ZIP', 'BULK_EXPORT_CASES', 'GENERATE_REGULATORY_PACKAGE', 'DOWNLOAD_MASTER_ARCHIVE', 'VIEW_FQ_LIBRARY', 'CREATE_FQ_ENTRY', 'EDIT_FQ_ENTRY', 'DELETE_FQ_ENTRY'] 
+      }
     ]
   }
 ];
@@ -96,7 +122,7 @@ export default function StaffRolesPage() {
   const handleSeed = async () => {
     setIsSyncing(true);
     await seedInstitutionalPermissions();
-    toast({ title: "Permissions Initialized", description: "Institutional framework established." });
+    toast({ title: "Institutional Slugs Sync'd", description: "Blueprint framework initialized." });
     await loadData();
     setIsSyncing(false);
   };
@@ -104,7 +130,7 @@ export default function StaffRolesPage() {
   const handleSaveRole = async () => {
     if (!roleForm.name) return;
     
-    // Auto-add base dashboard view if anything is selected
+    // Always include base dashboard access if any role is assigned
     let finalIds = [...roleForm.permissionIds];
     const dashboardPermission = allPermissions.find(p => p.slug === 'DASHBOARD_VIEW');
     if (dashboardPermission && finalIds.length > 0 && !finalIds.includes(dashboardPermission.id)) {
@@ -171,39 +197,39 @@ export default function StaffRolesPage() {
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Permissions</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Roles</h1>
           </div>
-          <p className="text-muted-foreground text-lg">Dynamic Role-Based Access Control (RBAC) Matrix.</p>
+          <p className="text-muted-foreground text-lg">Dynamic Access Control Matrix.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSeed} disabled={isSyncing} className="gap-2 border-primary/20 text-primary">
+          <Button variant="outline" onClick={handleSeed} disabled={isSyncing} className="gap-2 border-primary/20 text-primary font-bold">
             {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            Sync Permissions
+            Sync Slugs
           </Button>
-          <Button onClick={resetForm} className="bg-primary shadow-xl font-bold h-11 px-6">
-            <Plus className="w-4 h-4 mr-2" /> Create Role
+          <Button onClick={resetForm} className="bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90">
+            <Plus className="w-4 h-4 mr-2" /> Define New Role
           </Button>
         </div>
       </div>
 
       <Card className="shadow-xl border-slate-200 overflow-hidden">
         <CardHeader className="bg-slate-50/50 border-b">
-          <CardTitle>Role Management</CardTitle>
-          <CardDescription>Define institutional designations and their authority levels.</CardDescription>
+          <CardTitle>Personnel Designations</CardTitle>
+          <CardDescription>Manage regional and operational authority levels.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80">
                 <TableHead className="font-bold py-4 pl-8">Role Name</TableHead>
-                <TableHead className="font-bold">Status</TableHead>
-                <TableHead className="text-center font-bold">Privileges</TableHead>
+                <TableHead className="font-bold">Institutional Status</TableHead>
+                <TableHead className="text-center font-bold">Capability Slugs</TableHead>
                 <TableHead className="text-right font-bold pr-8">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {roleDefinitions.map((role) => (
-                <TableRow key={role.id} className="hover:bg-slate-50">
+                <TableRow key={role.id} className="hover:bg-slate-50 transition-colors">
                   <TableCell className="font-black text-slate-900 pl-8">{role.name.replace(/_/g, ' ')}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={role.active ? 'text-emerald-600 border-emerald-200 bg-emerald-50' : 'text-slate-400'}>
@@ -212,13 +238,13 @@ export default function StaffRolesPage() {
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">
-                      {role.permissions.length} Slugs
+                      {role.permissions.length} Atomic Rights
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(role)} className="h-8 w-8 text-primary"><Settings2 className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deactivateRole(role.id).then(loadData)} className="h-8 w-8 text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(role)} className="h-8 w-8 text-primary rounded-full hover:bg-primary/5"><Settings2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => deactivateRole(role.id).then(loadData)} className="h-8 w-8 text-destructive rounded-full hover:bg-destructive/5"><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -238,18 +264,17 @@ export default function StaffRolesPage() {
                     <ShieldAlert className="w-6 h-6 text-primary" />
                   </div>
                   <DialogTitle className="text-3xl font-black text-slate-900 tracking-tight">
-                    {editingRole ? 'Edit Role Authority' : 'Define New Role'}
+                    {editingRole ? 'Modify Designation' : 'Define New Role'}
                   </DialogTitle>
                 </div>
               </div>
             </DialogHeader>
             
-            <div className="p-8 space-y-10">
-              {/* Designation Name */}
+            <div className="p-8 space-y-10 max-h-[60vh] overflow-y-auto">
               <div className="space-y-3">
-                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Name</Label>
+                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
                 <Input 
-                  placeholder="e.g. SENIOR_AUDITOR" 
+                  placeholder="e.g. REGIONAL_DIRECTOR" 
                   className="h-14 bg-slate-50 border-slate-200 text-lg font-bold placeholder:text-slate-300 focus-visible:ring-primary/20 rounded-2xl"
                   value={roleForm.name}
                   onChange={(e) => setRoleForm({...roleForm, name: e.target.value.toUpperCase().replace(/\s+/g, '_')})}
@@ -307,7 +332,7 @@ export default function StaffRolesPage() {
                 onClick={handleSaveRole} 
                 className="h-12 px-10 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
               >
-                Commit Role
+                Commit Designation
               </Button>
             </DialogFooter>
           </div>
