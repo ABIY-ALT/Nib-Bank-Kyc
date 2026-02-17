@@ -1,33 +1,20 @@
-
 "use client"
 
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
-import { useMemo, useState } from "react";
-import { KYCSubmission } from "@/lib/kyc-data";
+import { useMemo, useState, useEffect } from "react";
 import { 
   LayoutList, 
   Loader2, 
-  MapPin, 
   Search, 
   ShieldCheck, 
   Users, 
-  BarChart3, 
   TrendingUp, 
   AlertCircle,
   CheckCircle2,
   Inbox,
-  User,
-  ShieldAlert,
-  Globe,
-  Zap,
-  RefreshCw,
-  Calendar as CalendarIcon,
-  ChevronRight,
-  TrendingDown,
   Activity,
-  FileBarChart,
-  Building2
+  Calendar as CalendarIcon,
+  Building2,
+  ShieldAlert
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
@@ -36,13 +23,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { subDays, format, startOfDay, endOfDay } from "date-fns";
+import { subDays, format } from "date-fns";
 import { 
   Bar, 
   BarChart, 
-  ResponsiveContainer, 
   XAxis, 
   YAxis, 
   Tooltip as RechartsTooltip,
@@ -51,8 +36,9 @@ import {
   Pie
 } from "recharts";
 import { type ChartConfig, ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
-import Link from "next/link";
 import { SubmissionsPageContent } from "../submissions-content";
+import { getSubmissions } from "@/actions/submissions";
+import { SubmissionStatus, UserRole } from "@prisma/client";
 
 const STATUS_COLORS = {
   APPROVED: "#10B981",
@@ -74,46 +60,45 @@ const volumeConfig = {
 } satisfies ChartConfig;
 
 export default function BranchNodeOversightPage() {
-  const db = useFirestore();
   const { user } = useAuth();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  const isAdmin = user?.role === 'ADMIN';
-  const isBranchMgr = user?.role === 'BRANCH_MANAGER' || isAdmin;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
-  const branchQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    const start = startOfDay(new Date(fromDate)).toISOString();
-    const end = endOfDay(new Date(toDate)).toISOString();
-
-    let q = query(
-      collection(db, "submissions"),
-      where("submittedAt", ">=", start),
-      where("submittedAt", "<=", end)
-    );
-
-    if (!isAdmin) {
-      if (!user?.branch) return null;
-      q = query(q, where("branch", "==", user.branch));
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      setLoading(true);
+      try {
+        const data = await getSubmissions({
+          branch: isAdmin ? undefined : user.branchName || undefined,
+          startDate: fromDate,
+          endDate: toDate
+        });
+        setSubmissions(data);
+      } catch (error) {
+        console.error("Load failed:", error);
+      } finally {
+        setLoading(false);
+      }
     }
-
-    return q;
-  }, [db, user?.branch, isAdmin, fromDate, toDate]);
-
-  const { data: submissions, loading } = useCollection<KYCSubmission>(branchQuery);
+    loadData();
+  }, [user, isAdmin, fromDate, toDate]);
 
   const analytics = useMemo(() => {
-    if (!submissions) return null;
+    if (!submissions || submissions.length === 0) return null;
 
     const stats = {
       total: submissions.length,
-      approved: submissions.filter(s => s.status === 'APPROVED').length,
-      pending: submissions.filter(s => ['PENDING', 'IN_REVIEW'].includes(s.status)).length,
-      rejected: submissions.filter(s => s.status === 'REJECTED').length,
-      amended: submissions.filter(s => s.status === 'AMENDED').length,
+      approved: submissions.filter(s => s.status === SubmissionStatus.APPROVED).length,
+      pending: submissions.filter(s => [SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW].includes(s.status)).length,
+      rejected: submissions.filter(s => s.status === SubmissionStatus.REJECTED).length,
+      amended: submissions.filter(s => s.status === SubmissionStatus.AMENDED).length,
       officers: {} as Record<string, { name: string, total: number, approved: number, amended: number, pending: number, cycles: number }>,
       byStatus: [
         { name: 'APPROVED', value: 0, fill: STATUS_COLORS.APPROVED },
@@ -127,20 +112,25 @@ export default function BranchNodeOversightPage() {
     const dateMap: Record<string, number> = {};
 
     submissions.forEach(sub => {
-      const officer = sub.submittedBy;
+      const officer = sub.submittedBy?.name || 'Unknown';
       if (!stats.officers[officer]) {
         stats.officers[officer] = { name: officer, total: 0, approved: 0, amended: 0, pending: 0, cycles: 0 };
       }
       stats.officers[officer].total++;
       stats.officers[officer].cycles += (sub.amendmentCycles || 0);
-      if (sub.status === 'APPROVED') stats.officers[officer].approved++;
-      else if (sub.status === 'AMENDED') stats.officers[officer].amended++;
-      else if (['PENDING', 'IN_REVIEW'].includes(sub.status)) stats.officers[officer].pending++;
-
-      if (sub.status === 'APPROVED') stats.byStatus[0].value++;
-      else if (['PENDING', 'IN_REVIEW'].includes(sub.status)) stats.byStatus[1].value++;
-      else if (sub.status === 'AMENDED') stats.byStatus[2].value++;
-      else if (sub.status === 'REJECTED') stats.byStatus[3].value++;
+      
+      if (sub.status === SubmissionStatus.APPROVED) {
+        stats.officers[officer].approved++;
+        stats.byStatus[0].value++;
+      } else if (sub.status === SubmissionStatus.AMENDED) {
+        stats.officers[officer].amended++;
+        stats.byStatus[2].value++;
+      } else if ([SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW].includes(sub.status)) {
+        stats.officers[officer].pending++;
+        stats.byStatus[1].value++;
+      } else if (sub.status === SubmissionStatus.REJECTED) {
+        stats.byStatus[3].value++;
+      }
 
       const d = format(new Date(sub.submittedAt), 'MMM dd');
       dateMap[d] = (dateMap[d] || 0) + 1;
@@ -159,7 +149,7 @@ export default function BranchNodeOversightPage() {
     );
   }, [submissions, searchTerm]);
 
-  if (!user?.branch && !isAdmin) {
+  if (!user?.branchName && !isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-6 animate-in fade-in duration-500">
         <div className="p-6 bg-white rounded-full shadow-sm border border-slate-100">
@@ -184,18 +174,18 @@ export default function BranchNodeOversightPage() {
               <Building2 className="w-6 h-6" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {isAdmin ? 'Global Command' : `${user.branch} Node Command`}
+              {isAdmin ? 'Global Command' : `${user.branchName} Node Command`}
             </h1>
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground text-lg">
               {isAdmin 
                 ? 'Master institutional monitoring of all branches.' 
-                : `Managing operational compliance at the ${user.branch} local hub.`}
+                : `Managing operational compliance at the ${user.branchName} local hub.`}
             </p>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
               <ShieldCheck className="w-3 h-3" />
-              {user.role} Authorization
+              {user.role?.replace(/_/g, ' ')} Authorization
             </Badge>
           </div>
         </div>
@@ -228,116 +218,125 @@ export default function BranchNodeOversightPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all duration-300">
-          <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Volume</CardTitle></CardHeader>
-          <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-slate-900 tracking-tighter">{analytics?.total || 0}</span><div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/5 group-hover:text-primary transition-colors"><Inbox className="w-6 h-6" /></div></CardContent>
-        </Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500">
-          <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Successfully Approved</CardTitle></CardHeader>
-          <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-emerald-600 tracking-tighter">{analytics?.approved || 0}</span><div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-6 h-6" /></div></CardContent>
-        </Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
-          <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Corrections Required</CardTitle></CardHeader>
-          <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-orange-600 tracking-tighter">{analytics?.amended || 0}</span><div className="p-3 bg-orange-50 rounded-2xl text-orange-600"><AlertCircle className="w-6 h-6" /></div></CardContent>
-        </Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
-          <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Review</CardTitle></CardHeader>
-          <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{analytics?.pending || 0}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="summary" className="space-y-6">
-        <TabsList className="bg-slate-100 p-1 border h-12">
-          <TabsTrigger value="summary" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><TrendingUp className="w-4 h-4 mr-2" />Summary Analytics</TabsTrigger>
-          <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><LayoutList className="w-4 h-4 mr-2" />Case Archive</TabsTrigger>
-          <TabsTrigger value="officer-performance" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Users className="w-4 h-4 mr-2" />Staff Productivity</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="summary" className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <Card className="shadow-xl border-slate-200 overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b">
-                <CardTitle className="text-xl">Workflow Distribution</CardTitle>
-                <CardDescription>Breakdown of verification determinations.</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-8 flex flex-col items-center">
-                <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                  <PieChart>
-                    <Pie data={analytics?.byStatus || []} cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={5} dataKey="value">
-                      {analytics?.byStatus.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} stroke="none" />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip content={<ChartTooltipContent />} />
-                  </PieChart>
-                </ChartContainer>
-              </CardContent>
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-40 gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Retrieving Institutional Data...</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all duration-300">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Volume</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-slate-900 tracking-tighter">{analytics?.total || 0}</span><div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/5 group-hover:text-primary transition-colors"><Inbox className="w-6 h-6" /></div></CardContent>
             </Card>
-
-            <Card className="shadow-xl border-slate-200 overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b">
-                <CardTitle className="text-xl">Node Volume Trend</CardTitle>
-                <CardDescription>Historical submission traffic.</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-8">
-                <ChartContainer config={volumeConfig} className="h-[400px] w-full">
-                  <BarChart data={analytics?.volumeHistory || []}>
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
-                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
-                    <RechartsTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Successfully Approved</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-emerald-600 tracking-tighter">{analytics?.approved || 0}</span><div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-6 h-6" /></div></CardContent>
+            </Card>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Corrections Required</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-orange-600 tracking-tighter">{analytics?.amended || 0}</span><div className="p-3 bg-orange-50 rounded-2xl text-orange-600"><AlertCircle className="w-6 h-6" /></div></CardContent>
+            </Card>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Review</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{analytics?.pending || 0}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
             </Card>
           </div>
-        </TabsContent>
 
-        <TabsContent value="all-cases">
-          <SubmissionsPageContent submissions={filteredSubmissions || []} />
-        </TabsContent>
+          <Tabs defaultValue="summary" className="space-y-6">
+            <TabsList className="bg-slate-100 p-1 border h-12">
+              <TabsTrigger value="summary" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><TrendingUp className="w-4 h-4 mr-2" />Summary Analytics</TabsTrigger>
+              <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><LayoutList className="w-4 h-4 mr-2" />Case Archive</TabsTrigger>
+              <TabsTrigger value="officer-performance" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Users className="w-4 h-4 mr-2" />Staff Productivity</TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="officer-performance">
-          <Card className="shadow-xl border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b">
-              <CardTitle className="text-xl">Local Productivity Matrix</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50/80">
-                  <TableRow>
-                    <TableHead className="font-bold py-4 pl-8">Staff Member</TableHead>
-                    <TableHead className="font-bold text-center">Total Requests</TableHead>
-                    <TableHead className="font-bold text-center text-emerald-600">Approved</TableHead>
-                    <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
-                    <TableHead className="font-bold text-right pr-8">Efficiency Score</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.values(analytics?.officers || {}).map((officer) => {
-                    const efficiency = Math.round((officer.approved / (officer.total - officer.pending || 1)) * 100);
-                    return (
-                      <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
-                        <TableCell className="py-4 pl-8 font-bold text-slate-900">{officer.name}</TableCell>
-                        <TableCell className="text-center font-bold">{officer.total}</TableCell>
-                        <TableCell className="text-center"><Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold">{officer.approved}</Badge></TableCell>
-                        <TableCell className="text-center"><Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold">{officer.amended}</Badge></TableCell>
-                        <TableCell className="text-right pr-8">
-                          <div className="flex flex-col items-end gap-1.5">
-                            <span className="text-xs font-black text-emerald-600">{efficiency}%</span>
-                            <Progress value={efficiency} className="w-24 h-1.5 bg-slate-100" />
-                          </div>
-                        </TableCell>
+            <TabsContent value="summary" className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Card className="shadow-xl border-slate-200 overflow-hidden">
+                  <CardHeader className="bg-slate-50/50 border-b">
+                    <CardTitle className="text-xl">Workflow Distribution</CardTitle>
+                    <CardDescription>Breakdown of verification determinations.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-8 flex flex-col items-center">
+                    <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                      <PieChart>
+                        <Pie data={analytics?.byStatus || []} cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={5} dataKey="value">
+                          {analytics?.byStatus.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} stroke="none" />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip content={<ChartTooltipContent />} />
+                      </PieChart>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-xl border-slate-200 overflow-hidden">
+                  <CardHeader className="bg-slate-50/50 border-b">
+                    <CardTitle className="text-xl">Node Volume Trend</CardTitle>
+                    <CardDescription>Historical submission traffic.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-8">
+                    <ChartContainer config={volumeConfig} className="h-[400px] w-full">
+                      <BarChart data={analytics?.volumeHistory || []}>
+                        <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                        <RechartsTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="all-cases">
+              <SubmissionsPageContent submissions={filteredSubmissions || []} />
+            </TabsContent>
+
+            <TabsContent value="officer-performance">
+              <Card className="shadow-xl border-slate-200 overflow-hidden">
+                <CardHeader className="bg-slate-50/50 border-b">
+                  <CardTitle className="text-xl">Local Productivity Matrix</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-slate-50/80">
+                      <TableRow>
+                        <TableHead className="font-bold py-4 pl-8">Staff Member</TableHead>
+                        <TableHead className="font-bold text-center">Total Requests</TableHead>
+                        <TableHead className="font-bold text-center text-emerald-600">Approved</TableHead>
+                        <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
+                        <TableHead className="font-bold text-right pr-8">Efficiency Score</TableHead>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.values(analytics?.officers || {}).map((officer) => {
+                        const efficiency = Math.round((officer.approved / (officer.total - officer.pending || 1)) * 100);
+                        return (
+                          <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
+                            <TableCell className="py-4 pl-8 font-bold text-slate-900">{officer.name}</TableCell>
+                            <TableCell className="text-center font-bold">{officer.total}</TableCell>
+                            <TableCell className="text-center"><Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold">{officer.approved}</Badge></TableCell>
+                            <TableCell className="text-center"><Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold">{officer.amended}</Badge></TableCell>
+                            <TableCell className="text-right pr-8">
+                              <div className="flex flex-col items-end gap-1.5">
+                                <span className="text-xs font-black text-emerald-600">{efficiency}%</span>
+                                <Progress value={efficiency} className="w-24 h-1.5 bg-slate-100" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { SubmissionStatus, ExceptionalStatus } from '@prisma/client';
+import { SubmissionStatus, ExceptionalStatus, UserRole } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 
 export async function getSubmissions(filters?: {
@@ -11,6 +11,8 @@ export async function getSubmissions(filters?: {
   submittedBy?: string;
   isExceptional?: boolean;
   isResubmitted?: boolean;
+  startDate?: string;
+  endDate?: string;
   limit?: number;
 }) {
   try {
@@ -22,6 +24,10 @@ export async function getSubmissions(filters?: {
         submittedById: filters?.submittedBy,
         isExceptional: filters?.isExceptional,
         isResubmitted: filters?.isResubmitted,
+        submittedAt: (filters?.startDate || filters?.endDate) ? {
+          gte: filters.startDate ? new Date(filters.startDate) : undefined,
+          lte: filters.endDate ? new Date(filters.endDate) : undefined,
+        } : undefined,
       },
       include: {
         submittedBy: true,
@@ -55,7 +61,6 @@ export async function getSubmissionById(id: string) {
 export async function updateSubmissionStatus(id: string, status: SubmissionStatus, reviewerId: string, remarks?: string) {
   const now = new Date();
   
-  // Get current submission to handle history append
   const current = await prisma.submission.findUnique({ where: { id } });
   if (!current) throw new Error("Submission not found");
 
@@ -78,7 +83,6 @@ export async function updateSubmissionStatus(id: string, status: SubmissionStatu
       reviewedAt: now,
       remarks,
       commentHistory: [...history, newEntry],
-      // If it was amended and now moved to pending/review, it's a resubmission cycle
       isResubmitted: status === SubmissionStatus.PENDING && current.status === SubmissionStatus.AMENDED,
       amendmentCycles: status === SubmissionStatus.AMENDED ? { increment: 1 } : undefined
     }
