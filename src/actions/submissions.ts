@@ -14,6 +14,9 @@ export async function getSubmissions(filters?: {
   startDate?: string;
   endDate?: string;
   limit?: number;
+  branch?: string;
+  district?: string;
+  isExceptional?: boolean;
 }) {
   try {
     return await prisma.kYC.findMany({
@@ -22,6 +25,8 @@ export async function getSubmissions(filters?: {
         branchId: filters?.branchId,
         createdById: filters?.createdById,
         isResubmitted: filters?.isResubmitted,
+        branch: filters?.branch ? { name: filters.branch } : undefined,
+        active: true,
         createdAt: (filters?.startDate || filters?.endDate) ? {
           gte: filters.startDate ? new Date(filters.startDate) : undefined,
           lte: filters.endDate ? new Date(filters.endDate) : undefined,
@@ -29,7 +34,7 @@ export async function getSubmissions(filters?: {
       },
       include: {
         createdBy: true,
-        branch: true,
+        branch: { include: { district: true } },
         memos: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -43,16 +48,31 @@ export async function getSubmissions(filters?: {
 
 export async function getSubmissionById(id: string) {
   try {
-    return await prisma.kYC.findUnique({
+    const kyc = await prisma.kYC.findUnique({
       where: { id },
       include: {
         createdBy: true,
         assignedTo: true,
         branch: { include: { district: true } },
         memos: true,
-        auditLogs: true,
+        auditLogs: { orderBy: { timestamp: 'desc' } },
       }
     });
+
+    if (!kyc) return null;
+
+    // Map back to app structure
+    return {
+      ...kyc,
+      branchName: kyc.branch.name,
+      districtName: kyc.branch.district.name,
+      documents: kyc.memos.map(m => ({
+        id: m.id,
+        name: m.name || 'Document',
+        type: m.type || 'Other',
+        url: m.fileUrl
+      }))
+    };
   } catch (error) {
     return null;
   }
@@ -106,16 +126,34 @@ export async function createSubmission(formData: FormData) {
   try {
     const id = formData.get('id') as string;
     const customerName = formData.get('customerName') as string;
-    const customerIdNumber = formData.get('customerIdNumber') as string;
-    const branchId = formData.get('branchId') as string;
-    const createdById = formData.get('createdById') as string;
-    const createdByName = formData.get('createdByName') as string;
+    const entityType = formData.get('entityType') as string;
+    const branchName = formData.get('branchName') as string;
+    const districtName = formData.get('districtName') as string;
+    const createdById = formData.get('submittedById') as string;
+    const createdByName = formData.get('submittedByName') as string;
     const remarks = formData.get('remarks') as string;
     
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
 
-    // 1. JIT User Provisioning for Schema integrity
+    // 1. Ensure District & Branch exist
+    const district = await prisma.district.upsert({
+      where: { name: districtName },
+      update: {},
+      create: { name: districtName }
+    });
+
+    const branch = await prisma.branch.upsert({
+      where: { code: id.split('-')[0] || 'GEN' },
+      update: { name: branchName },
+      create: { 
+        name: branchName, 
+        code: id.split('-')[0] || 'GEN',
+        districtId: district.id
+      }
+    });
+
+    // 2. JIT User Provisioning for Schema integrity
     const nameParts = createdByName.split(' ');
     await prisma.user.upsert({
       where: { id: createdById },
@@ -128,11 +166,11 @@ export async function createSubmission(formData: FormData) {
         lastName: nameParts[1] || 'Officer',
         role: 'BRANCH_OFFICER',
         status: UserStatus.ACTIVE,
-        branchId
+        branchId: branch.id
       }
     });
 
-    // 2. Local Filesystem Storage
+    // 3. Local Filesystem Storage
     const uploadDir = path.join(process.cwd(), 'uploads');
     try {
       await fs.access(uploadDir);
@@ -161,15 +199,16 @@ export async function createSubmission(formData: FormData) {
 
     const now = new Date();
     
-    // 3. Create KYC Record
+    // 4. Create KYC Record
     const kyc = await prisma.kYC.create({
       data: {
         id,
         customerName,
-        customerIdNumber,
-        branchId,
+        customerIdNumber: id, // Mapping ID as placeholder if not provided
+        branchId: branch.id,
         createdById,
         status: KYCStatus.SUBMITTED,
+        entityType,
         commentHistory: remarks ? [{
           role: 'BRANCH_OFFICER',
           performedBy: createdByName,
@@ -197,5 +236,23 @@ export async function createSubmission(formData: FormData) {
   } catch (error: any) {
     console.error('[Blueprint Error]:', error);
     return { success: false, error: error.message || 'Institutional storage fault.' };
+  }
+}
+
+export async function logBundleDownload(data: any) {
+  // Logic for bundle download logging if needed
+  return true;
+}
+
+export async function initiateExceptionalWorkflow(kycId: string, data: any) {
+  try {
+    return await prisma.governanceFlow.create({
+      data: {
+        kycId,
+        createdAt: new Date()
+      }
+    });
+  } catch (e) {
+    throw e;
   }
 }

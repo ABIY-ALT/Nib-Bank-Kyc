@@ -69,6 +69,20 @@ enum UserStatus {
   SUSPENDED
 }
 
+enum FindingCategory {
+  IDENTITY
+  DOCUMENTATION
+  COMPLIANCE
+  ACCOUNT_VALIDATION
+}
+
+enum FindingSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 //////////////////////////////////////////////////////
 // INSTITUTIONAL STRUCTURE
 //////////////////////////////////////////////////////
@@ -102,32 +116,33 @@ model User {
   firstName     String
   lastName      String
   phoneNumber   String?
-  role          String   @default("BRANCH_OFFICER")
+  role          String   // Transitioned to String to support dynamic RoleDefinitions
   branchId      String?
   branch        Branch?  @relation(fields: [branchId], references: [id])
   status        UserStatus @default(ACTIVE)
   needsPasswordChange Boolean @default(false)
-  assignedBranches String[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   auditLogs     AuditLog[]
+  assignedKycs  KYC[]    @relation("AssignedTo")
   createdKycs   KYC[]    @relation("CreatedBy")
-  assignedKycs  KYC[]    @relation("AssignedKYC")
 }
 
 model RoleDefinition {
-  id                   String  @id @default(uuid())
-  name                 String  @unique
-  canSubmit            Boolean @default(false)
-  canReview            Boolean @default(false)
-  canEscalate          Boolean @default(false)
-  canViewReports       Boolean @default(false)
-  canManageUsers       Boolean @default(false)
-  canManageSystem      Boolean @default(false)
-  canAccessPerformance Boolean @default(false)
-  canAccessFollowUp    Boolean @default(false)
-  canAccessArchive     Boolean @default(false)
+  id                   String   @id @default(uuid())
+  name                 String   @unique
+  canSubmit            Boolean  @default(false)
+  canReview            Boolean  @default(false)
+  canEscalate          Boolean  @default(false)
+  canViewReports       Boolean  @default(false)
+  canManageUsers       Boolean  @default(false)
+  canManageSystem      Boolean  @default(false)
+  canAccessPerformance Boolean  @default(false)
+  canAccessFollowUp    Boolean  @default(false)
+  canAccessArchive     Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////////
@@ -135,34 +150,36 @@ model RoleDefinition {
 //////////////////////////////////////////////////////
 
 model KYC {
-  id               String      @id @default(uuid())
+  id               String      @id
   customerName     String
   customerIdNumber String
   branchId         String
   branch           Branch      @relation(fields: [branchId], references: [id])
 
-  status           KYCStatus   @default(SUBMITTED)
+  status           KYCStatus   @default(DRAFT)
   riskLevel        RiskLevel    @default(LOW)
 
   createdById      String
   createdBy        User        @relation("CreatedBy", fields: [createdById], references: [id])
 
   assignedToId     String?
-  assignedTo       User?       @relation("AssignedKYC", fields: [assignedToId], references: [id])
+  assignedTo       User?       @relation("AssignedTo", fields: [assignedToId], references: [id])
 
   governanceFlow   GovernanceFlow?
   amendments       Amendment[]
   memos            Memo[]
   auditLogs        AuditLog[]
+  auditSamplings   AuditSampling[]
 
   slaDueAt         DateTime?
   approvedAt       DateTime?
 
-  commentHistory   Json?       @default("[]")
-  isResubmitted    Boolean     @default(false)
   amendCycles      Int         @default(0)
-  
-  active           Boolean     @default(true)
+  isResubmitted    Boolean     @default(false)
+  entityType       String?
+  commentHistory   Json?       // For historical tracking
+
+  active           Boolean     @default(true) // Zero deletion policy
 
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -209,10 +226,10 @@ model Memo {
   id        String   @id @default(uuid())
   kycId     String
   kyc       KYC      @relation(fields: [kycId], references: [id])
-  name      String
-  type      String
-  fileUrl   String
+  name      String?
+  type      String?
   uploadedById String
+  fileUrl   String
   createdAt DateTime @default(now())
 }
 
@@ -227,10 +244,10 @@ model AuditLog {
   kycId     String?
   kyc       KYC?        @relation(fields: [kycId], references: [id])
   action    AuditAction
+  details   String?
   ipAddress String?
   metadata  Json?
-  details   String?
-  createdAt DateTime    @default(now())
+  timestamp DateTime    @default(now())
 }
 
 //////////////////////////////////////////////////////
@@ -249,8 +266,21 @@ model AuditSampling {
 }
 
 //////////////////////////////////////////////////////
-// SYSTEM SETTINGS
+// SYSTEM KNOWLEDGE BASE
 //////////////////////////////////////////////////////
+
+model Finding {
+  id           String          @id @default(uuid())
+  code         String          @unique
+  title        String
+  description  String
+  category     FindingCategory
+  severity     FindingSeverity
+  applicableTo String[]        // List of account types
+  active       Boolean         @default(true)
+  source       String          @default("manual") // manual or auto
+  createdAt    DateTime        @default(now())
+}
 
 model GlobalSetting {
   id              String   @id @default("global")
@@ -258,9 +288,9 @@ model GlobalSetting {
   escalationHours Int      @default(72)
   strictSla       Boolean  @default(true)
   slaHours        Int      @default(24)
-  documentTypes   Json     @default("[]")
-  entityTypes     Json     @default("[]")
-  guidelines      Json     @default("[]")
+  documentTypes   Json?    // Array of {id, label}
+  entityTypes     Json?    // Array of {id, label}
+  guidelines      Json?    // Array of {id, title, description, type}
   updatedBy       String?
-  lastUpdated     DateTime @default(now())
+  lastUpdated     DateTime @updatedAt
 }
