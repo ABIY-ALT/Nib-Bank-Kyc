@@ -21,6 +21,7 @@ import {
   UserCheck,
   UserX,
   ShieldCheck,
+  Phone,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -38,9 +39,6 @@ import {
   SelectItem, 
   SelectTrigger, 
   SelectValue,
-  SelectLabel,
-  SelectGroup,
-  SelectSeparator
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
@@ -62,6 +60,7 @@ export default function UserManagementPage() {
   const [formData, setFormData] = useState<any>({
     name: '',
     email: '',
+    phoneNumber: '',
     role: UserRole.BRANCH_OFFICER,
     status: UserStatus.ACTIVE,
     branchName: '',
@@ -90,6 +89,7 @@ export default function UserManagementPage() {
       setFormData({ 
         name: '', 
         email: '', 
+        phoneNumber: '',
         role: UserRole.BRANCH_OFFICER, 
         status: UserStatus.ACTIVE, 
         branchName: '', 
@@ -102,6 +102,22 @@ export default function UserManagementPage() {
   const handleSave = async () => {
     if (!formData.name || !formData.email) {
       toast({ variant: "destructive", title: "Validation Error", description: "Identity details required." });
+      return;
+    }
+
+    // Role-based validation: Branch Manager, District Director, and Branch Officer must have District and Branch
+    const requiresLocation = [
+      UserRole.BRANCH_MANAGER,
+      UserRole.DISTRICT_DIRECTOR,
+      UserRole.BRANCH_OFFICER
+    ].includes(formData.role);
+
+    if (requiresLocation && (!formData.districtName || !formData.branchName)) {
+      toast({ 
+        variant: "destructive", 
+        title: "Mapping Required", 
+        description: "Branch Managers, District Directors, and Branch Officers must be assigned to a specific District and Branch Node." 
+      });
       return;
     }
 
@@ -132,6 +148,12 @@ export default function UserManagementPage() {
       setIsSyncing(false);
     }
   };
+
+  const locationMandatory = [
+    UserRole.BRANCH_MANAGER,
+    UserRole.DISTRICT_DIRECTOR,
+    UserRole.BRANCH_OFFICER
+  ].includes(formData.role);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -169,7 +191,14 @@ export default function UserManagementPage() {
                     </div>
                     <div className="flex flex-col">
                       <span className="font-bold text-slate-900">{user.name}</span>
-                      <span className="text-[10px] text-muted-foreground font-bold">{user.email}</span>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold">
+                        <Mail className="w-3 h-3" /> {user.email}
+                      </div>
+                      {user.phoneNumber && (
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold">
+                          <Phone className="w-3 h-3" /> {user.phoneNumber}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </TableCell>
@@ -180,10 +209,12 @@ export default function UserManagementPage() {
                 </TableCell>
                 <TableCell>
                   <div className="space-y-1">
-                    {user.branchName && (
+                    {user.branchName ? (
                       <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                         <Building2 className="w-3.5 h-3.5 text-slate-400" /> {user.branchName}
                       </div>
+                    ) : (
+                      <span className="text-[10px] italic text-muted-foreground">No branch mapping</span>
                     )}
                     {user.districtName && (
                       <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 uppercase tracking-tight">
@@ -214,7 +245,7 @@ export default function UserManagementPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               <ShieldCheck className="w-6 h-6 text-primary" />
@@ -231,6 +262,18 @@ export default function UserManagementPage() {
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-500">Official Email</Label>
                 <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">Phone Number</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    value={formData.phoneNumber || ""} 
+                    onChange={e => setFormData({...formData, phoneNumber: e.target.value})} 
+                    placeholder="+251..." 
+                    className="pl-10 h-11" 
+                  />
+                </div>
               </div>
             </div>
 
@@ -256,9 +299,11 @@ export default function UserManagementPage() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 pt-4 border-t border-dashed">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">District</Label>
+                <Label className={`text-[10px] font-black uppercase ${locationMandatory ? 'text-primary' : 'text-slate-500'}`}>
+                  District {locationMandatory && "(Mandatory)"}
+                </Label>
                 <Select value={formData.districtName || ""} onValueChange={val => setFormData({...formData, districtName: val, branchName: ''})}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Select District" /></SelectTrigger>
                   <SelectContent>
@@ -267,11 +312,13 @@ export default function UserManagementPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">Branch Node</Label>
+                <Label className={`text-[10px] font-black uppercase ${locationMandatory ? 'text-primary' : 'text-slate-500'}`}>
+                  Branch Node {locationMandatory && "(Mandatory)"}
+                </Label>
                 <Select value={formData.branchName || ""} onValueChange={val => setFormData({...formData, branchName: val})}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Select Branch" /></SelectTrigger>
                   <SelectContent>
-                    {branches.filter(b => b.districtName === formData.districtName).map(b => (
+                    {branches.filter(b => !formData.districtName || b.districtName === formData.districtName).map(b => (
                       <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
                     ))}
                   </SelectContent>

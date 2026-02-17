@@ -42,15 +42,33 @@ export async function provisionUser(data: {
   id: string;
   name: string;
   email: string;
+  phoneNumber?: string;
   role: UserRole;
-  branch?: string;
-  district?: string;
+  branchName?: string;
+  districtName?: string;
   status: UserStatus;
 }) {
   const user = await prisma.user.upsert({
     where: { id: data.id },
-    update: { ...data },
-    create: { ...data }
+    update: { 
+      name: data.name,
+      email: data.email,
+      phoneNumber: data.phoneNumber,
+      role: data.role,
+      branchName: data.branchName,
+      districtName: data.districtName,
+      status: data.status
+    },
+    create: { 
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      phoneNumber: data.phoneNumber,
+      role: data.role,
+      branchName: data.branchName,
+      districtName: data.districtName,
+      status: data.status
+    }
   });
   revalidatePath('/admin/users');
   return user;
