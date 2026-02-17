@@ -2,7 +2,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 
 export async function getAllUsers() {
@@ -11,7 +11,7 @@ export async function getAllUsers() {
   });
 }
 
-export async function updateUserRole(userId: string, role: UserRole) {
+export async function updateUserRole(userId: string, role: string) {
   const user = await prisma.user.update({
     where: { id: userId },
     data: { role }
@@ -44,7 +44,7 @@ export async function provisionUser(data: {
   name: string;
   email: string;
   phoneNumber?: string;
-  role: UserRole;
+  role: string;
   branchName?: string;
   districtName?: string;
   status: UserStatus;

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -45,7 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
 import { getBranches, getDistricts } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserStatus } from '@prisma/client';
 
 export default function UserManagementPage() {
   const { toast } = useToast();
@@ -146,7 +147,7 @@ export default function UserManagementPage() {
     setIsSyncing(true);
     try {
       const id = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
-      await provisionUser({ ...formData, id, role: formData.role as UserRole });
+      await provisionUser({ ...formData, id });
       toast({ title: "Success", description: "Personnel profile updated in SQL database." });
       setIsDialogOpen(false);
       loadData();
@@ -305,7 +306,6 @@ export default function UserManagementPage() {
                 <Select value={formData.role} onValueChange={val => setFormData({...formData, role: val})}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Select Defined Role" /></SelectTrigger>
                   <SelectContent>
-                    {/* Always include ADMIN as a fallback */}
                     <SelectItem value="ADMIN">ADMIN</SelectItem>
                     {/* Map defined roles from the SQL RoleDefinition table */}
                     {roleDefinitions.filter(r => r.name !== 'ADMIN').map(role => (

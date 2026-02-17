@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from "@/lib/auth-mock";
@@ -27,18 +28,15 @@ import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { getSubmissions } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
-import { SubmissionStatus, UserRole } from "@prisma/client";
+import { SubmissionStatus } from "@prisma/client";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { permissions } = usePermissions(user);
+  const { permissions, loading: permissionsLoading } = usePermissions(user);
   const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
-  const isAdmin = user?.role === UserRole.ADMIN;
-  const isKYC = user?.role === UserRole.KYC_OFFICER || user?.role === UserRole.SUPERVISOR;
 
   useEffect(() => {
     async function loadDashboard() {
@@ -48,8 +46,8 @@ export default function Dashboard() {
         const [subs, globalSettings] = await Promise.all([
           getSubmissions({
             limit: 5,
-            branch: user.role === UserRole.BRANCH_OFFICER ? user.branchName || undefined : undefined,
-            district: user.role === UserRole.DISTRICT_DIRECTOR ? user.districtName || undefined : undefined
+            branch: user.role === 'BRANCH_OFFICER' ? user.branchName || undefined : undefined,
+            district: user.role === 'DISTRICT_DIRECTOR' ? user.districtName || undefined : undefined
           }),
           getGlobalSettings()
         ]);
@@ -65,7 +63,9 @@ export default function Dashboard() {
   }, [user]);
 
   const stats = useMemo(() => {
-    const scopeLabel = isAdmin ? 'Global' : user?.role === UserRole.DISTRICT_DIRECTOR ? 'Regional' : 'Branch';
+    const isAdmin = user?.role === 'ADMIN';
+    const scopeLabel = isAdmin ? 'Global' : user?.role === 'DISTRICT_DIRECTOR' ? 'Regional' : 'Branch';
+    
     if (!recentSubmissions || recentSubmissions.length === 0) return [
       { label: `${scopeLabel} Activity`, value: '0', icon: History, color: 'text-blue-600' },
       { label: 'Approved Cases', value: '0', icon: FileCheck, color: 'text-green-600' },
@@ -82,14 +82,18 @@ export default function Dashboard() {
       { label: 'Action Required', value: amendedCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
       { label: 'Network SLA', value: '98.4%', icon: TrendingUp, color: 'text-purple-600' },
     ];
-  }, [recentSubmissions, isAdmin, user]);
+  }, [recentSubmissions, user]);
 
   const dashboardTitle = useMemo(() => {
-    if (isAdmin) return 'Institutional Command';
-    if (user?.role === UserRole.DISTRICT_DIRECTOR) return `${user.districtName || 'Regional'} District Portal`;
-    if (isKYC) return 'KYC Verification Hub';
+    if (user?.role === 'ADMIN') return 'Institutional Command';
+    if (user?.role === 'DISTRICT_DIRECTOR') return `${user.districtName || 'Regional'} District Portal`;
+    if (permissions.canReview && !permissions.canSubmit) return 'KYC Verification Hub';
     return `${user?.branchName || 'Local'} Branch Portal`;
-  }, [isAdmin, user, isKYC]);
+  }, [user, permissions]);
+
+  if (permissionsLoading) {
+    return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

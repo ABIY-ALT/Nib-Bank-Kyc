@@ -1,8 +1,8 @@
+
 'use client';
 
 import { UserProfile } from "@/lib/auth-mock.tsx";
 import { useMemo, useState, useEffect } from "react";
-import { UserRole } from "@prisma/client";
 import { getRoleDefinitions } from "@/actions/roles";
 
 export interface PermissionSet {
@@ -17,42 +17,29 @@ export interface PermissionSet {
   canAccessArchive: boolean;
 }
 
-const DEFAULT_PERMISSIONS: Record<string, PermissionSet> = {
-  [UserRole.ADMIN]: { 
+// System defaults for when the database isn't initialized yet or for critical fallback
+const HARDCODED_DEFAULTS: Record<string, PermissionSet> = {
+  "ADMIN": { 
     canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, 
     canManageUsers: true, canManageSystem: true, canAccessPerformance: true,
     canAccessFollowUp: true, canAccessArchive: true 
   },
-  [UserRole.KYC_OFFICER]: { 
+  "KYC_OFFICER": { 
     canSubmit: false, canReview: true, canEscalate: false, canViewReports: false, 
     canManageUsers: false, canManageSystem: false, canAccessPerformance: false,
     canAccessFollowUp: false, canAccessArchive: true 
   },
-  [UserRole.SUPERVISOR]: { 
-    canSubmit: false, canReview: true, canEscalate: true, canViewReports: true, 
-    canManageUsers: false, canManageSystem: false, canAccessPerformance: true,
-    canAccessFollowUp: true, canAccessArchive: true 
-  },
-  [UserRole.BRANCH_OFFICER]: { 
+  "BRANCH_OFFICER": { 
     canSubmit: true, canReview: false, canEscalate: false, canViewReports: false, 
     canManageUsers: false, canManageSystem: false, canAccessPerformance: false,
     canAccessFollowUp: false, canAccessArchive: false 
-  },
-  [UserRole.FOLLOW_UP_TEAM]: { 
-    canSubmit: false, canReview: false, canEscalate: false, canViewReports: true, 
-    canManageUsers: false, canManageSystem: false, canAccessPerformance: false,
-    canAccessFollowUp: true, canAccessArchive: false 
-  },
-  [UserRole.BRANCH_MANAGER]: { 
-    canSubmit: true, canReview: false, canEscalate: true, canViewReports: true, 
-    canManageUsers: false, canManageSystem: false, canAccessPerformance: true,
-    canAccessFollowUp: false, canAccessArchive: true 
-  },
-  [UserRole.DISTRICT_DIRECTOR]: { 
-    canSubmit: true, canReview: false, canEscalate: true, canViewReports: true, 
-    canManageUsers: false, canManageSystem: false, canAccessPerformance: true,
-    canAccessFollowUp: false, canAccessArchive: true 
   }
+};
+
+const EMPTY_PERMISSIONS: PermissionSet = {
+  canSubmit: false, canReview: false, canEscalate: false, 
+  canViewReports: false, canManageUsers: false, canManageSystem: false,
+  canAccessPerformance: false, canAccessFollowUp: false, canAccessArchive: false
 };
 
 export function usePermissions(user: UserProfile | null) {
@@ -61,50 +48,41 @@ export function usePermissions(user: UserProfile | null) {
 
   useEffect(() => {
     async function loadDefinitions() {
-      const data = await getRoleDefinitions();
-      setDbDefinitions(data);
-      setLoading(false);
+      try {
+        const data = await getRoleDefinitions();
+        setDbDefinitions(data);
+      } catch (e) {
+        console.error("Failed to load institutional permissions:", e);
+      } finally {
+        setLoading(false);
+      }
     }
     loadDefinitions();
   }, []);
 
   const permissions = useMemo((): PermissionSet => {
-    if (!user) return {
-      canSubmit: false, canReview: false, canEscalate: false, 
-      canViewReports: false, canManageUsers: false, canManageSystem: false,
-      canAccessPerformance: false, canAccessFollowUp: false, canAccessArchive: false
-    };
+    if (!user) return EMPTY_PERMISSIONS;
 
+    // 1. Check for dynamic lookup in SQL RoleDefinition table
     const roleName = user.role;
-    
-    // Check if there's a dynamic override in the DB
     const dbMatch = dbDefinitions.find(d => d.name === roleName);
+    
     if (dbMatch) {
       return {
-        canSubmit: dbMatch.canSubmit,
-        canReview: dbMatch.canReview,
-        canEscalate: dbMatch.canEscalate,
-        canViewReports: dbMatch.canViewReports,
-        canManageUsers: dbMatch.canManageUsers,
-        canManageSystem: dbMatch.canManageSystem,
-        canAccessPerformance: dbMatch.canAccessPerformance ?? false,
-        canAccessFollowUp: dbMatch.canAccessFollowUp ?? false,
-        canAccessArchive: dbMatch.canAccessArchive ?? false,
+        canSubmit: !!dbMatch.canSubmit,
+        canReview: !!dbMatch.canReview,
+        canEscalate: !!dbMatch.canEscalate,
+        canViewReports: !!dbMatch.canViewReports,
+        canManageUsers: !!dbMatch.canManageUsers,
+        canManageSystem: !!dbMatch.canManageSystem,
+        canAccessPerformance: !!dbMatch.canAccessPerformance,
+        canAccessFollowUp: !!dbMatch.canAccessFollowUp,
+        canAccessArchive: !!dbMatch.canAccessArchive,
       };
     }
 
-    // Fallback to defaults
-    return DEFAULT_PERMISSIONS[roleName] || {
-      canSubmit: false, // Default to false for unknown roles
-      canReview: false, 
-      canEscalate: false, 
-      canViewReports: false, 
-      canManageUsers: false, 
-      canManageSystem: false,
-      canAccessPerformance: false,
-      canAccessFollowUp: false, 
-      canAccessArchive: false
-    };
+    // 2. Fallback to baseline hardcoded defaults if DB isn't seeded yet
+    return HARDCODED_DEFAULTS[roleName] || EMPTY_PERMISSIONS;
   }, [user, dbDefinitions]);
 
   return { permissions, loading };

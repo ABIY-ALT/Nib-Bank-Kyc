@@ -2,7 +2,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserStatus } from '@prisma/client';
 
 interface SyncUserData {
   id: string;
@@ -22,10 +22,8 @@ export async function syncUserToSql(userData: SyncUserData) {
   try {
     const status = (userData.status?.toUpperCase() as UserStatus) || UserStatus.ACTIVE;
     
-    // Normalize role string to Prisma Enum
-    let rawRole = userData.role?.toUpperCase() || 'BRANCH_OFFICER';
-    rawRole = rawRole.replace(/\s+/g, '_');
-    const role = rawRole as UserRole;
+    // Role is now a dynamic string managed by RoleDefinition
+    const role = userData.role || 'BRANCH_OFFICER';
 
     const user = await prisma.user.upsert({
       where: { id: userData.id },
