@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Table, 
   TableBody, 
@@ -22,6 +22,7 @@ import {
   UserX,
   ShieldCheck,
   Phone,
+  ShieldAlert
 } from "lucide-react";
 import { 
   Dialog, 
@@ -43,15 +44,15 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
 import { getBranches, getDistricts } from '@/actions/hierarchy';
+import { getRoleDefinitions } from '@/actions/roles';
 import { UserRole, UserStatus } from '@prisma/client';
-
-const SYSTEM_ROLES = Object.values(UserRole);
 
 export default function UserManagementPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
+  const [roleDefinitions, setRoleDefinitions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -61,7 +62,7 @@ export default function UserManagementPage() {
     name: '',
     email: '',
     phoneNumber: '',
-    role: UserRole.BRANCH_OFFICER,
+    role: 'BRANCH_OFFICER',
     status: UserStatus.ACTIVE,
     branchName: '',
     districtName: ''
@@ -74,10 +75,16 @@ export default function UserManagementPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [u, b, d] = await Promise.all([getAllUsers(), getBranches(), getDistricts()]);
+      const [u, b, d, r] = await Promise.all([
+        getAllUsers(), 
+        getBranches(), 
+        getDistricts(),
+        getRoleDefinitions()
+      ]);
       setUsers(u);
       setBranches(b);
       setDistricts(d);
+      setRoleDefinitions(r);
     } catch (error) {
       toast({ variant: "destructive", title: "Sync Failed", description: "Could not retrieve institutional mapping." });
     } finally {
@@ -92,18 +99,20 @@ export default function UserManagementPage() {
         name: user.name || '',
         email: user.email || '',
         phoneNumber: user.phoneNumber || '',
-        role: user.role || UserRole.BRANCH_OFFICER,
+        role: user.role || 'BRANCH_OFFICER',
         status: user.status || UserStatus.ACTIVE,
         branchName: user.branchName || '',
         districtName: user.districtName || ''
       });
     } else {
       setEditingUser(null);
+      // Default to first defined role if available
+      const defaultRole = roleDefinitions.length > 0 ? roleDefinitions[0].name : 'BRANCH_OFFICER';
       setFormData({ 
         name: '', 
         email: '', 
         phoneNumber: '',
-        role: UserRole.BRANCH_OFFICER, 
+        role: defaultRole, 
         status: UserStatus.ACTIVE, 
         branchName: '', 
         districtName: '' 
@@ -120,9 +129,9 @@ export default function UserManagementPage() {
 
     // Role-based validation: Branch Manager, District Director, and Branch Officer must have District and Branch
     const requiresLocation = [
-      UserRole.BRANCH_MANAGER,
-      UserRole.DISTRICT_DIRECTOR,
-      UserRole.BRANCH_OFFICER
+      'BRANCH_MANAGER',
+      'DISTRICT_DIRECTOR',
+      'BRANCH_OFFICER'
     ].includes(formData.role);
 
     if (requiresLocation && (!formData.districtName || !formData.branchName)) {
@@ -137,7 +146,7 @@ export default function UserManagementPage() {
     setIsSyncing(true);
     try {
       const id = editingUser?.id || `user-${Math.random().toString(36).substr(2, 9)}`;
-      await provisionUser({ ...formData, id });
+      await provisionUser({ ...formData, id, role: formData.role as UserRole });
       toast({ title: "Success", description: "Personnel profile updated in SQL database." });
       setIsDialogOpen(false);
       loadData();
@@ -163,9 +172,9 @@ export default function UserManagementPage() {
   };
 
   const locationMandatory = [
-    UserRole.BRANCH_MANAGER,
-    UserRole.DISTRICT_DIRECTOR,
-    UserRole.BRANCH_OFFICER
+    'BRANCH_MANAGER',
+    'DISTRICT_DIRECTOR',
+    'BRANCH_OFFICER'
   ].includes(formData.role);
 
   return (
@@ -217,7 +226,7 @@ export default function UserManagementPage() {
                 </TableCell>
                 <TableCell>
                   <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">
-                    {user.role.replace(/_/g, ' ')}
+                    {user.role?.replace(/_/g, ' ')}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -294,9 +303,22 @@ export default function UserManagementPage() {
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-primary">System Role</Label>
                 <Select value={formData.role} onValueChange={val => setFormData({...formData, role: val})}>
-                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Select Defined Role" /></SelectTrigger>
                   <SelectContent>
-                    {SYSTEM_ROLES.map(role => <SelectItem key={role} value={role}>{role.replace(/_/g, ' ')}</SelectItem>)}
+                    {/* Always include ADMIN as a fallback */}
+                    <SelectItem value="ADMIN">ADMIN</SelectItem>
+                    {/* Map defined roles from the SQL RoleDefinition table */}
+                    {roleDefinitions.filter(r => r.name !== 'ADMIN').map(role => (
+                      <SelectItem key={role.id} value={role.name}>
+                        {role.name.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                    {roleDefinitions.length === 0 && (
+                      <>
+                        <SelectItem value="BRANCH_OFFICER">BRANCH OFFICER</SelectItem>
+                        <SelectItem value="KYC_OFFICER">KYC OFFICER</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -311,6 +333,13 @@ export default function UserManagementPage() {
                 </Select>
               </div>
             </div>
+
+            {roleDefinitions.length === 0 && (
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 flex gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-amber-800 font-bold">Note: No custom roles found in SQL matrix. Using system defaults.</p>
+              </div>
+            )}
 
             <div className="space-y-4 pt-4 border-t border-dashed">
               <div className="space-y-2">

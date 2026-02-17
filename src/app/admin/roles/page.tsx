@@ -39,8 +39,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 
-const SYSTEM_ROLES = Object.values(UserRole);
-
 export default function StaffRolesPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<any[]>([]);
@@ -80,9 +78,9 @@ export default function StaffRolesPage() {
     }
   };
 
-  const handleRoleChange = async (userId: string, newRole: UserRole, currentName: string) => {
+  const handleRoleChange = async (userId: string, newRole: string, currentName: string) => {
     try {
-      await updateUserRole(userId, newRole);
+      await updateUserRole(userId, newRole as UserRole);
       toast({ title: "Role Updated", description: `${currentName} is now ${newRole.replace(/_/g, ' ')}.` });
       loadData();
     } catch (e) {
@@ -191,12 +189,15 @@ export default function StaffRolesPage() {
                           <span className="text-[10px] text-muted-foreground font-medium">{u.email}</span>
                         </div>
                       </TableCell>
-                      <TableCell><Badge variant="secondary" className="bg-primary/5 text-primary font-bold">{u.role.replace(/_/g, ' ')}</Badge></TableCell>
+                      <TableCell><Badge variant="secondary" className="bg-primary/5 text-primary font-bold">{u.role?.replace(/_/g, ' ')}</Badge></TableCell>
                       <TableCell className="text-right pr-8">
-                        <Select value={u.role} onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.name)}>
-                          <SelectTrigger className="w-[220px] h-10 border-primary/20 bg-white"><SelectValue /></SelectTrigger>
+                        <Select value={u.role} onValueChange={(val) => handleRoleChange(u.id, val, u.name)}>
+                          <SelectTrigger className="w-[220px] h-10 border-primary/20 bg-white"><SelectValue placeholder="Assign Role" /></SelectTrigger>
                           <SelectContent>
-                            {SYSTEM_ROLES.map(role => <SelectItem key={role} value={role}>{role.replace(/_/g, ' ')}</SelectItem>)}
+                            <SelectItem value="ADMIN">ADMIN</SelectItem>
+                            {roleDefinitions.filter(r => r.name !== 'ADMIN').map(role => (
+                              <SelectItem key={role.id} value={role.name}>{role.name.replace(/_/g, ' ')}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </TableCell>
