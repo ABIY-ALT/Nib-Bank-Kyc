@@ -10,16 +10,19 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { syncUserToSql, getUserProfile, getUserByEmail } from '@/actions/auth';
 import { firebaseConfig } from '@/firebase/config';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserStatus } from '@prisma/client';
 
 export interface UserProfile {
   id: string;
-  name: string;
+  firebaseUid: string;
+  firstName: string;
+  lastName: string;
+  name: string; // Display name
   email: string;
   phoneNumber?: string | null;
-  role: UserRole;
+  role: string;
+  branchId?: string | null;
   branchName?: string | null;
-  assignedBranches: string[];
   districtName?: string | null;
   status: UserStatus;
   needsPasswordChange: boolean;
@@ -47,9 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isMockMode) {
       const savedUser = localStorage.getItem('nib_mock_user');
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-      }
+      if (savedUser) setUser(JSON.parse(savedUser));
       setLoading(false);
       return;
     }
@@ -66,7 +67,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               await signOut(auth);
               setUser(null);
             } else {
-              setUser(sqlUser as any);
+              setUser({
+                ...sqlUser,
+                name: `${sqlUser.firstName} ${sqlUser.lastName}`,
+                branchName: (sqlUser as any).branch?.name || null
+              } as any);
             }
           } else {
             const result = await syncUserToSql({
@@ -74,7 +79,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               email: fbUser.email!,
               name: fbUser.displayName || fbUser.email!.split('@')[0],
             });
-            if (result.success) setUser(result.user as any);
+            if (result.success) {
+              const u = result.user!;
+              setUser({ ...u, name: `${u.firstName} ${u.lastName}` } as any);
+            }
           }
         } catch (e) {
           console.error("Auth profile sync failed:", e);
@@ -98,21 +106,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (pass !== 'nibbank123') throw new Error('Invalid developer credential.');
       
       const emailId = normalizedEmail.split('@')[0];
-      
-      // CRITICAL FIX: Look up by EMAIL, not a constructed mock ID
       const existingUser = await getUserByEmail(normalizedEmail);
       
       const userId = existingUser?.id || `mock-${emailId}`;
-      
       const mockUser: any = {
         id: userId,
-        name: existingUser?.name || emailId.split('.').join(' '),
+        firebaseUid: userId,
+        firstName: existingUser?.firstName || emailId.split('.')[0] || 'User',
+        lastName: existingUser?.lastName || emailId.split('.')[1] || 'Nib',
+        name: existingUser ? `${existingUser.firstName} ${existingUser.lastName}` : emailId.replace('.', ' '),
         email: normalizedEmail,
         role: existingUser?.role || (normalizedEmail.includes('admin') ? 'ADMIN' : 'BRANCH_OFFICER'),
         status: existingUser?.status || 'ACTIVE',
-        branchName: existingUser?.branchName || null,
-        districtName: existingUser?.districtName || null,
-        assignedBranches: existingUser?.assignedBranches || []
+        branchId: existingUser?.branchId || null,
+        branchName: (existingUser as any)?.branch?.name || null
       };
       
       setUser(mockUser);
@@ -137,13 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      loading, 
-      isMock: isMockMode,
-      login, 
-      logout,
-    }}>
+    <AuthContext.Provider value={{ user, loading, isMock: isMockMode, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

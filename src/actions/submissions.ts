@@ -1,41 +1,38 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { SubmissionStatus, ExceptionalStatus, UserRole } from '@prisma/client';
+import { KYCStatus, UserStatus, AuditAction } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs/promises';
 import path from 'path';
 
 export async function getSubmissions(filters?: {
-  status?: SubmissionStatus[];
-  branch?: string;
-  district?: string;
-  submittedBy?: string;
-  isExceptional?: boolean;
+  status?: KYCStatus[];
+  branchId?: string;
+  createdById?: string;
   isResubmitted?: boolean;
   startDate?: string;
   endDate?: string;
   limit?: number;
 }) {
   try {
-    return await prisma.submission.findMany({
+    return await prisma.kYC.findMany({
       where: {
         status: filters?.status ? { in: filters.status } : undefined,
-        branchName: filters?.branch,
-        districtName: filters?.district,
-        submittedById: filters?.submittedBy,
-        isExceptional: filters?.isExceptional,
+        branchId: filters?.branchId,
+        createdById: filters?.createdById,
         isResubmitted: filters?.isResubmitted,
-        submittedAt: (filters?.startDate || filters?.endDate) ? {
+        createdAt: (filters?.startDate || filters?.endDate) ? {
           gte: filters.startDate ? new Date(filters.startDate) : undefined,
           lte: filters.endDate ? new Date(filters.endDate) : undefined,
         } : undefined,
       },
       include: {
-        submittedBy: true,
-        documents: true,
+        createdBy: true,
+        branch: true,
+        memos: true,
       },
-      orderBy: { submittedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
       take: filters?.limit
     });
   } catch (error) {
@@ -46,13 +43,14 @@ export async function getSubmissions(filters?: {
 
 export async function getSubmissionById(id: string) {
   try {
-    return await prisma.submission.findUnique({
+    return await prisma.kYC.findUnique({
       where: { id },
       include: {
-        submittedBy: true,
-        reviewedBy: true,
-        documents: true,
-        bundleDownloads: true,
+        createdBy: true,
+        assignedTo: true,
+        branch: { include: { district: true } },
+        memos: true,
+        auditLogs: true,
       }
     });
   } catch (error) {
@@ -60,72 +58,81 @@ export async function getSubmissionById(id: string) {
   }
 }
 
-export async function updateSubmissionStatus(id: string, status: SubmissionStatus, reviewerId: string, remarks?: string) {
+export async function updateSubmissionStatus(id: string, status: KYCStatus, reviewerId: string, remarks?: string) {
   const now = new Date();
   
-  const current = await prisma.submission.findUnique({ where: { id } });
-  if (!current) throw new Error("Submission not found");
+  const current = await prisma.kYC.findUnique({ where: { id } });
+  if (!current) throw new Error("KYC record not found");
 
   const history = (current.commentHistory as any[]) || [];
   const reviewer = await prisma.user.findUnique({ where: { id: reviewerId } });
 
   const newEntry = {
     role: reviewer?.role || 'SYSTEM',
-    performedBy: reviewer?.name || 'Unknown',
+    performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
     timestamp: now.toISOString(),
     comment: remarks || `Status updated to ${status}`,
     action: status
   };
 
-  const submission = await prisma.submission.update({
+  const kyc = await prisma.kYC.update({
     where: { id },
     data: {
       status,
-      reviewedById: reviewerId,
-      reviewedAt: now,
-      remarks,
+      assignedToId: reviewerId,
+      updatedAt: now,
       commentHistory: [...history, newEntry],
-      isResubmitted: status === SubmissionStatus.PENDING && current.status === SubmissionStatus.AMENDED,
-      amendmentCycles: status === SubmissionStatus.AMENDED ? { increment: 1 } : undefined
+      isResubmitted: status === KYCStatus.SUBMITTED && current.status === KYCStatus.ACTION_REQUIRED,
+      amendCycles: status === KYCStatus.ACTION_REQUIRED ? { increment: 1 } : undefined
+    }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: reviewerId,
+      kycId: id,
+      action: AuditAction.STATUS_CHANGE,
+      details: `Status changed from ${current.status} to ${status}`,
+      metadata: { remarks }
     }
   });
 
   revalidatePath(`/submissions/${id}`);
   revalidatePath('/submissions');
-  return submission;
+  return kyc;
 }
 
 export async function createSubmission(formData: FormData) {
   try {
     const id = formData.get('id') as string;
     const customerName = formData.get('customerName') as string;
-    const entityType = formData.get('entityType') as string;
-    const branchName = formData.get('branchName') as string;
-    const districtName = formData.get('districtName') as string;
-    const submittedById = formData.get('submittedById') as string;
-    const submittedByName = formData.get('submittedByName') as string;
+    const customerIdNumber = formData.get('customerIdNumber') as string;
+    const branchId = formData.get('branchId') as string;
+    const createdById = formData.get('createdById') as string;
+    const createdByName = formData.get('createdByName') as string;
     const remarks = formData.get('remarks') as string;
     
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
 
-    // 1. Ensure the submitting user exists in SQL to satisfy Foreign Key constraints.
-    // This is vital for the prototype environment where users might not be pre-created.
+    // 1. JIT User Provisioning for Schema integrity
+    const nameParts = createdByName.split(' ');
     await prisma.user.upsert({
-      where: { id: submittedById },
-      update: { name: submittedByName, branchName, districtName },
+      where: { id: createdById },
+      update: { firstName: nameParts[0] || 'Branch', lastName: nameParts[1] || 'Officer' },
       create: {
-        id: submittedById,
-        name: submittedByName,
-        email: `${submittedById.toLowerCase().replace(/[^a-z0-9]/g, '.')}@nibbank.com.et`,
+        id: createdById,
+        firebaseUid: createdById,
+        email: `${createdById}@nibbank.com.et`,
+        firstName: nameParts[0] || 'Branch',
+        lastName: nameParts[1] || 'Officer',
         role: 'BRANCH_OFFICER',
-        status: 'ACTIVE',
-        branchName,
-        districtName
+        status: UserStatus.ACTIVE,
+        branchId
       }
     });
 
-    // 2. Ensure uploads directory exists
+    // 2. Local Filesystem Storage
     const uploadDir = path.join(process.cwd(), 'uploads');
     try {
       await fs.access(uploadDir);
@@ -133,113 +140,62 @@ export async function createSubmission(formData: FormData) {
       await fs.mkdir(uploadDir, { recursive: true });
     }
 
-    const documentsData = [];
-
-    // 3. Process and Save Files to Filesystem
+    const memoData = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i];
-      
       const timestamp = Date.now();
-      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-      const storedFileName = `${timestamp}_${sanitizedName}`;
+      const storedFileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
       const filePath = path.join(uploadDir, storedFileName);
       
       const buffer = Buffer.from(await file.arrayBuffer());
       await fs.writeFile(filePath, buffer);
 
-      documentsData.push({
+      memoData.push({
         name: file.name,
         type: type,
-        url: `uploads/${storedFileName}`,
-        status: 'Current'
+        fileUrl: `uploads/${storedFileName}`,
+        uploadedById: createdById
       });
     }
 
     const now = new Date();
     
-    // 4. Atomic Submission Creation
-    const submission = await prisma.submission.create({
+    // 3. Create KYC Record
+    const kyc = await prisma.kYC.create({
       data: {
         id,
         customerName,
-        entityType,
-        branchName,
-        districtName,
-        submittedById,
-        submittedAt: now,
-        status: SubmissionStatus.PENDING,
-        remarks,
+        customerIdNumber,
+        branchId,
+        createdById,
+        status: KYCStatus.SUBMITTED,
         commentHistory: remarks ? [{
           role: 'BRANCH_OFFICER',
-          performedBy: submittedByName,
+          performedBy: createdByName,
           timestamp: now.toISOString(),
           comment: remarks,
-          action: 'Submission'
+          action: 'SUBMIT'
         }] : [],
-        isResubmitted: false,
-        amendmentCycles: 0,
-        isExceptional: false,
-        checklistState: {},
-        documents: {
-          create: documentsData
+        memos: {
+          create: memoData
         }
       }
     });
 
-    revalidatePath('/submissions');
-    revalidatePath('/submissions/my');
-    return { success: true, submission };
-  } catch (error: any) {
-    console.error('[SQL Storage Error]:', error);
-    return { success: false, error: error.message || 'Failed to save files to institutional storage.' };
-  }
-}
-
-export async function logBundleDownload(data: {
-  submissionId: string;
-  performedBy: string;
-  bundleName: string;
-  sourceDistrict: string;
-  sourceBranch: string;
-}) {
-  return await prisma.bundleDownload.create({
-    data: {
-      ...data,
-      timestamp: new Date()
-    }
-  });
-}
-
-export async function initiateExceptionalWorkflow(id: string, data: any) {
-  const { reason, justification, remarks, initiatedBy, memoData } = data;
-  
-  const submission = await prisma.submission.update({
-    where: { id },
-    data: {
-      isExceptional: true,
-      exceptionalStatus: ExceptionalStatus.AWAITING_DISTRICT,
-      exceptionalData: {
-        reason,
-        justification,
-        memoUrl: "#",
-        initiatedBy,
-        initiatedAt: new Date().toISOString(),
-        approvalHistory: []
-      },
-      remarks: remarks || "",
-      documents: {
-        create: {
-          name: memoData.name,
-          type: 'Exceptional Memo',
-          url: "#",
-          status: 'Current'
-        }
+    await prisma.auditLog.create({
+      data: {
+        userId: createdById,
+        kycId: kyc.id,
+        action: AuditAction.CREATE,
+        details: `Initial submission for ${customerName}`
       }
-    }
-  });
+    });
 
-  revalidatePath('/submissions/exceptional');
-  revalidatePath(`/submissions/${id}`);
-  return submission;
+    revalidatePath('/submissions');
+    return { success: true, kyc };
+  } catch (error: any) {
+    console.error('[Blueprint Error]:', error);
+    return { success: false, error: error.message || 'Institutional storage fault.' };
+  }
 }

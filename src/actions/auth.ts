@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -7,43 +6,47 @@ import { UserStatus } from '@prisma/client';
 interface SyncUserData {
   id: string;
   email: string;
-  name: string;
+  name: string; // Combined name from Firebase for JIT
   role?: string;
-  branch?: string;
-  district?: string;
+  branchId?: string;
   status?: string;
   phoneNumber?: string;
 }
 
 /**
  * Synchronizes a user profile with the SQL database via Prisma.
+ * Handles split names for the Institutional Blueprint.
  */
 export async function syncUserToSql(userData: SyncUserData) {
   try {
     const status = (userData.status?.toUpperCase() as UserStatus) || UserStatus.ACTIVE;
-    
-    // Role is now a dynamic string managed by RoleDefinition
     const role = userData.role || 'BRANCH_OFFICER';
 
+    // Institutional name splitting
+    const nameParts = userData.name.split(' ');
+    const firstName = nameParts[0] || 'Unknown';
+    const lastName = nameParts.slice(1).join(' ') || 'User';
+
     const user = await prisma.user.upsert({
-      where: { id: userData.id },
+      where: { firebaseUid: userData.id },
       update: {
         email: userData.email,
-        name: userData.name,
+        firstName,
+        lastName,
         role: role,
         status: status,
-        districtName: userData.district || null,
-        branchName: userData.branch || null,
+        branchId: userData.branchId || null,
         phoneNumber: userData.phoneNumber || null,
       },
       create: {
         id: userData.id,
+        firebaseUid: userData.id,
         email: userData.email,
-        name: userData.name,
+        firstName,
+        lastName,
         role: role,
         status: status,
-        districtName: userData.district || null,
-        branchName: userData.branch || null,
+        branchId: userData.branchId || null,
         phoneNumber: userData.phoneNumber || null,
       },
     });
@@ -58,12 +61,12 @@ export async function syncUserToSql(userData: SyncUserData) {
   }
 }
 
-export async function getUserProfile(userId: string) {
+export async function getUserProfile(uid: string) {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId }
+    return await prisma.user.findUnique({
+      where: { firebaseUid: uid },
+      include: { branch: true }
     });
-    return user;
   } catch (error) {
     return null;
   }
@@ -72,7 +75,8 @@ export async function getUserProfile(userId: string) {
 export async function getUserByEmail(email: string) {
   try {
     return await prisma.user.findUnique({
-      where: { email }
+      where: { email },
+      include: { branch: true }
     });
   } catch (error) {
     return null;

@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -7,7 +6,8 @@ import { revalidatePath } from 'next/cache';
 
 export async function getAllUsers() {
   return await prisma.user.findMany({
-    orderBy: { name: 'asc' }
+    include: { branch: true },
+    orderBy: { firstName: 'asc' }
   });
 }
 
@@ -17,7 +17,6 @@ export async function updateUserRole(userId: string, role: string) {
     data: { role }
   });
   revalidatePath('/admin/users');
-  revalidatePath('/admin/roles');
   return user;
 }
 
@@ -30,44 +29,36 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
   return user;
 }
 
-export async function updateUserPortfolio(userId: string, branches: string[]) {
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: { assignedBranches: branches }
-  });
-  revalidatePath('/admin/assignments');
-  return user;
-}
-
 export async function provisionUser(data: {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phoneNumber?: string;
   role: string;
-  branchName?: string;
-  districtName?: string;
+  branchId?: string;
   status: UserStatus;
 }) {
   const user = await prisma.user.upsert({
-    where: { id: data.id },
+    where: { firebaseUid: data.id },
     update: { 
-      name: data.name,
+      firstName: data.firstName,
+      lastName: data.lastName,
       email: data.email,
       phoneNumber: data.phoneNumber,
       role: data.role,
-      branchName: data.branchName,
-      districtName: data.districtName,
+      branchId: data.branchId,
       status: data.status
     },
     create: { 
       id: data.id,
-      name: data.name,
+      firebaseUid: data.id,
+      firstName: data.firstName,
+      lastName: data.lastName,
       email: data.email,
       phoneNumber: data.phoneNumber,
       role: data.role,
-      branchName: data.branchName,
-      districtName: data.districtName,
+      branchId: data.branchId,
       status: data.status
     }
   });
