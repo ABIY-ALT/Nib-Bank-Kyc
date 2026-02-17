@@ -11,16 +11,11 @@ import {
   Plus,
   Settings2,
   Trash2,
-  ShieldAlert,
   Zap,
   Check,
   CheckCircle2,
   X,
-  ListFilter,
-  Users,
-  Search,
-  CheckSquare,
-  Square
+  ShieldAlert
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -37,66 +32,6 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Checkbox } from '@/components/ui/checkbox';
-
-// INSTITUTIONAL MATRIX CONFIGURATION
-const ROLE_MATRIX_CONFIG = [
-  {
-    section: "OPERATIONAL AUTHORITY",
-    items: [
-      { 
-        id: 'case_submission', 
-        label: 'Case Submission', 
-        slugs: ['CASE_UPLOAD_DOCUMENT', 'CASE_SUBMIT', 'CASE_VIEW_OWN', 'CASE_VIEW_OWN_HISTORY', 'CASE_RESUBMIT', 'CASE_RESPOND_AMENDMENT'] 
-      },
-      { 
-        id: 'kyc_review', 
-        label: 'KYC Review', 
-        slugs: ['KYC_VIEW_QUEUE', 'KYC_VERIFY_CHECKLIST', 'KYC_REQUEST_AMENDMENT', 'KYC_APPROVE_STANDARD', 'KYC_VIEW_RESUBMITTED', 'KYC_PROCESS_RESUBMITTED'] 
-      },
-      { 
-        id: 'risk_escalation', 
-        label: 'Risk Escalation & Exception', 
-        slugs: ['VIEW_ESCALATED_CASES', 'ESCALATE_TO_SENIOR', 'APPROVE_ESCALATED_CASE', 'REJECT_ESCALATED_CASE', 'TRIGGER_GOVERNANCE_FLOW', 'VIEW_GOVERNANCE_QUEUE', 'APPROVE_GOVERNANCE_LEVEL', 'REJECT_GOVERNANCE_LEVEL', 'UPLOAD_AUTHORIZATION_MEMO', 'VIEW_PREVIOUS_GOVERNANCE_DECISIONS'] 
-      },
-      { 
-        id: 'audit_reports', 
-        label: 'Audit Reporting', 
-        slugs: ['REPORT_VIEW_SYSTEM', 'REPORT_EXPORT_SYSTEM', 'REPORT_VIEW_DISTRICT', 'REPORT_EXPORT_DISTRICT', 'VIEW_AUDIT_LOGS', 'EXPORT_AUDIT_LOGS', 'VIEW_IP_ACTIVITY', 'VIEW_STATUS_TRANSITIONS'] 
-      },
-      { 
-        id: 'user_access', 
-        label: 'User Management', 
-        slugs: ['USER_CREATE', 'USER_EDIT', 'USER_DEACTIVATE', 'USER_ASSIGN_ROLE', 'USER_RESET_PASSWORD'] 
-      },
-      { 
-        id: 'system_config', 
-        label: 'Institutional Config', 
-        slugs: ['ROLE_CREATE', 'ROLE_EDIT', 'MANAGE_PERMISSION_MATRIX', 'MANAGE_DISTRICTS', 'MANAGE_BRANCHES', 'MAP_USERS_TO_BRANCH', 'CONFIG_GOVERNANCE_STRUCTURE', 'EDIT_APPROVAL_SEQUENCE', 'EDIT_SLA_POLICY', 'EDIT_SAMPLING_PERCENTAGE', 'CONFIG_RISK_RULES', 'ENABLE_GOVERNANCE_FLOW', 'SYSTEM_EXPORT_CONFIG', 'VIEW_SYSTEM_AUDIT', 'EXPORT_SYSTEM_AUDIT'] 
-      }
-    ]
-  },
-  {
-    section: "MODULE ACCESS (BY PAGE)",
-    items: [
-      { 
-        id: 'performance', 
-        label: 'Performance Analytics', 
-        slugs: ['VIEW_SPECIALIST_PRODUCTIVITY', 'VIEW_SLA_METRICS', 'VIEW_ACCURACY_INDEX', 'EXPORT_ANALYTICS', 'DASHBOARD_VIEW_DISTRICT', 'DASHBOARD_VIEW_BRANCH'] 
-      },
-      { 
-        id: 'follow_up', 
-        label: 'Follow-up Audit', 
-        slugs: ['ACCESS_RANDOM_SAMPLING', 'ASSIGN_AUDIT_CASE', 'LOG_AUDIT_DISCREPANCY', 'SCORE_BRANCH', 'CLOSE_AUDIT_CASE', 'VIEW_AUDIT_POOL'] 
-      },
-      { 
-        id: 'master_archive', 
-        label: 'Master Case Archive', 
-        slugs: ['VIEW_ARCHIVED_CASE', 'EXPORT_CASE_ZIP', 'BULK_EXPORT_CASES', 'GENERATE_REGULATORY_PACKAGE', 'DOWNLOAD_MASTER_ARCHIVE', 'VIEW_FQ_LIBRARY', 'CREATE_FQ_ENTRY', 'EDIT_FQ_ENTRY', 'DELETE_FQ_ENTRY'] 
-      }
-    ]
-  }
-];
 
 export default function StaffRolesPage() {
   const { toast } = useToast();
@@ -104,18 +39,12 @@ export default function StaffRolesPage() {
   const [allPermissions, setAllPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
-  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
-  const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
-  const [selectedRoleForPermissions, setSelectedRoleForPermissions] = useState<any>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<any>(null);
+  const [roleName, setRoleName] = useState("");
   const [permissionsForm, setPermissionsForm] = useState<string[]>([]);
-  const [editingRole, setEditingRole] = useState<any>(null);
-  const [roleForm, setRoleForm] = useState({
-    name: '',
-    description: '',
-    permissionIds: [] as string[]
-  });
 
   useEffect(() => {
     loadData();
@@ -142,105 +71,58 @@ export default function StaffRolesPage() {
     setIsSyncing(false);
   };
 
-  const handleSaveRole = async () => {
-    if (!roleForm.name) return;
-    
-    let finalIds = [...roleForm.permissionIds];
-    const dashboardPermission = allPermissions.find(p => p.slug === 'DASHBOARD_VIEW');
-    if (dashboardPermission && finalIds.length > 0 && !finalIds.includes(dashboardPermission.id)) {
-      finalIds.push(dashboardPermission.id);
-    }
-
-    const res = await upsertRole({ ...roleForm, permissionIds: finalIds });
-    if (res.success) {
-      toast({ title: "Role Configuration Saved" });
-      setIsRoleDialogOpen(false);
-      loadData();
-    } else {
-      toast({ variant: "destructive", title: "Error", description: res.error });
-    }
+  const handleOpenAdd = () => {
+    setSelectedRole(null);
+    setRoleName("");
+    setPermissionsForm([]);
+    setIsDialogOpen(true);
   };
 
-  const handleToggleCategory = (slugs: string[]) => {
-    const targetIds = allPermissions.filter(p => slugs.includes(p.slug)).map(p => p.id);
-    const allSelected = targetIds.length > 0 && targetIds.every(id => roleForm.permissionIds.includes(id));
-
-    if (allSelected) {
-      setRoleForm(prev => ({
-        ...prev,
-        permissionIds: prev.permissionIds.filter(id => !targetIds.includes(id))
-      }));
-    } else {
-      setRoleForm(prev => ({
-        ...prev,
-        permissionIds: Array.from(new Set([...prev.permissionIds, ...targetIds]))
-      }));
-    }
-  };
-
-  const isCategorySelected = (slugs: string[]) => {
-    const targetIds = allPermissions.filter(p => slugs.includes(p.slug)).map(p => p.id);
-    if (targetIds.length === 0) return false;
-    return targetIds.every(id => roleForm.permissionIds.includes(id));
-  };
-
-  const openEdit = (role: any) => {
-    setEditingRole(role);
-    setRoleForm({
-      id: role.id,
-      name: role.name,
-      description: role.description || '',
-      permissionIds: role.permissions.map((rp: any) => rp.permissionId)
-    });
-    setIsRoleDialogOpen(true);
-  };
-
-  const openPermissionsEditor = (role: any) => {
-    setSelectedRoleForPermissions(role);
+  const handleOpenEdit = (role: any) => {
+    setSelectedRole(role);
+    setRoleName(role.name);
     setPermissionsForm(role.permissions.map((rp: any) => rp.permissionId));
-    setIsPermissionsDialogOpen(true);
+    setIsDialogOpen(true);
   };
 
-  const handleSavePermissions = async () => {
-    if (!selectedRoleForPermissions) return;
-    setIsSavingPermissions(true);
+  const handleSave = async () => {
+    if (!roleName) {
+      toast({ variant: "destructive", title: "Role Name Required" });
+      return;
+    }
+    
+    setIsSaving(true);
     try {
       const res = await upsertRole({
-        id: selectedRoleForPermissions.id,
-        name: selectedRoleForPermissions.name,
-        description: selectedRoleForPermissions.description || '',
+        id: selectedRole?.id,
+        name: roleName.toUpperCase().replace(/\s+/g, '_'),
+        description: "",
         permissionIds: permissionsForm
       });
       if (res.success) {
-        toast({ title: "Authority Map Updated" });
-        setIsPermissionsDialogOpen(false);
+        toast({ title: "Authority Configuration Saved" });
+        setIsDialogOpen(false);
         loadData();
       } else {
-        toast({ variant: "destructive", title: "Update Failed", description: res.error });
+        toast({ variant: "destructive", title: "Error", description: res.error });
       }
     } finally {
-      setIsSavingPermissions(false);
+      setIsSaving(false);
     }
   };
 
-  const handleToggleOnePermission = (id: string) => {
+  const handleTogglePermission = (id: string) => {
     setPermissionsForm(prev => 
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
     );
   };
 
-  const handleSelectAllPermissions = () => {
+  const handleSelectAll = () => {
     if (permissionsForm.length === allPermissions.length) {
       setPermissionsForm([]);
     } else {
       setPermissionsForm(allPermissions.map(p => p.id));
     }
-  };
-
-  const resetForm = () => {
-    setEditingRole(null);
-    setRoleForm({ name: '', description: '', permissionIds: [] });
-    setIsRoleDialogOpen(true);
   };
 
   const groupedPermissions = useMemo(() => {
@@ -272,7 +154,7 @@ export default function StaffRolesPage() {
             {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             Sync Slugs
           </Button>
-          <Button onClick={resetForm} className="bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90">
+          <Button onClick={handleOpenAdd} className="bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90">
             <Plus className="w-4 h-4 mr-2" /> Define New Role
           </Button>
         </div>
@@ -304,7 +186,7 @@ export default function StaffRolesPage() {
                   </TableCell>
                   <TableCell className="text-center">
                     <button 
-                      onClick={() => openPermissionsEditor(role)}
+                      onClick={() => handleOpenEdit(role)}
                       className="flex items-center justify-center gap-2 mx-auto hover:scale-105 transition-transform p-2 rounded-lg hover:bg-emerald-50 group"
                     >
                       <span className="font-bold text-slate-700 group-hover:text-emerald-700">{role.permissions.length} Rights</span>
@@ -313,7 +195,7 @@ export default function StaffRolesPage() {
                   </TableCell>
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(role)} className="h-8 w-8 text-primary rounded-full hover:bg-primary/5"><Settings2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-8 w-8 text-primary rounded-full hover:bg-primary/5"><Settings2 className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => deactivateRole(role.id).then(loadData)} className="h-8 w-8 text-destructive rounded-full hover:bg-destructive/5"><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </TableCell>
@@ -324,19 +206,19 @@ export default function StaffRolesPage() {
         </CardContent>
       </Card>
 
-      {/* GRANULAR PERMISSION EDITOR DIALOG */}
-      <Dialog open={isPermissionsDialogOpen} onOpenChange={setIsPermissionsDialogOpen}>
+      {/* AUTHORITY MANAGEMENT DIALOG (GRANULAR SELECTION) */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-3xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
-          <div className="bg-white">
-            <DialogHeader className="p-8 bg-slate-900 text-white space-y-0">
+          <div className="bg-[#1a1f2e]">
+            <DialogHeader className="p-8 bg-[#1a1f2e] text-white space-y-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-primary rounded-2xl">
                     <ShieldCheck className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <DialogTitle className="text-2xl font-black tracking-tight">
-                      Authority Management: {selectedRoleForPermissions?.name.replace(/_/g, ' ')}
+                    <DialogTitle className="text-2xl font-black tracking-tight text-white uppercase">
+                      Authority Management: {selectedRole ? selectedRole.name.replace(/_/g, ' ') : 'New Designation'}
                     </DialogTitle>
                     <DialogDescription className="text-primary font-bold text-[10px] uppercase tracking-widest mt-1">
                       Selective capability assignment for institutional security.
@@ -347,20 +229,30 @@ export default function StaffRolesPage() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={handleSelectAllPermissions}
-                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 font-bold"
+                    onClick={handleSelectAll}
+                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 font-bold px-6 h-10 rounded-xl"
                   >
                     {permissionsForm.length === allPermissions.length ? 'Deselect All' : 'Select All'}
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => setIsPermissionsDialogOpen(false)} className="text-white/40 hover:text-white hover:bg-white/10 rounded-full">
+                  <Button variant="ghost" size="icon" onClick={() => setIsDialogOpen(false)} className="text-white/40 hover:text-white hover:bg-white/10 rounded-full">
                     <X className="w-5 h-5" />
                   </Button>
                 </div>
               </div>
             </DialogHeader>
             
-            <div className="p-8">
-              <ScrollArea className="h-[60vh] pr-4">
+            <div className="p-8 bg-white rounded-t-3xl">
+              <div className="space-y-6 mb-8">
+                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
+                <Input 
+                  placeholder="e.g. REGIONAL_DIRECTOR" 
+                  className="h-14 bg-slate-50 border-slate-200 text-lg font-bold placeholder:text-slate-300 focus-visible:ring-primary/20 rounded-2xl"
+                  value={roleName}
+                  onChange={(e) => setRoleName(e.target.value.toUpperCase().replace(/\s+/g, '_'))}
+                />
+              </div>
+
+              <ScrollArea className="h-[50vh] pr-4">
                 <div className="space-y-10">
                   {Object.entries(groupedPermissions).map(([group, perms]) => (
                     <div key={group} className="space-y-4">
@@ -374,16 +266,16 @@ export default function StaffRolesPage() {
                           return (
                             <div 
                               key={p.id} 
-                              onClick={() => handleToggleOnePermission(p.id)}
+                              onClick={() => handleTogglePermission(p.id)}
                               className={cn(
                                 "flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer group",
-                                isSelected ? "bg-primary/5 border-primary/20 shadow-sm" : "bg-white border-slate-100 hover:border-slate-200"
+                                isSelected ? "bg-primary/5 border-primary/20 shadow-sm" : "bg-white border-slate-100 hover:border-slate-200 shadow-sm"
                               )}
                             >
                               <div className="flex items-center gap-3">
                                 <div className={cn(
                                   "w-2 h-2 rounded-full transition-all",
-                                  isSelected ? "bg-primary scale-125" : "bg-slate-200"
+                                  isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(var(--primary),0.5)]" : "bg-slate-200"
                                 )} />
                                 <span className={cn(
                                   "text-xs font-bold transition-colors",
@@ -391,10 +283,10 @@ export default function StaffRolesPage() {
                                 )}>{p.name}</span>
                               </div>
                               <div className={cn(
-                                "w-5 h-5 rounded border transition-all flex items-center justify-center",
-                                isSelected ? "bg-primary border-primary" : "bg-slate-50 border-slate-200 group-hover:border-primary/30"
+                                "w-6 h-6 rounded-lg border-2 transition-all flex items-center justify-center",
+                                isSelected ? "bg-primary border-primary" : "bg-white border-slate-200 group-hover:border-primary/30"
                               )}>
-                                {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />}
+                                {isSelected && <Check className="w-4 h-4 text-white stroke-[4px]" />}
                               </div>
                             </div>
                           );
@@ -409,104 +301,18 @@ export default function StaffRolesPage() {
             <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row justify-end gap-3 rounded-b-3xl">
               <Button 
                 variant="ghost" 
-                onClick={() => setIsPermissionsDialogOpen(false)} 
+                onClick={() => setIsDialogOpen(false)} 
                 className="h-12 px-8 font-bold text-slate-500 rounded-xl hover:bg-slate-100"
               >
                 Discard Changes
               </Button>
               <Button 
-                onClick={handleSavePermissions} 
-                disabled={isSavingPermissions}
-                className="h-12 px-10 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-lg shadow-primary/20"
+                onClick={handleSave} 
+                disabled={isSaving}
+                className="h-12 px-10 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-xl shadow-primary/20"
               >
-                {isSavingPermissions ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 Commit Rights Map
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* CREATE/EDIT DIALOG (9-CARD MATRIX) */}
-      <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-        <DialogContent className="max-w-xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
-          <div className="bg-white">
-            <DialogHeader className="p-8 bg-white border-b space-y-0">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-xl">
-                    <ShieldAlert className="w-6 h-6 text-primary" />
-                  </div>
-                  <DialogTitle className="text-3xl font-black text-slate-900 tracking-tight">
-                    {editingRole ? 'Modify Designation' : 'Define New Role'}
-                  </DialogTitle>
-                </div>
-              </div>
-            </DialogHeader>
-            
-            <div className="p-8 space-y-10 max-h-[60vh] overflow-y-auto">
-              <div className="space-y-3">
-                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
-                <Input 
-                  placeholder="e.g. REGIONAL_DIRECTOR" 
-                  className="h-14 bg-slate-50 border-slate-200 text-lg font-bold placeholder:text-slate-300 focus-visible:ring-primary/20 rounded-2xl"
-                  value={roleForm.name}
-                  onChange={(e) => setRoleForm({...roleForm, name: e.target.value.toUpperCase().replace(/\s+/g, '_')})}
-                />
-              </div>
-
-              {ROLE_MATRIX_CONFIG.map((section) => (
-                <div key={section.section} className="space-y-6">
-                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">{section.section}</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {section.items.map((item) => {
-                      const selected = isCategorySelected(item.slugs);
-                      return (
-                        <div 
-                          key={item.id}
-                          onClick={() => handleToggleCategory(item.slugs)}
-                          className={cn(
-                            "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group",
-                            selected 
-                              ? "bg-primary/5 border-primary/20 shadow-sm" 
-                              : "bg-slate-50/50 border-slate-100 hover:border-slate-200"
-                          )}
-                        >
-                          <span className={cn(
-                            "text-sm font-bold transition-colors",
-                            selected ? "text-primary" : "text-slate-600 group-hover:text-slate-900"
-                          )}>
-                            {item.label}
-                          </span>
-                          <div className={cn(
-                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                            selected 
-                              ? "bg-primary border-primary" 
-                              : "bg-white border-slate-200 group-hover:border-primary/30"
-                          )}>
-                            {selected && <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <DialogFooter className="p-8 bg-slate-50/50 border-t flex flex-row justify-end gap-3 rounded-b-3xl">
-              <Button 
-                variant="ghost" 
-                onClick={() => setIsRoleDialogOpen(false)} 
-                className="h-12 px-8 font-bold text-slate-500 rounded-xl hover:bg-slate-100"
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleSaveRole} 
-                className="h-12 px-10 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
-              >
-                Commit Designation
               </Button>
             </DialogFooter>
           </div>

@@ -97,17 +97,17 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* WORKFLOWS GROUP - Identity Verification */}
+        {/* WORKFLOWS GROUP */}
         {hasAnyInGroup('WORKFLOWS') && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-white/40">Identity Verification</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Workflows</SidebarGroupLabel>
             <SidebarMenu>
               <Collapsible className="group/collapsible" defaultOpen={true}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="Verification Flow">
+                    <SidebarMenuButton tooltip="Identity Verification">
                       <FileText className="w-4 h-4" />
-                      <span>Verification Flow</span>
+                      <span>Identity Verification</span>
                       <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
@@ -229,7 +229,7 @@ export function AppSidebar() {
         {/* REFERENCE GROUP */}
         {hasPermission('VIEW_FQ_LIBRARY') && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-white/40">Reference</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Reference</SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/kyc-fq-reference'} tooltip="KYC F&Q Reference">
@@ -246,12 +246,12 @@ export function AppSidebar() {
         {/* AUDIT & REPORTING GROUP */}
         {hasAnyInGroup('REPORTING') && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-white/40">Audit & Reporting</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Audit & Reporting</SidebarGroupLabel>
             <SidebarMenu>
               <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="Reporting">
+                    <SidebarMenuButton tooltip="Reporting Suite">
                       <FileBarChart className="w-4 h-4" />
                       <span>Reporting Suite</span>
                       <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
@@ -317,12 +317,12 @@ export function AppSidebar() {
         {/* SYSTEM ADMINISTRATION GROUP */}
         {hasAnyInGroup('SYSTEM') && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-white/40">Administration</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Administration</SidebarGroupLabel>
             <SidebarMenu>
               <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="Administration">
+                    <SidebarMenuButton tooltip="System Management">
                       <Settings className="w-4 h-4" />
                       <span>System Management</span>
                       <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
