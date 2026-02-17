@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -15,7 +14,9 @@ import {
   Check,
   CheckCircle2,
   X,
-  ShieldAlert
+  ShieldAlert,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -117,14 +118,6 @@ export default function StaffRolesPage() {
     );
   };
 
-  const handleSelectAll = () => {
-    if (permissionsForm.length === allPermissions.length) {
-      setPermissionsForm([]);
-    } else {
-      setPermissionsForm(allPermissions.map(p => p.id));
-    }
-  };
-
   const groupedPermissions = useMemo(() => {
     const groups: Record<string, any[]> = {};
     allPermissions.forEach(p => {
@@ -134,6 +127,18 @@ export default function StaffRolesPage() {
     });
     return groups;
   }, [allPermissions]);
+
+  const handleToggleGroup = (groupName: string) => {
+    const groupPerms = groupedPermissions[groupName] || [];
+    const groupIds = groupPerms.map(p => p.id);
+    const allSelected = groupIds.every(id => permissionsForm.includes(id));
+
+    if (allSelected) {
+      setPermissionsForm(prev => prev.filter(id => !groupIds.includes(id)));
+    } else {
+      setPermissionsForm(prev => [...new Set([...prev, ...groupIds])]);
+    }
+  };
 
   if (loading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
 
@@ -206,110 +211,120 @@ export default function StaffRolesPage() {
         </CardContent>
       </Card>
 
-      {/* AUTHORITY MANAGEMENT DIALOG (GRANULAR SELECTION) */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
-          <div className="bg-[#1a1f2e]">
-            <DialogHeader className="p-8 bg-[#1a1f2e] text-white space-y-0">
+        <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
+          <div className="bg-[#fcfaf7]">
+            <DialogHeader className="p-8 bg-white border-b space-y-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary rounded-2xl">
-                    <ShieldCheck className="w-6 h-6 text-white" />
+                  <div className="p-3 bg-primary/10 rounded-2xl">
+                    <ShieldCheck className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <DialogTitle className="text-2xl font-black tracking-tight text-white uppercase">
-                      Authority Management: {selectedRole ? selectedRole.name.replace(/_/g, ' ') : 'New Designation'}
+                    <DialogTitle className="text-2xl font-black tracking-tight text-slate-900">
+                      {selectedRole ? 'Update Role Rights' : 'Define New Role'}
                     </DialogTitle>
-                    <DialogDescription className="text-primary font-bold text-[10px] uppercase tracking-widest mt-1">
-                      Selective capability assignment for institutional security.
+                    <DialogDescription className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">
+                      Institutional Capability Assignment Workspace
                     </DialogDescription>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleSelectAll}
-                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 font-bold px-6 h-10 rounded-xl"
-                  >
-                    {permissionsForm.length === allPermissions.length ? 'Deselect All' : 'Select All'}
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => setIsDialogOpen(false)} className="text-white/40 hover:text-white hover:bg-white/10 rounded-full">
-                    <X className="w-5 h-5" />
-                  </Button>
-                </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsDialogOpen(false)} className="rounded-full">
+                  <X className="w-5 h-5" />
+                </Button>
               </div>
             </DialogHeader>
             
-            <div className="p-8 bg-white rounded-t-3xl">
-              <div className="space-y-6 mb-8">
+            <div className="p-8">
+              <div className="space-y-2 mb-10 max-w-sm">
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
                 <Input 
                   placeholder="e.g. REGIONAL_DIRECTOR" 
-                  className="h-14 bg-slate-50 border-slate-200 text-lg font-bold placeholder:text-slate-300 focus-visible:ring-primary/20 rounded-2xl"
+                  className="h-12 bg-white border-slate-200 font-bold focus-visible:ring-primary/20 rounded-xl"
                   value={roleName}
                   onChange={(e) => setRoleName(e.target.value.toUpperCase().replace(/\s+/g, '_'))}
                 />
               </div>
 
-              <ScrollArea className="h-[50vh] pr-4">
-                <div className="space-y-10">
-                  {Object.entries(groupedPermissions).map(([group, perms]) => (
-                    <div key={group} className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary whitespace-nowrap">{group}</span>
-                        <div className="h-px flex-1 bg-slate-100" />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {perms.map((p: any) => {
-                          const isSelected = permissionsForm.includes(p.id);
-                          return (
-                            <div 
-                              key={p.id} 
-                              onClick={() => handleTogglePermission(p.id)}
-                              className={cn(
-                                "flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer group",
-                                isSelected ? "bg-primary/5 border-primary/20 shadow-sm" : "bg-white border-slate-100 hover:border-slate-200 shadow-sm"
-                              )}
-                            >
-                              <div className="flex items-center gap-3">
+              <ScrollArea className="h-[55vh] pr-4">
+                <div className="space-y-12">
+                  {Object.entries(groupedPermissions).map(([group, perms]) => {
+                    const groupIds = perms.map(p => p.id);
+                    const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
+                    
+                    return (
+                      <div key={group} className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 flex-1">
+                            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-primary whitespace-nowrap">{group}</span>
+                            <div className="h-px flex-1 bg-slate-200" />
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleToggleGroup(group)}
+                            className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-bold text-[10px] uppercase tracking-wider gap-2"
+                          >
+                            {allSelectedInGroup ? (
+                              <><CheckSquare className="w-3.5 h-3.5" /> Deselect All</>
+                            ) : (
+                              <><Square className="w-3.5 h-3.5" /> Select All</>
+                            )}
+                          </Button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {perms.map((p: any) => {
+                            const isSelected = permissionsForm.includes(p.id);
+                            return (
+                              <div 
+                                key={p.id} 
+                                onClick={() => handleTogglePermission(p.id)}
+                                className={cn(
+                                  "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group",
+                                  isSelected 
+                                    ? "bg-primary/5 border-primary/40 shadow-sm" 
+                                    : "bg-white border-slate-100 hover:border-slate-200 shadow-sm"
+                                )}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className={cn(
+                                    "w-2 h-2 rounded-full transition-all",
+                                    isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(var(--primary),0.5)]" : "bg-slate-200"
+                                  )} />
+                                  <span className={cn(
+                                    "text-xs font-bold transition-colors",
+                                    isSelected ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
+                                  )}>{p.name}</span>
+                                </div>
                                 <div className={cn(
-                                  "w-2 h-2 rounded-full transition-all",
-                                  isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(var(--primary),0.5)]" : "bg-slate-200"
-                                )} />
-                                <span className={cn(
-                                  "text-xs font-bold transition-colors",
-                                  isSelected ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
-                                )}>{p.name}</span>
+                                  "w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center",
+                                  isSelected ? "bg-primary border-primary" : "bg-white border-slate-200 group-hover:border-primary/30"
+                                )}>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />}
+                                </div>
                               </div>
-                              <div className={cn(
-                                "w-6 h-6 rounded-lg border-2 transition-all flex items-center justify-center",
-                                isSelected ? "bg-primary border-primary" : "bg-white border-slate-200 group-hover:border-primary/30"
-                              )}>
-                                {isSelected && <Check className="w-4 h-4 text-white stroke-[4px]" />}
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </div>
 
-            <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row justify-end gap-3 rounded-b-3xl">
-              <Button 
-                variant="ghost" 
+            <DialogFooter className="p-8 bg-white border-t flex flex-row justify-end items-center gap-6 rounded-b-3xl">
+              <button 
                 onClick={() => setIsDialogOpen(false)} 
-                className="h-12 px-8 font-bold text-slate-500 rounded-xl hover:bg-slate-100"
+                className="text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
               >
                 Discard Changes
-              </Button>
+              </button>
               <Button 
                 onClick={handleSave} 
                 disabled={isSaving}
-                className="h-12 px-10 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-xl shadow-primary/20"
+                className="h-12 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-xl shadow-primary/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 Commit Rights Map
