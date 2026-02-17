@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 /**
  * Institutional Permission Seeding Script
- * Aligns exactly with sidebar structure requirements.
+ * Creates permissions and links them to preset roles.
  */
 export async function seedInstitutionalPermissions() {
   const permissions = [
@@ -101,13 +101,16 @@ export async function seedInstitutionalPermissions() {
     { slug: 'EXPORT_SYSTEM_AUDIT', name: 'Export System Audit Records', group: 'SYSTEM' },
   ];
 
-  // 1. Create Permissions
+  const dbPermissions = [];
+
+  // 1. Upsert Permissions
   for (const p of permissions) {
-    await prisma.permission.upsert({
+    const perm = await prisma.permission.upsert({
       where: { slug: p.slug },
       update: { name: p.name, group: p.group },
       create: p,
     });
+    dbPermissions.push(perm);
   }
 
   // 2. Create Preset Roles
@@ -120,13 +123,30 @@ export async function seedInstitutionalPermissions() {
   ];
 
   for (const preset of presets) {
-    await prisma.role.upsert({
+    const role = await prisma.role.upsert({
       where: { name: preset.name },
-      update: { description: preset.desc },
+      update: { description: preset.desc, active: true },
       create: { name: preset.name, description: preset.desc }
     });
+
+    // 3. Link Permissions
+    if (preset.name === 'SUPER_ADMIN') {
+      // Link ALL
+      await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+      await prisma.rolePermission.createMany({
+        data: dbPermissions.map(p => ({ roleId: role.id, permissionId: p.id }))
+      });
+    } else if (preset.name === 'BRANCH_OFFICER') {
+      const slugs = ['DASHBOARD_VIEW', 'CASE_SUBMIT', 'CASE_VIEW_OWN', 'CASE_RESUBMIT', 'CASE_RESPOND_AMENDMENT'];
+      const targets = dbPermissions.filter(p => slugs.includes(p.slug));
+      await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+      await prisma.rolePermission.createMany({
+        data: targets.map(p => ({ roleId: role.id, permissionId: p.id }))
+      });
+    }
   }
 
+  revalidatePath('/admin/roles');
   return { success: true };
 }
 

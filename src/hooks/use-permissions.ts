@@ -23,6 +23,12 @@ export function usePermissions() {
     loadPermissions();
   }, []);
 
+  const isSuperAdmin = useMemo(() => {
+    if (!user || !user.roles) return false;
+    // Check both relational roles and the legacy role field for safety
+    return user.roles.some((ur: any) => ur.role?.name === 'SUPER_ADMIN') || (user as any).role === 'SUPER_ADMIN';
+  }, [user]);
+
   const permissions = useMemo(() => {
     if (!user || !user.roles) return new Set<string>();
     
@@ -42,9 +48,10 @@ export function usePermissions() {
     return aggregatedSlugs;
   }, [user, dbRoles]);
 
-  const hasPermission = (slug: string) => permissions.has(slug);
+  const hasPermission = (slug: string) => isSuperAdmin || permissions.has(slug);
   
   const hasAnyInGroup = (group: string) => {
+    if (isSuperAdmin) return true;
     if (!user || !user.roles) return false;
     return dbRoles.some(role => 
       user.roles.some((ur: any) => ur.role?.name === role.name) &&
@@ -52,7 +59,14 @@ export function usePermissions() {
     );
   };
 
-  return { permissions, hasPermission, hasAnyInGroup, loading };
+  return { 
+    permissions, 
+    hasPermission, 
+    hasAnyInGroup, 
+    isSuperAdmin,
+    loading,
+    canManageFindings: hasPermission('VIEW_FQ_LIBRARY')
+  };
 }
 
 export function usePermission(slug: string) {
