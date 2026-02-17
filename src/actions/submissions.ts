@@ -109,7 +109,23 @@ export async function createSubmission(formData: FormData) {
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
 
-    // Ensure uploads directory exists
+    // 1. Ensure the submitting user exists in SQL to satisfy Foreign Key constraints.
+    // This is vital for the prototype environment where users might not be pre-created.
+    await prisma.user.upsert({
+      where: { id: submittedById },
+      update: { name: submittedByName, branchName, districtName },
+      create: {
+        id: submittedById,
+        name: submittedByName,
+        email: `${submittedById.toLowerCase().replace(/[^a-z0-9]/g, '.')}@nibbank.com.et`,
+        role: 'BRANCH_OFFICER',
+        status: 'ACTIVE',
+        branchName,
+        districtName
+      }
+    });
+
+    // 2. Ensure uploads directory exists
     const uploadDir = path.join(process.cwd(), 'uploads');
     try {
       await fs.access(uploadDir);
@@ -119,29 +135,30 @@ export async function createSubmission(formData: FormData) {
 
     const documentsData = [];
 
+    // 3. Process and Save Files to Filesystem
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i];
       
-      // Sanitize and uniquify filename
       const timestamp = Date.now();
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
       const storedFileName = `${timestamp}_${sanitizedName}`;
       const filePath = path.join(uploadDir, storedFileName);
       
-      // Read file into buffer and save to filesystem
       const buffer = Buffer.from(await file.arrayBuffer());
       await fs.writeFile(filePath, buffer);
 
       documentsData.push({
         name: file.name,
         type: type,
-        url: `uploads/${storedFileName}`, // Store relative path in DB
+        url: `uploads/${storedFileName}`,
         status: 'Current'
       });
     }
 
     const now = new Date();
+    
+    // 4. Atomic Submission Creation
     const submission = await prisma.submission.create({
       data: {
         id,
