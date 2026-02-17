@@ -87,7 +87,7 @@ export function AppSidebar() {
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
                 <Link href="/"><LayoutDashboard /><span>Dashboard</span></Link>
-              </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
@@ -199,10 +199,14 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/kyc-fq-reference'} tooltip="KYC F&Q Reference">
-                  <Link href="/kyc-fq-reference"><BookOpen /><span>KYC F&Q Reference</span></Link>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroup>
+                  <Link href="/kyc-fq-reference">
+                    <BookOpen />
+                    <span>KYC F&Q Reference</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
         )}
 
         {/* AUDIT & REPORTING GROUP */}

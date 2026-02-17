@@ -26,12 +26,14 @@ export function usePermissions() {
   const permissions = useMemo(() => {
     if (!user || !user.roles) return new Set<string>();
     
-    const userRoleNames = user.roles.map((ur: any) => ur.role.name);
     const aggregatedSlugs = new Set<string>();
 
-    dbRoles.forEach(role => {
-      if (userRoleNames.includes(role.name)) {
-        role.permissions.forEach((rp: any) => {
+    // user.roles is an array of UserRole objects which contain a role object
+    user.roles.forEach((ur: any) => {
+      const roleName = ur.role?.name;
+      const dbRole = dbRoles.find(r => r.name === roleName);
+      if (dbRole) {
+        dbRole.permissions.forEach((rp: any) => {
           aggregatedSlugs.add(rp.permission.slug);
         });
       }
@@ -43,9 +45,9 @@ export function usePermissions() {
   const hasPermission = (slug: string) => permissions.has(slug);
   
   const hasAnyInGroup = (group: string) => {
-    // Check if user has any permission belonging to a specific sidebar group
+    if (!user || !user.roles) return false;
     return dbRoles.some(role => 
-      user?.roles?.some((ur: any) => ur.role.name === role.name) &&
+      user.roles.some((ur: any) => ur.role?.name === role.name) &&
       role.permissions.some((rp: any) => rp.permission.group === group)
     );
   };

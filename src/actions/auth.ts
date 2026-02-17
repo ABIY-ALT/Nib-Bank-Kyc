@@ -41,7 +41,19 @@ export async function getUserProfile(uid: string) {
       where: { firebaseUid: uid },
       include: { 
         branch: true, 
-        roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } 
+        roles: { 
+          include: { 
+            role: { 
+              include: { 
+                permissions: { 
+                  include: { 
+                    permission: true 
+                  } 
+                } 
+              } 
+            } 
+          } 
+        } 
       }
     });
   } catch (error) {
@@ -55,7 +67,19 @@ export async function getUserByEmail(email: string) {
       where: { email },
       include: { 
         branch: true, 
-        roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } 
+        roles: { 
+          include: { 
+            role: { 
+              include: { 
+                permissions: { 
+                  include: { 
+                    permission: true 
+                  } 
+                } 
+              } 
+            } 
+          } 
+        } 
       }
     });
   } catch (error) {

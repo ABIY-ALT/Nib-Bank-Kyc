@@ -15,7 +15,7 @@ export async function seedInstitutionalPermissions() {
     { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Specific Dashboard', group: 'DASHBOARD' },
     { slug: 'DASHBOARD_VIEW_SYSTEM', name: 'View System-wide Command Dashboard', group: 'DASHBOARD' },
 
-    // WORKFLOWS -> Identity Verification
+    // Identity Verification (WORKFLOWS)
     { slug: 'CASE_UPLOAD_DOCUMENT', name: 'Upload Customer Documents', group: 'WORKFLOWS' },
     { slug: 'CASE_SUBMIT', name: 'Submit New KYC Case', group: 'WORKFLOWS' },
     { slug: 'CASE_VIEW_OWN', name: 'View Own Submissions', group: 'WORKFLOWS' },
