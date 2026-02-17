@@ -228,7 +228,6 @@ export function AppSidebar() {
         {/* REFERENCE GROUP */}
         {hasPermission('VIEW_FQ_LIBRARY') && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Reference</SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/kyc-fq-reference'} tooltip="KYC F&Q Reference">

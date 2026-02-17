@@ -16,7 +16,8 @@ import {
   X,
   ShieldAlert,
   CheckSquare,
-  Square
+  Square,
+  LayoutGrid
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -30,7 +31,7 @@ import {
   DialogFooter,
   DialogDescription
 } from "@/components/ui/dialog";
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
