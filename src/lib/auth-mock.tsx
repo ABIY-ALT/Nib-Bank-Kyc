@@ -17,15 +17,13 @@ export interface UserProfile {
   firebaseUid: string;
   firstName: string;
   lastName: string;
-  name: string; // Display name
+  name: string;
   email: string;
   phoneNumber?: string | null;
-  role: string;
+  status: UserStatus;
   branchId?: string | null;
   branchName?: string | null;
-  districtName?: string | null;
-  status: UserStatus;
-  needsPasswordChange: boolean;
+  roles: any[]; // Relational roles from SQL
 }
 
 interface AuthContextType {
@@ -74,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               } as any);
             }
           } else {
+            // JIT Provisioning for Institutional Identity
             const result = await syncUserToSql({
               id: fbUser.uid,
               email: fbUser.email!,
@@ -116,10 +115,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         lastName: existingUser?.lastName || emailId.split('.')[1] || 'Nib',
         name: existingUser ? `${existingUser.firstName} ${existingUser.lastName}` : emailId.replace('.', ' '),
         email: normalizedEmail,
-        role: existingUser?.role || (normalizedEmail.includes('admin') ? 'ADMIN' : 'BRANCH_OFFICER'),
         status: existingUser?.status || 'ACTIVE',
         branchId: existingUser?.branchId || null,
-        branchName: (existingUser as any)?.branch?.name || null
+        branchName: (existingUser as any)?.branch?.name || null,
+        roles: existingUser?.roles || [{ role: { name: normalizedEmail.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
       };
       
       setUser(mockUser);

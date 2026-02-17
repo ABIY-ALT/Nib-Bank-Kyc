@@ -8,23 +8,8 @@ datasource db {
 }
 
 //////////////////////////////////////////////////////
-// ENUMS
+// ENUMS (Business Logic)
 //////////////////////////////////////////////////////
-
-enum RoleType {
-  SUPER_ADMIN
-  BRANCH_OFFICER
-  KYC_SPECIALIST
-  SENIOR_ASSESSOR
-  DISTRICT_DIRECTOR
-  BRANCH_BANKING_DIRECTOR
-  CHIEF_OFFICER
-  DIVISION_MANAGER
-  SUPERVISOR
-  COMPLIANCE_OFFICER
-  AUDITOR
-  SLA_MANAGER
-}
 
 enum KYCStatus {
   DRAFT
@@ -60,26 +45,55 @@ enum AuditAction {
   FREEZE
   EXPORT
   STATUS_CHANGE
-}
-
-enum FindingCategory {
-  IDENTITY
-  DOCUMENTATION
-  COMPLIANCE
-  ACCOUNT_VALIDATION
-}
-
-enum FindingSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
+  PERMISSION_CHANGE
 }
 
 enum UserStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
+}
+
+//////////////////////////////////////////////////////
+// DYNAMIC RBAC SYSTEM
+//////////////////////////////////////////////////////
+
+model Permission {
+  id          String           @id @default(uuid())
+  slug        String           @unique // e.g., CASE_SUBMIT
+  name        String
+  group       String           // e.g., WORKFLOWS
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  active      Boolean          @default(true)
+  permissions RolePermission[]
+  users       UserRole[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id])
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
 }
 
 //////////////////////////////////////////////////////
@@ -90,6 +104,7 @@ model District {
   id        String   @id @default(uuid())
   name      String   @unique
   branches  Branch[]
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
 }
 
@@ -101,47 +116,33 @@ model Branch {
   district   District @relation(fields: [districtId], references: [id])
   users      User[]
   kycs       KYC[]
+  active     Boolean  @default(true)
   createdAt  DateTime @default(now())
 }
 
 //////////////////////////////////////////////////////
-// USER & RBAC
+// USER MODEL
 //////////////////////////////////////////////////////
 
 model User {
-  id            String   @id @default(uuid())
-  firebaseUid   String   @unique
-  email         String   @unique
+  id            String     @id @default(uuid())
+  firebaseUid   String     @unique
+  email         String     @unique
   firstName     String
   lastName      String
-  role          String   // Dynamic string to support custom roles from RoleDefinition
   phoneNumber   String?
-  branchId      String?
-  branch        Branch?  @relation(fields: [branchId], references: [id])
   status        UserStatus @default(ACTIVE)
-  assignedBranches String[] // For specialist portfolios
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
+  branchId      String?
+  branch        Branch?    @relation(fields: [branchId], references: [id])
+  active        Boolean    @default(true)
+  
+  roles         UserRole[]
   auditLogs     AuditLog[]
-  assignedKycs  KYC[]    @relation("AssignedKYC")
-  createdKycs   KYC[]    @relation("CreatedKYC")
-  memos         Memo[]
-}
-
-model RoleDefinition {
-  id                   String  @id @default(uuid())
-  name                 String  @unique
-  canSubmit            Boolean @default(false)
-  canReview            Boolean @default(false)
-  canEscalate          Boolean @default(false)
-  canViewReports       Boolean @default(false)
-  canManageUsers       Boolean @default(false)
-  canManageSystem      Boolean @default(false)
-  canAccessPerformance Boolean @default(false)
-  canAccessFollowUp    Boolean @default(false)
-  canAccessArchive     Boolean @default(false)
-  canManageFindings    Boolean @default(false)
+  createdKycs   KYC[]      @relation("CreatedBy")
+  assignedKycs  KYC[]      @relation("AssignedTo")
+  
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }
 
 //////////////////////////////////////////////////////
@@ -149,21 +150,21 @@ model RoleDefinition {
 //////////////////////////////////////////////////////
 
 model KYC {
-  id               String      @id
+  id               String      @id @default(uuid())
   customerName     String
   customerIdNumber String
   branchId         String
   branch           Branch      @relation(fields: [branchId], references: [id])
 
-  status           KYCStatus   @default(DRAFT)
+  status           KYCStatus   @default(SUBMITTED)
   riskLevel        RiskLevel   @default(LOW)
-  entityType       String?
+  entityType       String?     @default("individual")
 
   createdById      String
-  createdBy        User        @relation("CreatedKYC", fields: [createdById], references: [id])
+  createdBy        User        @relation("CreatedBy", fields: [createdById], references: [id])
 
   assignedToId     String?
-  assignedTo       User?       @relation("AssignedKYC", fields: [assignedToId], references: [id])
+  assignedTo       User?       @relation("AssignedTo", fields: [assignedToId], references: [id])
 
   governanceFlow   GovernanceFlow?
   amendments       Amendment[]
@@ -171,22 +172,31 @@ model KYC {
   auditLogs        AuditLog[]
   auditSamplings   AuditSampling[]
 
-  slaDueAt         DateTime?
-  approvedAt       DateTime?
   amendCycles      Int         @default(0)
   isResubmitted    Boolean     @default(false)
+  isExceptional    Boolean     @default(false)
+
   commentHistory   Json?       @default("[]")
   checklistState   Json?       @default("{}")
 
-  active           Boolean     @default(true) // Zero deletion policy
+  slaDueAt         DateTime?
+  approvedAt       DateTime?
+  active           Boolean     @default(true)
 
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 }
 
-//////////////////////////////////////////////////////
-// AMENDMENT CYCLE
-//////////////////////////////////////////////////////
+model Memo {
+  id           String   @id @default(uuid())
+  name         String?
+  type         String?
+  fileUrl      String
+  kycId        String
+  kyc          KYC      @relation(fields: [kycId], references: [id])
+  uploadedById String
+  createdAt    DateTime @default(now())
+}
 
 model Amendment {
   id          String   @id @default(uuid())
@@ -198,44 +208,17 @@ model Amendment {
   createdAt   DateTime @default(now())
 }
 
-//////////////////////////////////////////////////////
-// GOVERNANCE FLOW (Exceptional Cases)
-//////////////////////////////////////////////////////
-
 model GovernanceFlow {
   id              String   @id @default(uuid())
   kycId           String   @unique
   kyc             KYC      @relation(fields: [kycId], references: [id])
-
-  districtApproved         Boolean @default(false)
-  branchBankingApproved    Boolean @default(false)
-  chiefOfficerApproved     Boolean @default(false)
-  divisionManagerApproved  Boolean @default(false)
-  supervisorApproved       Boolean @default(false)
+  
+  exceptionalStatus String   @default("AWAITING_DISTRICT")
+  exceptionalData   Json?    @default("{}")
 
   completed       Boolean   @default(false)
   createdAt       DateTime  @default(now())
 }
-
-//////////////////////////////////////////////////////
-// AUTHORIZATION MEMOS (PDF UPLOADS)
-//////////////////////////////////////////////////////
-
-model Memo {
-  id           String   @id @default(uuid())
-  kycId        String
-  kyc          KYC      @relation(fields: [kycId], references: [id])
-  name         String?
-  type         String?
-  fileUrl      String
-  uploadedById String
-  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
-  createdAt    DateTime @default(now())
-}
-
-//////////////////////////////////////////////////////
-// AUDIT LOG (SECURITY VAULT)
-//////////////////////////////////////////////////////
 
 model AuditLog {
   id        String      @id @default(uuid())
@@ -250,58 +233,45 @@ model AuditLog {
   createdAt DateTime    @default(now())
 }
 
-//////////////////////////////////////////////////////
-// RANDOM SAMPLING (HEAD OFFICE QC)
-//////////////////////////////////////////////////////
-
 model AuditSampling {
   id          String   @id @default(uuid())
   kycId       String
   kyc         KYC      @relation(fields: [kycId], references: [id])
   reviewedBy  String
-  discrepancy Boolean  @default(false)
+  result      String?  // Correct / Discrepancy
   remarks     String?
-  score       Int?
-  createdAt   DateTime @default(now())
+  status      String   @default("PENDING")
+  verifiedAt  DateTime @default(now())
 }
-
-//////////////////////////////////////////////////////
-// KYC KNOWLEDGE BASE
-//////////////////////////////////////////////////////
-
-model Finding {
-  id           String          @id @default(uuid())
-  code         String          @unique
-  title        String
-  description  String
-  category     FindingCategory
-  severity     FindingSeverity
-  applicableTo String[]
-  active       Boolean         @default(true)
-  source       String          @default("manual")
-  createdAt    DateTime        @default(now())
-}
-
-//////////////////////////////////////////////////////
-// SYSTEM SETTINGS
-//////////////////////////////////////////////////////
 
 model GlobalSetting {
-  id               String   @id @default("global")
-  autoEscalation   Boolean  @default(true)
-  escalationHours  Int      @default(72)
-  strictSla        Boolean  @default(true)
-  slaHours         Int      @default(24)
-  documentTypes    Json?    @default("[]")
-  entityTypes      Json?    @default("[]")
-  guidelines       Json?    @default("[]")
-  updatedBy        String?
-  lastUpdated      DateTime @default(now())
+  id              String   @id @default("global")
+  autoEscalation  Boolean  @default(true)
+  escalationHours Int      @default(72)
+  strictSla       Boolean  @default(true)
+  slaHours        Int      @default(24)
+  documentTypes   Json?    @default("[]")
+  entityTypes     Json?    @default("[]")
+  guidelines      Json?    @default("[]")
+  lastUpdated     DateTime @default(now())
+}
+
+model Finding {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  title        String
+  description  String
+  category     String
+  severity     String
+  applicableTo Json?    @default("[]")
+  active       Boolean  @default(true)
+  source       String   @default("manual")
+  createdAt    DateTime @default(now())
 }
 
 model SLAConfig {
-  id             String   @id @default(uuid())
-  reviewHours    Int
+  id              String   @id @default(uuid())
+  reviewHours     Int
   escalationHours Int
-  createdAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
 }

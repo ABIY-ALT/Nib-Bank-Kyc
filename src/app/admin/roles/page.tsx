@@ -14,20 +14,14 @@ import {
   CheckCircle2,
   XCircle,
   ShieldAlert,
+  Zap,
+  Filter
 } from "lucide-react";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getAllUsers, updateUserRole } from '@/actions/users';
-import { getRoleDefinitions, upsertRoleDefinition, deleteRoleDefinition } from '@/actions/roles';
+import { getRoleDefinitions, getAllPermissions, upsertRole, deactivateRole, seedInstitutionalPermissions } from '@/actions/roles';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -37,28 +31,21 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function StaffRolesPage() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<any[]>([]);
   const [roleDefinitions, setRoleDefinitions] = useState<any[]>([]);
+  const [allPermissions, setAllPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<any>(null);
   const [roleForm, setRoleForm] = useState({
     name: '',
-    canSubmit: false,
-    canReview: false,
-    canEscalate: false,
-    canViewReports: false,
-    canManageUsers: false,
-    canManageSystem: false,
-    canAccessPerformance: false,
-    canAccessFollowUp: false,
-    canAccessArchive: false,
-    canManageFindings: false
+    description: '',
+    permissionIds: [] as string[]
   });
 
   useEffect(() => {
@@ -68,76 +55,69 @@ export default function StaffRolesPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [u, r] = await Promise.all([getAllUsers(), getRoleDefinitions()]);
-      setUsers(u);
+      const [r, p] = await Promise.all([getRoleDefinitions(), getAllPermissions()]);
       setRoleDefinitions(r);
+      setAllPermissions(p);
     } catch (e) {
-      toast({ variant: "destructive", title: "Sync Failed", description: "Could not retrieve SQL staff list." });
+      toast({ variant: "destructive", title: "Sync Failed" });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRoleChange = async (userId: string, newRole: string, currentName: string) => {
-    try {
-      await updateUserRole(userId, newRole);
-      toast({ title: "Role Updated", description: `${currentName} is now ${newRole.replace(/_/g, ' ')}.` });
-      loadData();
-    } catch (e) {
-      toast({ variant: "destructive", title: "Update Failed", description: "SQL registration could not be modified." });
-    }
+  const handleSeed = async () => {
+    setIsSyncing(true);
+    await seedInstitutionalPermissions();
+    toast({ title: "Permissions Initialized", description: "Standard institutional roles and 100+ permissions seeded." });
+    await loadData();
+    setIsSyncing(false);
   };
 
-  const handleSaveRoleDefinition = async () => {
+  const handleSaveRole = async () => {
     if (!roleForm.name) return;
-    const res = await upsertRoleDefinition(roleForm);
+    const res = await upsertRole(roleForm);
     if (res.success) {
-      toast({ title: "Role Definition Saved" });
+      toast({ title: "Role Configuration Saved" });
       setIsRoleDialogOpen(false);
-      resetRoleForm();
       loadData();
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error });
     }
   };
 
-  const handleDeleteRole = async (id: string) => {
-    if (!confirm("Remove this role definition?")) return;
-    await deleteRoleDefinition(id);
-    toast({ title: "Role Purged" });
-    loadData();
+  const handleTogglePermission = (id: string) => {
+    setRoleForm(prev => ({
+      ...prev,
+      permissionIds: prev.permissionIds.includes(id) 
+        ? prev.permissionIds.filter(pid => pid !== id)
+        : [...prev.permissionIds, id]
+    }));
   };
 
-  const resetRoleForm = () => {
+  const openEdit = (role: any) => {
+    setEditingRole(role);
     setRoleForm({
-      name: '',
-      canSubmit: false,
-      canReview: false,
-      canEscalate: false,
-      canViewReports: false,
-      canManageUsers: false,
-      canManageSystem: false,
-      canAccessPerformance: false,
-      canAccessFollowUp: false,
-      canAccessArchive: false,
-      canManageFindings: false
+      id: role.id,
+      name: role.name,
+      description: role.description || '',
+      permissionIds: role.permissions.map((rp: any) => rp.permissionId)
     });
-    setEditingRole(null);
+    setIsRoleDialogOpen(true);
   };
 
-  const filteredUsers = users.filter(u => 
-    `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    u.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const resetForm = () => {
+    setEditingRole(null);
+    setRoleForm({ name: '', description: '', permissionIds: [] });
+    setIsRoleDialogOpen(true);
+  };
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">Retrieving SQL Matrix...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
+
+  const permissionsByGroup = allPermissions.reduce((acc: any, p) => {
+    if (!acc[p.group]) acc[p.group] = [];
+    acc[p.group].push(p);
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -147,191 +127,141 @@ export default function StaffRolesPage() {
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Authorization Management</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Permissions</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Relational staff role mapping and access control.</p>
+          <p className="text-muted-foreground text-lg">Dynamic Role-Based Access Control (RBAC) Matrix.</p>
         </div>
-        <Button onClick={() => { resetRoleForm(); setIsRoleDialogOpen(true); }} className="bg-primary shadow-xl font-bold h-11 px-6">
-          <Plus className="w-4 h-4 mr-2" /> Add New Role
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleSeed} disabled={isSyncing} className="gap-2 border-primary/20 text-primary">
+            {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            Sync Permissions
+          </Button>
+          <Button onClick={resetForm} className="bg-primary shadow-xl font-bold h-11 px-6">
+            <Plus className="w-4 h-4 mr-2" /> Create Role
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="assignments" className="space-y-6">
-        <TabsList className="bg-slate-100 p-1 border h-12">
-          <TabsTrigger value="assignments" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8">
-            Staff Assignments
-          </TabsTrigger>
-          <TabsTrigger value="definitions" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8">
-            Role Permissions
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="assignments">
-          <Card className="shadow-xl border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b flex flex-row justify-between items-center">
-              <div><CardTitle className="text-xl">Staff Role Mapping</CardTitle></div>
-              <div className="relative w-80"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" /><Input placeholder="Search personnel..." className="pl-9" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50/50">
-                  <TableRow>
-                    <TableHead className="font-bold py-4 pl-8">Staff Member</TableHead>
-                    <TableHead className="font-bold">Current Designation</TableHead>
-                    <TableHead className="text-right font-bold pr-8">Update Authorization</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers.map((u) => (
-                    <TableRow key={u.id} className="hover:bg-slate-50">
-                      <TableCell className="pl-8 py-4">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-900">{u.firstName} {u.lastName}</span>
-                          <span className="text-[10px] text-muted-foreground font-medium">{u.email}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell><Badge variant="secondary" className="bg-primary/5 text-primary font-bold">{u.role?.replace(/_/g, ' ')}</Badge></TableCell>
-                      <TableCell className="text-right pr-8">
-                        <Select value={u.role} onValueChange={(val) => handleRoleChange(u.id, val, `${u.firstName} ${u.lastName}`)}>
-                          <SelectTrigger className="w-[220px] h-10 border-primary/20 bg-white"><SelectValue placeholder="Assign Role" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="ADMIN">ADMIN</SelectItem>
-                            {roleDefinitions.filter(r => r.name !== 'ADMIN').map(role => (
-                              <SelectItem key={role.id} value={role.name}>{role.name.replace(/_/g, ' ')}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="definitions">
-          <Card className="shadow-xl border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b">
-              <CardTitle className="text-xl">Institutional Permission Matrix</CardTitle>
-              <CardDescription>Define operational authority for each designation.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50/80">
-                  <TableRow>
-                    <TableHead className="font-bold py-4 pl-8">Role Name</TableHead>
-                    <TableHead className="text-center font-bold">Sub</TableHead>
-                    <TableHead className="text-center font-bold">Rev</TableHead>
-                    <TableHead className="text-center font-bold">Esc</TableHead>
-                    <TableHead className="text-center font-bold">KB</TableHead>
-                    <TableHead className="text-center font-bold">Perf</TableHead>
-                    <TableHead className="text-center font-bold">FU</TableHead>
-                    <TableHead className="text-center font-bold">Arch</TableHead>
-                    <TableHead className="text-center font-bold">User</TableHead>
-                    <TableHead className="text-center font-bold">Sys</TableHead>
-                    <TableHead className="text-right font-bold pr-8">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {roleDefinitions.map((def) => (
-                    <TableRow key={def.id} className="hover:bg-slate-50 transition-colors">
-                      <TableCell className="font-black text-slate-900 pl-8">{def.name}</TableCell>
-                      <TableCell className="text-center">{def.canSubmit ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-center">{def.canReview ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-center">{def.canEscalate ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-center">{def.canManageFindings ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-center">{def.canAccessPerformance ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-center">{def.canAccessFollowUp ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-center">{def.canAccessArchive ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-center">{def.canManageUsers ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-center">{def.canManageSystem ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-slate-200 mx-auto" />}</TableCell>
-                      <TableCell className="text-right pr-8">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => { setEditingRole(def); setRoleForm(def); setIsRoleDialogOpen(true); }} className="h-8 w-8 text-primary"><Settings2 className="w-4 h-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteRole(def.id)} className="h-8 w-8 text-destructive"><Trash2 className="w-4 h-4" /></Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {roleDefinitions.length === 0 && (
-                    <TableRow><TableCell colSpan={11} className="py-20 text-center text-muted-foreground italic">No dynamic roles defined.</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <Card className="shadow-xl border-slate-200 overflow-hidden">
+        <CardHeader className="bg-slate-50/50 border-b">
+          <CardTitle>Role Management</CardTitle>
+          <CardDescription>Assign atomic permissions to institutional designations.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50/80">
+                <TableHead className="font-bold py-4 pl-8">Role Name</TableHead>
+                <TableHead className="font-bold">Description</TableHead>
+                <TableHead className="text-center font-bold">Privileges</TableHead>
+                <TableHead className="text-right font-bold pr-8">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {roleDefinitions.map((role) => (
+                <TableRow key={role.id} className="hover:bg-slate-50">
+                  <TableCell className="font-black text-slate-900 pl-8">{role.name.replace(/_/g, ' ')}</TableCell>
+                  <TableCell className="text-slate-500 text-sm">{role.description}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">
+                      {role.permissions.length} Slugs
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right pr-8">
+                    <div className="flex justify-end gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(role)} className="h-8 w-8 text-primary"><Settings2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => deactivateRole(role.id).then(loadData)} className="h-8 w-8 text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="p-6 bg-slate-50 border-b">
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               <ShieldAlert className="w-6 h-6 text-primary" />
-              {editingRole ? 'Update Role' : 'Define New Role'}
+              {editingRole ? 'Modify Role Definition' : 'Define Institutional Role'}
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-6 pt-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Designation Name</Label>
-              <Input 
-                value={roleForm.name} 
-                onChange={e => setRoleForm({...roleForm, name: e.target.value.toUpperCase().replace(/\s+/g, '_')})} 
-                placeholder="e.g. SENIOR_AUDITOR"
-                className="h-11 font-mono font-bold"
-                disabled={!!editingRole}
-              />
-            </div>
-
-            <div className="space-y-4">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Operational Authority</Label>
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { id: 'canSubmit', label: 'Case Submission' },
-                  { id: 'canReview', label: 'KYC Review' },
-                  { id: 'canEscalate', label: 'Risk Escalation' },
-                  { id: 'canManageFindings', label: 'Knowledge Base (F&amp;Q)' },
-                  { id: 'canManageUsers', label: 'User Access' },
-                  { id: 'canManageSystem', label: 'System Config' }
-                ].map(perm => (
-                  <div key={perm.id} className="flex items-center space-x-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
-                    <Checkbox 
-                      id={perm.id} 
-                      checked={(roleForm as any)[perm.id]} 
-                      onCheckedChange={(val) => setRoleForm({...roleForm, [perm.id]: !!val})} 
-                    />
-                    <label htmlFor={perm.id} className="text-xs font-bold text-slate-700 cursor-pointer">{perm.label}</label>
-                  </div>
-                ))}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="p-6 grid grid-cols-2 gap-6 border-b bg-white">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">System Designation</Label>
+                <Input 
+                  value={roleForm.name} 
+                  onChange={e => setRoleForm({...roleForm, name: e.target.value.toUpperCase().replace(/\s+/g, '_')})} 
+                  placeholder="e.g. KYC_SPECIALIST_L2"
+                  className="h-11 font-mono font-bold"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Business Context</Label>
+                <Input 
+                  value={roleForm.description} 
+                  onChange={e => setRoleForm({...roleForm, description: e.target.value})} 
+                  placeholder="Brief role description..."
+                  className="h-11"
+                />
               </div>
             </div>
 
-            <div className="space-y-4 pt-4 border-t border-dashed">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-accent">Module Access (By Page)</Label>
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { id: 'canAccessPerformance', label: 'Performance Analytics' },
-                  { id: 'canAccessFollowUp', label: 'Follow-up Audit' },
-                  { id: 'canAccessArchive', label: 'Master Archive' }
-                ].map(perm => (
-                  <div key={perm.id} className="flex items-center space-x-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
-                    <Checkbox 
-                      id={perm.id} 
-                      checked={(roleForm as any)[perm.id]} 
-                      onCheckedChange={(val) => setRoleForm({...roleForm, [perm.id]: !!val})} 
-                    />
-                    <label htmlFor={perm.id} className="text-xs font-bold text-slate-700 cursor-pointer">{perm.label}</label>
+            <ScrollArea className="flex-1 p-6">
+              <div className="space-y-8 pb-8">
+                {Object.entries(permissionsByGroup).map(([group, perms]: [string, any]) => (
+                  <div key={group} className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-px flex-1 bg-slate-100" />
+                      <Badge variant="outline" className="bg-slate-50 text-slate-400 font-black tracking-widest uppercase text-[10px] py-1">
+                        {group} Capability Set
+                      </Badge>
+                      <div className="h-px flex-1 bg-slate-100" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {perms.map((p: any) => (
+                        <div 
+                          key={p.id} 
+                          onClick={() => handleTogglePermission(p.id)}
+                          className={cn(
+                            "flex items-start space-x-3 p-3 rounded-xl border cursor-pointer transition-all",
+                            roleForm.permissionIds.includes(p.id) 
+                              ? "border-primary bg-primary/5 shadow-sm" 
+                              : "border-slate-100 hover:bg-slate-50"
+                          )}
+                        >
+                          <Checkbox 
+                            id={p.id} 
+                            checked={roleForm.permissionIds.includes(p.id)}
+                            onCheckedChange={() => handleTogglePermission(p.id)}
+                          />
+                          <div className="space-y-0.5">
+                            <p className="text-[11px] font-bold text-slate-900 leading-tight">{p.name}</p>
+                            <p className="text-[9px] font-mono text-slate-400 uppercase">{p.slug}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
+            </ScrollArea>
           </div>
 
-          <DialogFooter className="pt-6 border-t mt-4">
-            <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveRoleDefinition} className="bg-primary font-black px-8">Commit Role</Button>
+          <DialogFooter className="p-6 border-t bg-slate-50">
+            <div className="flex items-center justify-between w-full">
+              <p className="text-[10px] font-bold text-slate-400 uppercase">
+                {roleForm.permissionIds.length} atomic privileges selected
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleSaveRole} className="bg-primary font-black px-10">Commit Changes</Button>
+              </div>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
