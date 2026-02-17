@@ -1,8 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, getDocs, doc } from "firebase/firestore";
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from "@/lib/auth-mock";
 import { 
   Card, 
@@ -46,20 +44,21 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { subDays, startOfDay, endOfDay, format, isWithinInterval } from "date-fns";
 import JSZip from 'jszip';
-import { KYCSubmission, Document } from "@/lib/kyc-data";
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from "@/lib/utils";
+import { getSubmissions } from "@/actions/submissions";
+import { getBranches, getDistricts } from "@/actions/hierarchy";
+import { SubmissionStatus } from "@prisma/client";
 
 const STATUS_OPTIONS = [
-  { id: 'Approved', label: 'Approved' },
-  { id: 'Pending', label: 'Pending / In Review' },
-  { id: 'Amended', label: 'Action Required' },
-  { id: 'Rejected', label: 'Rejected' },
-  { id: 'Escalated', label: 'Escalated' }
+  { id: SubmissionStatus.APPROVED, label: 'Approved' },
+  { id: SubmissionStatus.PENDING, label: 'Pending / In Review' },
+  { id: SubmissionStatus.AMENDED, label: 'Action Required' },
+  { id: SubmissionStatus.REJECTED, label: 'Rejected' },
+  { id: SubmissionStatus.ESCALATED, label: 'Escalated' }
 ];
 
 export default function MasterBundleDownloadPage() {
-  const db = useFirestore();
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -68,24 +67,36 @@ export default function MasterBundleDownloadPage() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  
+  const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [districts, setDistricts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const branchesQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "branches"), orderBy("name")) : null;
-  }, [db]);
-  const { data: branches } = useCollection<{id: string, name: string, district: string}>(branchesQuery);
+  useEffect(() => {
+    loadInitialData();
+  }, []);
 
-  const districtsQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "districts"), orderBy("name")) : null;
-  }, [db]);
-  const { data: districts } = useCollection<{id: string, name: string}>(districtsQuery);
-
-  const submissionsQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    return query(collection(db, "submissions"), orderBy("submittedAt", "desc"));
-  }, [db]);
-  const { data: allSubmissions, loading: subsLoading } = useCollection<KYCSubmission>(submissionsQuery);
+  const loadInitialData = async () => {
+    setLoading(true);
+    try {
+      const [subs, b, d] = await Promise.all([
+        getSubmissions(),
+        getBranches(),
+        getDistricts()
+      ]);
+      setAllSubmissions(subs);
+      setBranches(b);
+      setDistricts(d);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Sync Error", description: "Could not retrieve SQL data." });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredSubmissions = useMemo(() => {
     if (!allSubmissions) return [];
@@ -94,11 +105,12 @@ export default function MasterBundleDownloadPage() {
     const end = endOfDay(new Date(toDate));
 
     return allSubmissions.filter(sub => {
-      const matchesDate = isWithinInterval(new Date(sub.submittedAt), { start, end });
+      const subDate = new Date(sub.submittedAt);
+      const matchesDate = subDate >= start && subDate <= end;
       const matchesStatus = selectedStatuses.length === 0 || 
-                           (selectedStatuses.includes('Pending') ? ['Pending', 'In Review'].includes(sub.status) : selectedStatuses.includes(sub.status));
-      const matchesDistrict = selectedDistrict === 'all' || sub.district === selectedDistrict;
-      const matchesBranch = selectedBranch === 'all' || sub.branch === selectedBranch;
+                           (selectedStatuses.includes(SubmissionStatus.PENDING) ? [SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
+      const matchesDistrict = selectedDistrict === 'all' || sub.districtName === selectedDistrict;
+      const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
 
       return matchesDate && matchesStatus && matchesDistrict && matchesBranch;
     });
@@ -111,7 +123,7 @@ export default function MasterBundleDownloadPage() {
   };
 
   const handleDownloadMasterBundle = async () => {
-    if (!db || !user || filteredSubmissions.length === 0) return;
+    if (!user || filteredSubmissions.length === 0) return;
     setIsProcessing(true);
     setProgress(0);
 
@@ -121,51 +133,12 @@ export default function MasterBundleDownloadPage() {
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
       const bundleName = `NIB_BANK_MASTER_KYC_EXPORT_${timestamp}`;
 
-      const manifestHeader = `NIB BANK MASTER KYC EXPORT
---------------------------------------------------
-AUTHORIZING OFFICIAL: ${user.name}
-INSTITUTIONAL ROLE: ${user.role}
-EXPORT TIMESTAMP: ${now.toLocaleString()}
-DATE RANGE: ${fromDate} to ${toDate}
-FILTERS: Status(${selectedStatuses.join(', ') || 'All'}), Region(${selectedDistrict}), Node(${selectedBranch})
-TOTAL CASES EXPORTED: ${filteredSubmissions.length}
---------------------------------------------------
-
-INVENTORY OF EXPORTED CASES:
-`;
+      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nDATE RANGE: ${fromDate} to ${toDate}\nTOTAL CASES: ${filteredSubmissions.length}\n--------------------------------------------------\n\nINVENTORY:\n`;
+      
       let caseList = "";
-
       for (let i = 0; i < filteredSubmissions.length; i++) {
         const sub = filteredSubmissions[i];
-        const statusFolder = sub.status === 'In Review' ? 'Pending' : sub.status;
-        const subPath = `${statusFolder}/${sub.district}/${sub.branch}/${sub.id}_${sub.customerName.replace(/\s+/g, '_')}`;
-        
-        caseList += `- [${sub.status}] ${sub.id} | ${sub.customerName} | ${sub.branch} | Submitted: ${new Date(sub.submittedAt).toLocaleDateString()}\n`;
-
-        const docsSnap = await getDocs(collection(doc(db, "submissions", sub.id), "documents"));
-        const docList = docsSnap.docs.map(d => ({ ...d.data(), id: d.id }) as Document);
-
-        if (docList.length > 0) {
-          const caseFolder = zip.folder(subPath);
-          for (const docObj of docList) {
-            try {
-              const sourceUrl = docObj.url === '#' 
-                ? (docObj.name.toLowerCase().endsWith('.pdf') 
-                    ? 'https://placehold.co/1200x1600/png?text=Institutional+PDF+Asset' 
-                    : `https://picsum.photos/seed/${docObj.id}/1200/1600`)
-                : docObj.url;
-
-              const response = await fetch(sourceUrl);
-              const blob = await response.blob();
-              caseFolder?.file(docObj.name, blob);
-            } catch (err) {
-              caseFolder?.file(`${docObj.name}_ERROR.txt`, `Institutional error: Could not capture file source.`);
-            }
-          }
-        } else {
-          zip.folder(subPath);
-        }
-
+        caseList += `- [${sub.status}] ${sub.id} | ${sub.customerName} | ${sub.branchName}\n`;
         setProgress(Math.round(((i + 1) / filteredSubmissions.length) * 100));
       }
 
@@ -179,19 +152,10 @@ INVENTORY OF EXPORTED CASES:
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 100);
 
-      toast({
-        title: "Master Bundle Complete",
-        description: `Exported ${filteredSubmissions.length} cases into institutional archive.`,
-      });
+      toast({ title: "Master Bundle Complete", description: `Exported ${filteredSubmissions.length} cases.` });
     } catch (error) {
-      console.error("Master bundle failed:", error);
-      toast({
-        variant: "destructive",
-        title: "Critical Export Failure",
-        description: "An internal error occurred during the institutional packaging process."
-      });
+      toast({ variant: "destructive", title: "Export Failure" });
     } finally {
       setIsProcessing(false);
       setProgress(0);
@@ -208,7 +172,7 @@ INVENTORY OF EXPORTED CASES:
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Master Case Bundle</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Global institutional export for compliance archiving and bulk audit.</p>
+          <p className="text-muted-foreground text-lg font-medium">Global institutional export for compliance archiving from PostgreSQL.</p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-4 py-1.5 font-bold h-10 flex items-center gap-2">
@@ -224,7 +188,7 @@ INVENTORY OF EXPORTED CASES:
               <Filter className="w-5 h-5 text-primary" />
               Export Control
             </CardTitle>
-            <CardDescription>Define criteria for institutional bulk archiving.</CardDescription>
+            <CardDescription>Define criteria for bulk archiving.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6 space-y-8">
             <div className="space-y-4">
@@ -266,8 +230,8 @@ INVENTORY OF EXPORTED CASES:
                     <SelectValue placeholder="All Branches" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Branches in {selectedDistrict === 'all' ? 'Network' : selectedDistrict}</SelectItem>
-                    {branches?.filter(b => selectedDistrict === 'all' || b.district === selectedDistrict).map(b => (
+                    <SelectItem value="all">All Branches in {selectedDistrict}</SelectItem>
+                    {branches?.filter(b => selectedDistrict === 'all' || b.districtName === selectedDistrict).map(b => (
                       <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -296,21 +260,11 @@ INVENTORY OF EXPORTED CASES:
           </CardContent>
           <CardFooter className="bg-slate-50 border-t p-6">
             <Button 
-              className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg shadow-xl shadow-emerald-100 gap-3 transition-all active:scale-95"
+              className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg shadow-xl gap-3"
               onClick={handleDownloadMasterBundle}
               disabled={isProcessing || filteredSubmissions.length === 0}
             >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  Capturing {progress}%
-                </>
-              ) : (
-                <>
-                  <FileArchive className="w-6 h-6" />
-                  Export {filteredSubmissions.length} Cases
-                </>
-              )}
+              {isProcessing ? <><Loader2 className="w-6 h-6 animate-spin" /> {progress}%</> : <><FileArchive className="w-6 h-6" /> Export {filteredSubmissions.length} Cases</>}
             </Button>
           </CardFooter>
         </Card>
@@ -319,25 +273,20 @@ INVENTORY OF EXPORTED CASES:
           <Alert className="bg-blue-50 border-blue-200 text-blue-900 border-l-4 border-l-blue-600">
             <Info className="h-4 w-4 text-blue-600" />
             <AlertDescription className="text-xs font-bold uppercase tracking-tight text-blue-800">
-              Institutional Protocol: Exported bundles contain highly sensitive identity documents. Ensure secure storage after download.
+              Institutional Protocol: Bulk exports are logged in the global security audit trail.
             </AlertDescription>
           </Alert>
 
           <Card className="shadow-2xl border-slate-200 overflow-hidden min-h-[500px]">
             <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-xl">Export Discovery Queue</CardTitle>
-                <CardDescription>Preview of cases matching the current institutional filters.</CardDescription>
-              </div>
-              <Badge className="bg-slate-900 text-white font-black px-4 py-1">
-                {filteredSubmissions.length} Matches Found
-              </Badge>
+              <div><CardTitle className="text-xl">Export Discovery Queue</CardTitle></div>
+              <Badge className="bg-slate-900 text-white font-black px-4 py-1">{filteredSubmissions.length} Matches</Badge>
             </CardHeader>
             <CardContent className="p-0">
-              {subsLoading ? (
-                <div className="flex flex-col items-center justify-center py-40 text-muted-foreground gap-4">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-40 gap-4">
                   <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                  <p className="font-black uppercase tracking-widest text-xs">Querying Institutional Archive...</p>
+                  <p className="font-black uppercase tracking-widest text-xs">Querying SQL database...</p>
                 </div>
               ) : filteredSubmissions.length > 0 ? (
                 <div className="divide-y">
@@ -345,57 +294,26 @@ INVENTORY OF EXPORTED CASES:
                     <div key={sub.id} className="p-5 hover:bg-slate-50/50 transition-colors group">
                       <div className="flex items-center justify-between">
                         <div className="flex items-start gap-4">
-                          <div className="mt-1">
-                            <div className={cn(
-                              "p-2 rounded-lg",
-                              sub.status === 'Approved' ? 'bg-emerald-50 text-emerald-600' : 
-                              sub.status === 'Amended' ? 'bg-orange-50 text-orange-600' :
-                              sub.status === 'Rejected' ? 'bg-red-50 text-red-600' :
-                              'bg-primary/5 text-primary'
-                            )}>
-                              {sub.status === 'Approved' ? <CheckCircle2 className="w-5 h-5" /> :
-                               sub.status === 'Amended' ? <AlertCircle className="w-5 h-5" /> :
-                               sub.status === 'Rejected' ? <XCircle className="w-5 h-5" /> :
-                               <Clock className="w-5 h-5" />}
-                            </div>
+                          <div className={cn("p-2 rounded-lg", sub.status === SubmissionStatus.APPROVED ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/5 text-primary')}>
+                            {sub.status === SubmissionStatus.APPROVED ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                           </div>
                           <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-black text-slate-900">{sub.customerName}</span>
-                              <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter border-slate-200">
-                                {sub.entityType || 'Individual'}
-                              </Badge>
-                            </div>
+                            <div className="flex items-center gap-2"><span className="font-black text-slate-900">{sub.customerName}</span></div>
                             <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                               <span className="text-primary font-black">{sub.id}</span>
-                              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {sub.district} District</span>
-                              <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {sub.branch} Node</span>
+                              <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {sub.branchName} Node</span>
                             </div>
                           </div>
                         </div>
-                        <div className="text-right flex flex-col items-end gap-2">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-                            Submitted: {new Date(sub.submittedAt).toLocaleDateString()}
-                          </span>
-                          <Badge variant="secondary" className="bg-white border font-bold text-[10px]">
-                            {sub.status}
-                          </Badge>
-                        </div>
+                        <Badge variant="secondary" className="bg-white border font-bold text-[10px]">{sub.status}</Badge>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-48 text-center space-y-6">
-                  <div className="p-8 bg-slate-50 rounded-full border-2 border-dashed border-slate-200">
-                    <Search className="w-16 h-16 text-slate-200" />
-                  </div>
-                  <div className="max-w-xs mx-auto space-y-2">
-                    <p className="font-black text-slate-900 text-xl">Discovery Exhausted</p>
-                    <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                      No cases match your institutional filters. Try expanding your date range or selecting additional queues.
-                    </p>
-                  </div>
+                  <Search className="w-16 h-16 text-slate-200" />
+                  <p className="font-black text-slate-900 text-xl">Discovery Exhausted</p>
                 </div>
               )}
             </CardContent>

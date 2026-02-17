@@ -1,8 +1,6 @@
-
 "use client"
 
-import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, orderBy } from "firebase/firestore";
+import { useState, useEffect, useMemo } from "react";
 import { 
   Table, 
   TableBody, 
@@ -21,7 +19,8 @@ import {
   FileDown,
   Archive,
   Clock,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Loader2
 } from "lucide-react";
 import { 
   DropdownMenu,
@@ -36,25 +35,26 @@ import {
   DropdownMenuItem
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { KYCSubmission } from "@/lib/kyc-data";
 import { useToast } from "@/hooks/use-toast";
 import { subDays, startOfDay, endOfDay, format, isWithinInterval } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { getSubmissions } from "@/actions/submissions";
+import { SubmissionStatus } from "@prisma/client";
 
 const STATUS_OPTIONS = [
-  { id: 'APPROVED', label: 'Approved' },
-  { id: 'PENDING', label: 'Pending' },
-  { id: 'IN_REVIEW', label: 'In Review' },
-  { id: 'AMENDED', label: 'Action Required' },
-  { id: 'ESCALATED', label: 'Escalated' },
-  { id: 'REJECTED', label: 'Rejected' }
+  { id: SubmissionStatus.APPROVED, label: 'Approved' },
+  { id: SubmissionStatus.PENDING, label: 'Pending' },
+  { id: SubmissionStatus.IN_REVIEW, label: 'In Review' },
+  { id: SubmissionStatus.AMENDED, label: 'Action Required' },
+  { id: SubmissionStatus.ESCALATED, label: 'Escalated' },
+  { id: SubmissionStatus.REJECTED, label: 'Rejected' }
 ];
 
 export default function SubmissionsPage() {
-  const db = useFirestore();
   const { toast } = useToast();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
@@ -62,39 +62,46 @@ export default function SubmissionsPage() {
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  const allSubmissionsQuery = useMemo(() => {
-    if (!db) return null;
-    return query(collection(db, "submissions"), orderBy("submittedAt", "desc"));
-  }, [db]);
+  useEffect(() => {
+    loadArchive();
+  }, [fromDate, toDate]);
 
-  const { data: submissions, loading } = useCollection<KYCSubmission>(allSubmissionsQuery);
+  const loadArchive = async () => {
+    setLoading(true);
+    try {
+      const data = await getSubmissions({
+        startDate: fromDate,
+        endDate: toDate
+      });
+      setSubmissions(data);
+    } catch (error) {
+      console.error("Archive load failed:", error);
+      toast({ variant: "destructive", title: "Archive Error", description: "Could not retrieve SQL records." });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const branches = useMemo(() => {
     if (!submissions) return [];
-    return Array.from(new Set(submissions.map(s => s.branch))).sort();
+    return Array.from(new Set(submissions.map(s => s.branchName || "Unknown"))).sort();
   }, [submissions]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
     
-    const start = startOfDay(new Date(fromDate));
-    const end = endOfDay(new Date(toDate));
-
     return submissions.filter(s => {
       const matchesSearch = s.customerName.toLowerCase().includes(term) ||
                           s.id.toLowerCase().includes(term) ||
-                          s.branch.toLowerCase().includes(term);
+                          (s.branchName || "").toLowerCase().includes(term);
       
       const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(s.status);
-      const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(s.branch);
+      const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(s.branchName);
       
-      const subDate = new Date(s.submittedAt);
-      const matchesTime = isWithinInterval(subDate, { start, end });
-
-      return matchesSearch && matchesStatus && matchesBranch && matchesTime;
+      return matchesSearch && matchesStatus && matchesBranch;
     });
-  }, [submissions, searchTerm, selectedStatuses, selectedBranches, fromDate, toDate]);
+  }, [submissions, searchTerm, selectedStatuses, selectedBranches]);
 
   const handleExportCSV = () => {
     if (filteredSubmissions.length === 0) return;
@@ -103,13 +110,14 @@ export default function SubmissionsPage() {
     const rows = filteredSubmissions.map(s => [
       s.id,
       s.customerName,
-      s.branch,
+      s.branchName,
       s.status,
       new Date(s.submittedAt).toLocaleDateString()
     ]);
     
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', `nib-kyc-archive-${fromDate}-to-${toDate}.csv`);
@@ -141,21 +149,21 @@ export default function SubmissionsPage() {
     setToDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
-  const getStatusBadge = (sub: KYCSubmission) => {
-    const status = sub.status;
+  const getStatusBadge = (sub: any) => {
+    const status = sub.status as SubmissionStatus;
     switch (status) {
-      case 'APPROVED': 
+      case SubmissionStatus.APPROVED: 
         return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-bold px-3 py-1">Approved</Badge>;
-      case 'PENDING': 
-      case 'IN_REVIEW':
+      case SubmissionStatus.PENDING: 
+      case SubmissionStatus.IN_REVIEW:
         return <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5" /> {status.replace(/_/g, ' ')}
         </Badge>;
-      case 'AMENDED': 
+      case SubmissionStatus.AMENDED: 
         return <Badge className="bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100 font-bold px-3 py-1">Action Required</Badge>;
-      case 'REJECTED': 
+      case SubmissionStatus.REJECTED: 
         return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 hover:bg-red-100 font-bold px-3 py-1">Rejected</Badge>;
-      case 'ESCALATED': 
+      case SubmissionStatus.ESCALATED: 
         return <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100 font-bold px-3 py-1">Escalated</Badge>;
       default: 
         return <Badge variant="secondary" className="font-bold px-3 py-1">{status}</Badge>;
@@ -171,7 +179,7 @@ export default function SubmissionsPage() {
           </div>
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Master Case Archive</h1>
-            <p className="text-muted-foreground text-lg font-medium">Historical directory of all network submissions.</p>
+            <p className="text-muted-foreground text-lg font-medium">Historical directory of all network submissions in PostgreSQL.</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -234,7 +242,7 @@ export default function SubmissionsPage() {
           </DropdownMenu>
 
           <Button 
-            className="gap-2 h-10 px-6 bg-[#B89334] hover:bg-[#A6822D] text-white font-bold shadow-sm rounded-md transition-all active:scale-95" 
+            className="gap-2 h-10 px-6 bg-primary hover:bg-primary/90 text-white font-bold shadow-sm rounded-md transition-all active:scale-95" 
             onClick={handleExportCSV}
           >
             <FileDown className="w-4 h-4" />
@@ -304,8 +312,8 @@ export default function SubmissionsPage() {
             {loading ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
-                  <div className="animate-spin inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full mb-2" />
-                  <p>Syncing archive...</p>
+                  <Loader2 className="animate-spin inline-block w-6 h-6 text-primary mb-2" />
+                  <p className="font-bold">Syncing SQL archive...</p>
                 </TableCell>
               </TableRow>
             ) : filteredSubmissions.length === 0 ? (
@@ -325,7 +333,7 @@ export default function SubmissionsPage() {
                     <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">{sub.entityType || 'Individual'}</span>
                   </div>
                 </TableCell>
-                <TableCell className="font-medium text-slate-600">{sub.branch}</TableCell>
+                <TableCell className="font-medium text-slate-600">{sub.branchName}</TableCell>
                 <TableCell>{getStatusBadge(sub)}</TableCell>
                 <TableCell className="text-slate-500 font-medium tabular-nums text-xs">
                   {new Date(sub.submittedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}

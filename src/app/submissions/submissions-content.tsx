@@ -1,6 +1,5 @@
 "use client"
 
-import { KYCSubmission } from "@/lib/kyc-data";
 import { 
   Table, 
   TableBody, 
@@ -38,12 +37,12 @@ import { useState } from "react";
 import { logBundleDownload } from "@/actions/submissions";
 import { SubmissionStatus, ExceptionalStatus } from "@prisma/client";
 
-export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmission[] }) {
+export function SubmissionsPageContent({ submissions }: { submissions: any[] }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  const handleDownloadBundle = async (sub: KYCSubmission) => {
+  const handleDownloadBundle = async (sub: any) => {
     if (!user) return;
     setDownloadingId(sub.id);
 
@@ -51,7 +50,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
       const zip = new JSZip();
       const now = new Date();
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      const bundleName = `${sub.district.replace(/\s+/g, '_')}_${sub.branch.replace(/\s+/g, '_')}_${timestamp}`;
+      const bundleName = `${(sub.districtName || "Central").replace(/\s+/g, '_')}_${(sub.branchName || "Global").replace(/\s+/g, '_')}_${timestamp}`;
 
       const manifest = `Nib Bank KYC Bundle\nGenerated: ${now.toLocaleString()}\nCase ID: ${sub.id}\nCustomer: ${sub.customerName}`;
       zip.file("nib_bank_manifest.txt", manifest);
@@ -69,8 +68,8 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
         submissionId: sub.id,
         performedBy: user.name,
         bundleName: bundleName,
-        sourceDistrict: sub.district,
-        sourceBranch: sub.branch
+        sourceDistrict: sub.districtName || "Central",
+        sourceBranch: sub.branchName || "Global"
       });
 
       toast({ title: "Bundle Compiled", description: `Nib Bank archive is ready.` });
@@ -81,7 +80,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
     }
   };
 
-  const getStatusBadge = (sub: KYCSubmission) => {
+  const getStatusBadge = (sub: any) => {
     if (sub.isExceptional && sub.exceptionalStatus && sub.exceptionalStatus !== 'NONE' && sub.exceptionalStatus !== 'COMPLETED') {
       return (
         <Badge className="bg-yellow-50 text-yellow-800 border-yellow-200 flex items-center gap-1.5 font-bold px-3 py-1">
@@ -90,7 +89,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
       );
     }
 
-    const status = sub.status as unknown as SubmissionStatus;
+    const status = sub.status as SubmissionStatus;
     const isResubmitted = sub.isResubmitted && (status === SubmissionStatus.PENDING || status === SubmissionStatus.IN_REVIEW);
 
     switch (status) {
@@ -100,10 +99,10 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
       case SubmissionStatus.IN_REVIEW:
         return isResubmitted ? 
           <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1.5 font-bold px-3 py-1">
-            <History className="w-3.5 h-3.5" /> Pending Review
+            <History className="w-3.5 h-3.5" /> Resubmitted
           </Badge> : 
           <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5" /> {status}
+            <Clock className="w-3.5 h-3.5" /> {status.replace(/_/g, ' ')}
           </Badge>;
       case SubmissionStatus.AMENDED: 
         return <Badge className="bg-orange-100 text-orange-800 border-orange-200 flex items-center gap-1.5 font-bold px-3 py-1 animate-pulse">
@@ -139,7 +138,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
               <TableCell className="font-bold text-primary tabular-nums">
                 <div className="flex flex-col gap-1">
                   <span>{sub.id}</span>
-                  {sub.amendmentCycles > 0 && (
+                  {(sub.amendmentCycles || 0) > 0 && (
                     <div className="flex items-center gap-1 text-[9px] text-orange-600 font-black uppercase">
                       <RefreshCw className="w-2" /> Cycle {sub.amendmentCycles}
                     </div>
@@ -152,7 +151,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: KYCSubmis
                   <span className="text-[10px] text-muted-foreground uppercase font-semibold">{sub.entityType || 'Individual'}</span>
                 </div>
               </TableCell>
-              <TableCell className="text-slate-600 font-medium">{sub.branch}</TableCell>
+              <TableCell className="text-slate-600 font-medium">{sub.branchName}</TableCell>
               <TableCell>{getStatusBadge(sub)}</TableCell>
               <TableCell className="text-slate-500 tabular-nums font-medium">
                 {new Date(sub.submittedAt).toLocaleDateString()}
