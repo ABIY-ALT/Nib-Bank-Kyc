@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -48,122 +49,6 @@ enum ExceptionalStatus {
   CLARIFICATION_REQUIRED
 }
 
-model User {
-  id               String     @id
-  email            String     @unique
-  name             String
-  phoneNumber      String?
-  role             UserRole   @default(BRANCH_OFFICER)
-  status           UserStatus @default(ACTIVE)
-  branchName       String?
-  districtName     String?
-  assignedBranches String[]   @default([])
-  needsPasswordChange Boolean @default(false)
-  
-  submissions      Submission[] @relation("SubmittedBy")
-  reviews          Submission[] @relation("ReviewedBy")
-}
-
-model RoleDefinition {
-  id              String   @id @default(cuid())
-  name            String   @unique
-  canSubmit       Boolean  @default(false)
-  canReview       Boolean  @default(false)
-  canEscalate     Boolean  @default(false)
-  canViewReports  Boolean  @default(false)
-  canManageUsers  Boolean  @default(false)
-  canManageSystem Boolean  @default(false)
-}
-
-model District {
-  id       String   @id @default(cuid())
-  name     String   @unique
-  branches Branch[]
-}
-
-model Branch {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  code         String?
-  districtName String
-  district     District @relation(fields: [districtName], references: [name])
-}
-
-model Submission {
-  id                String            @id
-  customerName      String
-  entityType        String
-  branchName        String
-  districtName      String
-  status            SubmissionStatus  @default(PENDING)
-  submittedAt       DateTime          @default(now())
-  submittedById     String
-  submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
-  reviewedAt        DateTime?
-  reviewedById      String?
-  reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
-  remarks           String?
-  isResubmitted     Boolean           @default(false)
-  amendmentCycles   Int               @default(0)
-  isExceptional     Boolean           @default(false)
-  exceptionalStatus ExceptionalStatus @default(NONE)
-  exceptionalData   Json?
-  commentHistory    Json?
-  checklistState    Json?
-  
-  documents         Document[]
-  bundleDownloads   BundleDownload[]
-}
-
-model Document {
-  id           String     @id @default(cuid())
-  name         String
-  type         String
-  url          String
-  status       String     @default("Current")
-  uploadedAt   DateTime   @default(now())
-  submissionId String
-  submission   Submission @relation(fields: [submissionId], references: [id])
-}
-
-model BundleDownload {
-  id             String     @id @default(cuid())
-  performedBy    String
-  timestamp      DateTime   @default(now())
-  bundleName     String
-  sourceDistrict String
-  sourceBranch   String
-  submissionId   String
-  submission     Submission @relation(fields: [submissionId], references: [id])
-}
-
-model FollowUpVerification {
-  id           String   @id @default(cuid())
-  submissionId String   @unique
-  customerName String
-  branch       String
-  officer      String
-  accountType  String
-  verifiedBy   String?
-  verifiedAt   DateTime?
-  result       String?
-  remarks      String?
-  status       String   @default("PENDING")
-}
-
-model Finding {
-  id           String          @id @default(cuid())
-  code         String          @unique
-  title        String
-  description  String
-  category     FindingCategory
-  severity     FindingSeverity
-  applicableTo String[]
-  active       Boolean         @default(true)
-  source       String          @default("manual")
-  createdAt    DateTime        @default(now())
-}
-
 enum FindingCategory {
   IDENTITY
   DOCUMENTATION
@@ -178,17 +63,116 @@ enum FindingSeverity {
   CRITICAL
 }
 
-model GlobalSetting {
-  id              String   @id @default("global")
-  autoEscalation  Boolean  @default(true)
-  escalationHours Int      @default(72)
-  strictSla       Boolean  @default(true)
-  slaHours        Int      @default(24)
-  documentTypes   Json?
-  entityTypes     Json?
-  guidelines      Json?
-  updatedBy       String?
-  lastUpdated     DateTime @default(now())
+model User {
+  id                  String       @id
+  email               String       @unique
+  name                String
+  phoneNumber         String?
+  role                UserRole     @default(BRANCH_OFFICER)
+  status              UserStatus   @default(ACTIVE)
+  branchName          String?
+  districtName        String?
+  assignedBranches    String[]     @default([])
+  needsPasswordChange Boolean      @default(false)
+  
+  // Relations
+  submissions         Submission[] @relation("SubmittedBy")
+  reviewedSubmissions Submission[] @relation("ReviewedBy")
+  
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+}
+
+model Submission {
+  id                String            @id
+  customerId        String?
+  customerName      String
+  branchName        String
+  districtName      String
+  entityType        String?
+  status            SubmissionStatus  @default(PENDING)
+  remarks           String?           @db.Text
+  
+  // Exceptional Flow
+  isExceptional     Boolean           @default(false)
+  exceptionalStatus ExceptionalStatus @default(NONE)
+  exceptionalData   Json?             // Stores reason, justification, approval history
+  
+  // Audit Tracking
+  commentHistory    Json?             // Array of CommentHistoryEntry
+  amendmentCycles   Int               @default(0)
+  isResubmitted     Boolean           @default(false)
+  checklistState    Json?             
+  
+  // User Relations
+  submittedById     String
+  submittedBy       User              @relation("SubmittedBy", fields: [submittedById], references: [id])
+  reviewedById      String?
+  reviewedBy        User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  
+  // Assets
+  documents         Document[]
+  bundleDownloads   BundleDownload[]
+  
+  submittedAt       DateTime          @default(now())
+  reviewedAt        DateTime?
+  updatedAt         DateTime          @updatedAt
+}
+
+model Document {
+  id           String     @id @default(cuid())
+  name         String
+  type         String
+  url          String     // This is the filesystem path (uploads/...)
+  status       String     @default("Current")
+  
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  
+  uploadedAt   DateTime   @default(now())
+}
+
+model RoleDefinition {
+  id                   String  @id @default(cuid())
+  name                 String  @unique // Matches UserRole string representation
+  
+  // Operational Permissions
+  canSubmit            Boolean @default(false)
+  canReview            Boolean @default(false)
+  canEscalate          Boolean @default(false)
+  canViewReports       Boolean @default(false)
+  canManageUsers       Boolean @default(false)
+  canManageSystem      Boolean @default(false)
+  
+  // Page-Level Permissions
+  canAccessPerformance Boolean @default(false)
+  canAccessFollowUp    Boolean @default(false)
+  canAccessArchive     Boolean @default(false)
+}
+
+model FollowUpVerification {
+  id           String   @id @default(cuid())
+  submissionId String
+  customerName String
+  branch       String
+  officer      String
+  accountType  String
+  verifiedBy   String?
+  verifiedAt   DateTime @default(now())
+  result       String?  // "Correct" | "Discrepancy"
+  remarks      String?  @db.Text
+  status       String   @default("PENDING") // "PENDING" | "COMPLETED"
+}
+
+model BundleDownload {
+  id             String     @id @default(cuid())
+  submissionId   String
+  submission     Submission @relation(fields: [submissionId], references: [id])
+  performedBy    String
+  timestamp      DateTime   @default(now())
+  bundleName     String
+  sourceDistrict String
+  sourceBranch   String
 }
 
 model AuditLog {
@@ -197,7 +181,47 @@ model AuditLog {
   userEmail String
   userName  String?
   action    String
-  ipAddress String
-  details   String
   timestamp DateTime @default(now())
+  ipAddress String
+  details   String   @db.Text
+}
+
+model GlobalSetting {
+  id              String   @id @default("global")
+  autoEscalation  Boolean  @default(true)
+  escalationHours Int      @default(72)
+  strictSla       Boolean  @default(true)
+  slaHours        Int      @default(24)
+  documentTypes   Json?    // Array of {id, label}
+  entityTypes     Json?    // Array of {id, label}
+  guidelines      Json?    // Array of {id, title, description, type}
+  updatedBy       String?
+  lastUpdated     DateTime @default(now())
+}
+
+model Finding {
+  id           String          @id @default(cuid())
+  code         String          @unique
+  title        String
+  description  String          @db.Text
+  category     FindingCategory
+  severity     FindingSeverity
+  applicableTo String[]        @default([]) // Array of Account Types
+  active       Boolean         @default(true)
+  source       String          @default("manual") // "manual" | "auto"
+  createdAt    DateTime        @default(now())
+}
+
+model District {
+  id       String   @id @default(cuid())
+  name     String   @unique
+  branches Branch[]
+}
+
+model Branch {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  code         String?
+  districtName String
+  district     District @relation(fields: [districtName], references: [name])
 }
