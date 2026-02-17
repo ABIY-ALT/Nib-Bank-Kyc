@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -143,7 +144,7 @@ export function AppSidebar() {
                               <span>Action Required</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.actionRequired > 0 && <SidebarMenuBadge className="bg-orange-500 text-white font-bold animate-pulse">{counts.actionRequired}</SidebarMenuBadge>}
+                          {counts.actionRequired > 0 && <SidebarMenuBadge className="bg-orange-50 text-white font-bold animate-pulse">{counts.actionRequired}</SidebarMenuBadge>}
                         </SidebarMenuSubItem>
                       )}
 

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -15,7 +16,11 @@ import {
   Check,
   CheckCircle2,
   X,
-  ListFilter
+  ListFilter,
+  Users,
+  Search,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -26,11 +31,13 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter
+  DialogFooter,
+  DialogDescription
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // INSTITUTIONAL MATRIX CONFIGURATION
 const ROLE_MATRIX_CONFIG = [
@@ -97,9 +104,12 @@ export default function StaffRolesPage() {
   const [allPermissions, setAllPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
   
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
-  const [viewRoleDetails, setViewRoleDetails] = useState<any>(null);
+  const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
+  const [selectedRoleForPermissions, setSelectedRoleForPermissions] = useState<any>(null);
+  const [permissionsForm, setPermissionsForm] = useState<string[]>([]);
   const [editingRole, setEditingRole] = useState<any>(null);
   const [roleForm, setRoleForm] = useState({
     name: '',
@@ -185,22 +195,63 @@ export default function StaffRolesPage() {
     setIsRoleDialogOpen(true);
   };
 
+  const openPermissionsEditor = (role: any) => {
+    setSelectedRoleForPermissions(role);
+    setPermissionsForm(role.permissions.map((rp: any) => rp.permissionId));
+    setIsPermissionsDialogOpen(true);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!selectedRoleForPermissions) return;
+    setIsSavingPermissions(true);
+    try {
+      const res = await upsertRole({
+        id: selectedRoleForPermissions.id,
+        name: selectedRoleForPermissions.name,
+        description: selectedRoleForPermissions.description || '',
+        permissionIds: permissionsForm
+      });
+      if (res.success) {
+        toast({ title: "Authority Map Updated" });
+        setIsPermissionsDialogOpen(false);
+        loadData();
+      } else {
+        toast({ variant: "destructive", title: "Update Failed", description: res.error });
+      }
+    } finally {
+      setIsSavingPermissions(false);
+    }
+  };
+
+  const handleToggleOnePermission = (id: string) => {
+    setPermissionsForm(prev => 
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllPermissions = () => {
+    if (permissionsForm.length === allPermissions.length) {
+      setPermissionsForm([]);
+    } else {
+      setPermissionsForm(allPermissions.map(p => p.id));
+    }
+  };
+
   const resetForm = () => {
     setEditingRole(null);
     setRoleForm({ name: '', description: '', permissionIds: [] });
     setIsRoleDialogOpen(true);
   };
 
-  const groupedRolePermissions = useMemo(() => {
-    if (!viewRoleDetails) return {};
+  const groupedPermissions = useMemo(() => {
     const groups: Record<string, any[]> = {};
-    viewRoleDetails.permissions.forEach((rp: any) => {
-      const g = rp.permission.group;
+    allPermissions.forEach(p => {
+      const g = p.group;
       if (!groups[g]) groups[g] = [];
-      groups[g].push(rp.permission);
+      groups[g].push(p);
     });
     return groups;
-  }, [viewRoleDetails]);
+  }, [allPermissions]);
 
   if (loading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
 
@@ -253,7 +304,7 @@ export default function StaffRolesPage() {
                   </TableCell>
                   <TableCell className="text-center">
                     <button 
-                      onClick={() => setViewRoleDetails(role)}
+                      onClick={() => openPermissionsEditor(role)}
                       className="flex items-center justify-center gap-2 mx-auto hover:scale-105 transition-transform p-2 rounded-lg hover:bg-emerald-50 group"
                     >
                       <span className="font-bold text-slate-700 group-hover:text-emerald-700">{role.permissions.length} Rights</span>
@@ -273,9 +324,9 @@ export default function StaffRolesPage() {
         </CardContent>
       </Card>
 
-      {/* DETAIL VIEW DIALOG */}
-      <Dialog open={!!viewRoleDetails} onOpenChange={() => setViewRoleDetails(null)}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
+      {/* GRANULAR PERMISSION EDITOR DIALOG */}
+      <Dialog open={isPermissionsDialogOpen} onOpenChange={setIsPermissionsDialogOpen}>
+        <DialogContent className="max-w-3xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-white">
             <DialogHeader className="p-8 bg-slate-900 text-white space-y-0">
               <div className="flex items-center justify-between">
@@ -285,34 +336,69 @@ export default function StaffRolesPage() {
                   </div>
                   <div>
                     <DialogTitle className="text-2xl font-black tracking-tight">
-                      {viewRoleDetails?.name.replace(/_/g, ' ')}
+                      Authority Management: {selectedRoleForPermissions?.name.replace(/_/g, ' ')}
                     </DialogTitle>
-                    <p className="text-primary font-bold text-[10px] uppercase tracking-widest mt-1">Authority Inventory</p>
+                    <DialogDescription className="text-primary font-bold text-[10px] uppercase tracking-widest mt-1">
+                      Selective capability assignment for institutional security.
+                    </DialogDescription>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setViewRoleDetails(null)} className="text-white/40 hover:text-white hover:bg-white/10 rounded-full">
-                  <X className="w-5 h-5" />
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleSelectAllPermissions}
+                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 font-bold"
+                  >
+                    {permissionsForm.length === allPermissions.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => setIsPermissionsDialogOpen(false)} className="text-white/40 hover:text-white hover:bg-white/10 rounded-full">
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
               </div>
             </DialogHeader>
             
             <div className="p-8">
-              <ScrollArea className="h-[50vh] pr-4">
-                <div className="space-y-8">
-                  {Object.entries(groupedRolePermissions).map(([group, perms]) => (
+              <ScrollArea className="h-[60vh] pr-4">
+                <div className="space-y-10">
+                  {Object.entries(groupedPermissions).map(([group, perms]) => (
                     <div key={group} className="space-y-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-px flex-1 bg-slate-100" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 whitespace-nowrap">{group}</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary whitespace-nowrap">{group}</span>
                         <div className="h-px flex-1 bg-slate-100" />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {perms.map((p: any) => (
-                          <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                            <span className="text-xs font-bold text-slate-700">{p.name}</span>
-                          </div>
-                        ))}
+                        {perms.map((p: any) => {
+                          const isSelected = permissionsForm.includes(p.id);
+                          return (
+                            <div 
+                              key={p.id} 
+                              onClick={() => handleToggleOnePermission(p.id)}
+                              className={cn(
+                                "flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer group",
+                                isSelected ? "bg-primary/5 border-primary/20 shadow-sm" : "bg-white border-slate-100 hover:border-slate-200"
+                              )}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  "w-2 h-2 rounded-full transition-all",
+                                  isSelected ? "bg-primary scale-125" : "bg-slate-200"
+                                )} />
+                                <span className={cn(
+                                  "text-xs font-bold transition-colors",
+                                  isSelected ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
+                                )}>{p.name}</span>
+                              </div>
+                              <div className={cn(
+                                "w-5 h-5 rounded border transition-all flex items-center justify-center",
+                                isSelected ? "bg-primary border-primary" : "bg-slate-50 border-slate-200 group-hover:border-primary/30"
+                              )}>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -320,14 +406,28 @@ export default function StaffRolesPage() {
               </ScrollArea>
             </div>
 
-            <DialogFooter className="p-6 bg-slate-50 border-t flex justify-end">
-              <Button onClick={() => setViewRoleDetails(null)} className="bg-slate-900 text-white font-bold px-8">Close Inventory</Button>
+            <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row justify-end gap-3 rounded-b-3xl">
+              <Button 
+                variant="ghost" 
+                onClick={() => setIsPermissionsDialogOpen(false)} 
+                className="h-12 px-8 font-bold text-slate-500 rounded-xl hover:bg-slate-100"
+              >
+                Discard Changes
+              </Button>
+              <Button 
+                onClick={handleSavePermissions} 
+                disabled={isSavingPermissions}
+                className="h-12 px-10 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-lg shadow-primary/20"
+              >
+                {isSavingPermissions ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Commit Rights Map
+              </Button>
             </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* CREATE/EDIT DIALOG */}
+      {/* CREATE/EDIT DIALOG (9-CARD MATRIX) */}
       <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
         <DialogContent className="max-w-xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-white">
