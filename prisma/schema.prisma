@@ -11,27 +11,12 @@ datasource db {
 // ENUMS
 //////////////////////////////////////////////////////
 
-enum RoleType {
-  SUPER_ADMIN
-  BRANCH_OFFICER
-  KYC_SPECIALIST
-  SENIOR_ASSESSOR
-  DISTRICT_DIRECTOR
-  BRANCH_BANKING_DIRECTOR
-  CHIEF_OFFICER
-  DIVISION_MANAGER
-  SUPERVISOR
-  COMPLIANCE_OFFICER
-  AUDITOR
-  SLA_MANAGER
-  ADMIN
-}
-
 enum KYCStatus {
   DRAFT
   SUBMITTED
   UNDER_REVIEW
   ACTION_REQUIRED
+  AMENDED
   RESUBMITTED
   ESCALATED
   GOVERNANCE_PENDING
@@ -39,6 +24,7 @@ enum KYCStatus {
   COMPLIANCE_REVIEW
   ACTIVE
   INACTIVE
+  APPROVED
   REJECTED
   FROZEN
 }
@@ -116,33 +102,35 @@ model User {
   firstName     String
   lastName      String
   phoneNumber   String?
-  role          String   // Transitioned to String to support dynamic RoleDefinitions
+  role          String   @default("BRANCH_OFFICER")
   branchId      String?
   branch        Branch?  @relation(fields: [branchId], references: [id])
   status        UserStatus @default(ACTIVE)
+  
+  assignedBranches String[] // Specialist portfolio mapping (Branch Names)
   needsPasswordChange Boolean @default(false)
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   auditLogs     AuditLog[]
-  assignedKycs  KYC[]    @relation("AssignedTo")
   createdKycs   KYC[]    @relation("CreatedBy")
+  assignedKycs  KYC[]    @relation("AssignedTo")
 }
 
 model RoleDefinition {
-  id                   String   @id @default(uuid())
-  name                 String   @unique
-  canSubmit            Boolean  @default(false)
-  canReview            Boolean  @default(false)
-  canEscalate          Boolean  @default(false)
-  canViewReports       Boolean  @default(false)
-  canManageUsers       Boolean  @default(false)
-  canManageSystem      Boolean  @default(false)
-  canAccessPerformance Boolean  @default(false)
-  canAccessFollowUp    Boolean  @default(false)
-  canAccessArchive     Boolean  @default(false)
+  id                   String  @id @default(uuid())
+  name                 String  @unique
+  canSubmit            Boolean @default(false)
+  canReview            Boolean @default(false)
+  canEscalate          Boolean @default(false)
+  canViewReports       Boolean @default(false)
+  canManageUsers       Boolean @default(false)
+  canManageSystem      Boolean @default(false)
+  canAccessPerformance Boolean @default(false)
+  canAccessFollowUp    Boolean @default(false)
+  canAccessArchive     Boolean @default(false)
   createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////////
@@ -153,11 +141,12 @@ model KYC {
   id               String      @id
   customerName     String
   customerIdNumber String
+  entityType       String?
   branchId         String
   branch           Branch      @relation(fields: [branchId], references: [id])
 
   status           KYCStatus   @default(DRAFT)
-  riskLevel        RiskLevel    @default(LOW)
+  riskLevel        RiskLevel   @default(LOW)
 
   createdById      String
   createdBy        User        @relation("CreatedBy", fields: [createdById], references: [id])
@@ -171,13 +160,14 @@ model KYC {
   auditLogs        AuditLog[]
   auditSamplings   AuditSampling[]
 
-  slaDueAt         DateTime?
-  approvedAt       DateTime?
-
+  commentHistory   Json?       // Array of CommentHistoryEntry
+  exceptionalData  Json?       // Governance context
+  
   amendCycles      Int         @default(0)
   isResubmitted    Boolean     @default(false)
-  entityType       String?
-  commentHistory   Json?       // For historical tracking
+  
+  slaDueAt         DateTime?
+  approvedAt       DateTime?
 
   active           Boolean     @default(true) // Zero deletion policy
 
@@ -224,10 +214,10 @@ model GovernanceFlow {
 
 model Memo {
   id        String   @id @default(uuid())
-  kycId     String
-  kyc       KYC      @relation(fields: [kycId], references: [id])
   name      String?
   type      String?
+  kycId     String
+  kyc       KYC      @relation(fields: [kycId], references: [id])
   uploadedById String
   fileUrl   String
   createdAt DateTime @default(now())
@@ -247,7 +237,7 @@ model AuditLog {
   details   String?
   ipAddress String?
   metadata  Json?
-  timestamp DateTime    @default(now())
+  createdAt DateTime    @default(now())
 }
 
 //////////////////////////////////////////////////////
@@ -266,7 +256,18 @@ model AuditSampling {
 }
 
 //////////////////////////////////////////////////////
-// SYSTEM KNOWLEDGE BASE
+// SLA CONFIGURATION
+//////////////////////////////////////////////////////
+
+model SLAConfig {
+  id             String   @id @default(uuid())
+  reviewHours    Int
+  escalationHours Int
+  createdAt      DateTime @default(now())
+}
+
+//////////////////////////////////////////////////////
+// KNOWLEDGE BASE
 //////////////////////////////////////////////////////
 
 model Finding {
@@ -276,9 +277,9 @@ model Finding {
   description  String
   category     FindingCategory
   severity     FindingSeverity
-  applicableTo String[]        // List of account types
+  applicableTo String[]        // List of entity types
   active       Boolean         @default(true)
-  source       String          @default("manual") // manual or auto
+  source       String          @default("manual")
   createdAt    DateTime        @default(now())
 }
 
@@ -292,5 +293,5 @@ model GlobalSetting {
   entityTypes     Json?    // Array of {id, label}
   guidelines      Json?    // Array of {id, title, description, type}
   updatedBy       String?
-  lastUpdated     DateTime @updatedAt
+  lastUpdated     DateTime @default(now())
 }
