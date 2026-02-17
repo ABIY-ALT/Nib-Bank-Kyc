@@ -1,8 +1,9 @@
 'use client';
 
 import { UserProfile } from "@/lib/auth-mock.tsx";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { UserRole } from "@prisma/client";
+import { getRoleDefinitions } from "@/actions/roles";
 
 export interface PermissionSet {
   canSubmit: boolean;
@@ -13,39 +14,56 @@ export interface PermissionSet {
   canManageSystem: boolean;
 }
 
+const DEFAULT_PERMISSIONS: Record<string, PermissionSet> = {
+  [UserRole.ADMIN]: { canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, canManageUsers: true, canManageSystem: true },
+  [UserRole.KYC_OFFICER]: { canSubmit: true, canReview: true, canEscalate: false, canViewReports: false, canManageUsers: false, canManageSystem: false },
+  [UserRole.SUPERVISOR]: { canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, canManageUsers: false, canManageSystem: false },
+  [UserRole.BRANCH_OFFICER]: { canSubmit: true, canReview: false, canEscalate: false, canViewReports: false, canManageUsers: false, canManageSystem: false },
+  [UserRole.FOLLOW_UP_TEAM]: { canSubmit: false, canReview: false, canEscalate: false, canViewReports: true, canManageUsers: false, canManageSystem: false },
+  [UserRole.BRANCH_MANAGER]: { canSubmit: true, canReview: false, canEscalate: true, canViewReports: true, canManageUsers: false, canManageSystem: false },
+  [UserRole.DISTRICT_DIRECTOR]: { canSubmit: true, canReview: false, canEscalate: true, canViewReports: true, canManageUsers: false, canManageSystem: false }
+};
+
 export function usePermissions(user: UserProfile | null) {
+  const [dbDefinitions, setDbDefinitions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDefinitions() {
+      const data = await getRoleDefinitions();
+      setDbDefinitions(data);
+      setLoading(false);
+    }
+    loadDefinitions();
+  }, []);
+
   const permissions = useMemo((): PermissionSet => {
     if (!user) return {
       canSubmit: false, canReview: false, canEscalate: false, 
       canViewReports: false, canManageUsers: false, canManageSystem: false
     };
 
-    const role = user.role;
+    const roleName = user.role;
+    
+    // Check if there's a dynamic override in the DB
+    const dbMatch = dbDefinitions.find(d => d.name === roleName);
+    if (dbMatch) {
+      return {
+        canSubmit: dbMatch.canSubmit,
+        canReview: dbMatch.canReview,
+        canEscalate: dbMatch.canEscalate,
+        canViewReports: dbMatch.canViewReports,
+        canManageUsers: dbMatch.canManageUsers,
+        canManageSystem: dbMatch.canManageSystem,
+      };
+    }
 
-    if (role === UserRole.ADMIN) return {
-      canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, canManageUsers: true, canManageSystem: true
+    // Fallback to defaults
+    return DEFAULT_PERMISSIONS[roleName] || {
+      canSubmit: true, canReview: false, canEscalate: false, 
+      canViewReports: false, canManageUsers: false, canManageSystem: false
     };
+  }, [user, dbDefinitions]);
 
-    if (role === UserRole.KYC_OFFICER) return {
-      canSubmit: true, canReview: true, canEscalate: false, canViewReports: false, canManageUsers: false, canManageSystem: false
-    };
-
-    if (role === UserRole.SUPERVISOR) return {
-      canSubmit: true, canReview: true, canEscalate: true, canViewReports: true, canManageUsers: false, canManageSystem: false
-    };
-
-    if (role === UserRole.BRANCH_OFFICER) return {
-      canSubmit: true, canReview: false, canEscalate: false, canViewReports: false, canManageUsers: false, canManageSystem: false
-    };
-
-    if (role === UserRole.FOLLOW_UP_TEAM) return {
-      canSubmit: false, canReview: false, canEscalate: false, canViewReports: true, canManageUsers: false, canManageSystem: false
-    };
-
-    return {
-      canSubmit: true, canReview: false, canEscalate: true, canViewReports: true, canManageUsers: false, canManageSystem: false
-    };
-  }, [user]);
-
-  return { permissions, loading: false };
+  return { permissions, loading };
 }
