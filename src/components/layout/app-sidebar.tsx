@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -27,7 +28,8 @@ import {
   LayoutList,
   BookOpen,
   ClipboardList,
-  Folders
+  Folders,
+  TrendingUp
 } from "lucide-react"
 
 import {
@@ -215,8 +217,8 @@ export function AppSidebar() {
                       
                       {canAccessPerformance && (
                         <>
-                          <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/branch'}><Link href="/reports/branch"><Building2 className="w-4 h-4 mr-2" /><span>Branch & District</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                          <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/reports/officer'}><Link href="/reports/officer"><Users className="w-4 h-4 mr-2" /><span>Staff Productivity</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                          <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/performance/district'}><Link href="/performance/district"><Building2 className="w-4 h-4 mr-2" /><span>District Command</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                          <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}><Link href="/performance/officer"><Users className="w-4 h-4 mr-2" /><span>Specialist Matrix</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                         </>
                       )}
 

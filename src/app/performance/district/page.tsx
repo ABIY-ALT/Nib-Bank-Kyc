@@ -21,7 +21,8 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle2,
-  LayoutGrid
+  LayoutGrid,
+  MapPin
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -39,6 +40,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getSubmissions } from "@/actions/submissions";
 import { getDistricts } from "@/actions/hierarchy";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 export default function DistrictPerformancePage() {
   const { user } = useAuth();
@@ -51,7 +53,7 @@ export default function DistrictPerformancePage() {
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
 
-  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'ADMIN';
   const isDistDir = user?.role === 'DISTRICT_DIRECTOR';
   
   const activeDistrict = isDistDir ? user.districtName : (selectedDistrict === 'all' ? null : selectedDistrict);
@@ -89,19 +91,19 @@ export default function DistrictPerformancePage() {
   const analytics = useMemo(() => {
     const stats = {
       total: submissions.length,
-      approved: submissions.filter(s => ['ACTIVE', 'GOVERNANCE_APPROVED'].includes(s.status)).length,
-      pending: submissions.filter(s => ['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED'].includes(s.status)).length,
-      amended: submissions.filter(s => ['ACTION_REQUIRED'].includes(s.status)).length,
+      approved: submissions.filter(s => ['ACTIVE', 'GOVERNANCE_APPROVED', 'APPROVED'].includes(s.status)).length,
+      pending: submissions.filter(s => ['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED', 'PENDING'].includes(s.status)).length,
+      amended: submissions.filter(s => ['ACTION_REQUIRED', 'AMENDED'].includes(s.status)).length,
       byBranch: {} as Record<string, { total: number, approved: number, pending: number, amended: number }>
     };
 
     submissions.forEach(sub => {
-      const bName = sub.branch?.name || 'Unmapped Node';
+      const bName = sub.branchName || 'Unmapped Node';
       if (!stats.byBranch[bName]) stats.byBranch[bName] = { total: 0, approved: 0, pending: 0, amended: 0 };
       stats.byBranch[bName].total++;
-      if (['ACTIVE', 'GOVERNANCE_APPROVED'].includes(sub.status)) stats.byBranch[bName].approved++;
-      if (sub.status === 'ACTION_REQUIRED') stats.byBranch[bName].amended++;
-      if (['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED'].includes(sub.status)) stats.byBranch[bName].pending++;
+      if (['ACTIVE', 'GOVERNANCE_APPROVED', 'APPROVED'].includes(sub.status)) stats.byBranch[bName].approved++;
+      if (['ACTION_REQUIRED', 'AMENDED'].includes(sub.status)) stats.byBranch[bName].amended++;
+      if (['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED', 'PENDING'].includes(sub.status)) stats.byBranch[bName].pending++;
     });
 
     return stats;
@@ -153,47 +155,53 @@ export default function DistrictPerformancePage() {
         <CardContent className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Start Date</Label>
-            <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+            <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-11 font-bold" />
           </div>
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis End Date</Label>
-            <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
+            <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-11 font-bold" />
           </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all">
-          <CardHeader className="pb-2 text-[10px] font-black uppercase text-slate-400 flex flex-row justify-between items-center">
+        <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all bg-white overflow-hidden">
+          <CardHeader className="pb-2 text-[10px] font-black uppercase text-slate-400 flex flex-row justify-between items-center bg-slate-50/50">
             Regional Volume <Inbox className="w-3 h-3 text-slate-300" />
           </CardHeader>
-          <CardContent className="text-4xl font-black text-slate-900">{analytics.total}</CardContent>
+          <CardContent className="pt-4 text-4xl font-black text-slate-900 tracking-tighter">{analytics.total}</CardContent>
         </Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500">
-          <CardHeader className="pb-2 text-[10px] font-black uppercase text-emerald-600">Total Approvals</CardHeader>
-          <CardContent className="text-4xl font-black text-emerald-600">{analytics.approved}</CardContent>
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 bg-white overflow-hidden">
+          <CardHeader className="pb-2 text-[10px] font-black uppercase text-emerald-600 bg-slate-50/50">
+            Total Approvals
+          </CardHeader>
+          <CardContent className="pt-4 text-4xl font-black text-emerald-600 tracking-tighter">{analytics.approved}</CardContent>
         </Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
-          <CardHeader className="pb-2 text-[10px] font-black uppercase text-orange-600">Action Required</CardHeader>
-          <CardContent className="text-4xl font-black text-orange-600">{analytics.amended}</CardContent>
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500 bg-white overflow-hidden">
+          <CardHeader className="pb-2 text-[10px] font-black uppercase text-orange-600 bg-slate-50/50">
+            Action Required
+          </CardHeader>
+          <CardContent className="pt-4 text-4xl font-black text-orange-600 tracking-tighter">{analytics.amended}</CardContent>
         </Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
-          <CardHeader className="pb-2 text-[10px] font-black uppercase text-primary">In Review</CardHeader>
-          <CardContent className="text-4xl font-black text-primary">{analytics.pending}</CardContent>
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary bg-white overflow-hidden">
+          <CardHeader className="pb-2 text-[10px] font-black uppercase text-primary bg-slate-50/50">
+            In Review
+          </CardHeader>
+          <CardContent className="pt-4 text-4xl font-black text-primary tracking-tighter">{analytics.pending}</CardContent>
         </Card>
       </div>
 
-      <Card className="shadow-xl border-slate-200 overflow-hidden">
+      <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
         <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-xl flex items-center gap-2">
+            <CardTitle className="text-xl flex items-center gap-2 font-headline">
               <LayoutGrid className="w-5 h-5 text-primary" /> Branch Throughput Matrix
             </CardTitle>
             <CardDescription>Efficiency and volume comparison across regional branch nodes.</CardDescription>
           </div>
           {activeDistrict && (
-            <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-4 py-1">
-              <Building2 className="w-3 h-3 mr-2" /> {activeDistrict} Control
+            <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-4 py-1.5 flex items-center gap-2">
+              <MapPin className="w-3.5 h-3.5" /> {activeDistrict} Jurisdiction
             </Badge>
           )}
         </CardHeader>
@@ -201,7 +209,7 @@ export default function DistrictPerformancePage() {
           <Table>
             <TableHeader className="bg-slate-50/80">
               <TableRow>
-                <TableHead className="font-black py-4 pl-8 text-[11px] uppercase tracking-widest">Branch Node</TableHead>
+                <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest">Branch Node</TableHead>
                 <TableHead className="font-black text-center text-[11px] uppercase tracking-widest">Total Volume</TableHead>
                 <TableHead className="font-black text-center text-emerald-600 text-[11px] uppercase tracking-widest">Approved</TableHead>
                 <TableHead className="font-black text-center text-orange-600 text-[11px] uppercase tracking-widest">Amended</TableHead>
@@ -214,18 +222,30 @@ export default function DistrictPerformancePage() {
                   const efficiency = Math.round((data.approved / (data.total - data.pending || 1)) * 100);
                   return (
                     <TableRow key={name} className="hover:bg-slate-50 transition-colors group">
-                      <TableCell className="font-bold py-6 pl-8 text-slate-900">{name}</TableCell>
-                      <TableCell className="text-center font-bold">{data.total}</TableCell>
+                      <TableCell className="font-bold py-6 pl-8 text-slate-900 flex items-center gap-2">
+                        <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-primary/5 group-hover:text-primary transition-colors">
+                          <Building2 className="w-4 h-4" />
+                        </div>
+                        {name}
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-slate-700">{data.total}</TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold px-3">{data.approved}</Badge>
+                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold px-3 py-1">
+                          {data.approved}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold px-3">{data.amended}</Badge>
+                        <Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold px-3 py-1">
+                          {data.amended}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-right pr-8">
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className="font-black text-primary text-sm">{efficiency}%</span>
-                          <Progress value={efficiency} className="w-24 h-1 bg-slate-100" />
+                          <span className={cn(
+                            "font-black text-sm",
+                            efficiency >= 90 ? "text-emerald-600" : efficiency >= 70 ? "text-primary" : "text-orange-600"
+                          )}>{efficiency}%</span>
+                          <Progress value={efficiency} className="w-24 h-1.5 bg-slate-100" />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -233,10 +253,15 @@ export default function DistrictPerformancePage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-24 text-center text-muted-foreground italic bg-slate-50/30">
-                    <div className="flex flex-col items-center gap-3">
-                      <TrendingUp className="w-12 h-12 text-slate-200" />
-                      <p>No operational data discovered for this regional scope and timeframe.</p>
+                  <TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic bg-slate-50/30">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="p-6 bg-white rounded-full shadow-sm border border-slate-100">
+                        <TrendingUp className="w-12 h-12 text-slate-200" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-bold text-slate-900 text-lg">No Operational Data Discovered</p>
+                        <p className="text-sm">Adjust filters or verify jurisdictional activity in SQL Archive.</p>
+                      </div>
                     </div>
                   </TableCell>
                 </TableRow>

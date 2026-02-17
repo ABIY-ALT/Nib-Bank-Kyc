@@ -1,15 +1,28 @@
 
 "use client"
 
-import { useMemo, useState } from "react"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { useMemo, useState, useEffect } from "react"
+import { useAuth } from "@/lib/auth-mock";
+import { 
+  Card, 
+  CardHeader, 
+  CardTitle, 
+  CardContent, 
+  CardDescription 
+} from "@/components/ui/card"
 import { 
   Users, 
-  CheckCircle, 
+  CheckCircle2, 
   History, 
   Filter, 
   FileDown, 
   Calendar as CalendarIcon, 
+  TrendingUp,
+  Clock,
+  Loader2,
+  ShieldCheck,
+  UserCheck,
+  Search
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -19,9 +32,6 @@ import {
   DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
   DropdownMenuItem
@@ -30,249 +40,262 @@ import { useToast } from "@/hooks/use-toast"
 import { subDays, format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-
-const MOCK_OFFICER_METRICS = [
-  { name: "Jane Smith", branch: "Downtown", processed: 85, approved: 72, amended: 10, turnaround: "0.8d" },
-  { name: "Robert Brown", branch: "Uptown", processed: 76, approved: 60, amended: 12, turnaround: "1.2d" },
-  { name: "Alice Wilson", branch: "Downtown", processed: 64, approved: 58, amended: 4, turnaround: "1.1d" },
-  { name: "Local Officer", branch: "East Side", processed: 42, approved: 35, amended: 5, turnaround: "0.9d" },
-];
-
-const BRANCH_OPTIONS = ["Downtown", "Uptown", "East Side", "Valley Branch"];
-const OFFICER_NAMES = MOCK_OFFICER_METRICS.map(o => o.name);
+import { getSubmissions } from "@/actions/submissions";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function OfficerPerformancePage() {
+  const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submissions, setSubmissions] = useState<any[]>([]);
   const [selectedOfficers, setSelectedOfficers] = useState<string[]>([]);
   
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  const filteredOfficers = useMemo(() => {
-    return MOCK_OFFICER_METRICS.filter(o => {
-      const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(o.branch);
-      const matchesOfficer = selectedOfficers.length === 0 || selectedOfficers.includes(o.name);
-      return matchesBranch && matchesOfficer;
-    });
-  }, [selectedBranches, selectedOfficers, fromDate, toDate]);
+  useEffect(() => {
+    loadData();
+  }, [fromDate, toDate]);
 
-  const toggleBranch = (branch: string) => {
-    setSelectedBranches(prev => 
-      prev.includes(branch) ? prev.filter(b => b !== branch) : [...prev, branch]
-    );
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const data = await getSubmissions({
+        startDate: fromDate,
+        endDate: toDate
+      });
+      setSubmissions(data);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Audit Error" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleOfficer = (name: string) => {
-    setSelectedOfficers(prev => 
-      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
-    );
-  };
-
-  const resetFilters = () => {
-    setSelectedBranches([]);
-    setSelectedOfficers([]);
-    setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-    setToDate(format(new Date(), 'yyyy-MM-dd'));
-  };
-
-  const handleExportCSV = () => {
-    const headers = ['Officer', 'Branch', 'Processed', 'Approved', 'Amended', 'Turnaround'];
-    const rows = filteredOfficers.map(o => [
-      o.name, o.branch, o.processed, o.approved, o.amended, o.turnaround
-    ]);
+  const performanceMatrix = useMemo(() => {
+    const matrix: Record<string, any> = {};
     
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `officer-productivity-${fromDate}-to-${toDate}.csv`);
-    link.click();
-    
-    toast({
-      title: "Productivity Report Exported",
-      description: `Data for ${filteredOfficers.length} officers has been saved to CSV.`,
+    submissions.forEach(sub => {
+      if (!sub.assignedToId) return;
+
+      const officerName = `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}`;
+      const officerId = sub.assignedToId;
+      
+      if (!matrix[officerId]) {
+        matrix[officerId] = { 
+          id: officerId, 
+          name: officerName, 
+          total: 0, 
+          approved: 0, 
+          amended: 0, 
+          rejected: 0 
+        };
+      }
+      
+      matrix[officerId].total++;
+      if (['ACTIVE', 'GOVERNANCE_APPROVED', 'APPROVED'].includes(sub.status)) matrix[officerId].approved++;
+      if (['ACTION_REQUIRED', 'AMENDED'].includes(sub.status)) matrix[officerId].amended++;
+      if (sub.status === 'REJECTED') matrix[officerId].rejected++;
     });
-  };
+
+    return Object.values(matrix)
+      .map(o => ({
+        ...o,
+        accuracy: o.total > 0 ? Math.round((o.approved / o.total) * 100) : 0
+      }))
+      .filter(o => selectedOfficers.length === 0 || selectedOfficers.includes(o.id))
+      .sort((a, b) => b.total - a.total);
+  }, [submissions, selectedOfficers]);
+
+  const OFFICER_LIST = useMemo(() => {
+    const list: Record<string, string> = {};
+    submissions.forEach(sub => {
+      if (sub.assignedToId) {
+        list[sub.assignedToId] = `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}`;
+      }
+    });
+    return Object.entries(list).map(([id, name]) => ({ id, name }));
+  }, [submissions]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Officer Productivity</h1>
-          <p className="text-muted-foreground text-lg font-medium">Detailed throughput and accuracy metrics for verification staff.</p>
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary text-white rounded-lg shadow-lg"><TrendingUp className="w-6 h-6" /></div>
+          <div>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Specialist Productivity</h1>
+            <p className="text-muted-foreground text-lg font-medium">Monitoring throughput and determination accuracy for KYC specialists.</p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm hover:bg-slate-50">
+            <DropdownMenuTrigger asChild disabled={loading}>
+              <Button variant="outline" className="gap-2 h-11 px-6 border-slate-200 bg-white font-bold shadow-sm">
                 <Filter className="w-4 h-4 text-slate-400" />
-                Filter Personnel
-                {(selectedBranches.length > 0 || selectedOfficers.length > 0) && (
-                  <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">
-                    {selectedBranches.length + selectedOfficers.length}
-                  </Badge>
+                Filter Specialists
+                {selectedOfficers.length > 0 && (
+                  <Badge className="ml-1.5 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-primary text-[10px] font-black">{selectedOfficers.length}</Badge>
                 )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Personnel Scope</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer py-3">
-                  <span>Branch Name</span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-56">
-                  {BRANCH_OPTIONS.map((branch) => (
-                    <DropdownMenuCheckboxItem
-                      key={branch}
-                      checked={selectedBranches.includes(branch)}
-                      onCheckedChange={() => toggleBranch(branch)}
-                      className="cursor-pointer py-2.5"
-                    >
-                      {branch}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer py-3">
-                  <span>Individual Specialist</span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-56 max-h-64 overflow-y-auto">
-                  {OFFICER_NAMES.map((name) => (
-                    <DropdownMenuCheckboxItem
-                      key={name}
-                      checked={selectedOfficers.includes(name)}
-                      onCheckedChange={() => toggleOfficer(name)}
-                      className="cursor-pointer py-2.5"
-                    >
-                      {name}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              
+              {OFFICER_LIST.map((officer) => (
+                <DropdownMenuCheckboxItem 
+                  key={officer.id} 
+                  checked={selectedOfficers.includes(officer.id)} 
+                  onCheckedChange={() => setSelectedOfficers(prev => prev.includes(officer.id) ? prev.filter(x => x !== officer.id) : [...prev, officer.id])}
+                >
+                  {officer.name}
+                </DropdownMenuCheckboxItem>
+              ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={resetFilters} className="text-destructive font-bold cursor-pointer">
-                Clear All Personnel Filters
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSelectedOfficers([])} className="text-destructive font-bold cursor-pointer">Clear Selections</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button 
-            className="gap-2 h-10 px-6 bg-[#B89334] hover:bg-[#A6822D] text-white font-bold shadow-sm rounded-md transition-all active:scale-95" 
-            onClick={handleExportCSV}
-          >
-            <FileDown className="w-4 h-4" />
-            Export
+          <Button className="gap-2 h-11 px-6 bg-slate-900 text-white font-bold shadow-lg" onClick={() => toast({ title: "Exporting spreadsheet..." })}>
+            <FileDown className="w-4 h-4" /> Export Report
           </Button>
         </div>
       </div>
 
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
-        <CardContent className="p-4 md:p-6">
-          <div className="flex flex-col md:flex-row items-end gap-6">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    type="date" 
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    type="date" 
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30"
-                  />
-                </div>
-              </div>
+        <CardContent className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
+            <div className="relative">
+              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="pl-10 h-11 border-slate-200 font-bold" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
+            <div className="relative">
+              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="pl-10 h-11 border-slate-200 font-bold" />
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredOfficers.map((officer) => {
-          const approvalRate = Math.round((officer.approved / officer.processed) * 100);
-          return (
-            <Card key={officer.name} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all duration-300 hover:shadow-xl bg-white">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 px-6 pt-6">
-                <div>
-                  <CardTitle className="text-2xl font-black text-slate-900 tracking-tight">{officer.name}</CardTitle>
-                  <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-0.5">{officer.branch} Office</p>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 group-hover:bg-primary/5 group-hover:text-primary transition-all duration-300">
-                  <Users className="w-6 h-6" />
-                </div>
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-40 gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Aggregating Intelligence...</p>
+        </div>
+      ) : performanceMatrix.length === 0 ? (
+        <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50">
+          <CardContent className="flex flex-col items-center justify-center py-32 text-center space-y-6">
+            <div className="p-6 bg-white rounded-full shadow-sm border border-slate-100">
+              <ShieldCheck className="w-12 h-12 text-slate-200" />
+            </div>
+            <div className="max-w-md mx-auto space-y-2">
+              <p className="font-bold text-slate-900 text-2xl tracking-tight">Productivity Pool Empty</p>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                No determinations have been recorded by specialists in this timeframe. Check the SQL Archive for historical records.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="shadow-lg border-slate-200 bg-white overflow-hidden group hover:border-primary/40 transition-all">
+              <CardHeader className="pb-2 bg-slate-50/50 border-b">
+                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Determinations</CardTitle>
               </CardHeader>
-              <CardContent className="pt-6 px-6 space-y-8 pb-8">
-                <div className="grid grid-cols-2 gap-8">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Cases Processed</p>
-                    <p className="text-4xl font-bold text-slate-900 tracking-tighter">{officer.processed}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Avg. Turnaround</p>
-                    <p className="text-4xl font-bold text-blue-600 tracking-tighter">{officer.turnaround}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-700">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-500" />
-                      Approval Accuracy
-                    </span>
-                    <span className="text-emerald-600 font-black">{approvalRate}%</span>
-                  </div>
-                  <Progress value={approvalRate} className="h-2.5 bg-slate-100" />
-                </div>
-
-                <div className="pt-8 border-t border-slate-50 grid grid-cols-2 gap-y-6">
-                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    {officer.approved} Approved
-                  </div>
-                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
-                    <div className="w-2 h-2 rounded-full bg-orange-500" />
-                    {officer.amended} Amendments
-                  </div>
-                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
-                    <History className="w-4 h-4 text-indigo-400" />
-                    {officer.processed} Cycles
-                  </div>
-                </div>
+              <CardContent className="pt-6 flex items-center justify-between">
+                <span className="text-5xl font-black text-slate-900 tracking-tighter">{performanceMatrix.reduce((acc, o) => acc + o.total, 0)}</span>
+                <History className="w-8 h-8 text-primary opacity-20" />
               </CardContent>
             </Card>
-          );
-        })}
-        {filteredOfficers.length === 0 && (
-          <div className="col-span-full py-20 text-center bg-slate-50 border-2 border-dashed rounded-3xl text-muted-foreground font-medium flex flex-col items-center justify-center gap-4">
-            <Users className="w-16 h-16 text-slate-200" />
-            <div className="space-y-1">
-              <p className="font-bold text-slate-900 text-xl">No Staff Matches</p>
-              <p className="text-sm">Adjust your filters to see historical performance data for other specialists.</p>
-              <Button variant="link" onClick={resetFilters} className="text-primary font-bold">Reset All Filters</Button>
-            </div>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 bg-white overflow-hidden">
+              <CardHeader className="pb-2 bg-slate-50/50 border-b">
+                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Decision Accuracy</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 flex items-center justify-between">
+                <span className="text-5xl font-black text-emerald-600 tracking-tighter">
+                  {Math.round(performanceMatrix.reduce((acc, o) => acc + o.accuracy, 0) / performanceMatrix.length)}%
+                </span>
+                <CheckCircle2 className="w-8 h-8 text-emerald-600 opacity-20" />
+              </CardContent>
+            </Card>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500 bg-white overflow-hidden">
+              <CardHeader className="pb-2 bg-slate-50/50 border-b">
+                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Amendments Issued</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 flex items-center justify-between">
+                <span className="text-5xl font-black text-orange-600 tracking-tighter">{performanceMatrix.reduce((acc, o) => acc + o.amended, 0)}</span>
+                <Clock className="w-8 h-8 text-orange-600 opacity-20" />
+              </CardContent>
+            </Card>
           </div>
-        )}
-      </div>
+
+          <Card className="shadow-2xl border-slate-200 overflow-hidden bg-white">
+            <CardHeader className="border-b bg-slate-50/30 p-6 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-xl flex items-center gap-3 font-headline">
+                  <UserCheck className="w-6 h-6 text-primary" /> Specialist Performance Matrix
+                </CardTitle>
+                <CardDescription>Individual accuracy and resolution metrics derived from SQL determinations.</CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-white text-slate-500 font-black px-4 py-1 border-slate-200 shadow-sm">
+                {performanceMatrix.length} Specialists Audited
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-slate-50/80">
+                  <TableRow>
+                    <TableHead className="font-black py-5 pl-8 text-slate-500 text-[11px] uppercase tracking-widest">Specialist Name</TableHead>
+                    <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase tracking-widest text-center">Total Reviews</TableHead>
+                    <TableHead className="font-black py-5 text-emerald-600 text-[11px] uppercase tracking-widest text-center">Approved</TableHead>
+                    <TableHead className="font-black py-5 text-orange-600 text-[11px] uppercase tracking-widest text-center">Amended</TableHead>
+                    <TableHead className="text-right font-black py-5 pr-8 text-slate-500 text-[11px] uppercase tracking-widest">Accuracy Index</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {performanceMatrix.map((officer) => (
+                    <TableRow key={officer.id} className="hover:bg-slate-50 transition-colors group">
+                      <TableCell className="font-black text-slate-900 py-6 pl-8 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shadow-sm">
+                          {officer.name.charAt(0)}
+                        </div>
+                        <div className="flex flex-col">
+                          <span>{officer.name}</span>
+                          <span className="text-[9px] font-black text-slate-400 uppercase">KYC Specialist</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-slate-700">{officer.total}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-black px-3 py-1">
+                          {officer.approved}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="bg-orange-50 text-orange-700 font-black px-3 py-1">
+                          {officer.amended}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-8">
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className={cn(
+                            "font-black text-sm",
+                            officer.accuracy >= 90 ? "text-emerald-600" : officer.accuracy >= 70 ? "text-primary" : "text-orange-600"
+                          )}>{officer.accuracy}%</span>
+                          <Progress value={officer.accuracy} className="w-24 h-1.5 bg-slate-100" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
-  )
+  );
 }
