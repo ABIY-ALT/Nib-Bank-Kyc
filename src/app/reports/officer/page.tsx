@@ -7,7 +7,8 @@ import {
   Card, 
   CardContent, 
   CardHeader, 
-  CardTitle 
+  CardTitle,
+  CardDescription
 } from "@/components/ui/card";
 import { 
   Table, 
@@ -29,16 +30,15 @@ import {
   Filter,
   Calendar as CalendarIcon,
   Loader2,
-  ShieldCheck
+  ShieldCheck,
+  UserCheck,
+  LayoutList
 } from "lucide-react";
 import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
   DropdownMenuItem
@@ -48,6 +48,7 @@ import { subDays, format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
+import { Progress } from "@/components/ui/progress";
 
 export default function OfficerReportsPage() {
   const { user } = useAuth();
@@ -70,7 +71,7 @@ export default function OfficerReportsPage() {
       setSubmissions(data);
       setReportDataActive(true);
       toast({
-        title: "Staff Audit Complete",
+        title: "Specialist Audit Complete",
         description: `Analyzed records from the institutional archive.`,
       });
     } catch (e) {
@@ -83,10 +84,11 @@ export default function OfficerReportsPage() {
   const performanceMatrix = useMemo(() => {
     const matrix: Record<string, any> = {};
     
-    // Aggregate by reviewer (assignedToId)
     submissions.forEach(sub => {
-      const officerName = sub.assignedTo ? `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}` : "Unassigned";
-      const officerId = sub.assignedToId || "unassigned";
+      if (!sub.assignedToId) return; // Only count cases actioned by specialists
+
+      const officerName = `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}`;
+      const officerId = sub.assignedToId;
       
       if (!matrix[officerId]) {
         matrix[officerId] = { 
@@ -100,8 +102,8 @@ export default function OfficerReportsPage() {
       }
       
       matrix[officerId].total++;
-      if (sub.status === 'APPROVED') matrix[officerId].approved++;
-      if (sub.status === 'ACTION_REQUIRED' || sub.status === 'AMENDED') matrix[officerId].amended++;
+      if (['ACTIVE', 'GOVERNANCE_APPROVED'].includes(sub.status)) matrix[officerId].approved++;
+      if (sub.status === 'ACTION_REQUIRED') matrix[officerId].amended++;
       if (sub.status === 'REJECTED') matrix[officerId].rejected++;
     });
 
@@ -124,10 +126,6 @@ export default function OfficerReportsPage() {
     return Object.entries(list).map(([id, name]) => ({ id, name }));
   }, [submissions]);
 
-  const handleExportXLSX = () => {
-    toast({ title: "Exporting spreadsheet..." });
-  };
-
   const toggleOfficer = (id: string) => {
     setSelectedOfficers(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -146,8 +144,8 @@ export default function OfficerReportsPage() {
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary text-white rounded-lg shadow-lg"><TrendingUp className="w-6 h-6" /></div>
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Staff Productivity Reports</h1>
-            <p className="text-muted-foreground text-lg">Audit staff throughput and decision accuracy across institutional nodes.</p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Specialist Productivity</h1>
+            <p className="text-muted-foreground text-lg">Institutional matrix for monitoring KYC Specialist throughput and accuracy.</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
@@ -173,8 +171,8 @@ export default function OfficerReportsPage() {
           </DropdownMenu>
 
           <Button 
-            className="gap-2 h-10 px-6 bg-[#B89334] hover:bg-[#A6822D] text-white font-bold shadow-sm" 
-            onClick={handleExportXLSX}
+            className="gap-2 h-10 px-6 bg-slate-900 text-white font-bold shadow-lg" 
+            onClick={() => toast({ title: "Exporting spreadsheet..." })}
             disabled={!reportDataActive}
           >
             <FileDown className="w-4 h-4" /> Export XLSX
@@ -212,19 +210,19 @@ export default function OfficerReportsPage() {
               <ShieldCheck className="w-12 h-12 text-slate-300" />
             </div>
             <div className="max-w-md mx-auto space-y-2">
-              <p className="font-bold text-slate-900 text-xl">Audit Analysis Inactive</p>
+              <p className="font-bold text-slate-900 text-xl">Productivity Analysis Inactive</p>
               <p className="text-sm text-slate-500 font-medium">
-                Generate a staff productivity report to aggregate resolution and accuracy metrics for your specialized verification team.
+                Initialize the audit to aggregate real-time metrics for specialists who have reviewed cases in the specified timeframe.
               </p>
             </div>
             <Button 
               size="lg" 
-              className="px-12 h-14 bg-[#B89334] hover:bg-[#A6822D] text-white font-black text-lg shadow-xl" 
+              className="px-12 h-14 bg-primary text-white font-black text-lg shadow-xl" 
               onClick={handleGenerateReport}
               disabled={loading}
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
-              Initialize Audit
+              {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <UserCheck className="w-5 h-5 mr-2" />}
+              Run Specialist Audit
             </Button>
           </CardContent>
         </Card>
@@ -232,14 +230,14 @@ export default function OfficerReportsPage() {
         <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card className="shadow-sm border-slate-200">
-              <CardHeader className="pb-2"><CardTitle className="text-xs font-black uppercase tracking-widest text-slate-400">Total Reviewed</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Cases Actioned</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between">
                 <span className="text-4xl font-extrabold text-slate-900">{performanceMatrix.reduce((acc, o) => acc + o.total, 0)}</span>
                 <History className="w-6 h-6 text-primary opacity-20" />
               </CardContent>
             </Card>
             <Card className="shadow-sm border-slate-200 border-l-4 border-l-emerald-500">
-              <CardHeader className="pb-2"><CardTitle className="text-xs font-black uppercase tracking-widest text-emerald-600">Avg Accuracy</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Avg Decision Accuracy</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between">
                 <span className="text-4xl font-extrabold text-emerald-600">
                   {performanceMatrix.length > 0 ? Math.round(performanceMatrix.reduce((acc, o) => acc + o.accuracy, 0) / performanceMatrix.length) : 0}%
@@ -248,7 +246,7 @@ export default function OfficerReportsPage() {
               </CardContent>
             </Card>
             <Card className="shadow-sm border-slate-200 border-l-4 border-l-orange-500">
-              <CardHeader className="pb-2"><CardTitle className="text-xs font-black uppercase tracking-widest text-orange-600">Amendments</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Amendments Issued</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between">
                 <span className="text-4xl font-extrabold text-orange-600">{performanceMatrix.reduce((acc, o) => acc + o.amended, 0)}</span>
                 <Clock className="w-6 h-6 text-orange-600 opacity-20" />
@@ -258,20 +256,23 @@ export default function OfficerReportsPage() {
 
           <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
             <CardHeader className="border-b bg-slate-50/30 p-6 flex flex-row items-center justify-between">
-              <CardTitle className="text-xl font-bold flex items-center gap-2 font-headline">
-                <Users className="w-5 h-5 text-primary" /> Specialist Performance Matrix
-              </CardTitle>
-              <Button variant="ghost" onClick={resetFilters} className="text-xs font-bold text-muted-foreground uppercase">New Audit</Button>
+              <div>
+                <CardTitle className="text-xl flex items-center gap-2 font-headline">
+                  <LayoutList className="w-5 h-5 text-primary" /> Specialist Performance Matrix
+                </CardTitle>
+                <CardDescription>Comparative accuracy and resolution data for KYC Specialists.</CardDescription>
+              </div>
+              <Button variant="ghost" onClick={resetFilters} className="text-xs font-bold text-muted-foreground uppercase">New Search</Button>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader className="bg-slate-50/80">
                   <TableRow>
                     <TableHead className="font-black py-5 pl-8 text-slate-500 text-[11px] uppercase">Specialist Name</TableHead>
-                    <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase text-center">Cases</TableHead>
+                    <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase text-center">Total Reviews</TableHead>
                     <TableHead className="font-black py-5 text-emerald-600 text-[11px] uppercase text-center">Approved</TableHead>
                     <TableHead className="font-black py-5 text-orange-600 text-[11px] uppercase text-center">Amended</TableHead>
-                    <TableHead className="text-right font-black py-5 pr-8 text-slate-500 text-[11px] uppercase">Accuracy</TableHead>
+                    <TableHead className="text-right font-black py-5 pr-8 text-slate-500 text-[11px] uppercase">Accuracy Index</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -282,9 +283,10 @@ export default function OfficerReportsPage() {
                       <TableCell className="text-center text-emerald-600 font-bold">{officer.approved}</TableCell>
                       <TableCell className="text-center text-orange-600 font-bold">{officer.amended}</TableCell>
                       <TableCell className="text-right pr-8">
-                        <Badge variant="secondary" className="bg-primary/5 text-primary font-black px-4 py-1">
-                          {officer.accuracy}%
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="font-black text-primary text-sm">{officer.accuracy}%</span>
+                          <Progress value={officer.accuracy} className="w-24 h-1.5 bg-slate-100" />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

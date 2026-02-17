@@ -20,7 +20,8 @@ import {
   Building2,
   TrendingUp,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  LayoutGrid
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -37,7 +38,6 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getSubmissions } from "@/actions/submissions";
 import { getDistricts } from "@/actions/hierarchy";
-import { SubmissionStatus } from "@prisma/client";
 import { Progress } from "@/components/ui/progress";
 
 export default function DistrictPerformancePage() {
@@ -51,10 +51,9 @@ export default function DistrictPerformancePage() {
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
 
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
   const isDistDir = user?.role === 'DISTRICT_DIRECTOR';
   
-  // Lock to user's district if they are a District Director
   const activeDistrict = isDistDir ? user.districtName : (selectedDistrict === 'all' ? null : selectedDistrict);
 
   useEffect(() => {
@@ -90,20 +89,19 @@ export default function DistrictPerformancePage() {
   const analytics = useMemo(() => {
     const stats = {
       total: submissions.length,
-      approved: submissions.filter(s => s.status === 'APPROVED').length,
-      pending: submissions.filter(s => ['PENDING', 'IN_REVIEW', 'SUBMITTED', 'UNDER_REVIEW'].includes(s.status)).length,
-      rejected: submissions.filter(s => s.status === 'REJECTED').length,
-      amended: submissions.filter(s => ['AMENDED', 'ACTION_REQUIRED'].includes(s.status)).length,
+      approved: submissions.filter(s => ['ACTIVE', 'GOVERNANCE_APPROVED'].includes(s.status)).length,
+      pending: submissions.filter(s => ['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED'].includes(s.status)).length,
+      amended: submissions.filter(s => ['ACTION_REQUIRED'].includes(s.status)).length,
       byBranch: {} as Record<string, { total: number, approved: number, pending: number, amended: number }>
     };
 
     submissions.forEach(sub => {
-      const bName = sub.branchName || 'Unmapped Node';
+      const bName = sub.branch?.name || 'Unmapped Node';
       if (!stats.byBranch[bName]) stats.byBranch[bName] = { total: 0, approved: 0, pending: 0, amended: 0 };
       stats.byBranch[bName].total++;
-      if (sub.status === 'APPROVED') stats.byBranch[bName].approved++;
-      if (['AMENDED', 'ACTION_REQUIRED'].includes(sub.status)) stats.byBranch[bName].amended++;
-      if (['PENDING', 'IN_REVIEW', 'SUBMITTED', 'UNDER_REVIEW'].includes(sub.status)) stats.byBranch[bName].pending++;
+      if (['ACTIVE', 'GOVERNANCE_APPROVED'].includes(sub.status)) stats.byBranch[bName].approved++;
+      if (sub.status === 'ACTION_REQUIRED') stats.byBranch[bName].amended++;
+      if (['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED'].includes(sub.status)) stats.byBranch[bName].pending++;
     });
 
     return stats;
@@ -146,7 +144,7 @@ export default function DistrictPerformancePage() {
             </DropdownMenu>
           )}
           <Button className="gap-2 h-11 px-6 bg-slate-900 font-bold shadow-lg" onClick={() => toast({ title: "Exporting Command Dataset..." })}>
-            <FileDown className="w-4 h-4" /> Export District CSV
+            <FileDown className="w-4 h-4" /> Export CSV
           </Button>
         </div>
       </div>
@@ -154,11 +152,11 @@ export default function DistrictPerformancePage() {
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Start Date</Label>
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Start Date</Label>
             <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit End Date</Label>
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis End Date</Label>
             <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
           </div>
         </CardContent>
@@ -176,7 +174,7 @@ export default function DistrictPerformancePage() {
           <CardContent className="text-4xl font-black text-emerald-600">{analytics.approved}</CardContent>
         </Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
-          <CardHeader className="pb-2 text-[10px] font-black uppercase text-orange-600">Pending Actions</CardHeader>
+          <CardHeader className="pb-2 text-[10px] font-black uppercase text-orange-600">Action Required</CardHeader>
           <CardContent className="text-4xl font-black text-orange-600">{analytics.amended}</CardContent>
         </Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
@@ -188,8 +186,10 @@ export default function DistrictPerformancePage() {
       <Card className="shadow-xl border-slate-200 overflow-hidden">
         <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-xl">Branch Throughput Matrix</CardTitle>
-            <CardDescription>Comparative operational efficiency across regional branches.</CardDescription>
+            <CardTitle className="text-xl flex items-center gap-2">
+              <LayoutGrid className="w-5 h-5 text-primary" /> Branch Throughput Matrix
+            </CardTitle>
+            <CardDescription>Efficiency and volume comparison across regional branch nodes.</CardDescription>
           </div>
           {activeDistrict && (
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-4 py-1">
