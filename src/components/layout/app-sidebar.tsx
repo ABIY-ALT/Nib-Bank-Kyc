@@ -131,7 +131,11 @@ export function AppSidebar() {
                               <span>My Submissions</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.mySubmissions > 0 && <SidebarMenuBadge className="bg-white/10 text-white font-bold">{counts.mySubmissions}</SidebarMenuBadge>}
+                          {counts.mySubmissions > 0 && (
+                            <SidebarMenuBadge className="bg-white/10 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                              {counts.mySubmissions}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
                       )}
 
@@ -143,7 +147,11 @@ export function AppSidebar() {
                               <span>Action Required</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.actionRequired > 0 && <SidebarMenuBadge className="bg-orange-50 text-white font-bold animate-pulse">{counts.actionRequired}</SidebarMenuBadge>}
+                          {counts.actionRequired > 0 && (
+                            <SidebarMenuBadge className="bg-orange-600 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2 animate-pulse">
+                              {counts.actionRequired}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
                       )}
 
@@ -155,7 +163,11 @@ export function AppSidebar() {
                               <span>Local Node Oversight</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.branchNode > 0 && <SidebarMenuBadge className="bg-primary text-white font-bold">{counts.branchNode}</SidebarMenuBadge>}
+                          {counts.branchNode > 0 && (
+                            <SidebarMenuBadge className="bg-primary text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                              {counts.branchNode}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
                       )}
 
@@ -167,7 +179,11 @@ export function AppSidebar() {
                               <span>Review Queue</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.reviewQueue > 0 && <SidebarMenuBadge className="bg-primary text-white font-bold">{counts.reviewQueue}</SidebarMenuBadge>}
+                          {counts.reviewQueue > 0 && (
+                            <SidebarMenuBadge className="bg-primary text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                              {counts.reviewQueue}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
                       )}
 
@@ -179,7 +195,11 @@ export function AppSidebar() {
                               <span>Resubmitted Cases</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.resubmitted > 0 && <SidebarMenuBadge className="bg-blue-500 text-white font-bold">{counts.resubmitted}</SidebarMenuBadge>}
+                          {counts.resubmitted > 0 && (
+                            <SidebarMenuBadge className="bg-primary text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                              {counts.resubmitted}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
                       )}
 
@@ -191,7 +211,11 @@ export function AppSidebar() {
                               <span>Escalated Cases</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.escalated > 0 && <SidebarMenuBadge className="bg-destructive text-white font-bold">{counts.escalated}</SidebarMenuBadge>}
+                          {counts.escalated > 0 && (
+                            <SidebarMenuBadge className="bg-destructive text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                              {counts.escalated}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
                       )}
 
@@ -203,7 +227,11 @@ export function AppSidebar() {
                               <span>Exceptional Cases</span>
                             </Link>
                           </SidebarMenuSubButton>
-                          {counts.exceptional > 0 && <SidebarMenuBadge className="bg-yellow-500 text-white font-bold">{counts.exceptional}</SidebarMenuBadge>}
+                          {counts.exceptional > 0 && (
+                            <SidebarMenuBadge className="bg-yellow-600 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                              {counts.exceptional}
+                            </SidebarMenuBadge>
+                          )}
                         </SidebarMenuSubItem>
                       )}
 
