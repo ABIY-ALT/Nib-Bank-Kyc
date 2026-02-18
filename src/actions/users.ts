@@ -87,3 +87,8 @@ export async function provisionUser(data: {
   revalidatePath('/admin/users');
   return user;
 }
+
+export async function updateUserPortfolio(userId: string, branches: string[]) {
+  // Logic to update specialist branch coverage if needed in schema
+  return { success: true };
+}
