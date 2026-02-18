@@ -78,7 +78,7 @@ export default function StaffAssignmentsPage() {
   const isSpecialist = (user: any) => {
     return user.roles?.some((ur: any) => {
       const roleName = ur.role?.name?.toUpperCase() || "";
-      return roleName === 'KYC_SPECIALIST' || roleName === 'KYC_OFFICER';
+      return roleName.includes('KYC') && (roleName.includes('SPECIALIST') || roleName.includes('OFFICER'));
     });
   };
 

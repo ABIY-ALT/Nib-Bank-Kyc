@@ -129,6 +129,7 @@ export async function updateUserPortfolio(userId: string, branches: string[]) {
     revalidatePath('/admin/assignments');
     return { success: true };
   } catch (error: any) {
+    console.error('[SQL Portfolio Update] Error:', error);
     throw new Error(error.message || 'Institutional portfolio update fault.');
   }
 }

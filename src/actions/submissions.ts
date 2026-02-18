@@ -88,7 +88,7 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
   const reviewer = await prisma.user.findUnique({ where: { id: reviewerId } });
 
   const newEntry = {
-    role: reviewer?.role || 'SYSTEM',
+    role: reviewer?.roles?.[0]?.role?.name || 'SYSTEM',
     performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
     timestamp: now.toISOString(),
     comment: remarks || `Status updated to ${status}`,
@@ -164,7 +164,6 @@ export async function createSubmission(formData: FormData) {
         email: `${createdById}@nibbank.com.et`,
         firstName: nameParts[0] || 'Branch',
         lastName: nameParts[1] || 'Officer',
-        role: 'BRANCH_OFFICER',
         status: UserStatus.ACTIVE,
         branchId: branch.id
       }
