@@ -97,15 +97,12 @@ export async function seedInstitutionalPermissions() {
     { slug: 'EXPORT_SYSTEM_AUDIT', name: 'Export System Audit', group: 'SYSTEM' },
   ];
 
-  const dbPermissions = [];
-
   for (const p of permissions) {
-    const perm = await prisma.permission.upsert({
+    await prisma.permission.upsert({
       where: { slug: p.slug },
       update: { name: p.name, group: p.group },
       create: p,
     });
-    dbPermissions.push(perm);
   }
 
   revalidatePath('/admin/roles');
