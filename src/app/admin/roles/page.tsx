@@ -10,19 +10,16 @@ import {
   Plus,
   Settings2,
   Trash2,
-  Zap,
   Check,
   CheckCircle2,
   X,
-  ShieldAlert,
   CheckSquare,
-  Square,
-  LayoutGrid
+  Square
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getRoleDefinitions, getAllPermissions, upsertRole, deactivateRole, seedInstitutionalPermissions } from '@/actions/roles';
+import { getRoleDefinitions, getAllPermissions, upsertRole, deactivateRole } from '@/actions/roles';
 import {
   Dialog,
   DialogContent,
@@ -40,7 +37,6 @@ export default function StaffRolesPage() {
   const [roleDefinitions, setRoleDefinitions] = useState<any[]>([]);
   const [allPermissions, setAllPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -64,14 +60,6 @@ export default function StaffRolesPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSeed = async () => {
-    setIsSyncing(true);
-    await seedInstitutionalPermissions();
-    toast({ title: "Institutional Framework Synced", description: "Database now reflects the latest blueprint slugs." });
-    await loadData();
-    setIsSyncing(false);
   };
 
   const handleOpenAdd = () => {
@@ -162,10 +150,6 @@ export default function StaffRolesPage() {
           <p className="text-muted-foreground text-lg">Master Access Control Matrix.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSeed} disabled={isSyncing} className="gap-2 border-primary/20 text-primary font-bold">
-            {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            Sync Slugs
-          </Button>
           <Button onClick={handleOpenAdd} className="bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90">
             <Plus className="w-4 h-4 mr-2" /> Define New Role
           </Button>
@@ -188,7 +172,9 @@ export default function StaffRolesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {roleDefinitions.map((role) => (
+              {roleDefinitions.length === 0 ? (
+                <TableRow><TableCell colSpan={4} className="py-20 text-center text-muted-foreground italic">No roles defined. Establish institutional authority groups above.</TableCell></TableRow>
+              ) : roleDefinitions.map((role) => (
                 <TableRow key={role.id} className="hover:bg-slate-50 transition-colors">
                   <TableCell className="font-black text-slate-900 pl-8">{role.name.replace(/_/g, ' ')}</TableCell>
                   <TableCell>
@@ -208,7 +194,7 @@ export default function StaffRolesPage() {
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
                       <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-8 w-8 text-primary rounded-full hover:bg-primary/5"><Settings2 className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deactivateRole(role.id).then(loadData)} className="h-8 w-8 text-destructive rounded-full hover:bg-destructive/5"><Trash2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => { if(confirm('Deactivate this role?')) deactivateRole(role.id).then(loadData); }} className="h-8 w-8 text-destructive rounded-full hover:bg-destructive/5"><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -264,7 +250,7 @@ export default function StaffRolesPage() {
             </ScrollArea>
           </div>
           <DialogFooter className="p-6 bg-slate-50 border-t">
-            <Button onClick={() => { setIsInventoryOpen(false); handleOpenEdit(selectedRole); }} className="bg-primary px-8 font-black">Edit Authority Map</Button>
+            <Button onClick={() => { setIsInventoryOpen(false); handleOpenEdit(selectedRole); }} className="bg-primary px-8 font-black text-white hover:bg-primary/90 rounded-xl h-11">Edit Authority Map</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -10,26 +10,18 @@ import { getRoleDefinitions } from "@/actions/roles";
  */
 export function usePermissions() {
   const { user } = useAuth();
-  const [dbRoles, setDbRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Sync state once user is available
   useEffect(() => {
-    async function loadPermissions() {
-      try {
-        const roles = await getRoleDefinitions();
-        setDbRoles(roles);
-      } catch (e) {
-        console.error("Institutional Security: Permission Sync Failed", e);
-      } finally {
-        setLoading(false);
-      }
+    if (user) {
+      setLoading(false);
     }
-    loadPermissions();
-  }, []);
+  }, [user]);
 
   const isSuperAdmin = useMemo(() => {
     if (!user) return false;
-    // Standardize check for SUPER_ADMIN role across relational and legacy layers
+    // Standardize check for SUPER_ADMIN role across relational structure
     const hasRelationalSuper = user.roles?.some((ur: any) => ur.role?.name === 'SUPER_ADMIN');
     const isMockAdmin = user.email?.toLowerCase().includes('admin');
     return hasRelationalSuper || isMockAdmin;

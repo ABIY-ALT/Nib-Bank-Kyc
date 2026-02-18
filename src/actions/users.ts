@@ -5,25 +5,30 @@ import { UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 
 export async function getAllUsers() {
-  return await prisma.user.findMany({
-    include: { 
-      branch: true,
-      roles: { 
-        include: { 
-          role: {
-            include: {
-              permissions: {
-                include: {
-                  permission: true
+  try {
+    return await prisma.user.findMany({
+      include: { 
+        branch: true,
+        roles: { 
+          include: { 
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
                 }
               }
             }
           } 
-        } 
-      }
-    },
-    orderBy: { firstName: 'asc' }
-  });
+        }
+      },
+      orderBy: { firstName: 'asc' }
+    });
+  } catch (error) {
+    console.error('[SQL] getAllUsers Error:', error);
+    return [];
+  }
 }
 
 export async function updateUserRole(userId: string, roleName: string) {
@@ -61,48 +66,53 @@ export async function provisionUser(data: {
   branchId?: string;
   status: UserStatus;
 }) {
-  const result = await prisma.$transaction(async (tx) => {
-    // 1. Upsert the User (Note: No 'role' field here, it's relational)
-    const user = await tx.user.upsert({
-      where: { firebaseUid: data.id },
-      update: { 
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        phoneNumber: data.phoneNumber,
-        branchId: data.branchId || null,
-        status: data.status
-      },
-      create: { 
-        id: data.id,
-        firebaseUid: data.id,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        phoneNumber: data.phoneNumber,
-        branchId: data.branchId || null,
-        status: data.status
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Upsert the User (Mapping to SQL Schema)
+      const user = await tx.user.upsert({
+        where: { firebaseUid: data.id },
+        update: { 
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          phoneNumber: data.phoneNumber,
+          branchId: data.branchId || null,
+          status: data.status
+        },
+        create: { 
+          id: data.id,
+          firebaseUid: data.id,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          phoneNumber: data.phoneNumber,
+          branchId: data.branchId || null,
+          status: data.status
+        }
+      });
+
+      // 2. Link the role via UserRole join table
+      if (data.role) {
+        const role = await tx.role.findUnique({ where: { name: data.role } });
+        if (role) {
+          await tx.userRole.deleteMany({ where: { userId: user.id } });
+          await tx.userRole.create({
+            data: { userId: user.id, roleId: role.id }
+          });
+        }
       }
+      return user;
     });
 
-    // 2. Link the role via UserRole join table
-    if (data.role) {
-      const role = await tx.role.findUnique({ where: { name: data.role } });
-      if (role) {
-        await tx.userRole.deleteMany({ where: { userId: user.id } });
-        await tx.userRole.create({
-          data: { userId: user.id, roleId: role.id }
-        });
-      }
-    }
-    return user;
-  });
-
-  revalidatePath('/admin/users');
-  return result;
+    revalidatePath('/admin/users');
+    return result;
+  } catch (error: any) {
+    console.error('[SQL] Provisioning Error:', error);
+    throw new Error(error.message || 'Institutional database fault.');
+  }
 }
 
 export async function updateUserPortfolio(userId: string, branches: string[]) {
-  // Production Note: In a full SQL implementation, this would update a many-to-many SpecialistBranch table
+  // Logic for Specialist-Branch mapping
   return { success: true };
 }

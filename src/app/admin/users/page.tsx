@@ -80,7 +80,7 @@ export default function UserManagementPage() {
       setBranches(b);
       setRoleDefinitions(r);
     } catch (error) {
-      toast({ variant: "destructive", title: "Sync Failed" });
+      toast({ variant: "destructive", title: "Data retrieval failed" });
     } finally {
       setLoading(false);
     }
@@ -89,12 +89,14 @@ export default function UserManagementPage() {
   const handleOpenDialog = (user?: any) => {
     if (user) {
       setEditingUser(user);
+      // Extract existing role name from the relation
+      const currentRole = user.roles?.[0]?.role?.name || '';
       setFormData({ 
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
         phoneNumber: user.phoneNumber || '',
-        role: user.role || '',
+        role: currentRole,
         status: user.status || UserStatus.ACTIVE,
         branchId: user.branchId || ''
       });
@@ -105,7 +107,7 @@ export default function UserManagementPage() {
         lastName: '',
         email: '', 
         phoneNumber: '',
-        role: roleDefinitions[0]?.name || 'ADMIN', 
+        role: roleDefinitions[0]?.name || '', 
         status: UserStatus.ACTIVE, 
         branchId: '' 
       });
@@ -115,7 +117,7 @@ export default function UserManagementPage() {
 
   const handleSave = async () => {
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.role) {
-      toast({ variant: "destructive", title: "Identity Required" });
+      toast({ variant: "destructive", title: "Identity Required", description: "First Name, Last Name, Email, and Role are mandatory." });
       return;
     }
 
@@ -123,11 +125,11 @@ export default function UserManagementPage() {
     try {
       const id = editingUser?.firebaseUid || `user-${Math.random().toString(36).substr(2, 9)}`;
       await provisionUser({ ...formData, id });
-      toast({ title: "Profile Updated" });
+      toast({ title: "Profile Synchronized", description: "Institutional staff record updated in SQL." });
       setIsDialogOpen(false);
       loadData();
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
+      toast({ variant: "destructive", title: "Provisioning Error", description: error.message });
     } finally {
       setIsSyncing(false);
     }
@@ -137,7 +139,7 @@ export default function UserManagementPage() {
     const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.INACTIVE : UserStatus.ACTIVE;
     try {
       await updateUserStatus(user.id, newStatus);
-      toast({ title: "Status Updated" });
+      toast({ title: "Access Status Updated" });
       loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Action Failed" });
@@ -151,7 +153,7 @@ export default function UserManagementPage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Personnel Directory</h1>
           <p className="text-muted-foreground text-lg font-medium">Blueprint-aligned institutional staff management.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg font-bold h-11 px-6">
+        <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg font-bold h-11 px-6 text-white hover:bg-primary/90">
           <UserPlus className="w-4 h-4" />
           Provision User
         </Button>
@@ -161,7 +163,7 @@ export default function UserManagementPage() {
         <Table>
           <TableHeader className="bg-slate-50/50">
             <TableRow>
-              <TableHead className="font-bold py-4">Identity</TableHead>
+              <TableHead className="font-bold py-4 pl-8">Identity</TableHead>
               <TableHead className="font-bold">Role</TableHead>
               <TableHead className="font-bold">Branch Mapping</TableHead>
               <TableHead className="font-bold">Status</TableHead>
@@ -171,11 +173,13 @@ export default function UserManagementPage() {
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={5} className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+            ) : users.length === 0 ? (
+              <TableRow><TableCell colSpan={5} className="py-20 text-center text-muted-foreground italic">No personnel records found. Use "Provision User" to add staff.</TableCell></TableRow>
             ) : users.map((user) => (
               <TableRow key={user.id} className="hover:bg-slate-50 transition-colors">
-                <TableCell>
+                <TableCell className="pl-8">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 shadow-inner">
                       {user.firstName?.charAt(0)}
                     </div>
                     <div className="flex flex-col">
@@ -187,8 +191,8 @@ export default function UserManagementPage() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="bg-primary/5 text-primary font-bold">
-                    {user.role?.replace(/_/g, ' ')}
+                  <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-3 py-1">
+                    {user.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -203,10 +207,10 @@ export default function UserManagementPage() {
                 </TableCell>
                 <TableCell className="text-right pr-8">
                   <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary rounded-full h-9 w-9">
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary rounded-full h-9 w-9 hover:bg-primary/5">
                       <Settings2 className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9">
+                    <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5">
                       {user.status === UserStatus.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                     </Button>
                   </div>
@@ -218,7 +222,7 @@ export default function UserManagementPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md rounded-3xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               <ShieldCheck className="w-6 h-6 text-primary" />
@@ -229,45 +233,44 @@ export default function UserManagementPage() {
           <div className="space-y-4 pt-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">First Name</Label>
-                <Input value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="h-11" />
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">First Name</Label>
+                <Input value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="h-11 rounded-xl" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">Last Name</Label>
-                <Input value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="h-11" />
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Last Name</Label>
+                <Input value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="h-11 rounded-xl" />
               </div>
             </div>
             
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-500">Official Email</Label>
-              <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11" />
+              <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Official Email (@nibbank.com.et)</Label>
+              <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl font-bold" />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-500">Phone Number</Label>
+              <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Phone Number</Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input value={formData.phoneNumber || ""} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} placeholder="+251..." className="pl-10 h-11" />
+                <Input value={formData.phoneNumber || ""} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} placeholder="+251..." className="pl-10 h-11 rounded-xl" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-primary">System Role</Label>
+                <Label className="text-[10px] font-black uppercase text-primary tracking-widest">System Role</Label>
                 <Select value={formData.role} onValueChange={val => setFormData({...formData, role: val})}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Select Role" /></SelectTrigger>
+                  <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select Role" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ADMIN">ADMIN</SelectItem>
-                    {roleDefinitions.filter(r => r.name !== 'ADMIN').map(role => (
+                    {roleDefinitions.map(role => (
                       <SelectItem key={role.id} value={role.name}>{role.name.replace(/_/g, ' ')}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">Branch</Label>
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Home Branch</Label>
                 <Select value={formData.branchId || ""} onValueChange={val => setFormData({...formData, branchId: val})}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Select Branch" /></SelectTrigger>
+                  <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select Branch" /></SelectTrigger>
                   <SelectContent>
                     {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                   </SelectContent>
@@ -276,11 +279,11 @@ export default function UserManagementPage() {
             </div>
           </div>
 
-          <DialogFooter className="pt-6">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSyncing}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSyncing} className="bg-primary px-8">
+          <DialogFooter className="pt-6 gap-2">
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSyncing} className="rounded-xl px-6">Cancel</Button>
+            <Button onClick={handleSave} disabled={isSyncing} className="bg-primary hover:bg-primary/90 text-white font-black rounded-xl px-10 shadow-xl shadow-primary/20">
               {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Save Profile
+              Commit Profile
             </Button>
           </DialogFooter>
         </DialogContent>
