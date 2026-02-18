@@ -119,6 +119,16 @@ export async function provisionUser(data: {
 }
 
 export async function updateUserPortfolio(userId: string, branches: string[]) {
-  // Production portfolio logic can be implemented here
-  return { success: true };
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        assignedBranches: branches
+      }
+    });
+    revalidatePath('/admin/assignments');
+    return { success: true };
+  } catch (error: any) {
+    throw new Error(error.message || 'Institutional portfolio update fault.');
+  }
 }
