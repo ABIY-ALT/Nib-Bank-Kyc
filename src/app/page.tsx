@@ -20,7 +20,10 @@ import {
   Loader2,
   ChevronRight,
   LayoutDashboard,
-  Shield
+  Shield,
+  Building2,
+  MapPin,
+  Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -29,9 +32,13 @@ import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { getSubmissions } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
-import { SubmissionStatus } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 import { usePermissions } from "@/hooks/use-permissions";
 
+/**
+ * Institutional Role-Based Dashboard.
+ * Automatically adapts UI, metrics, and data visibility based on user designation.
+ */
 export default function Dashboard() {
   const { user } = useAuth();
   const { hasPermission, loading: permissionsLoading, isSuperAdmin } = usePermissions();
@@ -44,14 +51,27 @@ export default function Dashboard() {
       if (!user) return;
       setLoading(true);
       try {
+        // Determine jurisdictional scope for data fetching
+        const isDirector = user.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
+        const isSpecialist = user.roles?.some(ur => ['KYC_SPECIALIST', 'KYC_OFFICER'].includes(ur.role.name));
+        
+        let filters: any = { limit: 5 };
+
+        if (!isSuperAdmin) {
+          if (isDirector && user.districtName) {
+            filters.district = user.districtName;
+          } else if (isSpecialist && user.assignedBranches && user.assignedBranches.length > 0) {
+            filters.branches = user.assignedBranches;
+          } else if (user.branchName) {
+            filters.branch = user.branchName;
+          }
+        }
+
         const [subs, globalSettings] = await Promise.all([
-          getSubmissions({
-            limit: 5,
-            branch: hasPermission('DASHBOARD_VIEW_BRANCH') ? user.branchName || undefined : undefined,
-            district: hasPermission('DASHBOARD_VIEW_DISTRICT') ? user.districtName || undefined : undefined
-          }),
+          getSubmissions(filters),
           getGlobalSettings()
         ]);
+        
         setRecentSubmissions(subs);
         setSettings(globalSettings);
       } catch (error) {
@@ -61,58 +81,81 @@ export default function Dashboard() {
       }
     }
     loadDashboard();
-  }, [user, hasPermission]);
+  }, [user, isSuperAdmin]);
+
+  // Dynamic Metadata based on Role
+  const dashboardContext = useMemo(() => {
+    const roleName = user?.roles?.[0]?.role?.name || 'OFFICER';
+    
+    if (isSuperAdmin) return {
+      title: 'Institutional Command',
+      subtitle: 'Global network oversight and master control.',
+      scope: 'Global',
+      icon: Shield
+    };
+    
+    if (roleName === 'DISTRICT_DIRECTOR') return {
+      title: `${user?.districtName || 'Regional'} District Command`,
+      subtitle: `Overseeing operational health for all branches in the district.`,
+      scope: 'Regional',
+      icon: MapPin
+    };
+
+    if (['KYC_SPECIALIST', 'KYC_OFFICER'].includes(roleName)) return {
+      title: 'KYC Verification Hub',
+      subtitle: `Managing verification for ${user?.assignedBranches?.length || 0} jurisdiction nodes.`,
+      scope: 'Portfolio',
+      icon: Zap
+    };
+
+    return {
+      title: `${user?.branchName || 'Local'} Branch Portal`,
+      subtitle: 'Branch-level submission and amendment tracking.',
+      scope: 'Branch',
+      icon: Building2
+    };
+  }, [user, isSuperAdmin]);
 
   const stats = useMemo(() => {
-    const scopeLabel = isSuperAdmin ? 'Global' : hasPermission('DASHBOARD_VIEW_DISTRICT') ? 'Regional' : 'Branch';
+    const scopeLabel = dashboardContext.scope;
     
-    if (!recentSubmissions || recentSubmissions.length === 0) return [
-      { label: `${scopeLabel} Activity`, value: '0', icon: History, color: 'text-blue-600' },
-      { label: 'Approved Cases', value: '0', icon: FileCheck, color: 'text-green-600' },
-      { label: 'Action Required', value: '0', icon: AlertCircle, color: 'text-orange-600' },
-      { label: 'Network SLA', value: '100%', icon: TrendingUp, color: 'text-purple-600' },
-    ];
+    if (!recentSubmissions) return [];
 
-    const approvedCount = recentSubmissions.filter(s => s.status === 'APPROVED' || s.status === 'ACTIVE').length;
-    const amendedCount = recentSubmissions.filter(s => s.status === 'ACTION_REQUIRED' || s.status === 'AMENDED').length;
+    const approvedCount = recentSubmissions.filter(s => s.status === KYCStatus.APPROVED).length;
+    const actionCount = recentSubmissions.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length;
 
     return [
       { label: `${scopeLabel} Active`, value: recentSubmissions.length.toString(), icon: History, color: 'text-blue-600' },
-      { label: 'Approved Recently', value: approvedCount.toString(), icon: FileCheck, color: 'text-green-600' },
-      { label: 'Action Required', value: amendedCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
-      { label: 'Network SLA', value: '98.4%', icon: TrendingUp, color: 'text-purple-600' },
+      { label: 'Approved Recently', value: approvedCount.toString(), icon: FileCheck, color: 'text-emerald-600' },
+      { label: 'Action Required', value: actionCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
+      { label: 'SLA Compliance', value: '98.4%', icon: TrendingUp, color: 'text-primary' },
     ];
-  }, [recentSubmissions, isSuperAdmin, hasPermission]);
-
-  const dashboardTitle = useMemo(() => {
-    if (isSuperAdmin) return 'Institutional Command';
-    if (hasPermission('DASHBOARD_VIEW_DISTRICT')) return `${user?.districtName || 'Regional'} District Portal`;
-    if (hasPermission('KYC_VIEW_QUEUE')) return 'KYC Verification Hub';
-    return `${user?.branchName || 'Local'} Branch Portal`;
-  }, [user, isSuperAdmin, hasPermission]);
+  }, [recentSubmissions, dashboardContext]);
 
   if (permissionsLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">Syncing secure session...</p>
+        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Syncing secure session...</p>
       </div>
     );
   }
+
+  const Icon = dashboardContext.icon;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-primary/10 rounded-xl">
-              <Shield className="w-6 h-6 text-primary" />
+            <div className="p-2 bg-primary/10 rounded-xl text-primary">
+              <Icon className="w-6 h-6" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {dashboardTitle}
+              {dashboardContext.title}
             </h1>
           </div>
-          <p className="text-muted-foreground text-lg">Welcome back, {user?.name}. Institutional session active.</p>
+          <p className="text-muted-foreground text-lg font-medium">{dashboardContext.subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
           {hasPermission('CASE_SUBMIT') && (
@@ -128,7 +171,7 @@ export default function Dashboard() {
           <Card key={stat.label} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/30 transition-all rounded-2xl bg-white">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{stat.label}</CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color} group-hover:scale-125 transition-transform`} />
+              <stat.icon className={cn("h-4 w-4 transition-transform group-hover:scale-125", stat.color)} />
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-black text-slate-900 tracking-tighter">{stat.value}</div>
@@ -141,8 +184,8 @@ export default function Dashboard() {
         <Card className="lg:col-span-4 shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
           <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between p-6">
             <div>
-              <CardTitle className="text-xl font-bold">Recent Activity Stream</CardTitle>
-              <CardDescription>Live tracking for authorized jurisdictional submissions.</CardDescription>
+              <CardTitle className="text-xl font-bold">Activity Stream</CardTitle>
+              <CardDescription>Live tracking for {dashboardContext.scope.toLowerCase()} authorized cases.</CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/5">
               <Link href="/submissions" className="flex items-center gap-1">
@@ -155,7 +198,7 @@ export default function Dashboard() {
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-primary/30" />
-                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Querying Operational Vault...</p>
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Querying Vault...</p>
                 </div>
               ) : recentSubmissions && recentSubmissions.length > 0 ? (
                 recentSubmissions.map((sub) => (
@@ -165,12 +208,16 @@ export default function Dashboard() {
                         <p className="font-bold text-slate-900 group-hover:text-primary transition-colors">{sub.customerName}</p>
                         {sub.isExceptional && <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 text-[8px] h-4 font-black uppercase">Hierarchy</Badge>}
                       </div>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{sub.id} • {sub.branchName} Node</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
+                        {sub.id} • {sub.branch?.name || sub.branchName} Node
+                      </p>
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant="outline" className={cn(
                         "font-black text-[10px] uppercase px-3 py-1",
-                        sub.status === 'APPROVED' || sub.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-orange-50 text-orange-700 border-orange-100'
+                        sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                        sub.status === KYCStatus.ACTION_REQUIRED ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                        'bg-blue-50 text-blue-700 border-blue-100'
                       )}>
                         {sub.status?.replace(/_/g, ' ')}
                       </Badge>
@@ -192,8 +239,8 @@ export default function Dashboard() {
 
         <Card className="lg:col-span-3 shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
           <CardHeader className="bg-slate-50/50 border-b p-6">
-            <CardTitle className="text-xl font-bold">System Guidelines</CardTitle>
-            <CardDescription>Critical updates for compliance officers.</CardDescription>
+            <CardTitle className="text-xl font-bold">Institutional Guidelines</CardTitle>
+            <CardDescription>Critical policy updates for verification specialists.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
              <div className="space-y-4">
