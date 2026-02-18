@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { UserProfile } from "@/lib/auth-mock";
 import { getSubmissions } from '@/actions/submissions';
-import { SubmissionStatus } from '@prisma/client';
+import { KYCStatus } from '@prisma/client';
 
 export function useSidebarCounts(user: UserProfile | null) {
   const [counts, setCounts] = useState({
@@ -20,29 +20,31 @@ export function useSidebarCounts(user: UserProfile | null) {
     if (!user) return;
 
     const fetchCounts = async () => {
-      // In a real pure SQL app, we might use a single aggregated query or API
-      // Here we fetch and filter for the institutional dashboard experience
-      const allSubmissions = await getSubmissions();
-      
-      const my = allSubmissions.filter(s => s.submittedById === user.id);
-      const action = my.filter(s => s.status === SubmissionStatus.AMENDED);
-      const queue = allSubmissions.filter(s => !s.isExceptional && [SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW].includes(s.status));
-      const escalated = allSubmissions.filter(s => s.status === SubmissionStatus.ESCALATED);
-      const exceptional = allSubmissions.filter(s => s.isExceptional && s.status !== SubmissionStatus.APPROVED);
+      try {
+        const allSubmissions = await getSubmissions();
+        
+        const my = allSubmissions.filter(s => s.createdById === user.id);
+        const action = my.filter(s => s.status === KYCStatus.ACTION_REQUIRED);
+        const queue = allSubmissions.filter(s => !s.isExceptional && [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status as any));
+        const escalated = allSubmissions.filter(s => s.status === KYCStatus.ESCALATED);
+        const exceptional = allSubmissions.filter(s => s.isExceptional && s.status !== KYCStatus.APPROVED);
 
-      setCounts({
-        mySubmissions: my.length,
-        actionRequired: action.length,
-        reviewQueue: queue.length,
-        resubmitted: queue.filter(s => s.isResubmitted).length,
-        escalated: escalated.length,
-        exceptional: exceptional.length,
-        branchNode: allSubmissions.filter(s => s.branchName === user.branchName).length
-      });
+        setCounts({
+          mySubmissions: my.length,
+          actionRequired: action.length,
+          reviewQueue: queue.length,
+          resubmitted: queue.filter(s => s.isResubmitted).length,
+          escalated: escalated.length,
+          exceptional: exceptional.length,
+          branchNode: allSubmissions.filter(s => s.branch?.name === user.branchName).length
+        });
+      } catch (error) {
+        console.error("Failed to fetch sidebar counts:", error);
+      }
     };
 
     fetchCounts();
-    const interval = setInterval(fetchCounts, 30000); // Periodic polling since Firestore real-time is removed
+    const interval = setInterval(fetchCounts, 30000);
     return () => clearInterval(interval);
   }, [user]);
 

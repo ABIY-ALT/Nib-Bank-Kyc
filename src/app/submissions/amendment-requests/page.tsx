@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
-import { KYCSubmission } from "@/lib/kyc-data";
 import { AlertCircle, Loader2, Search, Zap, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Input } from "@/components/ui/input";
@@ -10,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { getSubmissions } from "@/actions/submissions";
-import { SubmissionStatus, UserRole } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 
 export default function AmendmentRequestsPage() {
   const { user } = useAuth();
@@ -18,16 +17,15 @@ export default function AmendmentRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const isAdmin = user?.role === UserRole.ADMIN;
-  const isBranchMgr = user?.role === UserRole.BRANCH_MANAGER || isAdmin;
+  const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
 
   useEffect(() => {
     async function loadData() {
       if (!user) return;
       setLoading(true);
       const data = await getSubmissions({
-        status: [SubmissionStatus.AMENDED],
-        submittedBy: isAdmin ? undefined : user.id
+        status: [KYCStatus.ACTION_REQUIRED],
+        createdById: isAdmin ? undefined : user.id
       });
       setSubmissions(data);
       setLoading(false);
@@ -66,14 +64,6 @@ export default function AmendmentRequestsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {isBranchMgr && (
-            <Button asChild className="bg-[#B89334] hover:bg-[#A6822D] text-white font-bold h-12 px-8 shadow-xl gap-2 rounded-lg">
-              <Link href="/submissions/exceptional">
-                <Zap className="w-5 h-5 fill-white" />
-                Trigger Exception
-              </Link>
-            </Button>
-          )}
           <div className="relative w-full md:w-80">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input 

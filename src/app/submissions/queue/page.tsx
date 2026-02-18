@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2, Inbox, MapPin, ShieldCheck } from "lucide-react";
+import { Search, Loader2, Inbox, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { getSubmissions } from "@/actions/submissions";
-import { SubmissionStatus, UserRole } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 
 export default function ReviewQueuePage() {
   const { user } = useAuth();
@@ -15,17 +15,17 @@ export default function ReviewQueuePage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
 
   useEffect(() => {
     async function loadData() {
       if (!user) return;
       setLoading(true);
       const data = await getSubmissions({
-        status: [SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW],
+        status: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW],
         isExceptional: false,
         isResubmitted: false,
-        branch: isAdmin ? undefined : (user.assignedBranches?.length ? undefined : user.branchName || undefined)
+        branch: isAdmin ? undefined : (user.branchName || undefined)
       });
       setSubmissions(data);
       setLoading(false);

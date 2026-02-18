@@ -73,7 +73,7 @@ export async function provisionUser(data: {
 }) {
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Upsert the User record
+      // 1. Upsert the User record (without the role argument)
       const user = await tx.user.upsert({
         where: { firebaseUid: data.id },
         update: { 
@@ -114,7 +114,7 @@ export async function provisionUser(data: {
     return result;
   } catch (error: any) {
     console.error('[SQL Provisioning] Error:', error);
-    throw new Error(error.message || 'Institutional database fault.');
+    throw new Error(error.message || 'Institutional database fault during user provisioning.');
   }
 }
 
