@@ -110,12 +110,17 @@ export default function StaffRolesPage() {
         description: "",
         permissionIds: permissionsForm
       });
+      
       if (res.success) {
         toast({ title: "Authority Configuration Saved" });
         setIsDialogOpen(false);
         loadData();
       } else {
-        toast({ variant: "destructive", title: "Error", description: res.error });
+        toast({ 
+          variant: "destructive", 
+          title: "Database Error", 
+          description: res.error 
+        });
       }
     } finally {
       setIsSaving(false);
@@ -276,7 +281,7 @@ export default function StaffRolesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Authority Management (EDIT) */}
+      {/* Authority Management (EDIT) - Overhauled to match image */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-[#fcfaf7]">
@@ -305,7 +310,7 @@ export default function StaffRolesPage() {
               <div className="space-y-2 mb-10 max-w-sm">
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
                 <Input 
-                  placeholder="e.g. REGIONAL_DIRECTOR" 
+                  placeholder="e.g. BRANCH_OFFICER" 
                   className="h-12 bg-white border-slate-200 font-bold focus-visible:ring-primary/20 rounded-xl"
                   value={roleName}
                   onChange={(e) => setRoleName(e.target.value.toUpperCase().replace(/\s+/g, '_'))}

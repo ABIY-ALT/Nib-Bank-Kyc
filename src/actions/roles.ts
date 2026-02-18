@@ -139,6 +139,18 @@ export async function getAllPermissions() {
 
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
   try {
+    // Unique constraint pre-flight validation
+    const existingByName = await prisma.role.findUnique({
+      where: { name: data.name }
+    });
+
+    if (existingByName && (!data.id || existingByName.id !== data.id)) {
+      return { 
+        success: false, 
+        error: `A role with the designation "${data.name}" already exists in the institutional registry.` 
+      };
+    }
+
     const role = await prisma.$transaction(async (tx) => {
       const r = await tx.role.upsert({
         where: { id: data.id || 'new-role-id' },
@@ -160,7 +172,8 @@ export async function upsertRole(data: { id?: string, name: string, description:
     revalidatePath('/admin/roles');
     return { success: true, role };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    console.error('[SQL Upsert] Failure:', error);
+    return { success: false, error: error.message || 'Institutional database fault during role commit.' };
   }
 }
 
