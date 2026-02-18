@@ -71,26 +71,37 @@ export default function StaffAssignmentsPage() {
     }
   };
 
+  /**
+   * Specialist Detection Logic.
+   * Matches manually created roles like KYC_SPECIALIST or KYC_OFFICER.
+   */
+  const isSpecialist = (user: any) => {
+    return user.roles?.some((ur: any) => {
+      const roleName = ur.role?.name?.toUpperCase() || "";
+      return roleName === 'KYC_SPECIALIST' || roleName === 'KYC_OFFICER';
+    });
+  };
+
   const assignedUsers = users.filter(u => {
-    const isKYCOfficer = u.roles?.some((ur: any) => ur.role?.name === 'KYC_OFFICER');
+    const hasSpecialistRole = isSpecialist(u);
     const isAtBranch = u.assignedBranches?.includes(selectedBranch);
-    return isKYCOfficer && isAtBranch && selectedBranch !== "";
+    return hasSpecialistRole && isAtBranch && selectedBranch !== "";
   });
 
   const unassignedUsers = users.filter(u => {
-    const isKYCOfficer = u.roles?.some((ur: any) => ur.role?.name === 'KYC_OFFICER');
+    const hasSpecialistRole = isSpecialist(u);
     const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
     const matchesSearch = fullName.includes(searchTerm.toLowerCase());
     const isNotAtSelected = !u.assignedBranches?.includes(selectedBranch);
     const isActive = u.status === 'ACTIVE';
-    return isKYCOfficer && matchesSearch && isNotAtSelected && isActive;
+    return hasSpecialistRole && matchesSearch && isNotAtSelected && isActive;
   });
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-bold text-muted-foreground">Retrieving SQL mappings...</p>
+        <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">Retrieving specialist directory...</p>
       </div>
     );
   }
@@ -105,7 +116,7 @@ export default function StaffAssignmentsPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Specialist Coverage</h1>
           </div>
-          <p className="text-muted-foreground text-lg">Manage multi-branch portfolios in SQL.</p>
+          <p className="text-muted-foreground text-lg">Manage multi-branch portfolios for verification staff.</p>
         </div>
       </div>
 
@@ -141,18 +152,19 @@ export default function StaffAssignmentsPage() {
             <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-4">
               <MapPin className="w-16 h-16 text-slate-200" />
               <p className="font-bold text-slate-900 text-xl">No Branch Selected</p>
+              <p className="text-sm text-muted-foreground">Select a node from the left to manage specialist mapping.</p>
             </div>
           ) : (
             <div className="grid gap-6">
               <Card className="shadow-xl border-slate-200 overflow-hidden">
                 <CardHeader className="bg-slate-50/50 border-b">
-                  <CardTitle className="text-xl flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Mapped KYC Officers</CardTitle>
+                  <CardTitle className="text-xl flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Mapped KYC Specialists</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[300px]">
                     <div className="divide-y">
                       {assignedUsers.length === 0 ? (
-                        <p className="p-8 text-center text-muted-foreground italic text-sm">No specialists mapped to this node.</p>
+                        <p className="p-12 text-center text-muted-foreground italic text-sm">No specialists mapped to this node.</p>
                       ) : assignedUsers.map(u => {
                         const fullName = `${u.firstName} ${u.lastName}`;
                         return (
@@ -176,13 +188,16 @@ export default function StaffAssignmentsPage() {
               <Card className="shadow-xl border-slate-200 overflow-hidden">
                 <CardHeader className="bg-slate-50/50 border-b flex justify-between items-center">
                   <CardTitle className="text-xl">Network Specialist Registry</CardTitle>
-                  <div className="relative w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Search officers..." className="pl-9 h-9" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                  <div className="relative w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Search staff..." className="pl-9 h-9" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[400px]">
                     <div className="divide-y">
                       {unassignedUsers.length === 0 ? (
-                        <p className="p-8 text-center text-muted-foreground italic text-sm">No available specialists discovered in registry.</p>
+                        <div className="p-12 text-center text-muted-foreground space-y-2">
+                          <Users className="w-8 h-8 mx-auto opacity-20" />
+                          <p className="italic text-sm">No available specialists discovered in registry.</p>
+                        </div>
                       ) : unassignedUsers.map(u => {
                         const fullName = `${u.firstName} ${u.lastName}`;
                         return (
