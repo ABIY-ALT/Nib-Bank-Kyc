@@ -2,22 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
-import { AlertCircle, Loader2, Search, Zap, ShieldCheck } from "lucide-react";
+import { AlertCircle, Loader2, Search, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import Link from "next/link";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function AmendmentRequestsPage() {
   const { user } = useAuth();
+  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
+  const isAdmin = isSuperAdmin;
 
   useEffect(() => {
     async function loadData() {
@@ -42,6 +42,8 @@ export default function AmendmentRequestsPage() {
         sub.id.toLowerCase().includes(term)
       );
   }, [submissions, searchTerm]);
+
+  if (permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

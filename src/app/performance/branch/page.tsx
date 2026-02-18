@@ -4,36 +4,30 @@ import { useMemo, useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-mock";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { 
-  Building2, 
-  TrendingUp, 
-  Clock, 
-  ArrowUpRight, 
   Filter, 
   FileDown, 
-  Calendar as CalendarIcon,
   Loader2
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { 
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
-  DropdownMenuItem
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { subDays, format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
-import { SubmissionStatus, UserRole } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function BranchPerformancePage() {
   const { user } = useAuth();
+  const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -42,19 +36,20 @@ export default function BranchPerformancePage() {
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  const isDistDir = user?.role === UserRole.DISTRICT_DIRECTOR;
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isDistDir = hasPermission('REPORT_VIEW_DISTRICT');
+  const isAdmin = isSuperAdmin;
 
   useEffect(() => {
     loadData();
-  }, [fromDate, toDate]);
+  }, [fromDate, toDate, isAdmin, isDistDir]);
 
   const loadData = async () => {
+    if (!user) return;
     setLoading(true);
     const data = await getSubmissions({
       startDate: fromDate,
       endDate: toDate,
-      district: isDistDir ? user.districtName || undefined : undefined
+      district: isDistDir && !isAdmin ? user.districtName || undefined : undefined
     });
     setSubmissions(data);
     setLoading(false);
@@ -72,9 +67,9 @@ export default function BranchPerformancePage() {
         stats[bName] = { name: bName, district: sub.districtName, volume: 0, approved: 0, amended: 0, pending: 0 };
       }
       stats[bName].volume++;
-      if (sub.status === SubmissionStatus.APPROVED) stats[bName].approved++;
-      if (sub.status === SubmissionStatus.AMENDED) stats[bName].amended++;
-      if ([SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW].includes(sub.status)) stats[bName].pending++;
+      if (sub.status === KYCStatus.APPROVED) stats[bName].approved++;
+      if (sub.status === KYCStatus.ACTION_REQUIRED) stats[bName].amended++;
+      if ([KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status as any)) stats[bName].pending++;
     });
 
     return Object.values(stats)
@@ -86,7 +81,7 @@ export default function BranchPerformancePage() {
     toast({ title: "Performance Data Exported" });
   };
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />

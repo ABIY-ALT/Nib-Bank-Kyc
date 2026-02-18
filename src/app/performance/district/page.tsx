@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect } from "react"
@@ -16,11 +15,8 @@ import {
   Globe,
   Loader2,
   Inbox,
-  ShieldCheck,
   Building2,
   TrendingUp,
-  AlertCircle,
-  CheckCircle2,
   LayoutGrid,
   MapPin
 } from "lucide-react"
@@ -41,9 +37,11 @@ import { getSubmissions } from "@/actions/submissions";
 import { getDistricts } from "@/actions/hierarchy";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function DistrictPerformancePage() {
   const { user } = useAuth();
+  const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -53,20 +51,20 @@ export default function DistrictPerformancePage() {
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
 
-  const isAdmin = user?.role === 'ADMIN';
-  const isDistDir = user?.role === 'DISTRICT_DIRECTOR';
+  const isAdmin = isSuperAdmin;
+  const isDistDir = hasPermission('REPORT_VIEW_DISTRICT');
   
-  const activeDistrict = isDistDir ? user.districtName : (selectedDistrict === 'all' ? null : selectedDistrict);
+  const activeDistrict = isDistDir && !isAdmin ? user?.districtName : (selectedDistrict === 'all' ? null : selectedDistrict);
 
   useEffect(() => {
     async function loadInitial() {
-      if (isDistDir && user.districtName) {
+      if (isDistDir && user?.districtName && !isAdmin) {
         setSelectedDistrict(user.districtName);
       }
       await loadData();
     }
     loadInitial();
-  }, [user, isDistDir, fromDate, toDate, selectedDistrict]);
+  }, [user, isAdmin, isDistDir, fromDate, toDate, selectedDistrict]);
 
   const loadData = async () => {
     setLoading(true);
@@ -91,9 +89,9 @@ export default function DistrictPerformancePage() {
   const analytics = useMemo(() => {
     const stats = {
       total: submissions.length,
-      approved: submissions.filter(s => ['ACTIVE', 'GOVERNANCE_APPROVED', 'APPROVED'].includes(s.status)).length,
-      pending: submissions.filter(s => ['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED', 'PENDING'].includes(s.status)).length,
-      amended: submissions.filter(s => ['ACTION_REQUIRED', 'AMENDED'].includes(s.status)).length,
+      approved: submissions.filter(s => ['APPROVED'].includes(s.status)).length,
+      pending: submissions.filter(s => ['SUBMITTED', 'IN_REVIEW'].includes(s.status)).length,
+      amended: submissions.filter(s => ['ACTION_REQUIRED'].includes(s.status)).length,
       byBranch: {} as Record<string, { total: number, approved: number, pending: number, amended: number }>
     };
 
@@ -101,15 +99,15 @@ export default function DistrictPerformancePage() {
       const bName = sub.branchName || 'Unmapped Node';
       if (!stats.byBranch[bName]) stats.byBranch[bName] = { total: 0, approved: 0, pending: 0, amended: 0 };
       stats.byBranch[bName].total++;
-      if (['ACTIVE', 'GOVERNANCE_APPROVED', 'APPROVED'].includes(sub.status)) stats.byBranch[bName].approved++;
-      if (['ACTION_REQUIRED', 'AMENDED'].includes(sub.status)) stats.byBranch[bName].amended++;
-      if (['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED', 'PENDING'].includes(sub.status)) stats.byBranch[bName].pending++;
+      if (['APPROVED'].includes(sub.status)) stats.byBranch[bName].approved++;
+      if (['ACTION_REQUIRED'].includes(sub.status)) stats.byBranch[bName].amended++;
+      if (['SUBMITTED', 'IN_REVIEW'].includes(sub.status)) stats.byBranch[bName].pending++;
     });
 
     return stats;
   }, [submissions]);
 
-  if (loading && submissions.length === 0) {
+  if ((loading || permissionsLoading) && submissions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />

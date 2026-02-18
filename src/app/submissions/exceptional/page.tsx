@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
-import { KYCSubmission } from "@/lib/kyc-data";
-import { Zap, Loader2, Search, Info, Plus, FileText, Upload, ShieldAlert, FileType, CheckCircle2, Beaker } from "lucide-react";
+import { Zap, Loader2, Search, Info, Upload } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -11,12 +10,11 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getSubmissions, initiateExceptionalWorkflow } from "@/actions/submissions";
-import { UserRole, ExceptionalStatus } from "@prisma/client";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
@@ -29,9 +27,11 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function ExceptionalCasesPage() {
   const { user } = useAuth();
+  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [availableCases, setAvailableCases] = useState<any[]>([]);
@@ -46,7 +46,7 @@ export default function ExceptionalCasesPage() {
   const [memoFile, setMemoFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isAdmin = isSuperAdmin;
 
   useEffect(() => {
     async function loadData() {
@@ -94,7 +94,6 @@ export default function ExceptionalCasesPage() {
       toast({ title: "Exception Initiated", description: "Case dispatched to District Director." });
       setIsAddDialogOpen(false);
       resetForm();
-      // Reload
       const exceptional = await getSubmissions({ isExceptional: true });
       setSubmissions(exceptional);
     } catch (error: any) {
@@ -110,6 +109,8 @@ export default function ExceptionalCasesPage() {
     setMemoFile(null);
   };
 
+  if (permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -123,7 +124,7 @@ export default function ExceptionalCasesPage() {
           <p className="text-muted-foreground text-lg font-medium">Hierarchy oversight for high-risk and non-standard verification requests.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {(user?.role === UserRole.BRANCH_MANAGER || isAdmin) && (
+          {isAdmin && (
             <Button 
               onClick={() => setIsAddDialogOpen(true)}
               className="bg-[#B89334] hover:bg-[#A6822D] text-white font-bold h-12 px-8 shadow-xl gap-2 rounded-lg transition-all active:scale-95"
@@ -170,7 +171,6 @@ export default function ExceptionalCasesPage() {
         <SubmissionsPageContent submissions={filteredSubmissions || []} />
       )}
 
-      {/* Initiation Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>

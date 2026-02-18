@@ -7,15 +7,16 @@ import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
-import { UserRole } from "@prisma/client";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function AmendmentReviewPage() {
   const { user } = useAuth();
+  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isAdmin = isSuperAdmin;
 
   useEffect(() => {
     async function loadData() {
@@ -38,6 +39,8 @@ export default function AmendmentReviewPage() {
       sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
     );
   }, [submissions, searchTerm]);
+
+  if (permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
