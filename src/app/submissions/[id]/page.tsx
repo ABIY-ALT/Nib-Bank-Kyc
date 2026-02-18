@@ -22,14 +22,18 @@ import {
   Loader2,
   FileArchive,
   MapPin,
-  MessagesSquare
+  MessagesSquare,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
+  Activity
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getSubmissionById, updateSubmissionStatus } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
-import { KYCStatus, UserRole } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { 
@@ -40,13 +44,6 @@ import {
   DialogDescription
 } from "@/components/ui/dialog";
 import JSZip from 'jszip';
-
-const DEFAULT_DOC_TYPES = [
-  { id: "id_card", label: "ID Card / National ID" },
-  { id: "passport", label: "Passport" },
-  { id: "utility_bill", label: "Utility Bill" },
-  { id: "other", label: "Other Document" },
-];
 
 export default function SubmissionDetails() {
   const params = useParams();
@@ -84,7 +81,7 @@ export default function SubmissionDetails() {
 
   const isReviewer = useMemo(() => {
     if (!user) return false;
-    return user.roles?.some(ur => ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN'].includes(ur.role.name));
+    return user.roles?.some(ur => ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST'].includes(ur.role.name));
   }, [user]);
 
   const isTerminal = submission?.status === KYCStatus.APPROVED || submission?.status === KYCStatus.REJECTED;
@@ -128,57 +125,144 @@ export default function SubmissionDetails() {
     }
   };
 
+  // Workflow Steps logic
+  const workflowSteps = useMemo(() => {
+    if (!submission) return [];
+    
+    const status = submission.status as KYCStatus;
+    
+    return [
+      { 
+        id: 'submitted', 
+        label: 'Submission', 
+        description: 'Case registered by branch',
+        state: 'completed',
+        icon: CheckCircle2
+      },
+      { 
+        id: 'review', 
+        label: 'KYC Review', 
+        description: 'Specialist analysis',
+        state: status === KYCStatus.SUBMITTED ? 'active' : 'completed',
+        icon: Search
+      },
+      { 
+        id: 'determination', 
+        label: 'Determination', 
+        description: status === KYCStatus.ACTION_REQUIRED ? 'Action Required' : 'Institutional Verdict',
+        state: status === KYCStatus.ACTION_REQUIRED ? 'alert' : 
+               status === KYCStatus.IN_REVIEW ? 'active' : 
+               (status === KYCStatus.APPROVED || status === KYCStatus.REJECTED) ? 'completed' : 'pending',
+        icon: status === KYCStatus.ACTION_REQUIRED ? AlertCircle : 
+              status === KYCStatus.REJECTED ? XCircle : ShieldCheck
+      },
+      { 
+        id: 'finalized', 
+        label: 'Case Closed', 
+        description: 'Lifecycle conclusion',
+        state: (status === KYCStatus.APPROVED || status === KYCStatus.REJECTED) ? 'completed' : 'pending',
+        icon: FileArchive
+      }
+    ];
+  }, [submission]);
+
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ArrowLeft className="w-5 h-5" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-primary/5 text-primary"><ArrowLeft className="w-5 h-5" /></Button>
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-3xl font-bold font-headline">{submission.id}</h1>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-3xl font-black font-headline text-slate-900 tracking-tight">{submission.id}</h1>
               <Badge variant="outline" className={cn(
-                submission.status === KYCStatus.APPROVED && 'bg-emerald-100 text-emerald-800 border-emerald-200',
-                submission.status === KYCStatus.ACTION_REQUIRED && 'bg-orange-100 text-orange-800 border-orange-200', 
+                "font-black px-3 py-1 uppercase text-[10px] tracking-widest",
+                submission.status === KYCStatus.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                submission.status === KYCStatus.ACTION_REQUIRED && 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse', 
+                submission.status === KYCStatus.REJECTED && 'bg-red-50 text-red-700 border-red-200',
+                submission.status === KYCStatus.SUBMITTED && 'bg-primary/5 text-primary border-primary/20'
               )}>
-                {submission.status}
+                {submission.status.replace(/_/g, ' ')}
               </Badge>
             </div>
-            <p className="text-muted-foreground font-medium">{submission.customerName} • {submission.branchName} Node</p>
+            <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} • {submission.branchName} Node</p>
           </div>
         </div>
         <div className="flex gap-2">
-           <Button className="bg-primary hover:bg-primary/90 text-white font-bold px-6 shadow-lg h-10" onClick={handleDownloadBundle} disabled={isDownloading}>
-            {isDownloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileArchive className="w-4 h-4 mr-2" />}
-            Download Bundle
+           <Button className="bg-primary hover:bg-primary/90 text-white font-black px-6 shadow-xl h-11 rounded-xl gap-2" onClick={handleDownloadBundle} disabled={isDownloading}>
+            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileArchive className="w-4 h-4" />}
+            Download Archive
            </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="shadow-sm border-slate-200">
-            <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50">
-              <CardTitle className="text-xl flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Case Documents</CardTitle>
-              <Badge variant="outline" className="bg-white font-bold text-slate-500 uppercase text-[10px] tracking-widest">{submission.documents?.length || 0} Files</Badge>
+      {/* WORKFLOW TRACKER */}
+      <Card className="border-slate-200 shadow-lg overflow-hidden rounded-3xl bg-white">
+        <CardContent className="p-8">
+          <div className="relative flex flex-col md:flex-row justify-between gap-8 md:gap-0">
+            {/* Progress Line */}
+            <div className="absolute top-[22px] left-0 right-0 h-0.5 bg-slate-100 hidden md:block" />
+            
+            {workflowSteps.map((step, idx) => {
+              const Icon = step.icon;
+              return (
+                <div key={step.id} className="relative z-10 flex md:flex-col items-center md:items-center gap-4 md:gap-3 md:w-1/4">
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-sm border-2",
+                    step.state === 'completed' && "bg-primary border-primary text-white shadow-primary/20",
+                    step.state === 'active' && "bg-white border-primary text-primary animate-pulse shadow-xl",
+                    step.state === 'alert' && "bg-orange-50 border-orange-500 text-orange-600 shadow-orange-100",
+                    step.state === 'pending' && "bg-slate-50 border-slate-100 text-slate-300"
+                  )}>
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  <div className="text-left md:text-center space-y-0.5">
+                    <p className={cn(
+                      "text-xs font-black uppercase tracking-[0.15em]",
+                      step.state === 'completed' ? "text-primary" : 
+                      step.state === 'active' ? "text-primary" : 
+                      step.state === 'alert' ? "text-orange-600" : "text-slate-400"
+                    )}>
+                      {step.label}
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-400 whitespace-nowrap">{step.description}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-8 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-8">
+          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
+            <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-xl">
+                  <FileText className="w-5 h-5 text-primary" />
+                </div>
+                <CardTitle className="text-xl font-black tracking-tight">Case Documents</CardTitle>
+              </div>
+              <Badge variant="secondary" className="bg-white border font-bold text-slate-500 uppercase text-[10px] tracking-widest px-3">{submission.documents?.length || 0} Files</Badge>
             </CardHeader>
-            <CardContent className="pt-6 space-y-8">
+            <CardContent className="pt-6 px-6">
               <div className="grid gap-4">
                 {submission.documents?.map((doc: any) => (
-                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/30 transition-all group border-slate-200">
+                    <div key={doc.id} className="flex items-center justify-between p-5 border rounded-2xl bg-white shadow-sm hover:border-primary/30 transition-all group border-slate-100">
                       <div className="flex items-center gap-4">
-                        <div className="p-2 bg-primary/10 text-primary rounded-lg">
-                          <FileText className="w-6 h-6" />
+                        <div className="p-3 bg-slate-50 rounded-xl group-hover:bg-primary/5 transition-colors">
+                          <FileText className="w-6 h-6 text-slate-400 group-hover:text-primary transition-colors" />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{doc.type}</p>
+                          <p className="font-black text-slate-900 group-hover:text-primary transition-colors">{doc.name}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-[0.1em] font-black">{doc.type}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
-                         <Button variant="ghost" size="icon" onClick={() => setPreviewFile({ name: doc.name, url: doc.url })} className="rounded-full"><Eye className="w-4 h-4" /></Button>
+                         <Button variant="ghost" size="icon" onClick={() => setPreviewFile({ name: doc.name, url: doc.url })} className="rounded-full h-10 w-10 hover:bg-primary/5 text-primary"><Eye className="w-5 h-5" /></Button>
                       </div>
                     </div>
                 ))}
@@ -186,76 +270,109 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
-              <CardTitle className="text-xl flex items-center gap-2"><MessagesSquare className="w-5 h-5 text-primary" /> Audit History</CardTitle>
+          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl">
+            <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-xl">
+                  <MessagesSquare className="w-5 h-5 text-primary" />
+                </div>
+                <CardTitle className="text-xl font-black tracking-tight">Audit History</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="pt-8 px-8">
+            <CardContent className="pt-8 px-8 pb-10">
               <div className="relative space-y-8">
                 <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
                 {submission.commentHistory && (submission.commentHistory as any[]).length > 0 ? (
                   (submission.commentHistory as any[]).map((entry, idx) => (
-                    <div key={idx} className="relative flex gap-6">
-                      <div className="z-10 w-10 h-10 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center shrink-0 shadow-sm">
+                    <div key={idx} className="relative flex gap-6 animate-in slide-in-from-left duration-500" style={{ animationDelay: `${idx * 100}ms` }}>
+                      <div className="z-10 w-10 h-10 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center shrink-0 shadow-sm group-hover:border-primary/20 transition-colors">
                         <MessageSquare className="w-5 h-5 text-slate-400" />
                       </div>
-                      <div className="flex-1 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-sm font-black text-slate-900">{entry.performedBy} ({entry.role})</span>
-                          <span className="text-[10px] font-bold text-slate-400">{new Date(entry.timestamp).toLocaleString()}</span>
+                      <div className="flex-1 bg-slate-50/50 p-5 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 gap-1">
+                          <span className="text-xs font-black text-slate-900 uppercase tracking-widest">{entry.performedBy} <span className="text-primary ml-1">[{entry.role}]</span></span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">{new Date(entry.timestamp).toLocaleString()}</span>
                         </div>
-                        <p className="text-sm text-slate-700">{entry.comment}</p>
+                        <p className="text-sm text-slate-700 leading-relaxed font-medium">{entry.comment}</p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="py-12 text-center text-muted-foreground italic">No historical comments.</div>
+                  <div className="py-12 text-center text-muted-foreground italic flex flex-col items-center gap-3">
+                    <Activity className="w-10 h-10 opacity-10" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">No historical entries recorded.</p>
+                  </div>
                 )}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="space-y-6">
-          <Card className="shadow-lg border-primary/20 bg-primary/5 overflow-hidden sticky top-24">
-            <CardHeader className="bg-primary/10 border-b border-primary/10 py-4">
-              <CardTitle className="text-[11px] font-black uppercase tracking-widest text-primary flex items-center gap-2"><MapPin className="w-4 h-4" /> Details</CardTitle>
+        <div className="space-y-8">
+          <Card className="shadow-xl border-primary/20 bg-primary/5 overflow-hidden rounded-3xl sticky top-24">
+            <CardHeader className="bg-primary/10 border-b border-primary/10 py-5 px-6">
+              <CardTitle className="text-[11px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2">
+                <MapPin className="w-4 h-4" /> Institutional Context
+              </CardTitle>
             </CardHeader>
-            <CardContent className="p-5 space-y-4">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">Customer</p>
-                  <p className="font-black text-slate-900">{submission.customerName}</p>
+            <CardContent className="p-6 space-y-6">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Entity</p>
+                  <p className="font-black text-slate-900 text-lg leading-tight">{submission.customerName}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">Branch</p>
-                  <p className="font-black text-slate-900">{submission.branchName}</p>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Originating Node</p>
+                  <p className="font-black text-slate-900">{submission.branchName} Branch</p>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">Submitted By</p>
-                  <p className="font-black text-slate-900">{submission.submittedBy?.name}</p>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Submitted By</p>
+                  <p className="font-black text-slate-900">{submission.submittedBy?.name || 'Institutional Staff'}</p>
+                </div>
+                <div className="space-y-1 pt-4 border-t border-primary/10">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Workflow</p>
+                  <p className="font-black text-primary uppercase text-sm">{submission.status.replace(/_/g, ' ')}</p>
                 </div>
             </CardContent>
           </Card>
 
           {!isTerminal && isReviewer && (
-            <Card className="border-primary/20 shadow-xl">
-              <CardHeader className="bg-slate-50/50 border-b">
-                <CardTitle className="text-lg font-bold">KYC Determination</CardTitle>
+            <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-500">
+              <CardHeader className="bg-slate-900 text-white border-b py-5">
+                <CardTitle className="text-lg font-black tracking-tight">KYC Determination</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 pt-6">
+              <CardContent className="space-y-6 pt-6 px-6 pb-8">
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-500 uppercase">Decision Remarks</Label>
-                  <Textarea placeholder="Instructions for branch..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[120px]" />
+                  <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Official Decision Remarks</Label>
+                  <Textarea 
+                    placeholder="Provide detailed instructions or verification notes..." 
+                    value={remarks} 
+                    onChange={(e) => setRemarks(e.target.value)} 
+                    className="min-h-[140px] bg-slate-50/50 border-slate-200 focus-visible:ring-primary/20 rounded-2xl font-medium" 
+                  />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={() => handleAction(KYCStatus.APPROVED)} className="bg-emerald-600 hover:bg-emerald-700 font-bold" disabled={!!isActioning}>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button 
+                    onClick={() => handleAction(KYCStatus.APPROVED)} 
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl shadow-lg shadow-emerald-100" 
+                    disabled={!!isActioning}
+                  >
                     Approve
                   </Button>
-                  <Button onClick={() => handleAction(KYCStatus.ACTION_REQUIRED)} variant="outline" className="text-orange-600 border-orange-200 font-bold" disabled={!!isActioning}>
+                  <Button 
+                    onClick={() => handleAction(KYCStatus.ACTION_REQUIRED)} 
+                    variant="outline" 
+                    className="text-orange-600 border-orange-200 font-black h-12 rounded-xl hover:bg-orange-50" 
+                    disabled={!!isActioning}
+                  >
                     Request Fix
                   </Button>
-                  <Button onClick={() => handleAction(KYCStatus.REJECTED)} variant="destructive" className="font-bold col-span-2" disabled={!!isActioning}>
-                    Reject
+                  <Button 
+                    onClick={() => handleAction(KYCStatus.REJECTED)} 
+                    variant="destructive" 
+                    className="font-black h-12 rounded-xl col-span-2 shadow-xl shadow-red-100" 
+                    disabled={!!isActioning}
+                  >
+                    Final Rejection
                   </Button>
                 </div>
               </CardContent>
@@ -265,7 +382,7 @@ export default function SubmissionDetails() {
       </div>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none bg-[#1a1a1a]">
+        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none bg-[#1a1a1a] rounded-3xl">
           <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between border-b border-white/5 pr-14">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/20 rounded-lg"><FileText className="w-5 h-5 text-primary" /></div>
@@ -273,7 +390,7 @@ export default function SubmissionDetails() {
             </div>
           </DialogHeader>
           <div className="flex-1 bg-[#121212] overflow-hidden flex items-center justify-center text-white">
-            <p>Preview functionality limited in Pure SQL mode. Use "Download Bundle" for full access.</p>
+            <p className="font-bold text-slate-500 uppercase tracking-widest text-xs">Preview functionality limited. Use "Download Archive" for full access.</p>
           </div>
         </DialogContent>
       </Dialog>
