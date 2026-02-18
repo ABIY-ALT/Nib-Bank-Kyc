@@ -3,35 +3,39 @@
 import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2, Inbox, ShieldCheck } from "lucide-react";
+import { Search, Loader2, Inbox, ShieldCheck, MapPin } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function ReviewQueuePage() {
   const { user } = useAuth();
+  const { isSuperAdmin } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-
-  const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
 
   useEffect(() => {
     async function loadData() {
       if (!user) return;
       setLoading(true);
+      
+      const assignedBranches = user.assignedBranches || [];
+      
       const data = await getSubmissions({
         status: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW],
         isExceptional: false,
         isResubmitted: false,
-        branch: isAdmin ? undefined : (user.branchName || undefined)
+        // If not super admin, restrict to assigned branches
+        branches: isSuperAdmin ? undefined : (assignedBranches.length > 0 ? assignedBranches : [user.branchName || "NONE"])
       });
       setSubmissions(data);
       setLoading(false);
     }
     loadData();
-  }, [user, isAdmin]);
+  }, [user, isSuperAdmin]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -49,11 +53,16 @@ export default function ReviewQueuePage() {
             <Inbox className="w-8 h-8 text-primary" />
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Review Queue</h1>
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-muted-foreground text-lg">Central hub for processing initial applications.</p>
-            {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <p className="text-muted-foreground text-lg">Central hub for processing applications.</p>
+            {isSuperAdmin ? (
               <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
                 <ShieldCheck className="w-3 h-3" /> Global Oversight
+              </Badge>
+            ) : user?.assignedBranches && user.assignedBranches.length > 0 && (
+              <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
+                <MapPin className="w-3 h-3" />
+                {user.assignedBranches.length} Node Portfolio
               </Badge>
             )}
           </div>

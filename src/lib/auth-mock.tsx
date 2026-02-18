@@ -23,7 +23,10 @@ export interface UserProfile {
   status: UserStatus;
   branchId?: string | null;
   branchName?: string | null;
+  districtName?: string | null;
+  assignedBranches: string[];
   roles: any[]; // Relational roles from SQL
+  needsPasswordChange?: boolean;
 }
 
 interface AuthContextType {
@@ -32,6 +35,7 @@ interface AuthContextType {
   isMock: boolean;
   login: (email: string, pass: string) => Promise<void>;
   logout: (reason?: string) => Promise<void>;
+  changePassword: (newPass: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,11 +72,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser({
                 ...sqlUser,
                 name: `${sqlUser.firstName} ${sqlUser.lastName}`,
-                branchName: (sqlUser as any).branch?.name || null
+                branchName: (sqlUser as any).branch?.name || null,
+                districtName: (sqlUser as any).branch?.district?.name || null,
+                assignedBranches: (sqlUser as any).assignedBranches || []
               } as any);
             }
           } else {
-            // JIT Provisioning for Institutional Identity
             const result = await syncUserToSql({
               id: fbUser.uid,
               email: fbUser.email!,
@@ -80,7 +85,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
             if (result.success) {
               const u = result.user!;
-              setUser({ ...u, name: `${u.firstName} ${u.lastName}` } as any);
+              setUser({ 
+                ...u, 
+                name: `${u.firstName} ${u.lastName}`,
+                assignedBranches: [] 
+              } as any);
             }
           }
         } catch (e) {
@@ -118,6 +127,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         status: existingUser?.status || 'ACTIVE',
         branchId: existingUser?.branchId || null,
         branchName: (existingUser as any)?.branch?.name || null,
+        districtName: (existingUser as any)?.branch?.district?.name || null,
+        assignedBranches: (existingUser as any)?.assignedBranches || [],
         roles: existingUser?.roles || [{ role: { name: normalizedEmail.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
       };
       
@@ -142,8 +153,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     toast({ title: 'Logged Out', description: `Session terminated: ${reason}` });
   };
 
+  const changePassword = async (newPass: string) => {
+    // Mock implementation for change password
+    if (user) {
+      const updated = { ...user, needsPasswordChange: false };
+      setUser(updated);
+      if (isMockMode) localStorage.setItem('nib_mock_user', JSON.stringify(updated));
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, isMock: isMockMode, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, isMock: isMockMode, login, logout, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

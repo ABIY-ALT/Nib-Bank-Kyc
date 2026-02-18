@@ -15,6 +15,7 @@ export async function getSubmissions(filters?: {
   endDate?: string;
   limit?: number;
   branch?: string;
+  branches?: string[];
   district?: string;
   isExceptional?: boolean;
 }) {
@@ -25,7 +26,11 @@ export async function getSubmissions(filters?: {
         branchId: filters?.branchId,
         createdById: filters?.createdById,
         isResubmitted: filters?.isResubmitted,
-        branch: filters?.branch ? { name: filters.branch } : undefined,
+        branch: filters?.branches && filters.branches.length > 0 ? {
+          name: { in: filters.branches }
+        } : filters?.branch ? { 
+          name: filters.branch 
+        } : undefined,
         active: true,
         createdAt: (filters?.startDate || filters?.endDate) ? {
           gte: filters.startDate ? new Date(filters.startDate) : undefined,
@@ -61,7 +66,6 @@ export async function getSubmissionById(id: string) {
 
     if (!kyc) return null;
 
-    // Map back to app structure
     return {
       ...kyc,
       branchName: kyc.branch.name,
@@ -85,7 +89,10 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
   if (!current) throw new Error("KYC record not found");
 
   const history = (current.commentHistory as any[]) || [];
-  const reviewer = await prisma.user.findUnique({ where: { id: reviewerId } });
+  const reviewer = await prisma.user.findUnique({ 
+    where: { id: reviewerId },
+    include: { roles: { include: { role: true } } }
+  });
 
   const newEntry = {
     role: reviewer?.roles?.[0]?.role?.name || 'SYSTEM',
@@ -136,7 +143,6 @@ export async function createSubmission(formData: FormData) {
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
 
-    // 1. Ensure District & Branch exist
     const district = await prisma.district.upsert({
       where: { name: districtName },
       update: {},
@@ -153,7 +159,6 @@ export async function createSubmission(formData: FormData) {
       }
     });
 
-    // 2. JIT User Provisioning for Schema integrity
     const nameParts = createdByName.split(' ');
     await prisma.user.upsert({
       where: { id: createdById },
@@ -169,7 +174,6 @@ export async function createSubmission(formData: FormData) {
       }
     });
 
-    // 3. Local Filesystem Storage
     const uploadDir = path.join(process.cwd(), 'uploads');
     try {
       await fs.access(uploadDir);
@@ -198,12 +202,11 @@ export async function createSubmission(formData: FormData) {
 
     const now = new Date();
     
-    // 4. Create KYC Record
     const kyc = await prisma.kYC.create({
       data: {
         id,
         customerName,
-        customerIdNumber: id, // Mapping ID as placeholder if not provided
+        customerIdNumber: id,
         branchId: branch.id,
         createdById,
         status: KYCStatus.SUBMITTED,
@@ -239,7 +242,6 @@ export async function createSubmission(formData: FormData) {
 }
 
 export async function logBundleDownload(data: any) {
-  // Logic for bundle download logging if needed
   return true;
 }
 
