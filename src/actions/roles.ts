@@ -99,7 +99,6 @@ export async function seedInstitutionalPermissions() {
 
   const dbPermissions = [];
 
-  // 1. Clear existing or upsert permissions
   for (const p of permissions) {
     const perm = await prisma.permission.upsert({
       where: { slug: p.slug },
@@ -109,55 +108,54 @@ export async function seedInstitutionalPermissions() {
     dbPermissions.push(perm);
   }
 
-  // 2. Ensure SUPER_ADMIN role exists and has ALL permissions linked
-  const superAdminRole = await prisma.role.upsert({
-    where: { name: 'SUPER_ADMIN' },
-    update: { description: 'Master Institutional Control', active: true },
-    create: { name: 'SUPER_ADMIN', description: 'Master Institutional Control' }
-  });
-
-  await prisma.rolePermission.deleteMany({ where: { roleId: superAdminRole.id } });
-  await prisma.rolePermission.createMany({
-    data: dbPermissions.map(p => ({ roleId: superAdminRole.id, permissionId: p.id }))
-  });
-
   revalidatePath('/admin/roles');
   return { success: true };
 }
 
 export async function getRoleDefinitions() {
-  return await prisma.role.findMany({
-    where: { active: true },
-    include: { 
-      permissions: { 
-        include: { 
-          permission: true 
+  try {
+    return await prisma.role.findMany({
+      where: { active: true },
+      include: { 
+        permissions: { 
+          include: { 
+            permission: true 
+          } 
         } 
-      } 
-    },
-    orderBy: { name: 'asc' }
-  });
+      },
+      orderBy: { name: 'asc' }
+    });
+  } catch (e) {
+    return [];
+  }
 }
 
 export async function getAllPermissions() {
-  return await prisma.permission.findMany({
-    orderBy: [{ group: 'asc' }, { name: 'asc' }]
-  });
+  try {
+    return await prisma.permission.findMany({
+      orderBy: [{ group: 'asc' }, { name: 'asc' }]
+    });
+  } catch (e) {
+    return [];
+  }
 }
 
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
   try {
     const role = await prisma.$transaction(async (tx) => {
       const r = await tx.role.upsert({
-        where: { id: data.id || 'new' },
+        where: { id: data.id || 'new-role-id' },
         update: { name: data.name, description: data.description },
         create: { name: data.name, description: data.description }
       });
 
       await tx.rolePermission.deleteMany({ where: { roleId: r.id } });
-      await tx.rolePermission.createMany({
-        data: data.permissionIds.map(pid => ({ roleId: r.id, permissionId: pid }))
-      });
+      
+      if (data.permissionIds.length > 0) {
+        await tx.rolePermission.createMany({
+          data: data.permissionIds.map(pid => ({ roleId: r.id, permissionId: pid }))
+        });
+      }
 
       return r;
     });

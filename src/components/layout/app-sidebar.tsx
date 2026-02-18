@@ -394,7 +394,7 @@ export function AppSidebar() {
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
                             <Link href="/admin/settings">
-                              <Settings className="w-4 h-4 mr-2" />
+                              <Settings className="w-4 h-4" />
                               <span>Configuration</span>
                             </Link>
                           </SidebarMenuSubButton>
