@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { 
-  LayoutList, 
   Loader2, 
   Search, 
   ShieldCheck, 
@@ -38,20 +37,20 @@ import {
 import { type ChartConfig, ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { SubmissionsPageContent } from "../submissions-content";
 import { getSubmissions } from "@/actions/submissions";
-import { SubmissionStatus, UserRole } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 
 const STATUS_COLORS = {
   APPROVED: "#10B981",
-  PENDING: "#3F51B5",
-  AMENDED: "#F59E0B",
+  SUBMITTED: "#3F51B5",
+  ACTION_REQUIRED: "#F59E0B",
   REJECTED: "#EF4444",
   ESCALATED: "#8B5CF6"
 };
 
 const chartConfig = {
   APPROVED: { label: "Approved", color: STATUS_COLORS.APPROVED },
-  PENDING: { label: "Pending", color: STATUS_COLORS.PENDING },
-  AMENDED: { label: "Action Required", color: STATUS_COLORS.AMENDED },
+  SUBMITTED: { label: "Pending", color: STATUS_COLORS.SUBMITTED },
+  ACTION_REQUIRED: { label: "Action Required", color: STATUS_COLORS.ACTION_REQUIRED },
   REJECTED: { label: "Rejected", color: STATUS_COLORS.REJECTED },
 } satisfies ChartConfig;
 
@@ -68,7 +67,7 @@ export default function BranchNodeOversightPage() {
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
 
   useEffect(() => {
     async function loadData() {
@@ -95,15 +94,15 @@ export default function BranchNodeOversightPage() {
 
     const stats = {
       total: submissions.length,
-      approved: submissions.filter(s => s.status === SubmissionStatus.APPROVED).length,
-      pending: submissions.filter(s => [SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW].includes(s.status)).length,
-      rejected: submissions.filter(s => s.status === SubmissionStatus.REJECTED).length,
-      amended: submissions.filter(s => s.status === SubmissionStatus.AMENDED).length,
+      approved: submissions.filter(s => s.status === KYCStatus.APPROVED).length,
+      pending: submissions.filter(s => [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status)).length,
+      rejected: submissions.filter(s => s.status === KYCStatus.REJECTED).length,
+      amended: submissions.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length,
       officers: {} as Record<string, { name: string, total: number, approved: number, amended: number, pending: number, cycles: number }>,
       byStatus: [
         { name: 'APPROVED', value: 0, fill: STATUS_COLORS.APPROVED },
-        { name: 'PENDING', value: 0, fill: STATUS_COLORS.PENDING },
-        { name: 'AMENDED', value: 0, fill: STATUS_COLORS.AMENDED },
+        { name: 'SUBMITTED', value: 0, fill: STATUS_COLORS.SUBMITTED },
+        { name: 'ACTION_REQUIRED', value: 0, fill: STATUS_COLORS.ACTION_REQUIRED },
         { name: 'REJECTED', value: 0, fill: STATUS_COLORS.REJECTED },
       ],
       volumeHistory: [] as { date: string, count: number }[]
@@ -119,16 +118,16 @@ export default function BranchNodeOversightPage() {
       stats.officers[officer].total++;
       stats.officers[officer].cycles += (sub.amendmentCycles || 0);
       
-      if (sub.status === SubmissionStatus.APPROVED) {
+      if (sub.status === KYCStatus.APPROVED) {
         stats.officers[officer].approved++;
         stats.byStatus[0].value++;
-      } else if (sub.status === SubmissionStatus.AMENDED) {
+      } else if (sub.status === KYCStatus.ACTION_REQUIRED) {
         stats.officers[officer].amended++;
         stats.byStatus[2].value++;
-      } else if ([SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW].includes(sub.status)) {
+      } else if ([KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status)) {
         stats.officers[officer].pending++;
         stats.byStatus[1].value++;
-      } else if (sub.status === SubmissionStatus.REJECTED) {
+      } else if (sub.status === KYCStatus.REJECTED) {
         stats.byStatus[3].value++;
       }
 
@@ -185,7 +184,7 @@ export default function BranchNodeOversightPage() {
             </p>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
               <ShieldCheck className="w-3 h-3" />
-              {user.role?.replace(/_/g, ' ')} Authorization
+              {user.roles?.[0]?.role.name.replace(/_/g, ' ') || 'OFFICER'} Authorization
             </Badge>
           </div>
         </div>
@@ -247,7 +246,7 @@ export default function BranchNodeOversightPage() {
           <Tabs defaultValue="summary" className="space-y-6">
             <TabsList className="bg-slate-100 p-1 border h-12">
               <TabsTrigger value="summary" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><TrendingUp className="w-4 h-4 mr-2" />Summary Analytics</TabsTrigger>
-              <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><LayoutList className="w-4 h-4 mr-2" />Case Archive</TabsTrigger>
+              <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Activity className="w-4 h-4 mr-2" />Case Archive</TabsTrigger>
               <TabsTrigger value="officer-performance" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Users className="w-4 h-4 mr-2" />Staff Productivity</TabsTrigger>
             </TabsList>
 

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -6,111 +5,41 @@ import { useAuth } from "@/lib/auth-mock.tsx";
 import { 
   Card, 
   CardContent, 
-  CardDescription, 
   CardHeader, 
   CardTitle,
-  CardFooter
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   FileText, 
   Clock, 
-  User, 
-  History, 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle,
-  Download,
-  ExternalLink,
   MessageSquare,
-  Upload,
-  FilePlus,
-  X,
-  ShieldAlert,
   ArrowLeft,
-  AlertCircle,
   ShieldCheck,
-  RefreshCw,
   Check,
   Search,
-  Flag,
   Eye,
   Loader2,
-  Archive,
-  Zap,
-  Shield,
-  ArrowRight,
-  FileType,
-  ClipboardCheck,
-  CheckCircle2,
-  Info,
-  ChevronRight,
-  TrendingUp,
-  ListFilter,
-  MapPin,
   FileArchive,
-  Building2,
-  Calendar,
-  Layers,
-  UserCheck,
-  MessagesSquare,
-  Globe,
-  RotateCcw
+  MapPin,
+  MessagesSquare
 } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getSubmissionById, updateSubmissionStatus } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
-import { SubmissionStatus, UserRole } from "@prisma/client";
-import { AMENDMENT_SCENARIOS } from "@/lib/kyc-data";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
+import { KYCStatus, UserRole } from "@prisma/client";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogDescription,
-  DialogFooter
+  DialogDescription
 } from "@/components/ui/dialog";
-import { format } from "date-fns";
 import JSZip from 'jszip';
-
-const CHECKLIST_CONFIGS: Record<string, { id: string; label: string; mandatory: boolean }[]> = {
-  "individual": [
-    { id: "id", label: "National ID", mandatory: true },
-    { id: "form", label: "Fully completed account opening application form", mandatory: true },
-    { id: "name", label: "Full Name", mandatory: true },
-    { id: "dob", label: "Date of Birth", mandatory: true },
-    { id: "address", label: "Residential Address", mandatory: true },
-    { id: "phone", label: "Phone Number", mandatory: true },
-    { id: "deposit", label: "Initial Deposit", mandatory: true },
-    { id: "signature", label: "Customer Signature", mandatory: true },
-    { id: "tin", label: "TIN (if applicable)", mandatory: false },
-  ],
-  "company": [
-    { id: "signatory_id", label: "National ID of all signatories", mandatory: true },
-    { id: "form", label: "Fully completed account opening application form", mandatory: true },
-    { id: "trade_license", label: "Valid & renewed trade license", mandatory: true },
-    { id: "tin", label: "TIN", mandatory: true },
-    { id: "memo_articles", label: "Authenticated Memorandum & Articles of Association", mandatory: true },
-    { id: "address", label: "Company Address", mandatory: true },
-    { id: "phone", label: "Company Phone Number", mandatory: true },
-    { id: "deposit", label: "Initial Deposit", mandatory: true },
-    { id: "board_res", label: "Board resolution authorizing account opening", mandatory: false },
-  ]
-};
 
 const DEFAULT_DOC_TYPES = [
   { id: "id_card", label: "ID Card / National ID" },
@@ -130,23 +59,9 @@ export default function SubmissionDetails() {
   const [loading, setLoading] = useState(true);
   
   const [remarks, setRemarks] = useState("");
-  const [selectedScenario, setSelectedScenario] = useState<string>("");
-  const [otherScenarioText, setOtherScenarioText] = useState("");
-  const [correctionNote, setCorrectionNote] = useState("");
-  const [newFiles, setNewFiles] = useState<{file: File, type: string}[]>([]);
   const [previewFile, setPreviewFile] = useState<any>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isActioning, setIsActioning] = useState<string | null>(null);
-  
-  const [isExceptionDialogOpen, setIsExceptionDialogOpen] = useState(false);
-  const [exceptionReason, setExceptionReason] = useState("");
-  const [riskJustification, setRiskJustification] = useState("");
-  const [memoFile, setMemoFile] = useState<File | null>(null);
-  
-  const exceptionMemoInputRef = useRef<HTMLInputElement>(null);
-  const correctionInputRef = useRef<HTMLInputElement>(null);
-  const decisionMemoInputRef = useRef<HTMLInputElement>(null);
-  const [decisionMemoFile, setDecisionMemoFile] = useState<File | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -167,23 +82,14 @@ export default function SubmissionDetails() {
     loadData();
   }, [params.id]);
 
-  const documentTypes = useMemo(() => {
-    return settings?.documentTypes || DEFAULT_DOC_TYPES;
-  }, [settings]);
+  const isReviewer = useMemo(() => {
+    if (!user) return false;
+    return user.roles?.some(ur => ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN'].includes(ur.role.name));
+  }, [user]);
 
-  const currentChecklist = useMemo(() => {
-    return CHECKLIST_CONFIGS[submission?.entityType || "individual"] || CHECKLIST_CONFIGS["individual"];
-  }, [submission?.entityType]);
+  const isTerminal = submission?.status === KYCStatus.APPROVED || submission?.status === KYCStatus.REJECTED;
 
-  const isAdmin = user?.role === UserRole.ADMIN;
-  const isKYCOfficer = user?.role === UserRole.KYC_OFFICER; 
-  const isReviewer = [UserRole.KYC_OFFICER, UserRole.SUPERVISOR, UserRole.ADMIN].includes(user?.role as UserRole);
-  const isSeniorReviewer = [UserRole.SUPERVISOR, UserRole.ADMIN].includes(user?.role as UserRole);
-  const isOwner = submission?.submittedBy?.id === user?.id;
-
-  const isTerminal = submission?.status === SubmissionStatus.APPROVED || submission?.status === SubmissionStatus.REJECTED;
-
-  const handleAction = async (action: SubmissionStatus) => {
+  const handleAction = async (action: KYCStatus) => {
     if (!submission || !user || isTerminal || isActioning) return;
 
     setIsActioning(action);
@@ -191,7 +97,6 @@ export default function SubmissionDetails() {
       await updateSubmissionStatus(submission.id, action, user.id, remarks);
       toast({ title: "Workflow Updated", description: `Case moved to ${action}.` });
       
-      // Reload submission
       const updated = await getSubmissionById(submission.id);
       setSubmission(updated);
       setRemarks("");
@@ -226,12 +131,6 @@ export default function SubmissionDetails() {
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
-  const steps = [
-    { title: "Submitted", status: "completed" as const, icon: Check },
-    { title: "KYC Verification", status: (isTerminal ? "completed" : "active") as const, icon: Search },
-    { title: "Final Decision", status: (isTerminal ? "completed" : "upcoming") as const, icon: ShieldCheck }
-  ];
-
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -241,8 +140,8 @@ export default function SubmissionDetails() {
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-3xl font-bold font-headline">{submission.id}</h1>
               <Badge variant="outline" className={cn(
-                submission.status === SubmissionStatus.APPROVED && 'bg-emerald-100 text-emerald-800 border-emerald-200',
-                submission.status === SubmissionStatus.AMENDED && 'bg-orange-100 text-orange-800 border-orange-200', 
+                submission.status === KYCStatus.APPROVED && 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                submission.status === KYCStatus.ACTION_REQUIRED && 'bg-orange-100 text-orange-800 border-orange-200', 
               )}>
                 {submission.status}
               </Badge>
@@ -294,7 +193,7 @@ export default function SubmissionDetails() {
             <CardContent className="pt-8 px-8">
               <div className="relative space-y-8">
                 <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
-                {submission.commentHistory && submission.commentHistory.length > 0 ? (
+                {submission.commentHistory && (submission.commentHistory as any[]).length > 0 ? (
                   (submission.commentHistory as any[]).map((entry, idx) => (
                     <div key={idx} className="relative flex gap-6">
                       <div className="z-10 w-10 h-10 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center shrink-0 shadow-sm">
@@ -349,13 +248,13 @@ export default function SubmissionDetails() {
                   <Textarea placeholder="Instructions for branch..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[120px]" />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={() => handleAction(SubmissionStatus.APPROVED)} className="bg-emerald-600 hover:bg-emerald-700 font-bold" disabled={!!isActioning}>
+                  <Button onClick={() => handleAction(KYCStatus.APPROVED)} className="bg-emerald-600 hover:bg-emerald-700 font-bold" disabled={!!isActioning}>
                     Approve
                   </Button>
-                  <Button onClick={() => handleAction(SubmissionStatus.AMENDED)} variant="outline" className="text-orange-600 border-orange-200 font-bold" disabled={!!isActioning}>
+                  <Button onClick={() => handleAction(KYCStatus.ACTION_REQUIRED)} variant="outline" className="text-orange-600 border-orange-200 font-bold" disabled={!!isActioning}>
                     Request Fix
                   </Button>
-                  <Button onClick={() => handleAction(SubmissionStatus.REJECTED)} variant="destructive" className="font-bold col-span-2" disabled={!!isActioning}>
+                  <Button onClick={() => handleAction(KYCStatus.REJECTED)} variant="destructive" className="font-bold col-span-2" disabled={!!isActioning}>
                     Reject
                   </Button>
                 </div>

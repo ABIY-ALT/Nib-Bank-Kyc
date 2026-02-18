@@ -35,7 +35,7 @@ import { format } from "date-fns";
 import JSZip from 'jszip';
 import { useState } from "react";
 import { logBundleDownload } from "@/actions/submissions";
-import { SubmissionStatus, ExceptionalStatus } from "@prisma/client";
+import { KYCStatus, ExceptionalStatus } from "@prisma/client";
 
 export function SubmissionsPageContent({ submissions }: { submissions: any[] }) {
   const { toast } = useToast();
@@ -89,14 +89,14 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       );
     }
 
-    const status = sub.status as SubmissionStatus;
-    const isResubmitted = sub.isResubmitted && (status === SubmissionStatus.PENDING || status === SubmissionStatus.IN_REVIEW);
+    const status = sub.status as KYCStatus;
+    const isResubmitted = sub.isResubmitted && (status === KYCStatus.SUBMITTED || status === KYCStatus.IN_REVIEW);
 
     switch (status) {
-      case SubmissionStatus.APPROVED: 
+      case KYCStatus.APPROVED: 
         return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 font-bold px-3 py-1">Approved</Badge>;
-      case SubmissionStatus.PENDING: 
-      case SubmissionStatus.IN_REVIEW:
+      case KYCStatus.SUBMITTED: 
+      case KYCStatus.IN_REVIEW:
         return isResubmitted ? 
           <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1.5 font-bold px-3 py-1">
             <History className="w-3.5 h-3.5" /> Resubmitted
@@ -104,13 +104,13 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
           <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" /> {status.replace(/_/g, ' ')}
           </Badge>;
-      case SubmissionStatus.AMENDED: 
+      case KYCStatus.ACTION_REQUIRED: 
         return <Badge className="bg-orange-100 text-orange-800 border-orange-200 flex items-center gap-1.5 font-bold px-3 py-1 animate-pulse">
           <AlertCircle className="w-3.5 h-3.5" /> Action Required
         </Badge>;
-      case SubmissionStatus.REJECTED: 
+      case KYCStatus.REJECTED: 
         return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 font-bold px-3 py-1">Rejected</Badge>;
-      case SubmissionStatus.ESCALATED: 
+      case KYCStatus.ESCALATED: 
         return <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-bold px-3 py-1">Escalated</Badge>;
       default: 
         return <Badge variant="secondary" className="font-bold px-3 py-1">{status}</Badge>;

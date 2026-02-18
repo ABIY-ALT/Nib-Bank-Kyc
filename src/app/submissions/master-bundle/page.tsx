@@ -14,21 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   Folders, 
-  Download, 
   Filter, 
   Calendar as CalendarIcon, 
-  MapPin, 
   Building2, 
   ShieldCheck, 
   Loader2,
   FileArchive,
-  Info,
-  Archive,
   CheckCircle2,
-  AlertCircle,
-  XCircle,
   Clock,
-  ChevronRight,
   Search
 } from "lucide-react";
 import { 
@@ -42,20 +35,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { subDays, startOfDay, endOfDay, format, isWithinInterval } from "date-fns";
+import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import JSZip from 'jszip';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from "@/lib/utils";
 import { getSubmissions } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
-import { SubmissionStatus } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 
 const STATUS_OPTIONS = [
-  { id: SubmissionStatus.APPROVED, label: 'Approved' },
-  { id: SubmissionStatus.PENDING, label: 'Pending / In Review' },
-  { id: SubmissionStatus.AMENDED, label: 'Action Required' },
-  { id: SubmissionStatus.REJECTED, label: 'Rejected' },
-  { id: SubmissionStatus.ESCALATED, label: 'Escalated' }
+  { id: KYCStatus.APPROVED, label: 'Approved' },
+  { id: KYCStatus.SUBMITTED, label: 'Submitted / In Review' },
+  { id: KYCStatus.ACTION_REQUIRED, label: 'Action Required' },
+  { id: KYCStatus.REJECTED, label: 'Rejected' },
+  { id: KYCStatus.ESCALATED, label: 'Escalated' }
 ];
 
 export default function MasterBundleDownloadPage() {
@@ -108,7 +101,7 @@ export default function MasterBundleDownloadPage() {
       const subDate = new Date(sub.submittedAt);
       const matchesDate = subDate >= start && subDate <= end;
       const matchesStatus = selectedStatuses.length === 0 || 
-                           (selectedStatuses.includes(SubmissionStatus.PENDING) ? [SubmissionStatus.PENDING, SubmissionStatus.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
+                           (selectedStatuses.includes(KYCStatus.SUBMITTED) ? [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
       const matchesDistrict = selectedDistrict === 'all' || sub.districtName === selectedDistrict;
       const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
 
@@ -270,13 +263,6 @@ export default function MasterBundleDownloadPage() {
         </Card>
 
         <div className="lg:col-span-8 space-y-6">
-          <Alert className="bg-blue-50 border-blue-200 text-blue-900 border-l-4 border-l-blue-600">
-            <Info className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-xs font-bold uppercase tracking-tight text-blue-800">
-              Institutional Protocol: Bulk exports are logged in the global security audit trail.
-            </AlertDescription>
-          </Alert>
-
           <Card className="shadow-2xl border-slate-200 overflow-hidden min-h-[500px]">
             <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
               <div><CardTitle className="text-xl">Export Discovery Queue</CardTitle></div>
@@ -294,8 +280,8 @@ export default function MasterBundleDownloadPage() {
                     <div key={sub.id} className="p-5 hover:bg-slate-50/50 transition-colors group">
                       <div className="flex items-center justify-between">
                         <div className="flex items-start gap-4">
-                          <div className={cn("p-2 rounded-lg", sub.status === SubmissionStatus.APPROVED ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/5 text-primary')}>
-                            {sub.status === SubmissionStatus.APPROVED ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                          <div className={cn("p-2 rounded-lg", sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/5 text-primary')}>
+                            {sub.status === KYCStatus.APPROVED ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center gap-2"><span className="font-black text-slate-900">{sub.customerName}</span></div>

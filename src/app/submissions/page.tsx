@@ -36,19 +36,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { subDays, startOfDay, endOfDay, format, isWithinInterval } from "date-fns";
+import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSubmissions } from "@/actions/submissions";
-import { SubmissionStatus } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 
 const STATUS_OPTIONS = [
-  { id: SubmissionStatus.APPROVED, label: 'Approved' },
-  { id: SubmissionStatus.PENDING, label: 'Pending' },
-  { id: SubmissionStatus.IN_REVIEW, label: 'In Review' },
-  { id: SubmissionStatus.AMENDED, label: 'Action Required' },
-  { id: SubmissionStatus.ESCALATED, label: 'Escalated' },
-  { id: SubmissionStatus.REJECTED, label: 'Rejected' }
+  { id: KYCStatus.APPROVED, label: 'Approved' },
+  { id: KYCStatus.SUBMITTED, label: 'Submitted' },
+  { id: KYCStatus.IN_REVIEW, label: 'In Review' },
+  { id: KYCStatus.ACTION_REQUIRED, label: 'Action Required' },
+  { id: KYCStatus.ESCALATED, label: 'Escalated' },
+  { id: KYCStatus.REJECTED, label: 'Rejected' }
 ];
 
 export default function SubmissionsPage() {
@@ -150,20 +150,20 @@ export default function SubmissionsPage() {
   };
 
   const getStatusBadge = (sub: any) => {
-    const status = sub.status as SubmissionStatus;
+    const status = sub.status as KYCStatus;
     switch (status) {
-      case SubmissionStatus.APPROVED: 
+      case KYCStatus.APPROVED: 
         return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-bold px-3 py-1">Approved</Badge>;
-      case SubmissionStatus.PENDING: 
-      case SubmissionStatus.IN_REVIEW:
+      case KYCStatus.SUBMITTED: 
+      case KYCStatus.IN_REVIEW:
         return <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5" /> {status.replace(/_/g, ' ')}
         </Badge>;
-      case SubmissionStatus.AMENDED: 
+      case KYCStatus.ACTION_REQUIRED: 
         return <Badge className="bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100 font-bold px-3 py-1">Action Required</Badge>;
-      case SubmissionStatus.REJECTED: 
+      case KYCStatus.REJECTED: 
         return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 hover:bg-red-100 font-bold px-3 py-1">Rejected</Badge>;
-      case SubmissionStatus.ESCALATED: 
+      case KYCStatus.ESCALATED: 
         return <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100 font-bold px-3 py-1">Escalated</Badge>;
       default: 
         return <Badge variant="secondary" className="font-bold px-3 py-1">{status}</Badge>;
