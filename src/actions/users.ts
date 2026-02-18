@@ -8,7 +8,19 @@ export async function getAllUsers() {
   return await prisma.user.findMany({
     include: { 
       branch: true,
-      roles: { include: { role: true } }
+      roles: { 
+        include: { 
+          role: {
+            include: {
+              permissions: {
+                include: {
+                  permission: true
+                }
+              }
+            }
+          } 
+        } 
+      }
     },
     orderBy: { firstName: 'asc' }
   });
@@ -16,7 +28,6 @@ export async function getAllUsers() {
 
 export async function updateUserRole(userId: string, roleName: string) {
   try {
-    // Clear existing roles and set new one in relational schema
     await prisma.userRole.deleteMany({ where: { userId } });
     const role = await prisma.role.findUnique({ where: { name: roleName } });
     if (role) {
@@ -50,45 +61,48 @@ export async function provisionUser(data: {
   branchId?: string;
   status: UserStatus;
 }) {
-  // 1. Upsert the User without the 'role' field (moved to relational UserRole table)
-  const user = await prisma.user.upsert({
-    where: { firebaseUid: data.id },
-    update: { 
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      phoneNumber: data.phoneNumber,
-      branchId: data.branchId || null,
-      status: data.status
-    },
-    create: { 
-      id: data.id,
-      firebaseUid: data.id,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      phoneNumber: data.phoneNumber,
-      branchId: data.branchId || null,
-      status: data.status
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Upsert the User (Note: No 'role' field here, it's relational)
+    const user = await tx.user.upsert({
+      where: { firebaseUid: data.id },
+      update: { 
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+        branchId: data.branchId || null,
+        status: data.status
+      },
+      create: { 
+        id: data.id,
+        firebaseUid: data.id,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+        branchId: data.branchId || null,
+        status: data.status
+      }
+    });
+
+    // 2. Link the role via UserRole join table
+    if (data.role) {
+      const role = await tx.role.findUnique({ where: { name: data.role } });
+      if (role) {
+        await tx.userRole.deleteMany({ where: { userId: user.id } });
+        await tx.userRole.create({
+          data: { userId: user.id, roleId: role.id }
+        });
+      }
     }
+    return user;
   });
 
-  // 2. Link the role via the UserRole relation
-  if (data.role) {
-    const role = await prisma.role.findUnique({ where: { name: data.role } });
-    if (role) {
-      await prisma.userRole.deleteMany({ where: { userId: user.id } });
-      await prisma.userRole.create({
-        data: { userId: user.id, roleId: role.id }
-      });
-    }
-  }
-
   revalidatePath('/admin/users');
-  return user;
+  return result;
 }
 
 export async function updateUserPortfolio(userId: string, branches: string[]) {
-  // Logic to update specialist branch coverage if needed in schema
+  // Production Note: In a full SQL implementation, this would update a many-to-many SpecialistBranch table
   return { success: true };
 }

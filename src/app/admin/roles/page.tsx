@@ -44,6 +44,7 @@ export default function StaffRolesPage() {
   const [isSaving, setIsSaving] = useState(false);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<any>(null);
   const [roleName, setRoleName] = useState("");
   const [permissionsForm, setPermissionsForm] = useState<string[]>([]);
@@ -59,7 +60,7 @@ export default function StaffRolesPage() {
       setRoleDefinitions(r);
       setAllPermissions(p);
     } catch (e) {
-      toast({ variant: "destructive", title: "Sync Failed" });
+      toast({ variant: "destructive", title: "Institutional Sync Failed" });
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ export default function StaffRolesPage() {
   const handleSeed = async () => {
     setIsSyncing(true);
     await seedInstitutionalPermissions();
-    toast({ title: "Institutional Slugs Sync'd", description: "Blueprint framework initialized." });
+    toast({ title: "Institutional Framework Synced", description: "Database now reflects the latest blueprint slugs." });
     await loadData();
     setIsSyncing(false);
   };
@@ -85,6 +86,11 @@ export default function StaffRolesPage() {
     setRoleName(role.name);
     setPermissionsForm(role.permissions.map((rp: any) => rp.permissionId));
     setIsDialogOpen(true);
+  };
+
+  const handleOpenInventory = (role: any) => {
+    setSelectedRole(role);
+    setIsInventoryOpen(true);
   };
 
   const handleSave = async () => {
@@ -153,7 +159,7 @@ export default function StaffRolesPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Roles</h1>
           </div>
-          <p className="text-muted-foreground text-lg">Dynamic Access Control Matrix.</p>
+          <p className="text-muted-foreground text-lg">Master Access Control Matrix.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleSeed} disabled={isSyncing} className="gap-2 border-primary/20 text-primary font-bold">
@@ -192,7 +198,7 @@ export default function StaffRolesPage() {
                   </TableCell>
                   <TableCell className="text-center">
                     <button 
-                      onClick={() => handleOpenEdit(role)}
+                      onClick={() => handleOpenInventory(role)}
                       className="flex items-center justify-center gap-2 mx-auto hover:scale-105 transition-transform p-2 rounded-lg hover:bg-emerald-50 group"
                     >
                       <span className="font-bold text-slate-700 group-hover:text-emerald-700">{role.permissions.length} Rights</span>
@@ -212,6 +218,58 @@ export default function StaffRolesPage() {
         </CardContent>
       </Card>
 
+      {/* Authority Inventory (READ ONLY) */}
+      <Dialog open={isInventoryOpen} onOpenChange={setIsInventoryOpen}>
+        <DialogContent className="max-w-3xl rounded-3xl overflow-hidden p-0 border-none shadow-2xl">
+          <DialogHeader className="p-8 bg-slate-900 text-white border-b space-y-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-primary/20 rounded-2xl">
+                  <ShieldCheck className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <DialogTitle className="text-2xl font-black">{selectedRole?.name.replace(/_/g, ' ')} Authority</DialogTitle>
+                  <DialogDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">
+                    Institutional Capability Inventory
+                  </DialogDescription>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setIsInventoryOpen(false)} className="text-white/40 hover:text-white"><X className="w-5 h-5" /></Button>
+            </div>
+          </DialogHeader>
+          <div className="p-8">
+            <ScrollArea className="h-[50vh] pr-4">
+              <div className="space-y-8">
+                {Object.entries(
+                  selectedRole?.permissions.reduce((acc: any, curr: any) => {
+                    const group = curr.permission.group;
+                    if (!acc[group]) acc[group] = [];
+                    acc[group].push(curr.permission);
+                    return acc;
+                  }, {}) || {}
+                ).map(([group, perms]: [string, any]) => (
+                  <div key={group} className="space-y-4">
+                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-primary">{group}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {perms.map((p: any) => (
+                        <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                          <span className="text-xs font-bold text-slate-700">{p.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+          <DialogFooter className="p-6 bg-slate-50 border-t">
+            <Button onClick={() => { setIsInventoryOpen(false); handleOpenEdit(selectedRole); }} className="bg-primary px-8 font-black">Edit Authority Map</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Authority Management (EDIT) */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-[#fcfaf7]">

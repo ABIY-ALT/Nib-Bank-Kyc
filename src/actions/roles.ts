@@ -4,8 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 /**
- * Institutional Permission Seeding Script
- * Creates permissions based EXACTLY on the requested blueprint sidebar structure.
+ * Institutional Framework Synchronization Script.
+ * Ensures the database exactly reflects the blueprint slugs required for the Sidebar.
  */
 export async function seedInstitutionalPermissions() {
   const permissions = [
@@ -99,7 +99,7 @@ export async function seedInstitutionalPermissions() {
 
   const dbPermissions = [];
 
-  // 1. Upsert Permissions
+  // 1. Clear existing or upsert permissions
   for (const p of permissions) {
     const perm = await prisma.permission.upsert({
       where: { slug: p.slug },
@@ -109,37 +109,17 @@ export async function seedInstitutionalPermissions() {
     dbPermissions.push(perm);
   }
 
-  // 2. Create Preset Roles
-  const presets = [
-    { name: 'SUPER_ADMIN', desc: 'Master System Control' },
-    { name: 'BRANCH_OFFICER', desc: 'Branch Submission and Correction' },
-    { name: 'KYC_SPECIALIST', desc: 'Verification and Review Specialist' },
-    { name: 'SENIOR_ASSESSOR', desc: 'High-risk case determination' },
-    { name: 'COMPLIANCE_OFFICER', desc: 'Audit and Regulatory Oversight' },
-  ];
+  // 2. Ensure SUPER_ADMIN role exists and has ALL permissions linked
+  const superAdminRole = await prisma.role.upsert({
+    where: { name: 'SUPER_ADMIN' },
+    update: { description: 'Master Institutional Control', active: true },
+    create: { name: 'SUPER_ADMIN', description: 'Master Institutional Control' }
+  });
 
-  for (const preset of presets) {
-    const role = await prisma.role.upsert({
-      where: { name: preset.name },
-      update: { description: preset.desc, active: true },
-      create: { name: preset.name, description: preset.desc }
-    });
-
-    // 3. Link ALL permissions to SUPER_ADMIN
-    if (preset.name === 'SUPER_ADMIN') {
-      await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
-      await prisma.rolePermission.createMany({
-        data: dbPermissions.map(p => ({ roleId: role.id, permissionId: p.id }))
-      });
-    } else if (preset.name === 'BRANCH_OFFICER') {
-      const slugs = ['DASHBOARD_VIEW', 'CASE_UPLOAD_DOCUMENT', 'CASE_SUBMIT', 'CASE_VIEW_OWN', 'CASE_RESUBMIT', 'CASE_RESPOND_AMENDMENT', 'VIEW_ARCHIVED_CASE'];
-      const targets = dbPermissions.filter(p => slugs.includes(p.slug));
-      await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
-      await prisma.rolePermission.createMany({
-        data: targets.map(p => ({ roleId: role.id, permissionId: p.id }))
-      });
-    }
-  }
+  await prisma.rolePermission.deleteMany({ where: { roleId: superAdminRole.id } });
+  await prisma.rolePermission.createMany({
+    data: dbPermissions.map(p => ({ roleId: superAdminRole.id, permissionId: p.id }))
+  });
 
   revalidatePath('/admin/roles');
   return { success: true };
@@ -148,7 +128,13 @@ export async function seedInstitutionalPermissions() {
 export async function getRoleDefinitions() {
   return await prisma.role.findMany({
     where: { active: true },
-    include: { permissions: { include: { permission: true } } },
+    include: { 
+      permissions: { 
+        include: { 
+          permission: true 
+        } 
+      } 
+    },
     orderBy: { name: 'asc' }
   });
 }
