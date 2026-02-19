@@ -6,6 +6,10 @@ import { revalidatePath } from 'next/cache';
 import fs from 'fs/promises';
 import path from 'path';
 
+/**
+ * Optimized Submission Fetcher.
+ * Removed 'memos' from the default list include to ensure high-velocity navigation.
+ */
 export async function getSubmissions(filters?: {
   status?: KYCStatus[];
   branchId?: string;
@@ -18,18 +22,22 @@ export async function getSubmissions(filters?: {
   branches?: string[];
   district?: string;
   isExceptional?: boolean;
+  submittedBy?: string;
 }) {
   try {
     return await prisma.kYC.findMany({
       where: {
         status: filters?.status ? { in: filters.status } : undefined,
         branchId: filters?.branchId,
-        createdById: filters?.createdById,
+        createdById: filters?.createdById || filters?.submittedBy,
         isResubmitted: filters?.isResubmitted,
+        isExceptional: filters?.isExceptional,
         branch: filters?.branches && filters.branches.length > 0 ? {
           name: { in: filters.branches }
         } : filters?.branch ? { 
           name: filters.branch 
+        } : filters?.district ? {
+          district: { name: filters.district }
         } : undefined,
         active: true,
         createdAt: (filters?.startDate || filters?.endDate) ? {
@@ -39,11 +47,13 @@ export async function getSubmissions(filters?: {
       },
       include: {
         createdBy: true,
-        branch: { include: { district: true } },
-        memos: true,
+        branch: { 
+          include: { district: true } 
+        },
+        // Memos removed for performance in list views
       },
       orderBy: { createdAt: 'desc' },
-      take: filters?.limit
+      take: filters?.limit || 500
     });
   } catch (error) {
     console.error('[SQL] getSubmissions error:', error);
@@ -59,7 +69,7 @@ export async function getSubmissionById(id: string) {
         createdBy: true,
         assignedTo: true,
         branch: { include: { district: true } },
-        memos: true,
+        memos: true, // Deep join only for specific case view
         auditLogs: { orderBy: { timestamp: 'desc' } },
       }
     });
@@ -247,10 +257,11 @@ export async function logBundleDownload(data: any) {
 
 export async function initiateExceptionalWorkflow(kycId: string, data: any) {
   try {
-    return await prisma.governanceFlow.create({
+    return await prisma.kYC.update({
+      where: { id: kycId },
       data: {
-        kycId,
-        createdAt: new Date()
+        isExceptional: true,
+        updatedAt: new Date()
       }
     });
   } catch (e) {
