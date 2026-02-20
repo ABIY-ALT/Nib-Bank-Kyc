@@ -1,5 +1,4 @@
 import type {NextConfig} from 'next';
-import path from 'path';
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -9,8 +8,6 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Silence workspace root warnings by explicitly setting the tracing root
-  outputFileTracingRoot: path.join(__dirname, './'),
   images: {
     remotePatterns: [
       {
