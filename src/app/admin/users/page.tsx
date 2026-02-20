@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Table, 
   TableBody, 
@@ -21,6 +21,9 @@ import {
   UserX,
   ShieldCheck,
   Phone,
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { 
   Dialog, 
@@ -54,6 +57,11 @@ export default function UserManagementPage() {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   
+  // Search & Pagination State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const [formData, setFormData] = useState<any>({
     firstName: '',
     lastName: '',
@@ -86,10 +94,24 @@ export default function UserManagementPage() {
     }
   };
 
+  // Filtered and Paginated Users
+  const filteredUsers = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return users.filter(user => 
+      `${user.firstName} ${user.lastName}`.toLowerCase().includes(term) ||
+      user.email.toLowerCase().includes(term)
+    );
+  }, [users, searchTerm]);
+
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredUsers.slice(start, start + itemsPerPage);
+  }, [filteredUsers, currentPage]);
+
   const handleOpenDialog = (user?: any) => {
     if (user) {
       setEditingUser(user);
-      // Extract existing role name from the relation
       const currentRole = user.roles?.[0]?.role?.name || '';
       setFormData({ 
         firstName: user.firstName || '',
@@ -148,15 +170,29 @@ export default function UserManagementPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Personnel Directory</h1>
           <p className="text-muted-foreground text-lg font-medium">Blueprint-aligned institutional staff management.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg font-bold h-11 px-6 text-white hover:bg-primary/90">
-          <UserPlus className="w-4 h-4" />
-          Provision User
-        </Button>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="relative flex-1 md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input 
+              placeholder="Search staff..." 
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1); // Reset to first page on search
+              }}
+              className="pl-10 h-11 bg-white border-slate-200 rounded-xl font-medium"
+            />
+          </div>
+          <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg font-bold h-11 px-6 text-white hover:bg-primary/90">
+            <UserPlus className="w-4 h-4" />
+            Provision User
+          </Button>
+        </div>
       </div>
 
       <div className="border rounded-xl bg-card shadow-xl overflow-hidden border-slate-200">
@@ -173,9 +209,9 @@ export default function UserManagementPage() {
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={5} className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-            ) : users.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="py-20 text-center text-muted-foreground italic">No personnel records found. Use "Provision User" to add staff.</TableCell></TableRow>
-            ) : users.map((user) => (
+            ) : filteredUsers.length === 0 ? (
+              <TableRow><TableCell colSpan={5} className="py-20 text-center text-muted-foreground italic">No personnel records found.</TableCell></TableRow>
+            ) : paginatedUsers.map((user) => (
               <TableRow key={user.id} className="hover:bg-slate-50 transition-colors">
                 <TableCell className="pl-8">
                   <div className="flex items-center gap-3">
@@ -191,7 +227,7 @@ export default function UserManagementPage() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-3 py-1">
+                  <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10 font-black uppercase text-[9px] px-3 py-1">
                     {user.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
                   </Badge>
                 </TableCell>
@@ -201,16 +237,16 @@ export default function UserManagementPage() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={user.status === UserStatus.ACTIVE ? 'text-green-600 border-green-200 bg-green-50' : 'text-slate-400 border-slate-200 bg-slate-50'}>
+                  <Badge variant="outline" className={user.status === UserStatus.ACTIVE ? 'text-green-600 border-green-200 bg-green-50 font-black text-[9px]' : 'text-slate-400 border-slate-200 bg-slate-50 font-black text-[9px]'}>
                     {user.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right pr-8">
                   <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-primary rounded-full h-9 w-9 hover:bg-primary/5">
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-slate-400 rounded-full h-9 w-9 hover:bg-primary/5 hover:text-primary transition-colors">
                       <Settings2 className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5">
+                    <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5 transition-colors">
                       {user.status === UserStatus.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                     </Button>
                   </div>
@@ -219,6 +255,40 @@ export default function UserManagementPage() {
             ))}
           </TableBody>
         </Table>
+
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-8 py-4 bg-slate-50/50 border-t">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+              Showing {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} Staff
+            </p>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <div className="flex items-center gap-1 px-2">
+                <span className="text-sm font-black text-primary">{currentPage}</span>
+                <span className="text-sm font-bold text-slate-400">/</span>
+                <span className="text-sm font-bold text-slate-400">{totalPages}</span>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -272,6 +342,7 @@ export default function UserManagementPage() {
                 <Select value={formData.branchId || ""} onValueChange={val => setFormData({...formData, branchId: val})}>
                   <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select Branch" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Unmapped</SelectItem>
                     {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                   </SelectContent>
                 </Select>

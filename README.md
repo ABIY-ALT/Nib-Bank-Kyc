@@ -7,7 +7,10 @@ The Nib Bank KYC Flow is a mission-critical digital identity verification platfo
 ### 1. Verification Workflow Management
 *   **Branch Submission Portal**: Intuitive interface for Branch Officers to upload customer identity bundles and initiate verification.
 *   **KYC Review Queue**: Centralized workspace for specialists to verify documents against dynamic, entity-specific checklists.
-*   **Amendment Lifecycle**: Integrated correction requests ("Action Required") with automated tracking of resubmission cycles and resolution times.
+*   **Amendment LifeCREATE INDEX idx_kyc_branch ON "KYC" ("branchId");
+CREATE INDEX idx_kyc_status ON "KYC" ("status");
+CREATE INDEX idx_kyc_user   ON "KYC" ("createdById");
+**: Integrated correction requests ("Action Required") with automated tracking of resubmission cycles and resolution times.
 *   **Escalation Management**: Automated routing of complex risk cases to senior assessors for high-level determination.
 
 ### 2. Strategic Hierarchy Approvals (Exceptional Cases)
