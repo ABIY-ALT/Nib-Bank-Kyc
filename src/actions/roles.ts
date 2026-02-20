@@ -123,6 +123,7 @@ export async function getRoleDefinitions() {
       orderBy: { name: 'asc' }
     });
   } catch (e) {
+    console.error('[SQL Roles] Fetch Error:', e);
     return [];
   }
 }
@@ -133,6 +134,7 @@ export async function getAllPermissions() {
       orderBy: [{ group: 'asc' }, { name: 'asc' }]
     });
   } catch (e) {
+    console.error('[SQL Permissions] Fetch Error:', e);
     return [];
   }
 }
@@ -178,9 +180,13 @@ export async function upsertRole(data: { id?: string, name: string, description:
 }
 
 export async function deactivateRole(id: string) {
-  await prisma.role.update({
-    where: { id },
-    data: { active: false }
-  });
-  revalidatePath('/admin/roles');
+  try {
+    await prisma.role.update({
+      where: { id },
+      data: { active: false }
+    });
+    revalidatePath('/admin/roles');
+  } catch (e) {
+    console.error('[SQL Deactivate] Failure:', e);
+  }
 }
