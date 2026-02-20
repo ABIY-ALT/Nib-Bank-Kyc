@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -29,12 +28,15 @@ import {
   XCircle,
   Activity,
   SendHorizontal,
-  RotateCcw
+  RotateCcw,
+  Upload,
+  X,
+  Plus
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissionById, updateSubmissionStatus } from "@/actions/submissions";
+import { getSubmissionById, updateSubmissionStatus, resubmitSubmission } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { KYCStatus } from "@prisma/client";
 import { Label } from "@/components/ui/label";
@@ -46,6 +48,13 @@ import {
   DialogTitle, 
   DialogDescription
 } from "@/components/ui/dialog";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 import JSZip from 'jszip';
 import { usePermissions } from "@/hooks/use-permissions";
 
@@ -64,6 +73,10 @@ export default function SubmissionDetails() {
   const [previewFile, setPreviewFile] = useState<any>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isActioning, setIsActioning] = useState<string | null>(null);
+
+  // Resubmission File State
+  const [resubmitFiles, setResubmitFiles] = useState<{file: File, type: string, id: string}[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -111,6 +124,61 @@ export default function SubmissionDetails() {
     } finally {
       setIsActioning(null);
     }
+  };
+
+  const handleResubmit = async () => {
+    if (!submission || !user || isActioning) return;
+    if (!remarks.trim()) {
+      toast({ variant: "destructive", title: "Notes Required", description: "Explain the corrections made." });
+      return;
+    }
+
+    setIsActioning(KYCStatus.SUBMITTED);
+    try {
+      const formData = new FormData();
+      formData.append('id', submission.id);
+      formData.append('userId', user.id);
+      formData.append('remarks', remarks);
+      
+      resubmitFiles.forEach(f => {
+        formData.append('files', f.file);
+        formData.append('types', f.type);
+      });
+
+      const res = await resubmitSubmission(formData);
+      if (res.success) {
+        toast({ title: "Case Resubmitted", description: "Corrections and documents dispatched." });
+        const updated = await getSubmissionById(submission.id);
+        setSubmission(updated);
+        setRemarks("");
+        setResubmitFiles([]);
+      } else {
+        throw new Error(res.error);
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Resubmission Failed", description: e.message });
+    } finally {
+      setIsActioning(null);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files).map(f => ({
+        file: f,
+        type: "other",
+        id: Math.random().toString(36).substr(2, 9)
+      }));
+      setResubmitFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const removeResubmitFile = (id: string) => {
+    setResubmitFiles(prev => prev.filter(f => f.id !== id));
+  };
+
+  const updateResubmitFileType = (id: string, type: string) => {
+    setResubmitFiles(prev => prev.map(f => f.id === id ? { ...f, type } : f));
   };
 
   const handleDownloadBundle = async () => {
@@ -355,18 +423,57 @@ export default function SubmissionDetails() {
                     placeholder="Describe the corrections made (e.g., 'Attached missing ID copy')..." 
                     value={remarks} 
                     onChange={(e) => setRemarks(e.target.value)} 
-                    className="min-h-[140px] bg-white border-orange-200 focus-visible:ring-orange-200 rounded-2xl font-medium" 
+                    className="min-h-[120px] bg-white border-orange-200 focus-visible:ring-orange-200 rounded-2xl font-medium" 
                   />
                 </div>
+
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Add Supplemental Documents</Label>
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-orange-200 rounded-2xl p-6 text-center cursor-pointer hover:bg-orange-50 transition-all"
+                  >
+                    <Upload className="w-6 h-6 text-orange-400 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-orange-600">Click to attach new files</p>
+                    <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileSelect} />
+                  </div>
+
+                  {resubmitFiles.length > 0 && (
+                    <div className="space-y-2">
+                      {resubmitFiles.map((item) => (
+                        <div key={item.id} className="flex items-center gap-2 p-2 bg-white border border-orange-100 rounded-lg">
+                          <FileText className="w-4 h-4 text-orange-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-bold text-slate-700 truncate">{item.file.name}</p>
+                            <select 
+                              className="text-[9px] font-black uppercase text-orange-600 bg-transparent border-none p-0 h-auto focus:ring-0"
+                              value={item.type}
+                              onChange={(e) => updateResubmitFileType(item.id, e.target.value)}
+                            >
+                              <option value="id_card">ID Card</option>
+                              <option value="passport">Passport</option>
+                              <option value="trade_license">Trade License</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-red-500" onClick={() => removeResubmitFile(item.id)}>
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <Button 
-                  onClick={() => handleAction(KYCStatus.SUBMITTED)} 
+                  onClick={handleResubmit} 
                   className="w-full bg-orange-600 hover:bg-orange-700 text-white font-black h-14 rounded-xl shadow-lg shadow-orange-100 gap-2" 
                   disabled={!!isActioning || !remarks.trim()}
                 >
                   {isActioning === KYCStatus.SUBMITTED ? <Loader2 className="w-5 h-5 animate-spin" /> : <SendHorizontal className="w-5 h-5" />}
                   Resubmit Corrected Case
                 </Button>
-                <p className="text-[10px] text-center text-orange-400 font-bold uppercase">This case will be returned to the Review Queue.</p>
+                <p className="text-[10px] text-center text-orange-400 font-bold uppercase">The case will be flagged as "Resubmitted" for Specialists.</p>
               </CardContent>
             </Card>
           )}

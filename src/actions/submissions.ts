@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -137,7 +136,9 @@ export async function getSubmissionById(id: string) {
         createdBy: true,
         assignedTo: true,
         branch: { include: { district: true } },
-        memos: true,
+        memos: {
+          orderBy: { createdAt: 'desc' }
+        },
         auditLogs: { orderBy: { timestamp: 'desc' } },
       }
     });
@@ -325,6 +326,97 @@ export async function createSubmission(formData: FormData) {
   } catch (error: any) {
     console.error('[Blueprint Error]:', error);
     return { success: false, error: error.message || 'Institutional storage fault.' };
+  }
+}
+
+/**
+ * Resubmission Handler.
+ * Supports notes and new document attachments for corrective action.
+ */
+export async function resubmitSubmission(formData: FormData) {
+  try {
+    const id = formData.get('id') as string;
+    const userId = formData.get('userId') as string;
+    const remarks = formData.get('remarks') as string;
+    const files = formData.getAll('files') as File[];
+    const types = formData.getAll('types') as string[];
+
+    const current = await prisma.kYC.findUnique({ 
+      where: { id },
+      include: { createdBy: true }
+    });
+    if (!current) throw new Error("KYC record not found");
+
+    const user = await prisma.user.findUnique({ 
+      where: { id: userId },
+      include: { roles: { include: { role: true } } }
+    });
+
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    try {
+      await fs.access(uploadDir);
+    } catch {
+      await fs.mkdir(uploadDir, { recursive: true });
+    }
+
+    const memoData = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const type = types[i];
+      const timestamp = Date.now();
+      const storedFileName = `${timestamp}_resubmit_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      const filePath = path.join(uploadDir, storedFileName);
+      
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(filePath, buffer);
+
+      memoData.push({
+        name: file.name,
+        type: type,
+        fileUrl: `uploads/${storedFileName}`,
+        uploadedById: userId
+      });
+    }
+
+    const now = new Date();
+    const history = (current.commentHistory as any[]) || [];
+    const newEntry = {
+      role: user?.roles?.[0]?.role?.name || 'BRANCH_OFFICER',
+      performedBy: `${user?.firstName} ${user?.lastName}`,
+      timestamp: now.toISOString(),
+      comment: remarks || `Case resubmitted with ${files.length} new documents.`,
+      action: 'RESUBMIT'
+    };
+
+    const kyc = await prisma.kYC.update({
+      where: { id },
+      data: {
+        status: KYCStatus.SUBMITTED,
+        isResubmitted: true,
+        updatedAt: now,
+        commentHistory: [...history, newEntry],
+        memos: {
+          create: memoData
+        }
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        kycId: id,
+        action: AuditAction.STATUS_CHANGE,
+        details: `Resubmitted with ${files.length} new documents. Remarks: ${remarks}`
+      }
+    });
+
+    revalidatePath(`/submissions/${id}`);
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/amendments');
+    return { success: true };
+  } catch (error: any) {
+    console.error('[SQL Resubmission] Failure:', error);
+    return { success: false, error: error.message || 'Institutional storage fault during resubmission.' };
   }
 }
 
