@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -24,25 +27,10 @@ enum KYCStatus {
 
 enum AuditAction {
   CREATE
-  STATUS_CHANGE
   UPDATE
+  STATUS_CHANGE
+  DOWNLOAD
   DELETE
-  LOGIN
-  LOGOUT
-}
-
-enum FindingCategory {
-  IDENTITY
-  DOCUMENTATION
-  COMPLIANCE
-  ACCOUNT_VALIDATION
-}
-
-enum FindingSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
 }
 
 model District {
@@ -54,11 +42,29 @@ model District {
 model Branch {
   id         String   @id @default(cuid())
   name       String   @unique
-  code       String?
+  code       String?  @unique
   districtId String
   district   District @relation(fields: [districtId], references: [id])
   users      User[]
-  kycRecords KYC[]
+  kycCases   KYC[]
+}
+
+model User {
+  id               String     @id
+  firebaseUid      String     @unique
+  email            String     @unique
+  firstName        String
+  lastName         String
+  phoneNumber      String?
+  status           UserStatus @default(ACTIVE)
+  branchId         String?
+  branch           Branch?    @relation(fields: [branchId], references: [id])
+  assignedBranches String[]   @default([])
+  roles            UserRole[]
+  submissions      KYC[]      @relation("CreatedBy")
+  assignments      KYC[]      @relation("AssignedTo")
+  auditLogs        AuditLog[]
+  memos            Memo[]
 }
 
 model Role {
@@ -87,24 +93,6 @@ model RolePermission {
   @@id([roleId, permissionId])
 }
 
-model User {
-  id               String     @id @default(cuid())
-  firebaseUid      String     @unique
-  email            String     @unique
-  firstName        String
-  lastName         String
-  phoneNumber      String?
-  status           UserStatus @default(ACTIVE)
-  branchId         String?
-  branch           Branch?    @relation(fields: [branchId], references: [id])
-  roles            UserRole[]
-  assignedBranches String[]   @default([])
-  createdKYC       KYC[]      @relation("CreatedBy")
-  assignedKYC      KYC[]      @relation("AssignedTo")
-  memos            Memo[]
-  auditLogs        AuditLog[]
-}
-
 model UserRole {
   userId String
   roleId String
@@ -120,17 +108,18 @@ model KYC {
   customerIdNumber String
   branchId         String
   branchName       String
-  entityType       String?
   status           KYCStatus   @default(SUBMITTED)
-  createdById      String
-  assignedToId     String?
+  entityType       String?
+  active           Boolean     @default(true)
   isExceptional    Boolean     @default(false)
   isResubmitted    Boolean     @default(false)
-  active           Boolean     @default(true)
-  commentHistory   Json?
   amendCycles      Int         @default(0)
+  commentHistory   Json?       @default("[]")
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
+  submittedAt      DateTime    @default(now())
+  createdById      String
+  assignedToId     String?
   branch           Branch      @relation(fields: [branchId], references: [id])
   createdBy        User        @relation("CreatedBy", fields: [createdById], references: [id])
   assignedTo       User?       @relation("AssignedTo", fields: [assignedToId], references: [id])
@@ -155,25 +144,12 @@ model AuditLog {
   userId    String
   kycId     String?
   action    AuditAction
-  timestamp DateTime    @default(now())
-  details   String?
+  details   String
   metadata  Json?
+  timestamp DateTime    @default(now())
   ipAddress String?
   user      User        @relation(fields: [userId], references: [id])
   kyc       KYC?        @relation(fields: [kycId], references: [id])
-}
-
-model Finding {
-  id           String          @id @default(cuid())
-  code         String          @unique
-  title        String
-  description  String
-  category     FindingCategory
-  severity     FindingSeverity
-  applicableTo String[]
-  active       Boolean         @default(true)
-  source       String          @default("manual")
-  createdAt    DateTime        @default(now())
 }
 
 model GlobalSetting {
@@ -189,6 +165,33 @@ model GlobalSetting {
   updatedBy        String?
 }
 
+model Finding {
+  id           String          @id @default(cuid())
+  code         String          @unique
+  title        String
+  description  String
+  category     FindingCategory
+  severity     FindingSeverity
+  applicableTo String[]        @default([])
+  active       Boolean         @default(true)
+  source       String          @default("manual")
+  createdAt    DateTime        @default(now())
+}
+
+enum FindingCategory {
+  IDENTITY
+  DOCUMENTATION
+  COMPLIANCE
+  ACCOUNT_VALIDATION
+}
+
+enum FindingSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 model FollowUpVerification {
   id           String   @id @default(cuid())
   submissionId String
@@ -197,7 +200,7 @@ model FollowUpVerification {
   officer      String
   accountType  String
   verifiedBy   String?
-  verifiedAt   DateTime?
+  verifiedAt   DateTime @default(now())
   result       String?
   remarks      String?
   status       String   @default("PENDING")

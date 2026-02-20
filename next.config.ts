@@ -1,13 +1,14 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Resolved EINVAL and workspace inference errors by explicitly setting tracing root
+  outputFileTracingRoot: process.cwd(),
   images: {
     remotePatterns: [
       {
