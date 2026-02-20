@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -203,6 +204,8 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
 
   revalidatePath(`/submissions/${id}`);
   revalidatePath('/submissions');
+  revalidatePath('/submissions/queue');
+  revalidatePath('/submissions/amendments');
   return kyc;
 }
 
@@ -227,11 +230,11 @@ export async function createSubmission(formData: FormData) {
     });
 
     const branch = await prisma.branch.upsert({
-      where: { code: id.split('-')[0] || 'GEN' },
-      update: { name: branchName },
+      where: { name: branchName },
+      update: {},
       create: { 
         name: branchName, 
-        code: id.split('-')[0] || 'GEN',
+        code: branchName.substring(0, 3).toUpperCase() + Math.floor(10 + Math.random() * 90),
         districtId: district.id
       }
     });
@@ -285,9 +288,13 @@ export async function createSubmission(formData: FormData) {
         customerName,
         customerIdNumber: id,
         branchId: branch.id,
+        branchName: branchName,
         createdById,
         status: KYCStatus.SUBMITTED,
         entityType,
+        active: true,
+        isExceptional: false,
+        isResubmitted: false,
         commentHistory: remarks ? [{
           role: 'BRANCH_OFFICER',
           performedBy: createdByName,
@@ -310,7 +317,10 @@ export async function createSubmission(formData: FormData) {
       }
     });
 
+    revalidatePath('/');
     revalidatePath('/submissions');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/queue');
     return { success: true, kyc };
   } catch (error: any) {
     console.error('[Blueprint Error]:', error);

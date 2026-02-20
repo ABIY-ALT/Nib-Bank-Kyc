@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -43,7 +44,6 @@ import {
 import { getBranches } from "@/actions/hierarchy";
 import { getGlobalSettings } from "@/actions/settings";
 import { createSubmission } from "@/actions/submissions";
-import { SubmissionStatus } from "@prisma/client";
 
 interface UploadedFile {
   id: string;
@@ -161,15 +161,16 @@ export default function NewSubmission() {
 
     setIsSubmitting(true);
     try {
-      const branchCode = branches.find(b => b.name === user.branchName)?.code || user.branchName?.substring(0, 3).toUpperCase() || "GEN";
+      const branchName = user.branchName || "HEADQUARTERS";
+      const branchSlug = branchName.replace(/\s+/g, '_').toUpperCase();
       const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-      const submissionId = `${branchCode}-KYC-${randomSuffix}`;
+      const submissionId = `${branchSlug}-KYC-${randomSuffix}`;
       
       const formData = new FormData();
       formData.append('id', submissionId);
       formData.append('customerName', customerName);
       formData.append('entityType', entityType);
-      formData.append('branchName', user.branchName || "Headquarters");
+      formData.append('branchName', branchName);
       formData.append('districtName', user.districtName || "Central");
       formData.append('submittedById', user.id);
       formData.append('submittedByName', user.name);
@@ -209,7 +210,7 @@ export default function NewSubmission() {
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-extrabold tracking-tight text-primary font-headline">New KYC Submission</h1>
+        <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">New KYC Submission</h1>
         <Shield className="w-8 h-8 text-primary" />
       </div>
 
@@ -243,14 +244,14 @@ export default function NewSubmission() {
 
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2"><FilePlus className="w-5 h-5 text-accent" /> Documentation Bundle</CardTitle>
+            <CardTitle className="text-xl flex items-center gap-2"><FilePlus className="w-5 h-5 text-primary" /> Documentation Bundle</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
              <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.jpg,.jpeg,.png" />
-             <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:bg-accent/5 transition-all">
-                <Upload className="w-10 h-10 text-accent mb-4" />
+             <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all">
+                <Upload className="w-10 h-10 text-primary mb-4" />
                 <p className="font-bold text-xl text-slate-800">Drop customer files here</p>
-                <Button variant="outline" type="button" className="mt-4 font-bold border-accent/20 text-accent hover:bg-accent/5">Browse Filesystem</Button>
+                <Button variant="outline" type="button" className="mt-4 font-bold border-primary/20 text-primary hover:bg-primary/5">Browse Filesystem</Button>
              </div>
 
              <div className="space-y-3">
