@@ -8,7 +8,7 @@ import path from 'path';
 
 /**
  * Optimized Submission Fetcher.
- * Removed 'memos' from the default list include to ensure high-velocity navigation.
+ * Uses 'select' to only retrieve fields needed for list views, reducing payload size.
  */
 export async function getSubmissions(filters?: {
   status?: KYCStatus[];
@@ -18,6 +18,7 @@ export async function getSubmissions(filters?: {
   startDate?: string;
   endDate?: string;
   limit?: number;
+  offset?: number;
   branch?: string;
   branches?: string[];
   district?: string;
@@ -45,19 +46,85 @@ export async function getSubmissions(filters?: {
           lte: filters.endDate ? new Date(filters.endDate) : undefined,
         } : undefined,
       },
-      include: {
-        createdBy: true,
-        branch: { 
-          include: { district: true } 
+      select: {
+        id: true,
+        customerName: true,
+        status: true,
+        createdAt: true,
+        submittedAt: true,
+        branchName: true,
+        entityType: true,
+        isExceptional: true,
+        isResubmitted: true,
+        amendCycles: true,
+        createdById: true,
+        createdBy: {
+          select: {
+            firstName: true,
+            lastName: true,
+          }
         },
-        // Memos removed for performance in list views
+        branch: {
+          select: {
+            name: true,
+            district: {
+              select: { name: true }
+            }
+          }
+        }
       },
       orderBy: { createdAt: 'desc' },
-      take: filters?.limit || 500
+      take: filters?.limit || 50,
+      skip: filters?.offset || 0,
     });
   } catch (error) {
     console.error('[SQL] getSubmissions error:', error);
     return [];
+  }
+}
+
+/**
+ * High-Performance Count Aggregator.
+ * Replaces client-side filtering with SQL counts for UI notification badges.
+ */
+export async function getWorkflowCounts(params: { 
+  userId: string, 
+  branchName?: string, 
+  branches?: string[],
+  isSuperAdmin: boolean 
+}) {
+  const { userId, branchName, branches, isSuperAdmin } = params;
+
+  // Base filters for counts
+  const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? {
+    branch: { name: { in: branches } }
+  } : {
+    branchName: branchName || "NONE"
+  });
+
+  try {
+    const [myCount, actionRequired, reviewQueue, resubmitted, escalated, exceptional, branchNodeCount] = await Promise.all([
+      prisma.kYC.count({ where: { createdById: userId, active: true } }),
+      prisma.kYC.count({ where: { createdById: userId, status: KYCStatus.ACTION_REQUIRED, active: true } }),
+      prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW] }, isExceptional: false, isResubmitted: false, active: true } }),
+      prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW] }, isResubmitted: true, active: true } }),
+      prisma.kYC.count({ where: { ...branchFilter, status: KYCStatus.ESCALATED, active: true } }),
+      prisma.kYC.count({ where: { ...branchFilter, isExceptional: true, status: { not: KYCStatus.APPROVED }, active: true } }),
+      prisma.kYC.count({ where: { branchName: branchName || "NONE", active: true } })
+    ]);
+
+    return {
+      mySubmissions: myCount,
+      actionRequired,
+      reviewQueue,
+      resubmitted,
+      escalated,
+      exceptional,
+      branchNode: branchNodeCount
+    };
+  } catch (error) {
+    console.error('[SQL Counts] Failure:', error);
+    return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
   }
 }
 
@@ -69,7 +136,7 @@ export async function getSubmissionById(id: string) {
         createdBy: true,
         assignedTo: true,
         branch: { include: { district: true } },
-        memos: true, // Deep join only for specific case view
+        memos: true,
         auditLogs: { orderBy: { timestamp: 'desc' } },
       }
     });

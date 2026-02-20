@@ -36,8 +36,8 @@ import { KYCStatus } from "@prisma/client";
 import { usePermissions } from "@/hooks/use-permissions";
 
 /**
- * Institutional Role-Based Dashboard.
- * Automatically adapts UI, metrics, and data visibility based on user designation.
+ * Optimized Institutional Dashboard.
+ * Uses Promise.all for parallel data fetching and SQL-level filtering.
  */
 export default function Dashboard() {
   const { user } = useAuth();
@@ -51,11 +51,10 @@ export default function Dashboard() {
       if (!user) return;
       setLoading(true);
       try {
-        // Determine jurisdictional scope for data fetching
         const isDirector = user.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
         const isSpecialist = user.roles?.some(ur => ['KYC_SPECIALIST', 'KYC_OFFICER'].includes(ur.role.name));
         
-        let filters: any = { limit: 5 };
+        let filters: any = { limit: 10 }; // Leaner limit for dashboard
 
         if (!isSuperAdmin) {
           if (isDirector && user.districtName) {
@@ -67,6 +66,7 @@ export default function Dashboard() {
           }
         }
 
+        // Parallel aggregation to prevent waterfalls
         const [subs, globalSettings] = await Promise.all([
           getSubmissions(filters),
           getGlobalSettings()
@@ -75,7 +75,7 @@ export default function Dashboard() {
         setRecentSubmissions(subs);
         setSettings(globalSettings);
       } catch (error) {
-        console.error("Dashboard data fetch failed:", error);
+        console.error("Dashboard aggregation failed:", error);
       } finally {
         setLoading(false);
       }
@@ -83,7 +83,6 @@ export default function Dashboard() {
     loadDashboard();
   }, [user, isSuperAdmin]);
 
-  // Dynamic Metadata based on Role
   const dashboardContext = useMemo(() => {
     const roleName = user?.roles?.[0]?.role?.name || 'OFFICER';
     
@@ -96,14 +95,14 @@ export default function Dashboard() {
     
     if (roleName === 'DISTRICT_DIRECTOR') return {
       title: `${user?.districtName || 'Regional'} District Command`,
-      subtitle: `Overseeing operational health for all branches in the district.`,
+      subtitle: `Overseeing operational health for regional branches.`,
       scope: 'Regional',
       icon: MapPin
     };
 
     if (['KYC_SPECIALIST', 'KYC_OFFICER'].includes(roleName)) return {
       title: 'KYC Verification Hub',
-      subtitle: `Managing verification for ${user?.assignedBranches?.length || 0} jurisdiction nodes.`,
+      subtitle: `Portfolio visibility across authorized jurisdiction nodes.`,
       scope: 'Portfolio',
       icon: Zap
     };
@@ -118,7 +117,6 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const scopeLabel = dashboardContext.scope;
-    
     if (!recentSubmissions) return [];
 
     const approvedCount = recentSubmissions.filter(s => s.status === KYCStatus.APPROVED).length;
