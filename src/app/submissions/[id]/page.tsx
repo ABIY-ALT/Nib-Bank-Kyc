@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -26,7 +27,9 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
-  Activity
+  Activity,
+  SendHorizontal,
+  RotateCcw
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect } from "react";
@@ -44,12 +47,14 @@ import {
   DialogDescription
 } from "@/components/ui/dialog";
 import JSZip from 'jszip';
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function SubmissionDetails() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
   
   const [submission, setSubmission] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
@@ -80,11 +85,15 @@ export default function SubmissionDetails() {
   }, [params.id]);
 
   const isReviewer = useMemo(() => {
-    if (!user) return false;
-    return user.roles?.some(ur => ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST'].includes(ur.role.name));
-  }, [user]);
+    return hasPermission('KYC_VERIFY_CHECKLIST') || hasPermission('KYC_APPROVE_STANDARD');
+  }, [hasPermission]);
+
+  const canRespond = useMemo(() => {
+    return hasPermission('CASE_RESPOND_AMENDMENT') || hasPermission('CASE_RESUBMIT');
+  }, [hasPermission]);
 
   const isTerminal = submission?.status === KYCStatus.APPROVED || submission?.status === KYCStatus.REJECTED;
+  const isActionRequired = submission?.status === KYCStatus.ACTION_REQUIRED;
 
   const handleAction = async (action: KYCStatus) => {
     if (!submission || !user || isTerminal || isActioning) return;
@@ -125,7 +134,6 @@ export default function SubmissionDetails() {
     }
   };
 
-  // Workflow Steps logic
   const workflowSteps = useMemo(() => {
     if (!submission) return [];
     
@@ -198,14 +206,11 @@ export default function SubmissionDetails() {
         </div>
       </div>
 
-      {/* WORKFLOW TRACKER */}
       <Card className="border-slate-200 shadow-lg overflow-hidden rounded-3xl bg-white">
         <CardContent className="p-8">
           <div className="relative flex flex-col md:flex-row justify-between gap-8 md:gap-0">
-            {/* Progress Line */}
             <div className="absolute top-[22px] left-0 right-0 h-0.5 bg-slate-100 hidden md:block" />
-            
-            {workflowSteps.map((step, idx) => {
+            {workflowSteps.map((step) => {
               const Icon = step.icon;
               return (
                 <div key={step.id} className="relative z-10 flex md:flex-col items-center md:items-center gap-4 md:gap-3 md:w-1/4">
@@ -326,7 +331,7 @@ export default function SubmissionDetails() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Submitted By</p>
-                  <p className="font-black text-slate-900">{submission.submittedBy?.name || 'Institutional Staff'}</p>
+                  <p className="font-black text-slate-900">{submission.createdBy?.firstName} {submission.createdBy?.lastName || 'Institutional Staff'}</p>
                 </div>
                 <div className="space-y-1 pt-4 border-t border-primary/10">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Workflow</p>
@@ -335,7 +340,39 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {!isTerminal && isReviewer && (
+          {/* OFFICER RESPONSE WORKSPACE (Fix/Resubmit) */}
+          {isActionRequired && canRespond && (
+            <Card className="border-orange-200 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-500 bg-orange-50/10">
+              <CardHeader className="bg-orange-600 text-white border-b py-5">
+                <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5" /> Correction Workspace
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-6 px-6 pb-8">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Response Note</Label>
+                  <Textarea 
+                    placeholder="Describe the corrections made (e.g., 'Attached missing ID copy')..." 
+                    value={remarks} 
+                    onChange={(e) => setRemarks(e.target.value)} 
+                    className="min-h-[140px] bg-white border-orange-200 focus-visible:ring-orange-200 rounded-2xl font-medium" 
+                  />
+                </div>
+                <Button 
+                  onClick={() => handleAction(KYCStatus.SUBMITTED)} 
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-black h-14 rounded-xl shadow-lg shadow-orange-100 gap-2" 
+                  disabled={!!isActioning || !remarks.trim()}
+                >
+                  {isActioning === KYCStatus.SUBMITTED ? <Loader2 className="w-5 h-5 animate-spin" /> : <SendHorizontal className="w-5 h-5" />}
+                  Resubmit Corrected Case
+                </Button>
+                <p className="text-[10px] text-center text-orange-400 font-bold uppercase">This case will be returned to the Review Queue.</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* SPECIALIST DETERMINATION WORKSPACE (Approve/Request Fix) */}
+          {!isTerminal && !isActionRequired && isReviewer && (
             <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-500">
               <CardHeader className="bg-slate-900 text-white border-b py-5">
                 <CardTitle className="text-lg font-black tracking-tight">KYC Determination</CardTitle>
