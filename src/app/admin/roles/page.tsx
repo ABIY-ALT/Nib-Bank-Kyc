@@ -234,19 +234,16 @@ export default function StaffRolesPage() {
       <Dialog open={isInventoryOpen} onOpenChange={setIsInventoryOpen}>
         <DialogContent className="max-w-3xl rounded-3xl overflow-hidden p-0 border-none shadow-2xl">
           <DialogHeader className="p-8 bg-slate-900 text-white border-b space-y-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-primary/20 rounded-2xl">
-                  <ShieldCheck className="w-6 h-6 text-primary" />
-                </div>
-                <div>
-                  <DialogTitle className="text-2xl font-black">{selectedRole?.name.replace(/_/g, ' ')} Authority</DialogTitle>
-                  <DialogDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">
-                    Institutional Capability Inventory
-                  </DialogDescription>
-                </div>
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-primary/20 rounded-2xl">
+                <ShieldCheck className="w-6 h-6 text-primary" />
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setIsInventoryOpen(false)} className="text-white/40 hover:text-white"><X className="w-5 h-5" /></Button>
+              <div>
+                <DialogTitle className="text-2xl font-black">{selectedRole?.name.replace(/_/g, ' ')} Authority</DialogTitle>
+                <DialogDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">
+                  Institutional Capability Inventory
+                </DialogDescription>
+              </div>
             </div>
           </DialogHeader>
           <div className="p-8">
@@ -281,7 +278,7 @@ export default function StaffRolesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Authority Management (EDIT) - Overhauled to match image */}
+      {/* Authority Management (EDIT) */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-[#fcfaf7]">
@@ -300,9 +297,6 @@ export default function StaffRolesPage() {
                     </DialogDescription>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setIsDialogOpen(false)} className="rounded-full">
-                  <X className="w-5 h-5" />
-                </Button>
               </div>
             </DialogHeader>
             
