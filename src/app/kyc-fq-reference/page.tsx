@@ -55,19 +55,22 @@ import { getFindings, upsertFinding, deleteFinding, seedFindings } from '@/actio
 import { FindingCategory, FindingSeverity } from '@prisma/client';
 import { usePermissions } from '@/hooks/use-permissions';
 
-const SEVERITY_COLORS = {
+const SEVERITY_COLORS: Record<string, string> = {
   LOW: "bg-blue-100 text-blue-800",
   MEDIUM: "bg-yellow-100 text-yellow-800",
   HIGH: "bg-orange-100 text-orange-800",
   CRITICAL: "bg-red-100 text-red-800"
 };
 
-const SEVERITY_ICONS = {
+const SEVERITY_ICONS: Record<string, any> = {
   LOW: Info,
   MEDIUM: AlertTriangle,
   HIGH: ShieldAlert,
   CRITICAL: AlertTriangle
 };
+
+const CATEGORY_OPTIONS = ["IDENTITY", "DOCUMENTATION", "COMPLIANCE", "ACCOUNT_VALIDATION"];
+const SEVERITY_OPTIONS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
 const ACCOUNT_TYPES = [
   { id: "INDIVIDUAL", label: "Individual" },
@@ -98,7 +101,7 @@ const EXAMPLE_FINDINGS: Partial<KYCFinding>[] = [
 
 export default function KYCFFQReferencePage() {
   const { user } = useAuth();
-  const { permissions, loading: permissionsLoading } = usePermissions(user);
+  const { permissions, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   const [findings, setFindings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,7 +132,7 @@ export default function KYCFFQReferencePage() {
     setLoading(false);
   };
 
-  const canManageFindings = permissions.canManageFindings;
+  const canManageFindings = permissions.has('VIEW_FQ_LIBRARY');
 
   const filteredFindings = useMemo(() => {
     if (!findings) return [];
@@ -245,7 +248,7 @@ export default function KYCFFQReferencePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {Object.values(FindingCategory).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                  {CATEGORY_OPTIONS.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -258,7 +261,7 @@ export default function KYCFFQReferencePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Severities</SelectItem>
-                  {Object.values(FindingSeverity).map(sev => <SelectItem key={sev} value={sev}>{sev}</SelectItem>)}
+                  {SEVERITY_OPTIONS.map(sev => <SelectItem key={sev} value={sev}>{sev}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -288,7 +291,7 @@ export default function KYCFFQReferencePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredFindings.map((finding) => {
-                const SeverityIcon = SEVERITY_ICONS[finding.severity as FindingSeverity] || Info;
+                const SeverityIcon = SEVERITY_ICONS[finding.severity] || Info;
                 return (
                   <Card key={finding.id} className="group hover:border-primary/40 transition-all flex flex-col bg-white overflow-hidden border-slate-200">
                     <CardHeader className="bg-slate-50/50 border-b pb-4 pt-5 px-6">
@@ -297,7 +300,7 @@ export default function KYCFFQReferencePage() {
                           <span className="text-[10px] font-black text-primary uppercase">{finding.code}</span>
                           <CardTitle className="text-lg font-bold">{finding.title}</CardTitle>
                         </div>
-                        <Badge className={SEVERITY_COLORS[finding.severity as FindingSeverity]}>
+                        <Badge className={SEVERITY_COLORS[finding.severity]}>
                           <SeverityIcon className="w-3 h-3 mr-1.5" /> {finding.severity}
                         </Badge>
                       </div>
@@ -351,7 +354,7 @@ export default function KYCFFQReferencePage() {
                 <Select value={findingForm.category} onValueChange={(val: any) => setFindingForm({...findingForm, category: val})}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.values(FindingCategory).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                    {CATEGORY_OPTIONS.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -384,7 +387,7 @@ export default function KYCFFQReferencePage() {
               <Select value={findingForm.severity} onValueChange={(val: any) => setFindingForm({...findingForm, severity: val})}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.values(FindingSeverity).map(sev => <SelectItem key={sev} value={sev}>{sev}</SelectItem>)}
+                  {SEVERITY_OPTIONS.map(sev => <SelectItem key={sev} value={sev}>{sev}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
