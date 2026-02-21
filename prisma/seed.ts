@@ -62,6 +62,8 @@ async function main() {
     'BRANCH_OPERATION_DIRECTOR',
     'BRANCH_MANAGER',
     'BRANCH_OFFICER',
+    'KYC_OFFICER',
+    'SUPERVISOR',
     'CHIEF'
   ];
 
@@ -108,6 +110,20 @@ async function main() {
       last: 'Officer', 
       role: 'BRANCH_OFFICER', 
       branch: 'Arada Branch' 
+    },
+    { 
+      email: 'kyc.specialist@nibbank.com.et', 
+      first: 'Jane', 
+      last: 'Specialist', 
+      role: 'KYC_OFFICER', 
+      branch: 'Kirkos Branch' 
+    },
+    { 
+      email: 'supervisor.one@nibbank.com.et', 
+      first: 'Robert', 
+      last: 'Supervisor', 
+      role: 'SUPERVISOR', 
+      branch: 'Bole Branch' 
     },
     { 
       email: 'audit.specialist@nibbank.com.et', 
