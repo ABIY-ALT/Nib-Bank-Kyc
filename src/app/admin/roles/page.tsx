@@ -55,8 +55,8 @@ export default function StaffRolesPage() {
     setLoading(true);
     try {
       const [r, p] = await Promise.all([getRoleDefinitions(), getAllPermissions()]);
-      setRoleDefinitions(r);
-      setAllPermissions(p);
+      setRoleDefinitions(r || []);
+      setAllPermissions(p || []);
     } catch (e) {
       toast({ variant: "destructive", title: "Institutional Sync Failed" });
     } finally {
@@ -67,9 +67,11 @@ export default function StaffRolesPage() {
   const handleInitializeFramework = async () => {
     setIsInitializing(true);
     try {
-      await seedInstitutionalPermissions();
-      toast({ title: "Framework Initialized", description: "Institutional capabilities established in SQL." });
-      loadData();
+      const res = await seedInstitutionalPermissions();
+      if (res.success) {
+        toast({ title: "Framework Initialized", description: "Institutional capabilities established in SQL." });
+        await loadData(); // Force reload to hide the initialize button
+      }
     } catch (e) {
       toast({ variant: "destructive", title: "Initialization Error" });
     } finally {
@@ -278,24 +280,22 @@ export default function StaffRolesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Authority Management (EDIT) */}
+      {/* Authority Management (EDIT) - CLEAN HEADERS TO REMOVE DUAL X ICONS */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-[#fcfaf7]">
             <DialogHeader className="p-8 bg-white border-b space-y-0">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary/10 rounded-2xl">
-                    <ShieldCheck className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-2xl font-black tracking-tight text-slate-900">
-                      {selectedRole ? 'Update Role Rights' : 'Define New Role'}
-                    </DialogTitle>
-                    <DialogDescription className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">
-                      Institutional Capability Assignment Workspace
-                    </DialogDescription>
-                  </div>
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-primary/10 rounded-2xl">
+                  <ShieldCheck className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <DialogTitle className="text-2xl font-black tracking-tight text-slate-900">
+                    {selectedRole ? 'Update Role Rights' : 'Define New Role'}
+                  </DialogTitle>
+                  <DialogDescription className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">
+                    Institutional Capability Assignment Workspace
+                  </DialogDescription>
                 </div>
               </div>
             </DialogHeader>

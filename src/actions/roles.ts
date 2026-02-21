@@ -97,16 +97,20 @@ export async function seedInstitutionalPermissions() {
     { slug: 'EXPORT_SYSTEM_AUDIT', name: 'Export System Audit', group: 'SYSTEM' },
   ];
 
-  for (const p of permissions) {
-    await prisma.permission.upsert({
-      where: { slug: p.slug },
-      update: { name: p.name, group: p.group },
-      create: p,
-    });
+  try {
+    for (const p of permissions) {
+      await prisma.permission.upsert({
+        where: { slug: p.slug },
+        update: { name: p.name, group: p.group },
+        create: p,
+      });
+    }
+    revalidatePath('/admin/roles');
+    return { success: true };
+  } catch (error) {
+    console.error('[SQL Framework] Seeding Error:', error);
+    return { success: false };
   }
-
-  revalidatePath('/admin/roles');
-  return { success: true };
 }
 
 export async function getRoleDefinitions() {
