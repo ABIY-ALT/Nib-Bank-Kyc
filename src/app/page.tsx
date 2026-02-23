@@ -119,8 +119,8 @@ export default function Dashboard() {
     };
 
     return {
-      title: `${user?.branchName || 'Local'} Branch Overview`,
-      subtitle: 'Local branch overview and amendment tracking.',
+      title: user?.branchName ? `${user.branchName} Overview` : 'Local Branch Overview',
+      subtitle: 'Local branch activity monitoring and amendment tracking.',
       scope: 'Branch',
       icon: Building2
     };

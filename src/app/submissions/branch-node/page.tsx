@@ -173,14 +173,14 @@ export default function BranchNodeOversightPage() {
               <Building2 className="w-6 h-6" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {isAdmin ? 'Global Command' : `${user.branchName} Branch Overview`}
+              {isAdmin ? 'Global Command' : user?.branchName ? `${user.branchName} Overview` : 'Branch Overview'}
             </h1>
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground text-lg">
               {isAdmin 
                 ? 'Master institutional monitoring of all branches.' 
-                : `Managing operational compliance at the ${user.branchName} local branch.`}
+                : `Managing operational compliance at the authorized local node.`}
             </p>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
               <ShieldCheck className="w-3 h-3" />
