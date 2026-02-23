@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -8,7 +9,6 @@ import path from 'path';
 
 /**
  * Optimized Submission Fetcher.
- * Uses 'select' to only retrieve fields needed for list views, reducing payload size.
  */
 export async function getSubmissions(filters?: {
   status?: KYCStatus[];
@@ -83,10 +83,6 @@ export async function getSubmissions(filters?: {
   }
 }
 
-/**
- * High-Performance Count Aggregator.
- * Replaces client-side filtering with internal counts for UI notification badges.
- */
 export async function getWorkflowCounts(params: { 
   userId: string, 
   branchName?: string, 
@@ -95,7 +91,6 @@ export async function getWorkflowCounts(params: {
 }) {
   const { userId, branchName, branches, isSuperAdmin } = params;
 
-  // Base filters for counts
   const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? {
     branch: { name: { in: branches } }
   } : {
@@ -208,6 +203,19 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
   revalidatePath('/submissions/queue');
   revalidatePath('/submissions/amendments');
   return kyc;
+}
+
+export async function updateSubmissionChecklist(id: string, checklistState: any) {
+  try {
+    const kyc = await prisma.kYC.update({
+      where: { id },
+      data: { checklistState }
+    });
+    revalidatePath(`/submissions/${id}`);
+    return { success: true, kyc };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
 }
 
 export async function createSubmission(formData: FormData) {
@@ -329,10 +337,6 @@ export async function createSubmission(formData: FormData) {
   }
 }
 
-/**
- * Resubmission Handler.
- * Supports notes and new document attachments for corrective action.
- */
 export async function resubmitSubmission(formData: FormData) {
   try {
     const id = formData.get('id') as string;

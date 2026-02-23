@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -35,12 +36,13 @@ import {
   BookOpen,
   Download,
   RefreshCw,
-  ShieldAlert
+  ShieldAlert,
+  ClipboardCheck
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissionById, updateSubmissionStatus, resubmitSubmission } from "@/actions/submissions";
+import { getSubmissionById, updateSubmissionStatus, resubmitSubmission, updateSubmissionChecklist } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { KYCStatus } from "@prisma/client";
 import { Label } from "@/components/ui/label";
@@ -59,9 +61,20 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import JSZip from 'jszip';
 import { usePermissions } from "@/hooks/use-permissions";
 import { AMENDMENT_SCENARIOS } from "@/lib/kyc-data";
+
+const KYC_CHECKLIST_ITEMS = [
+  { id: 'id_verified', label: 'Identity Document Authenticity' },
+  { id: 'photo_match', label: 'Customer Photo Comparison' },
+  { id: 'sanction_check', label: 'Sanction & AML Screening' },
+  { id: 'mother_name', label: 'Mother\'s Name Verification' },
+  { id: 't24_sync', label: 'Core Banking (T24) Data Match' },
+  { id: 'address_verified', label: 'Residential Address Validation' },
+  { id: 'risk_profile', label: 'Risk Categorization Review' }
+];
 
 export default function SubmissionDetails() {
   const params = useParams();
@@ -79,6 +92,7 @@ export default function SubmissionDetails() {
   const [previewFile, setPreviewFile] = useState<any>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isActioning, setIsActioning] = useState<string | null>(null);
+  const [checklist, setChecklist] = useState<Record<string, boolean>>({});
 
   const [resubmitFiles, setResubmitFiles] = useState<{file: File, type: string, id: string}[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -93,6 +107,7 @@ export default function SubmissionDetails() {
         ]);
         setSubmission(sub);
         setSettings(s);
+        setChecklist((sub?.checklistState as Record<string, boolean>) || {});
       } catch (error) {
         console.error("Load failed:", error);
       } finally {
@@ -139,6 +154,19 @@ export default function SubmissionDetails() {
       toast({ variant: "destructive", title: "Action Failed", description: error.message });
     } finally {
       setIsActioning(null);
+    }
+  };
+
+  const handleChecklistToggle = async (itemId: string) => {
+    if (!isReviewer || isTerminal) return;
+
+    const nextState = { ...checklist, [itemId]: !checklist[itemId] };
+    setChecklist(nextState);
+
+    try {
+      await updateSubmissionChecklist(submission.id, nextState);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Sync Error", description: "Failed to save checklist state." });
     }
   };
 
@@ -414,6 +442,53 @@ export default function SubmissionDetails() {
         </div>
 
         <div className="space-y-8">
+          {/* KYC VERIFICATION CHECKLIST */}
+          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
+            <CardHeader className="bg-primary p-5 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <ClipboardCheck className="w-5 h-5 text-white" />
+                </div>
+                <CardTitle className="text-lg font-black tracking-tight text-white uppercase">Verification Checklist</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              {KYC_CHECKLIST_ITEMS.map((item) => (
+                <div 
+                  key={item.id} 
+                  className={cn(
+                    "flex items-center space-x-3 p-3 rounded-xl border transition-all",
+                    checklist[item.id] ? "bg-emerald-50 border-emerald-100" : "bg-white border-slate-100"
+                  )}
+                >
+                  <Checkbox 
+                    id={item.id} 
+                    checked={checklist[item.id] || false} 
+                    onCheckedChange={() => handleChecklistToggle(item.id)}
+                    disabled={!isReviewer || isTerminal}
+                    className="h-5 w-5 rounded-md border-2 border-slate-200 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                  />
+                  <label 
+                    htmlFor={item.id} 
+                    className={cn(
+                      "text-xs font-bold leading-tight cursor-pointer",
+                      checklist[item.id] ? "text-emerald-800" : "text-slate-600",
+                      (!isReviewer || isTerminal) && "cursor-not-allowed opacity-70"
+                    )}
+                  >
+                    {item.label}
+                  </label>
+                </div>
+              ))}
+              {(!isReviewer || isTerminal) && (
+                <div className="mt-4 p-3 bg-slate-50 rounded-xl flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-slate-400" />
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">Read-only institutional record</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="shadow-xl border-primary/20 bg-primary/5 overflow-hidden rounded-3xl sticky top-24">
             <CardHeader className="bg-primary border-b border-white/10 py-5 px-6">
               <CardTitle className="text-[11px] font-black uppercase tracking-[0.2em] text-white flex items-center gap-2">
