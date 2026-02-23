@@ -39,7 +39,6 @@ export default function StaffRolesPage() {
   const [allPermissions, setAllPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
@@ -61,21 +60,6 @@ export default function StaffRolesPage() {
       toast({ variant: "destructive", title: "Institutional Sync Failed" });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleInitializeFramework = async () => {
-    setIsInitializing(true);
-    try {
-      const res = await seedInstitutionalPermissions();
-      if (res.success) {
-        toast({ title: "Framework Initialized", description: "Institutional capabilities established." });
-        await loadData();
-      }
-    } catch (e) {
-      toast({ variant: "destructive", title: "Initialization Error" });
-    } finally {
-      setIsInitializing(false);
     }
   };
 
@@ -172,12 +156,6 @@ export default function StaffRolesPage() {
           <p className="text-muted-foreground text-lg">Master Access Control Matrix.</p>
         </div>
         <div className="flex gap-2">
-          {allPermissions.length === 0 && (
-            <Button onClick={handleInitializeFramework} disabled={isInitializing} variant="outline" className="border-orange-200 text-orange-600 font-bold h-11 px-6">
-              {isInitializing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
-              Initialize Framework
-            </Button>
-          )}
           <Button onClick={handleOpenAdd} className="bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90">
             <Plus className="w-4 h-4 mr-2" /> Define New Role
           </Button>
@@ -309,79 +287,72 @@ export default function StaffRolesPage() {
                 />
               </div>
 
-              {allPermissions.length === 0 ? (
-                <div className="py-20 text-center border-2 border-dashed rounded-3xl space-y-4">
-                  <p className="text-muted-foreground font-bold">Institutional Capabilities Not Initialized</p>
-                  <Button onClick={handleInitializeFramework} size="sm">Initialize Now</Button>
-                </div>
-              ) : (
-                <ScrollArea className="h-[55vh] pr-4">
-                  <div className="space-y-12">
-                    {Object.entries(groupedPermissions).map(([group, perms]) => {
-                      const groupIds = perms.map(p => p.id);
-                      const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
-                      
-                      return (
-                        <div key={group} className="space-y-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 flex-1">
-                              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-primary whitespace-nowrap">{group}</span>
-                              <div className="h-px flex-1 bg-slate-200" />
-                            </div>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleToggleGroup(group)}
-                              className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-bold text-[10px] uppercase tracking-wider gap-2"
-                            >
-                              {allSelectedInGroup ? (
-                                <><CheckSquare className="w-3.5 h-3.5" /> Deselect All</>
-                              ) : (
-                                <><Square className="w-3.5 h-3.5" /> Select All</>
-                              )}
-                            </Button>
+              <ScrollArea className="h-[55vh] pr-4">
+                <div className="space-y-12">
+                  {Object.entries(groupedPermissions).map(([group, perms]) => {
+                    const groupIds = perms.map(p => p.id);
+                    const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
+                    
+                    return (
+                      <div key={group} className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 flex-1">
+                            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-primary whitespace-nowrap">{group}</span>
+                            <div className="h-px flex-1 bg-slate-200" />
                           </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {perms.map((p: any) => {
-                              const isSelected = permissionsForm.includes(p.id);
-                              return (
-                                <div 
-                                  key={p.id} 
-                                  onClick={() => handleTogglePermission(p.id)}
-                                  className={cn(
-                                    "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group",
-                                    isSelected 
-                                      ? "bg-primary/5 border-primary/40 shadow-sm" 
-                                      : "bg-white border-slate-100 hover:border-slate-200 shadow-sm"
-                                  )}
-                                >
-                                  <div className="flex items-center gap-4">
-                                    <div className={cn(
-                                      "w-2 h-2 rounded-full transition-all",
-                                      isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(var(--primary),0.5)]" : "bg-slate-200"
-                                    )} />
-                                    <span className={cn(
-                                      "text-xs font-bold transition-colors",
-                                      isSelected ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
-                                    )}>{p.name}</span>
-                                  </div>
-                                  <div className={cn(
-                                    "w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center",
-                                    isSelected ? "bg-primary border-primary" : "bg-white border-slate-200 group-hover:border-primary/30"
-                                  )}>
-                                    {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleToggleGroup(group)}
+                            className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-bold text-[10px] uppercase tracking-wider gap-2"
+                          >
+                            {allSelectedInGroup ? (
+                              <><CheckSquare className="w-3.5 h-3.5" /> Deselect All</>
+                            ) : (
+                              <><Square className="w-3.5 h-3.5" /> Select All</>
+                            )}
+                          </Button>
                         </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              )}
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {perms.map((p: any) => {
+                            const isSelected = permissionsForm.includes(p.id);
+                            return (
+                              <div 
+                                key={p.id} 
+                                onClick={() => handleTogglePermission(p.id)}
+                                className={cn(
+                                  "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group",
+                                  isSelected 
+                                    ? "bg-primary/5 border-primary/40 shadow-sm" 
+                                    : "bg-white border-slate-100 hover:border-slate-200 shadow-sm"
+                                )}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className={cn(
+                                    "w-2 h-2 rounded-full transition-all",
+                                    isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(var(--primary),0.5)]" : "bg-slate-200"
+                                  )} />
+                                  <span className={cn(
+                                    "text-xs font-bold transition-colors",
+                                    isSelected ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
+                                  )}>{p.name}</span>
+                                </div>
+                                <div className={cn(
+                                  "w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center",
+                                  isSelected ? "bg-primary border-primary" : "bg-white border-slate-200 group-hover:border-primary/30"
+                                )}>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </div>
 
             <DialogFooter className="p-8 bg-white border-t flex flex-row justify-end items-center gap-6 rounded-b-3xl">
@@ -393,7 +364,7 @@ export default function StaffRolesPage() {
               </button>
               <Button 
                 onClick={handleSave} 
-                disabled={isSaving || allPermissions.length === 0}
+                disabled={isSaving}
                 className="h-12 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-xl shadow-primary/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
