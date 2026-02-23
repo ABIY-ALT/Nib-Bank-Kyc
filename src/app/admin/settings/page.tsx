@@ -129,8 +129,8 @@ export default function SystemSettingsPage() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="space-y-8">
-          <Card className="shadow-lg border-slate-200">
-            <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-xl flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" /> Workflow Automation</CardTitle></CardHeader>
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-white" /> Workflow Automation</CardTitle></CardHeader>
             <CardContent className="space-y-6 pt-6">
               <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4 group hover:border-primary/30 transition-all">
                 <div className="flex items-center justify-between">
@@ -144,8 +144,8 @@ export default function SystemSettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg border-slate-200">
-            <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-xl flex items-center gap-2"><Building2 className="w-5 h-5 text-primary" /> Account Classifications</CardTitle></CardHeader>
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2"><Building2 className="w-5 h-5 text-white" /> Account Classifications</CardTitle></CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div className="flex gap-2">
                 <Input 
@@ -154,7 +154,7 @@ export default function SystemSettingsPage() {
                   onChange={(e) => setNewEntityLabel(e.target.value)} 
                   onKeyDown={(e) => e.key === 'Enter' && handleAddEntityType()}
                 />
-                <Button size="icon" onClick={handleAddEntityType} className="bg-primary hover:bg-primary/90">
+                <Button size="icon" onClick={handleAddEntityType} className="bg-primary hover:bg-primary/90 text-white">
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
@@ -180,8 +180,8 @@ export default function SystemSettingsPage() {
         </div>
 
         <div className="space-y-8">
-          <Card className="shadow-lg border-slate-200">
-            <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-xl flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Document Classifications</CardTitle></CardHeader>
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2"><FileText className="w-5 h-5 text-white" /> Document Classifications</CardTitle></CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div className="flex gap-2">
                 <Input 
@@ -190,7 +190,7 @@ export default function SystemSettingsPage() {
                   onChange={(e) => setNewDocLabel(e.target.value)} 
                   onKeyDown={(e) => e.key === 'Enter' && handleAddDocType()}
                 />
-                <Button size="icon" onClick={handleAddDocType} className="bg-primary hover:bg-primary/90">
+                <Button size="icon" onClick={handleAddDocType} className="bg-primary hover:bg-primary/90 text-white">
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
@@ -214,12 +214,12 @@ export default function SystemSettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg border-slate-200">
-            <CardHeader className="bg-slate-50/50 border-b">
-              <CardTitle className="text-xl flex items-center gap-2">
-                <Megaphone className="w-5 h-5 text-primary" /> Institutional Guidelines
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-primary text-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2 text-white">
+                <Megaphone className="w-5 h-5 text-white" /> Institutional Guidelines
               </CardTitle>
-              <CardDescription>Publish critical policy updates to the user dashboard.</CardDescription>
+              <CardDescription className="text-white/70">Publish critical policy updates to the user dashboard.</CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div className="space-y-4 p-4 rounded-xl border bg-slate-50/30">
@@ -292,7 +292,7 @@ export default function SystemSettingsPage() {
         </div>
       </div>
 
-      <div className="pt-4 border-t flex items-center justify-end"><Button onClick={handleSavePolicies} className="px-10 h-12 font-bold shadow-lg bg-primary">Save Institutional Settings</Button></div>
+      <div className="pt-4 border-t flex items-center justify-end"><Button onClick={handleSavePolicies} className="px-10 h-12 font-bold shadow-lg bg-primary text-white">Save Institutional Settings</Button></div>
     </div>
   );
 }

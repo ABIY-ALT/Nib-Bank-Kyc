@@ -208,8 +208,8 @@ export default function KYCFFQReferencePage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-slate-900 text-white rounded-lg shadow-lg">
-              <BookOpen className="w-6 h-6" />
+            <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
+              <BookOpen className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC F&amp;Q Reference</h1>
           </div>
@@ -217,7 +217,7 @@ export default function KYCFFQReferencePage() {
         </div>
         <div className="flex gap-2">
           {canManageFindings && (
-            <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 bg-primary shadow-xl font-bold">
+            <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2 bg-primary shadow-xl font-bold text-white">
               <Plus className="w-4 h-4" /> Add Finding
             </Button>
           )}
@@ -226,7 +226,7 @@ export default function KYCFFQReferencePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <Card className="lg:col-span-1 shadow-sm h-fit sticky top-20">
-          <CardHeader className="bg-slate-50/50 border-b">
+          <CardHeader className="bg-primary/5 border-b">
             <CardTitle className="text-lg flex items-center gap-2">
               <Filter className="w-4 h-4" /> Filters
             </CardTitle>
@@ -294,11 +294,11 @@ export default function KYCFFQReferencePage() {
                 const SeverityIcon = SEVERITY_ICONS[finding.severity] || Info;
                 return (
                   <Card key={finding.id} className="group hover:border-primary/40 transition-all flex flex-col bg-white overflow-hidden border-slate-200">
-                    <CardHeader className="bg-slate-50/50 border-b pb-4 pt-5 px-6">
+                    <CardHeader className="bg-primary text-white border-b pb-4 pt-5 px-6">
                       <div className="flex justify-between items-start">
                         <div className="space-y-1">
-                          <span className="text-[10px] font-black text-primary uppercase">{finding.code}</span>
-                          <CardTitle className="text-lg font-bold">{finding.title}</CardTitle>
+                          <span className="text-[10px] font-black text-white/80 uppercase">{finding.code}</span>
+                          <CardTitle className="text-lg font-bold text-white">{finding.title}</CardTitle>
                         </div>
                         <Badge className={SEVERITY_COLORS[finding.severity]}>
                           <SeverityIcon className="w-3 h-3 mr-1.5" /> {finding.severity}
@@ -322,7 +322,7 @@ export default function KYCFFQReferencePage() {
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         )}
-                        <Button size="sm" onClick={() => handleCopy(finding.description)} className="h-8 gap-2 font-bold px-4">
+                        <Button size="sm" onClick={() => handleCopy(finding.description)} className="h-8 gap-2 font-bold px-4 text-white bg-primary">
                           <Copy className="w-3.5 h-3.5" /> Copy
                         </Button>
                       </div>
@@ -336,14 +336,14 @@ export default function KYCFFQReferencePage() {
       </div>
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-              <ShieldCheck className="w-6 h-6 text-primary" /> Register Finding
+        <DialogContent className="max-w-xl p-0 overflow-hidden rounded-3xl border-none">
+          <DialogHeader className="p-8 bg-primary text-white">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-white">
+              <ShieldCheck className="w-6 h-6 text-white" /> Register Finding
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-6 pt-4">
+          <div className="p-8 space-y-6">
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase">Code</Label>
@@ -393,9 +393,9 @@ export default function KYCFFQReferencePage() {
             </div>
           </div>
 
-          <DialogFooter className="pt-6 border-t mt-4">
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveFinding} className="bg-primary font-black shadow-lg">Register Finding</Button>
+          <DialogFooter className="p-8 bg-slate-50 border-t">
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
+            <Button onClick={handleSaveFinding} className="bg-primary font-black shadow-lg text-white h-11 px-10">Register Finding</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

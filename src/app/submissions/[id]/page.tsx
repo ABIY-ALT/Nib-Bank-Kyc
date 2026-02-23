@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -78,7 +77,6 @@ export default function SubmissionDetails() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isActioning, setIsActioning] = useState<string | null>(null);
 
-  // Resubmission File State
   const [resubmitFiles, setResubmitFiles] = useState<{file: File, type: string, id: string}[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -318,14 +316,14 @@ export default function SubmissionDetails() {
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-8">
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
-            <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 p-6">
+            <CardHeader className="flex flex-row items-center justify-between border-b bg-primary p-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-xl">
-                  <FileText className="w-5 h-5 text-primary" />
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <FileText className="w-5 h-5 text-white" />
                 </div>
-                <CardTitle className="text-xl font-black tracking-tight">Case Documents</CardTitle>
+                <CardTitle className="text-xl font-black tracking-tight text-white">Case Documents</CardTitle>
               </div>
-              <Badge variant="secondary" className="bg-white border font-bold text-slate-500 uppercase text-[10px] tracking-widest px-3">{submission.documents?.length || 0} Files</Badge>
+              <Badge variant="secondary" className="bg-white/20 border-white/20 font-bold text-white uppercase text-[10px] tracking-widest px-3">{submission.documents?.length || 0} Files</Badge>
             </CardHeader>
             <CardContent className="pt-6 px-6">
               <div className="grid gap-4">
@@ -350,12 +348,12 @@ export default function SubmissionDetails() {
           </Card>
 
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl">
-            <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between p-6">
+            <CardHeader className="bg-primary p-6 border-b flex flex-row items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-xl">
-                  <MessagesSquare className="w-5 h-5 text-primary" />
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <MessagesSquare className="w-5 h-5 text-white" />
                 </div>
-                <CardTitle className="text-xl font-black tracking-tight">Audit History</CardTitle>
+                <CardTitle className="text-xl font-black tracking-tight text-white">Audit History</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="pt-8 px-8 pb-10">
@@ -389,9 +387,9 @@ export default function SubmissionDetails() {
 
         <div className="space-y-8">
           <Card className="shadow-xl border-primary/20 bg-primary/5 overflow-hidden rounded-3xl sticky top-24">
-            <CardHeader className="bg-primary/10 border-b border-primary/10 py-5 px-6">
-              <CardTitle className="text-[11px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2">
-                <MapPin className="w-4 h-4" /> Institutional Context
+            <CardHeader className="bg-primary border-b border-white/10 py-5 px-6">
+              <CardTitle className="text-[11px] font-black uppercase tracking-[0.2em] text-white flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-white" /> Institutional Context
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
@@ -414,12 +412,11 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          {/* OFFICER RESPONSE WORKSPACE (Fix/Resubmit) */}
           {isActionRequired && canRespond && (
             <Card className="border-orange-200 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-500 bg-orange-50/10">
               <CardHeader className="bg-orange-600 text-white border-b py-5">
-                <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2">
-                  <RotateCcw className="w-5 h-5" /> Correction Workspace
+                <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2 text-white">
+                  <RotateCcw className="w-5 h-5 text-white" /> Correction Workspace
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6 pt-6 px-6 pb-8">
@@ -484,11 +481,10 @@ export default function SubmissionDetails() {
             </Card>
           )}
 
-          {/* SPECIALIST DETERMINATION WORKSPACE (Approve/Request Fix - REJECT REMOVED) */}
           {!isTerminal && !isActionRequired && isReviewer && (
             <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-500">
-              <CardHeader className="bg-slate-900 text-white border-b py-5">
-                <CardTitle className="text-lg font-black tracking-tight">KYC Determination</CardTitle>
+              <CardHeader className="bg-primary text-white border-b py-5">
+                <CardTitle className="text-lg font-black tracking-tight text-white">KYC Determination</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6 pt-6 px-6 pb-8">
                 <div className="space-y-2">

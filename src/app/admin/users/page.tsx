@@ -63,7 +63,6 @@ export default function UserManagementPage() {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  // Search & Pagination State
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -295,16 +294,16 @@ export default function UserManagementPage() {
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="p-8 bg-slate-900 text-white space-y-1">
+          <DialogHeader className="p-8 bg-primary text-white space-y-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/20 rounded-xl">
-                  <ShieldCheck className="w-6 h-6 text-primary" />
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <ShieldCheck className="w-6 h-6 text-white" />
                 </div>
-                <DialogTitle className="text-2xl font-black tracking-tight">Institutional Profile</DialogTitle>
+                <DialogTitle className="text-2xl font-black tracking-tight text-white">Institutional Profile</DialogTitle>
               </div>
             </div>
-            <DialogDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest pl-11">
+            <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest pl-11">
               {editingUser ? 'Managing Jurisdictional Mapping' : 'Provisioning New Staff Credentials'}
             </DialogDescription>
           </DialogHeader>

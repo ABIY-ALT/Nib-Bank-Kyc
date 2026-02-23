@@ -86,7 +86,7 @@ export default function FollowUpVerificationDetail() {
   };
 
   if (loading) return <div className="py-32 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving audit assets...</div>;
-  if (!verification || !submission) return <div className="p-12 text-center">Audit record missing in SQL.</div>;
+  if (!verification || !submission) return <div className="p-12 text-center">Audit record missing.</div>;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
@@ -103,7 +103,7 @@ export default function FollowUpVerificationDetail() {
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-8">
           <Card className="shadow-lg border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-xl flex items-center gap-2"><FolderArchive className="w-5 h-5 text-primary" /> Asset Inventory</CardTitle></CardHeader>
+            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 text-white"><FolderArchive className="w-5 h-5 text-white" /> Asset Inventory</CardTitle></CardHeader>
             <CardContent className="pt-6 space-y-4">
               {submission.documents?.map((doc: any) => (
                 <div key={doc.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/30 transition-all group">
@@ -117,15 +117,15 @@ export default function FollowUpVerificationDetail() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-xl border-primary/20 bg-white">
-            <CardHeader className="bg-primary/5 border-b border-primary/10"><CardTitle className="text-xl flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" /> Institutional Determination</CardTitle></CardHeader>
+          <Card className="shadow-xl border-primary/20 bg-white overflow-hidden">
+            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 text-white"><ShieldCheck className="w-5 h-5 text-white" /> Institutional Determination</CardTitle></CardHeader>
             <CardContent className="pt-6 space-y-6">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Remarks & Feedback</Label>
                 <Textarea placeholder="Detail findings..." className="min-h-[140px] bg-slate-50/30" value={remarks} onChange={(e) => setRemarks(e.target.value)} disabled={!!isSubmitting} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Button className="bg-emerald-600 hover:bg-emerald-700 h-14 font-black shadow-lg" onClick={() => handleAction('Correct')} disabled={!!isSubmitting}>{isSubmitting === 'Correct' ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5 mr-2" />} Mark Correct</Button>
+                <Button className="bg-emerald-600 hover:bg-emerald-700 h-14 font-black shadow-lg text-white" onClick={() => handleAction('Correct')} disabled={!!isSubmitting}>{isSubmitting === 'Correct' ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5 mr-2" />} Mark Correct</Button>
                 <Button variant="outline" className="h-14 font-black shadow-md text-orange-600 border-orange-600" onClick={() => handleAction('Discrepancy')} disabled={!!isSubmitting}>{isSubmitting === 'Discrepancy' ? <Loader2 className="w-5 h-5 animate-spin" /> : <AlertTriangle className="w-5 h-5 mr-2" />} Log Discrepancy</Button>
               </div>
             </CardContent>
@@ -134,13 +134,13 @@ export default function FollowUpVerificationDetail() {
 
         <div className="space-y-6">
           <Card className="shadow-lg border-slate-200 overflow-hidden sticky top-24">
-            <CardHeader className="bg-slate-900 text-white border-b border-white/10"><CardTitle className="text-lg font-bold uppercase tracking-widest">Audit Context</CardTitle></CardHeader>
+            <CardHeader className="bg-primary text-white border-b border-white/10"><CardTitle className="text-lg font-bold uppercase tracking-widest text-white">Audit Context</CardTitle></CardHeader>
             <CardContent className="pt-8 space-y-8">
               <div className="space-y-6">
                 <div className="flex gap-4"><div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><User className="w-5 h-5" /></div><div><p className="text-[10px] font-black text-slate-400 uppercase">Customer</p><p className="font-bold text-slate-900">{submission.customerName}</p></div></div>
                 <div className="flex gap-4"><div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><Building2 className="w-5 h-5" /></div><div><p className="text-[10px] font-black text-slate-400 uppercase">Originating Node</p><p className="font-bold text-slate-900">{submission.branchName}</p></div></div>
               </div>
-              <div className="pt-6 border-t space-y-4"><p className="text-xs text-slate-500 leading-relaxed font-medium bg-slate-50 p-4 rounded-xl italic">Findings here impact branch performance metrics in SQL Reporting.</p></div>
+              <div className="pt-6 border-t space-y-4"><p className="text-xs text-slate-500 leading-relaxed font-medium bg-slate-50 p-4 rounded-xl italic">Findings here impact branch performance metrics in reporting.</p></div>
             </CardContent>
           </Card>
         </div>

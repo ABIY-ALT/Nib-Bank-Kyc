@@ -124,7 +124,7 @@ export default function BranchesDistrictsPage() {
 
       <div className="grid gap-8 lg:grid-cols-12">
         <Card className="lg:col-span-4 shadow-md h-fit border-slate-200 rounded-2xl overflow-hidden">
-          <CardHeader className="bg-slate-900 text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><MapPin className="w-5 h-5 text-primary" /> Districts</CardTitle></CardHeader>
+          <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><MapPin className="w-5 h-5 text-white" /> Districts</CardTitle></CardHeader>
           <CardContent className="pt-6 space-y-3">
             {districts.length === 0 ? (
               <p className="text-center py-10 text-muted-foreground italic">No districts defined.</p>
@@ -138,7 +138,7 @@ export default function BranchesDistrictsPage() {
         </Card>
 
         <Card className="lg:col-span-8 shadow-xl overflow-hidden border-slate-200 rounded-3xl">
-          <CardHeader className="bg-slate-900 text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-primary" /> Branch Directory</CardTitle></CardHeader>
+          <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-white" /> Branch Directory</CardTitle></CardHeader>
           <CardContent className="pt-6">
             {branches.length === 0 ? (
               <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
@@ -168,9 +168,9 @@ export default function BranchesDistrictsPage() {
 
       <Dialog open={isBranchDialogOpen} onOpenChange={setIsBranchDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="p-8 bg-slate-900 text-white">
+          <DialogHeader className="p-8 bg-primary text-white">
             <DialogTitle className="text-2xl font-bold flex items-center gap-3">
-              <div className="p-2 bg-primary/20 rounded-xl"><Building2 className="w-6 h-6 text-primary" /></div>
+              <div className="p-2 bg-white/20 rounded-xl"><Building2 className="w-6 h-6 text-white" /></div>
               Branch Configuration
             </DialogTitle>
           </DialogHeader>
@@ -203,9 +203,9 @@ export default function BranchesDistrictsPage() {
 
       <Dialog open={isDistrictDialogOpen} onOpenChange={setIsDistrictDialogOpen}>
         <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="p-8 bg-slate-900 text-white">
+          <DialogHeader className="p-8 bg-primary text-white">
             <DialogTitle className="text-2xl font-bold flex items-center gap-3">
-              <div className="p-2 bg-primary/20 rounded-xl"><Globe className="w-6 h-6 text-primary" /></div>
+              <div className="p-2 bg-white/20 rounded-xl"><Globe className="w-6 h-6 text-white" /></div>
               Regional Entity
             </DialogTitle>
           </DialogHeader>
@@ -217,7 +217,7 @@ export default function BranchesDistrictsPage() {
           </div>
           <DialogFooter className="p-8 bg-slate-50 border-t">
             <Button variant="ghost" onClick={() => setIsDistrictDialogOpen(false)} disabled={isSaving} className="font-bold text-slate-500">Cancel</Button>
-            <Button onClick={handleSaveDistrict} disabled={isSaving} className="font-black bg-primary px-8 h-12 shadow-lg rounded-xl">
+            <Button onClick={handleSaveDistrict} disabled={isSaving} className="font-black bg-primary px-8 h-12 shadow-lg rounded-xl text-white">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Establish Region
             </Button>

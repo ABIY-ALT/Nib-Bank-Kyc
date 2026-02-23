@@ -32,7 +32,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { getFollowUpVerifications, seedFollowUpPool } from "@/actions/follow-up";
 import { getSubmissions } from "@/actions/submissions";
-import { SubmissionStatus } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 
 export default function FollowUpDashboard() {
   const { user } = useAuth();
@@ -65,7 +65,7 @@ export default function FollowUpDashboard() {
     setIsSampling(true);
     try {
       const approved = await getSubmissions({
-        status: [SubmissionStatus.APPROVED],
+        status: [KYCStatus.APPROVED],
         startDate: fromDate,
         endDate: toDate
       });
@@ -87,7 +87,7 @@ export default function FollowUpDashboard() {
         submissionId: s.id,
         customerName: s.customerName,
         branch: s.branchName,
-        officer: s.submittedBy?.name || 'Unknown',
+        officer: s.createdBy?.firstName ? `${s.createdBy.firstName} ${s.createdBy.lastName}` : 'Unknown',
         accountType: s.entityType || "individual",
         status: "PENDING",
         verifiedAt: new Date().toISOString()
@@ -144,8 +144,8 @@ export default function FollowUpDashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-slate-900 text-white rounded-lg shadow-lg">
-              <ShieldCheck className="w-6 h-6" />
+            <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
+              <ShieldCheck className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Follow-up Verification</h1>
           </div>
@@ -180,7 +180,7 @@ export default function FollowUpDashboard() {
                 <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-11 font-bold" />
               </div>
             </div>
-            <Button onClick={handleSampleCases} disabled={isSampling} className="bg-[#B89334] text-white font-black h-11 px-8 gap-3 shadow-xl min-w-[240px]">
+            <Button onClick={handleSampleCases} disabled={isSampling} className="bg-primary text-white font-black h-11 px-8 gap-3 shadow-xl min-w-[240px]">
               {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
               Seed Shared Audit Pool
             </Button>
@@ -190,7 +190,7 @@ export default function FollowUpDashboard() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-lg border-slate-200 overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-primary/5">
             <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-500">Compliance Index</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
           </CardHeader>
@@ -200,7 +200,7 @@ export default function FollowUpDashboard() {
           </CardContent>
         </Card>
         <Card className="shadow-lg border-slate-200">
-          <CardHeader className="pb-2 bg-slate-50/50">
+          <CardHeader className="pb-2 bg-primary/5">
             <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Checked</CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
@@ -208,7 +208,7 @@ export default function FollowUpDashboard() {
           </CardContent>
         </Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
-          <CardHeader className="pb-2 bg-slate-50/50">
+          <CardHeader className="pb-2 bg-primary/5">
             <CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Discrepancies</CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
@@ -216,7 +216,7 @@ export default function FollowUpDashboard() {
           </CardContent>
         </Card>
         <Card className="shadow-lg border-slate-200">
-          <CardHeader className="pb-2 bg-slate-50/50">
+          <CardHeader className="pb-2 bg-primary/5">
             <CardTitle className="text-[10px] font-black uppercase tracking-widest text-blue-600">Shared Queue</CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
@@ -227,12 +227,12 @@ export default function FollowUpDashboard() {
 
       <div className="grid gap-8 lg:grid-cols-7">
         <Card className="lg:col-span-4 shadow-xl border-slate-200 overflow-hidden min-h-[400px]">
-          <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
+          <CardHeader className="bg-primary text-white border-b flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-xl">Institutional Shared Pool</CardTitle>
-              <CardDescription>Sampled cases available for any Head Office specialist.</CardDescription>
+              <CardTitle className="text-xl text-white">Institutional Shared Pool</CardTitle>
+              <CardDescription className="text-white/70">Sampled cases available for any Head Office specialist.</CardDescription>
             </div>
-            <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-3">
+            <Badge variant="secondary" className="bg-white/20 border-white/20 text-white font-bold px-3">
               {pendingVerifications.length} Cases Available
             </Badge>
           </CardHeader>
@@ -240,7 +240,7 @@ export default function FollowUpDashboard() {
             {loading ? (
               <div className="flex flex-col items-center justify-center py-32 text-muted-foreground gap-4">
                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                <p className="font-bold">Syncing institutional pool...</p>
+                <p className="font-bold">Syncing pool...</p>
               </div>
             ) : pendingVerifications.length > 0 ? (
               <div className="divide-y">
@@ -255,7 +255,7 @@ export default function FollowUpDashboard() {
                         {v.submissionId} • {v.branch} • By: {v.officer}
                       </p>
                     </div>
-                    <Button asChild size="sm" className="font-bold shadow-sm rounded-lg bg-slate-900 group-hover:bg-primary transition-colors">
+                    <Button asChild size="sm" className="font-bold shadow-sm rounded-lg bg-primary hover:bg-primary/90 text-white transition-colors">
                       <Link href={`/head-office/follow-up/${v.id}`}>
                         Pick Case <ChevronRight className="w-3.5 h-3.5 ml-2" />
                       </Link>
@@ -274,9 +274,9 @@ export default function FollowUpDashboard() {
 
         <div className="lg:col-span-3 space-y-6">
           <Card className="shadow-xl border-slate-200 overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b">
-              <CardTitle className="text-xl flex items-center gap-2">
-                <History className="w-5 h-5 text-primary" />
+            <CardHeader className="bg-primary text-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2 text-white">
+                <History className="w-5 h-5 text-white" />
                 Audit History
               </CardTitle>
             </CardHeader>

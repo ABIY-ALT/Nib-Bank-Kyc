@@ -185,9 +185,9 @@ export default function StaffRolesPage() {
       </div>
 
       <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
-        <CardHeader className="bg-slate-900 text-white border-b">
+        <CardHeader className="bg-primary text-white border-b">
           <CardTitle>Personnel Designations</CardTitle>
-          <CardDescription className="text-slate-400">Manage regional and operational authority levels.</CardDescription>
+          <CardDescription className="text-white/70">Manage regional and operational authority levels.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -234,14 +234,14 @@ export default function StaffRolesPage() {
 
       <Dialog open={isInventoryOpen} onOpenChange={setIsInventoryOpen}>
         <DialogContent className="max-w-3xl rounded-3xl overflow-hidden p-0 border-none shadow-2xl">
-          <DialogHeader className="p-8 bg-slate-900 text-white border-b space-y-0">
+          <DialogHeader className="p-8 bg-primary text-white border-b space-y-0">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary/20 rounded-2xl">
-                <ShieldCheck className="w-6 h-6 text-primary" />
+              <div className="p-3 bg-white/20 rounded-2xl">
+                <ShieldCheck className="w-6 h-6 text-white" />
               </div>
               <div>
                 <DialogTitle className="text-2xl font-black">{selectedRole?.name.replace(/_/g, ' ')} Authority</DialogTitle>
-                <DialogDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">
+                <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">
                   Institutional Capability Inventory
                 </DialogDescription>
               </div>
@@ -282,16 +282,16 @@ export default function StaffRolesPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-[#fcfaf7]">
-            <DialogHeader className="p-8 bg-slate-900 text-white border-b space-y-0">
+            <DialogHeader className="p-8 bg-primary text-white border-b space-y-0">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-primary/10 rounded-2xl">
-                  <ShieldCheck className="w-6 h-6 text-primary" />
+                <div className="p-3 bg-white/20 rounded-2xl">
+                  <ShieldCheck className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <DialogTitle className="text-2xl font-black tracking-tight">
+                  <DialogTitle className="text-2xl font-black tracking-tight text-white">
                     {selectedRole ? 'Update Role Rights' : 'Define New Role'}
                   </DialogTitle>
-                  <DialogDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">
+                  <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">
                     Institutional Capability Assignment Workspace
                   </DialogDescription>
                 </div>

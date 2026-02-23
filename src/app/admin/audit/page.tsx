@@ -79,7 +79,7 @@ export default function GlobalAuditLogPage() {
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-slate-900 text-white rounded-lg shadow-lg"><ShieldCheck className="w-6 h-6" /></div>
+          <div className="p-2 bg-primary text-white rounded-lg shadow-lg"><ShieldCheck className="w-6 h-6" /></div>
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Security Audit Log</h1>
             <p className="text-muted-foreground text-lg">Master institutional security record.</p>
@@ -87,7 +87,7 @@ export default function GlobalAuditLogPage() {
         </div>
         <div className="flex gap-2">
           <div className="relative w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Search trail..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 h-11" /></div>
-          <Button onClick={handleExportCSV} className="gap-2 shadow-lg font-bold h-11 px-6 bg-primary">
+          <Button onClick={handleExportCSV} className="gap-2 shadow-lg font-bold h-11 px-6 bg-primary text-white">
             <FileDown className="w-4 h-4" /> Export Trail
           </Button>
         </div>
@@ -95,13 +95,13 @@ export default function GlobalAuditLogPage() {
 
       <div className="border rounded-xl bg-card shadow-xl overflow-hidden border-slate-200">
         <Table>
-          <TableHeader className="bg-slate-50/50">
+          <TableHeader className="bg-primary text-white">
             <TableRow>
-              <TableHead className="font-bold py-4 pl-6">Performed By</TableHead>
-              <TableHead className="font-bold">Action Taken</TableHead>
-              <TableHead className="font-bold">Details</TableHead>
-              <TableHead className="font-bold">Network Origin</TableHead>
-              <TableHead className="font-bold pr-6">Timestamp</TableHead>
+              <TableHead className="font-bold py-4 pl-6 text-white">Performed By</TableHead>
+              <TableHead className="font-bold text-white">Action Taken</TableHead>
+              <TableHead className="font-bold text-white">Details</TableHead>
+              <TableHead className="font-bold text-white">Network Origin</TableHead>
+              <TableHead className="font-bold pr-6 text-white text-right">Timestamp</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

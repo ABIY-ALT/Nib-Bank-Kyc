@@ -215,8 +215,8 @@ export default function NewSubmission() {
 
       <form onSubmit={handleSubmit} className="space-y-6 pb-12">
         <Card className="border-slate-200 shadow-sm overflow-hidden">
-          <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-600" /> Entity Profile</CardTitle>
+          <CardHeader className="bg-primary text-white border-b">
+            <CardTitle className="text-xl flex items-center gap-2 text-white"><CheckCircle2 className="w-5 h-5 text-white" /> Entity Profile</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-6 md:grid-cols-2 pt-6">
             <div className="space-y-2">
@@ -241,9 +241,9 @@ export default function NewSubmission() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm">
-          <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2"><FilePlus className="w-5 h-5 text-primary" /> Documentation Bundle</CardTitle>
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="bg-primary text-white border-b">
+            <CardTitle className="text-xl flex items-center gap-2 text-white"><FilePlus className="w-5 h-5 text-white" /> Documentation Bundle</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
              <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.jpg,.jpeg,.png" />
@@ -294,14 +294,14 @@ export default function NewSubmission() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm">
-          <CardHeader><CardTitle className="text-xl">Initial Remarks</CardTitle></CardHeader>
-          <CardContent>
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl text-white">Initial Remarks</CardTitle></CardHeader>
+          <CardContent className="pt-6">
              <Textarea placeholder="Provide internal context for the KYC Officer (optional)..." className="min-h-[140px]" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           </CardContent>
           <CardFooter className="flex justify-end gap-4 border-t pt-8">
             <Button variant="outline" type="button" onClick={() => router.back()} className="px-8 h-11 font-bold" disabled={isSubmitting}>Cancel</Button>
-            <Button type="submit" className="px-12 h-11 bg-primary font-bold shadow-lg" disabled={isSubmitting}>
+            <Button type="submit" className="px-12 h-11 bg-primary font-bold shadow-lg text-white" disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Dispatch for Review
             </Button>

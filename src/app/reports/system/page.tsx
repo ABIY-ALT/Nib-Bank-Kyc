@@ -1,5 +1,4 @@
-
-"use client"
+'use client';
 
 import { useState } from "react";
 import { 
@@ -114,7 +113,7 @@ export default function SystemWideReportsPage() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
-              <Globe className="w-6 h-6" />
+              <Globe className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">System-wide Compliance</h1>
           </div>
@@ -124,7 +123,7 @@ export default function SystemWideReportsPage() {
           <Button variant="outline" className="gap-2 font-bold h-10 px-6 border-slate-200 bg-white" onClick={resetFilters}>
             <History className="w-4 h-4" /> Reset
           </Button>
-          <Button className="gap-2 bg-primary shadow-xl font-bold h-10 px-6" onClick={handleGenerateReport}>
+          <Button className="gap-2 bg-primary shadow-xl font-bold h-10 px-6 text-white" onClick={handleGenerateReport}>
             <ShieldCheck className="w-4 h-4" />
             Compile Master Audit
           </Button>
@@ -174,7 +173,7 @@ export default function SystemWideReportsPage() {
               <p className="font-extrabold text-slate-900 text-2xl">Network Audit Offline</p>
               <p className="text-slate-500 leading-relaxed font-medium">Run the institutional audit to aggregate data across all network nodes.</p>
             </div>
-            <Button size="lg" className="px-12 h-14 font-extrabold text-lg shadow-2xl shadow-primary/20" onClick={handleGenerateReport}>
+            <Button size="lg" className="px-12 h-14 font-extrabold text-lg shadow-2xl shadow-primary/20 text-white" onClick={handleGenerateReport}>
               Execute Global Aggregation
             </Button>
           </CardContent>
@@ -182,47 +181,46 @@ export default function SystemWideReportsPage() {
       ) : (
         <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-             <Card className="bg-slate-900 text-white shadow-2xl">
-               <CardHeader className="pb-2">
-                 <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-400">Total Volume</CardTitle>
+             <Card className="bg-primary text-white shadow-2xl overflow-hidden">
+               <CardHeader className="pb-2 bg-white/10">
+                 <CardTitle className="text-xs font-bold uppercase tracking-widest text-white/80">Total Volume</CardTitle>
                </CardHeader>
-               <CardContent>
-                 <span className="text-5xl font-black">{reportData.total}</span>
+               <CardContent className="pt-4">
+                 <span className="text-5xl font-black text-white">{reportData.total}</span>
                </CardContent>
              </Card>
-             <Card className="shadow-lg border-slate-200">
-               <CardHeader className="pb-2">
+             <Card className="shadow-lg border-slate-200 overflow-hidden">
+               <CardHeader className="pb-2 bg-emerald-50">
                  <CardTitle className="text-xs font-bold uppercase tracking-widest text-emerald-600">Approvals</CardTitle>
                </CardHeader>
-               <CardContent>
+               <CardContent className="pt-4">
                  <span className="text-5xl font-black text-emerald-600">{reportData.approved}</span>
                </CardContent>
              </Card>
-             <Card className="shadow-lg border-slate-200">
-               <CardHeader className="pb-2">
+             <Card className="shadow-lg border-slate-200 overflow-hidden">
+               <CardHeader className="pb-2 bg-orange-50">
                  <CardTitle className="text-xs font-bold uppercase tracking-widest text-orange-600">Pending</CardTitle>
                </CardHeader>
-               <CardContent>
+               <CardContent className="pt-4">
                  <span className="text-5xl font-black text-orange-600">{reportData.pending}</span>
                </CardContent>
              </Card>
-             <Card className="shadow-lg border-slate-200">
-               <CardHeader className="pb-2">
+             <Card className="shadow-lg border-slate-200 overflow-hidden">
+               <CardHeader className="pb-2 bg-purple-50">
                  <CardTitle className="text-xs font-bold uppercase tracking-widest text-purple-600">Accuracy</CardTitle>
                </CardHeader>
-               <CardContent>
+               <CardContent className="pt-4">
                  <span className="text-5xl font-black text-purple-600">{reportData.accuracy}</span>
                </CardContent>
-             </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <Card className="shadow-xl border-slate-200 overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b p-6 flex flex-row items-center justify-between">
-                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-primary" /> Branch Network
+              <CardHeader className="bg-primary text-white border-b p-6 flex flex-row items-center justify-between">
+                <CardTitle className="text-xl font-bold flex items-center gap-2 text-white">
+                  <Building2 className="w-5 h-5 text-white" /> Branch Network
                 </CardTitle>
-                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-primary font-bold">
+                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-white font-bold hover:bg-white/10">
                   <FileDown className="w-4 h-4 mr-2" /> CSV
                 </Button>
               </CardHeader>
@@ -249,11 +247,11 @@ export default function SystemWideReportsPage() {
             </Card>
 
             <Card className="shadow-xl border-slate-200 overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b p-6 flex flex-row items-center justify-between">
-                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                  <Users className="w-5 h-5 text-primary" /> Officer Throughput
+              <CardHeader className="bg-primary text-white border-b p-6 flex flex-row items-center justify-between">
+                <CardTitle className="text-xl font-bold flex items-center gap-2 text-white">
+                  <Users className="w-5 h-5 text-white" /> Officer Throughput
                 </CardTitle>
-                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-primary font-bold">
+                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-white font-bold hover:bg-white/10">
                   <FileDown className="w-4 h-4 mr-2" /> CSV
                 </Button>
               </CardHeader>
@@ -283,7 +281,7 @@ export default function SystemWideReportsPage() {
           </div>
 
           <div className="flex justify-center pt-8">
-            <Button size="lg" className="px-16 h-16 font-bold text-xl gap-3 shadow-2xl" onClick={handleExportPDF}>
+            <Button size="lg" className="px-16 h-16 font-bold text-xl gap-3 shadow-2xl text-white" onClick={handleExportPDF}>
               <Download className="w-6 h-6" /> Export Master PDF Bundle
             </Button>
           </div>
