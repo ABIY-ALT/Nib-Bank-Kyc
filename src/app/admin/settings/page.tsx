@@ -32,6 +32,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { getGlobalSettings, updateGlobalSettings } from '@/actions/settings';
+import { cn } from '@/lib/utils';
 
 export default function SystemSettingsPage() {
   const { toast } = useToast();
@@ -95,6 +96,23 @@ export default function SystemSettingsPage() {
   const handleRemoveEntityType = (id: string) => {
     const updated = localSettings.entityTypes.filter((t: any) => t.id !== id);
     setLocalSettings({ ...localSettings, entityTypes: updated });
+  };
+
+  const handleAddGuideline = () => {
+    if (!newGuideline.title.trim() || !newGuideline.description.trim()) {
+      toast({ variant: "destructive", title: "Information Required", description: "Title and description are mandatory for guidelines." });
+      return;
+    }
+    const id = Math.random().toString(36).substr(2, 9);
+    const updated = [...(localSettings.guidelines || []), { ...newGuideline, id }];
+    setLocalSettings({ ...localSettings, guidelines: updated });
+    setNewGuideline({ title: "", description: "", type: 'info' });
+    toast({ title: "Guideline Staged", description: "Click 'Save Institutional Settings' to publish." });
+  };
+
+  const handleRemoveGuideline = (id: string) => {
+    const updated = localSettings.guidelines.filter((g: any) => g.id !== id);
+    setLocalSettings({ ...localSettings, guidelines: updated });
   };
 
   if (loading) return <div className="py-24 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
@@ -191,6 +209,82 @@ export default function SystemSettingsPage() {
                   ))
                 ) : (
                   <p className="text-center py-6 text-muted-foreground italic border-2 border-dashed rounded-lg">No document types defined.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-slate-200">
+            <CardHeader className="bg-slate-50/50 border-b">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-primary" /> Institutional Guidelines
+              </CardTitle>
+              <CardDescription>Publish critical policy updates to the user dashboard.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <div className="space-y-4 p-4 rounded-xl border bg-slate-50/30">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Title</Label>
+                    <Input 
+                      placeholder="Guideline Title..." 
+                      value={newGuideline.title} 
+                      onChange={(e) => setNewGuideline({ ...newGuideline, title: e.target.value })} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Notice Type</Label>
+                    <Select 
+                      value={newGuideline.type} 
+                      onValueChange={(val) => setNewGuideline({ ...newGuideline, type: val })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="info">Information (Blue)</SelectItem>
+                        <SelectItem value="alert">Alert (Orange)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Description</Label>
+                  <Textarea 
+                    placeholder="Provide detailed policy context..." 
+                    className="min-h-[80px]"
+                    value={newGuideline.description}
+                    onChange={(e) => setNewGuideline({ ...newGuideline, description: e.target.value })}
+                  />
+                </div>
+                <Button onClick={handleAddGuideline} className="w-full gap-2 font-bold shadow-sm">
+                  <Plus className="w-4 h-4" /> Publish Guideline
+                </Button>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                {localSettings.guidelines?.length > 0 ? (
+                  localSettings.guidelines.map((guide: any) => (
+                    <div key={guide.id} className="flex items-start justify-between p-4 border rounded-xl bg-white group hover:border-primary/30 transition-all">
+                      <div className="flex gap-3">
+                        <div className={cn(
+                          "p-2 rounded-lg h-fit",
+                          guide.type === 'alert' ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-600"
+                        )}>
+                          {guide.type === 'alert' ? <AlertTriangle className="w-4 h-4" /> : <Info className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{guide.title}</p>
+                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">{guide.description}</p>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => handleRemoveGuideline(guide.id)} className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center py-10 text-muted-foreground italic border-2 border-dashed rounded-xl">No active guidelines published.</p>
                 )}
               </div>
             </CardContent>
