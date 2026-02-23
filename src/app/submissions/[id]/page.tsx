@@ -480,7 +480,7 @@ export default function SubmissionDetails() {
             </Card>
           )}
 
-          {/* SPECIALIST DETERMINATION WORKSPACE (Approve/Request Fix) */}
+          {/* SPECIALIST DETERMINATION WORKSPACE (Approve/Request Fix - REJECT REMOVED) */}
           {!isTerminal && !isActionRequired && isReviewer && (
             <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-500">
               <CardHeader className="bg-slate-900 text-white border-b py-5">
@@ -536,15 +536,8 @@ export default function SubmissionDetails() {
                   >
                     Request Fix
                   </Button>
-                  <Button 
-                    onClick={() => handleAction(KYCStatus.REJECTED)} 
-                    variant="destructive" 
-                    className="font-black h-12 rounded-xl col-span-2 shadow-xl shadow-red-100" 
-                    disabled={!!isActioning}
-                  >
-                    Final Rejection
-                  </Button>
                 </div>
+                <p className="text-[10px] text-center text-slate-400 font-bold uppercase mt-2">Final rejection is restricted per institutional policy.</p>
               </CardContent>
             </Card>
           )}
