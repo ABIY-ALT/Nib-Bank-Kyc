@@ -34,7 +34,8 @@ import {
   Plus,
   BookOpen,
   Download,
-  RefreshCw
+  RefreshCw,
+  ShieldAlert
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -115,10 +116,20 @@ export default function SubmissionDetails() {
   const handleAction = async (action: KYCStatus) => {
     if (!submission || !user || isTerminal || isActioning) return;
 
+    if (action === KYCStatus.ACTION_REQUIRED && !remarks.trim()) {
+      toast({ variant: "destructive", title: "Information Required", description: "Amendment requests require detailed remarks." });
+      return;
+    }
+
+    if (action === KYCStatus.ESCALATED && !remarks.trim()) {
+      toast({ variant: "destructive", title: "Justification Required", description: "Please explain the reason for escalation." });
+      return;
+    }
+
     setIsActioning(action);
     try {
       await updateSubmissionStatus(submission.id, action, user.id, remarks);
-      toast({ title: "Workflow Updated", description: `Case moved to ${action}.` });
+      toast({ title: "Workflow Updated", description: `Case moved to ${action.replace(/_/g, ' ')}.` });
       
       const updated = await getSubmissionById(submission.id);
       setSubmission(updated);
@@ -231,11 +242,13 @@ export default function SubmissionDetails() {
       { 
         id: 'determination', 
         label: 'Determination', 
-        description: status === KYCStatus.ACTION_REQUIRED ? 'Action Required' : 'Institutional Verdict',
+        description: status === KYCStatus.ACTION_REQUIRED ? 'Action Required' : status === KYCStatus.ESCALATED ? 'Senior Assessment' : 'Institutional Verdict',
         state: status === KYCStatus.ACTION_REQUIRED ? 'alert' : 
                status === KYCStatus.IN_REVIEW ? 'active' : 
+               status === KYCStatus.ESCALATED ? 'active' :
                (status === KYCStatus.APPROVED || status === KYCStatus.REJECTED) ? 'completed' : 'pending',
         icon: status === KYCStatus.ACTION_REQUIRED ? AlertCircle : 
+              status === KYCStatus.ESCALATED ? ShieldAlert :
               status === KYCStatus.REJECTED ? XCircle : ShieldCheck
       },
       { 
@@ -265,7 +278,8 @@ export default function SubmissionDetails() {
                   submission.status === KYCStatus.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-200',
                   submission.status === KYCStatus.ACTION_REQUIRED && 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse', 
                   submission.status === KYCStatus.REJECTED && 'bg-red-50 text-red-700 border-red-200',
-                  submission.status === KYCStatus.SUBMITTED && 'bg-primary/5 text-primary border-primary/20'
+                  submission.status === KYCStatus.SUBMITTED && 'bg-primary/5 text-primary border-primary/20',
+                  submission.status === KYCStatus.ESCALATED && 'bg-purple-50 text-purple-700 border-purple-200'
                 )}>
                   {submission.status.replace(/_/g, ' ')}
                 </Badge>
@@ -547,7 +561,7 @@ export default function SubmissionDetails() {
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <Button 
                     onClick={() => handleAction(KYCStatus.APPROVED)} 
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl shadow-lg shadow-emerald-100" 
@@ -561,10 +575,17 @@ export default function SubmissionDetails() {
                     className="text-orange-600 border-orange-200 font-black h-12 rounded-xl hover:bg-orange-50" 
                     disabled={!!isActioning}
                   >
-                    Request Fix
+                    Amend
+                  </Button>
+                  <Button 
+                    onClick={() => handleAction(KYCStatus.ESCALATED)} 
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-black h-12 rounded-xl shadow-lg shadow-purple-100" 
+                    disabled={!!isActioning}
+                  >
+                    Escalate
                   </Button>
                 </div>
-                <p className="text-[10px] text-center text-slate-400 font-bold uppercase mt-2">Final rejection is restricted per institutional policy.</p>
+                <p className="text-[10px] text-center text-slate-400 font-bold uppercase mt-2">Determinations are logged in the Institutional Vault.</p>
               </CardContent>
             </Card>
           )}
