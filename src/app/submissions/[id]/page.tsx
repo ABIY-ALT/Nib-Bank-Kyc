@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -72,6 +73,7 @@ export default function SubmissionDetails() {
   const [loading, setLoading] = useState(true);
   
   const [remarks, setRemarks] = useState("");
+  const [isCustomRemark, setIsCustomRemark] = useState(true);
   const [previewFile, setPreviewFile] = useState<any>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isActioning, setIsActioning] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export default function SubmissionDetails() {
       const updated = await getSubmissionById(submission.id);
       setSubmission(updated);
       setRemarks("");
+      setIsCustomRemark(true);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Action Failed", description: error.message });
     } finally {
@@ -153,6 +156,7 @@ export default function SubmissionDetails() {
         const updated = await getSubmissionById(submission.id);
         setSubmission(updated);
         setRemarks("");
+        setIsCustomRemark(true);
         setResubmitFiles([]);
       } else {
         throw new Error(res.error);
@@ -492,9 +496,11 @@ export default function SubmissionDetails() {
                     <BookOpen className="w-3 h-3" /> Standard Findings / Scenarios
                   </Label>
                   <Select onValueChange={(val) => {
-                    if (val === "other") {
+                    if (val.toLowerCase().includes("other")) {
+                      setIsCustomRemark(true);
                       setRemarks("");
                     } else {
+                      setIsCustomRemark(false);
                       setRemarks(val);
                     }
                   }}>
@@ -503,7 +509,7 @@ export default function SubmissionDetails() {
                     </SelectTrigger>
                     <SelectContent>
                       {AMENDMENT_SCENARIOS.map((scenario, idx) => (
-                        <SelectItem key={idx} value={scenario.toLowerCase().includes("other") ? "other" : scenario}>
+                        <SelectItem key={idx} value={scenario}>
                           {scenario}
                         </SelectItem>
                       ))}
@@ -517,7 +523,11 @@ export default function SubmissionDetails() {
                     placeholder="Provide detailed instructions or verification notes..." 
                     value={remarks} 
                     onChange={(e) => setRemarks(e.target.value)} 
-                    className="min-h-[140px] bg-slate-50/50 border-slate-200 focus-visible:ring-primary/20 rounded-2xl font-medium" 
+                    readOnly={!isCustomRemark}
+                    className={cn(
+                      "min-h-[140px] border-slate-200 focus-visible:ring-primary/20 rounded-2xl font-medium",
+                      !isCustomRemark ? "bg-slate-100 cursor-not-allowed text-slate-600" : "bg-slate-50/50"
+                    )}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
