@@ -93,21 +93,23 @@ export async function provisionUser(data: {
         }
       });
 
-      // 3. Handle Branch Transfer Logging
+      // 3. Handle Branch Transfer Logging (For Managers and Officers)
       if (existingUser && existingUser.branchId !== data.branchId) {
         const oldBranchName = existingUser.branch?.name || 'Institutional';
         const newBranch = data.branchId ? await tx.branch.findUnique({ where: { id: data.branchId } }) : null;
         const newBranchName = newBranch?.name || 'Institutional';
+        const roleLabel = data.role.replace(/_/g, ' ');
 
         await tx.auditLog.create({
           data: {
             userId: data.authorizingAdminId || 'SYSTEM',
             action: 'BRANCH_TRANSFER',
-            details: `Staff member ${user.firstName} ${user.lastName} moved from ${oldBranchName} to ${newBranchName}.`,
+            details: `${roleLabel} ${user.firstName} ${user.lastName} moved from ${oldBranchName} to ${newBranchName}. Jurisdictional handover complete.`,
             metadata: {
               targetUserId: user.id,
               previousBranch: oldBranchName,
-              newBranch: newBranchName
+              newBranch: newBranchName,
+              role: data.role
             }
           }
         });

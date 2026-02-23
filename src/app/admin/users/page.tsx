@@ -367,7 +367,7 @@ export default function UserManagementPage() {
               <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 flex gap-3 animate-in zoom-in-95">
                 <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-[10px] text-amber-800 font-bold leading-relaxed uppercase">
-                  <strong>Branch Transfer:</strong> Moving this officer will re-route their new submissions. Historical records remain under their previous node for audit integrity.
+                  <strong>Branch Transfer:</strong> Moving this staff member will re-route future jurisdictional tasks. Historical records remain under their previous node for audit integrity.
                 </p>
               </div>
             )}
