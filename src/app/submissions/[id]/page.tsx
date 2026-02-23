@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -32,7 +33,8 @@ import {
   Upload,
   X,
   Plus,
-  BookOpen
+  BookOpen,
+  Download
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -338,8 +340,13 @@ export default function SubmissionDetails() {
                           <p className="text-[10px] text-muted-foreground uppercase tracking-[0.1em] font-black">{doc.type}</p>
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1">
                          <Button variant="ghost" size="icon" onClick={() => setPreviewFile({ name: doc.name, url: doc.url })} className="rounded-full h-10 w-10 hover:bg-primary/5 text-primary"><Eye className="w-5 h-5" /></Button>
+                         <Button variant="ghost" size="icon" asChild className="rounded-full h-10 w-10 hover:bg-primary/5 text-primary">
+                           <a href={doc.url} download={doc.name}>
+                             <Download className="w-5 h-5" />
+                           </a>
+                         </Button>
                       </div>
                     </div>
                 ))}
@@ -459,9 +466,16 @@ export default function SubmissionDetails() {
                               <option value="other">Other</option>
                             </select>
                           </div>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-red-500" onClick={() => removeResubmitFile(item.id)}>
-                            <X className="w-3 h-3" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-slate-400 hover:text-primary">
+                              <a href={URL.createObjectURL(item.file)} download={item.file.name}>
+                                <Download className="w-3.5 h-3.5" />
+                              </a>
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500" onClick={() => removeResubmitFile(item.id)}>
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -551,15 +565,29 @@ export default function SubmissionDetails() {
       </div>
 
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none bg-[#1a1a1a] rounded-3xl">
-          <DialogHeader className="p-4 bg-[#242424] text-white flex flex-row items-center justify-between border-b border-white/5 pr-14">
+        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none bg-[#1a1a1a] rounded-3xl shadow-2xl">
+          <DialogHeader className="p-4 bg-primary text-white flex flex-row items-center justify-between space-y-0 border-b border-white/10 pr-14">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/20 rounded-lg"><FileText className="w-5 h-5 text-primary" /></div>
-              <DialogTitle className="text-base font-bold">{previewFile?.name}</DialogTitle>
+              <div className="p-2 bg-white/20 rounded-xl">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex flex-col">
+                <DialogTitle className="text-base font-bold text-white">
+                  {previewFile?.name}
+                </DialogTitle>
+                <DialogDescription className="text-white/70 text-[10px] uppercase font-black tracking-widest mt-0.5">
+                  Institutional Document Inspection
+                </DialogDescription>
+              </div>
             </div>
+            <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20 h-9 font-bold px-4">
+              <a href={previewFile?.url} download={previewFile?.name}>
+                <Download className="w-4 h-4 mr-2" /> Download Document
+              </a>
+            </Button>
           </DialogHeader>
           <div className="flex-1 bg-[#121212] overflow-hidden flex items-center justify-center text-white">
-            <p className="font-bold text-slate-500 uppercase tracking-widest text-xs">Preview functionality limited. Use "Download Archive" for full access.</p>
+            <p className="font-bold text-slate-500 uppercase tracking-widest text-xs">Visualization optimized for secure inspection.</p>
           </div>
         </DialogContent>
       </Dialog>
