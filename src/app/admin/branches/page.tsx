@@ -110,7 +110,7 @@ export default function BranchesDistrictsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Hierarchy</h1>
-          <p className="text-muted-foreground text-lg">Manage regions and nodes in PostgreSQL.</p>
+          <p className="text-muted-foreground text-lg">Manage regional nodes and districts.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setIsDistrictDialogOpen(true)} className="gap-2 h-11 px-6 border-primary/20 text-primary font-bold">

@@ -146,7 +146,7 @@ export default function UserManagementPage() {
     }
 
     // Enforce branch removal for non-branch roles during save
-    const isBranchRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFF_ICER' || formData.role === 'BRANCH_OFFICER';
+    const isBranchRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
     const finalFormData = {
       ...formData,
       branchId: isBranchRole ? formData.branchId : null
@@ -156,7 +156,7 @@ export default function UserManagementPage() {
     try {
       const id = editingUser?.firebaseUid || `user-${Math.random().toString(36).substr(2, 9)}`;
       await provisionUser({ ...finalFormData, id });
-      toast({ title: "Profile Synchronized", description: "Institutional staff record updated in SQL." });
+      toast({ title: "Profile Synchronized", description: "Staff record updated." });
       setIsDialogOpen(false);
       loadData();
     } catch (error: any) {

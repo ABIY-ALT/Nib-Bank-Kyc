@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -184,7 +183,7 @@ export default function NewSubmission() {
       const result = await createSubmission(formData);
       
       if (result.success) {
-        toast({ title: "Submission Created", description: `Case ${submissionId} dispatched to SQL storage.` });
+        toast({ title: "Submission Created", description: `Case ${submissionId} dispatched for review.` });
         router.push('/submissions/my');
       } else {
         throw new Error(result.error);

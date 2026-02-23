@@ -82,7 +82,7 @@ export default function GlobalAuditLogPage() {
           <div className="p-2 bg-slate-900 text-white rounded-lg shadow-lg"><ShieldCheck className="w-6 h-6" /></div>
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Security Audit Log</h1>
-            <p className="text-muted-foreground text-lg">Master institutional SQL security record.</p>
+            <p className="text-muted-foreground text-lg">Master institutional security record.</p>
           </div>
         </div>
         <div className="flex gap-2">

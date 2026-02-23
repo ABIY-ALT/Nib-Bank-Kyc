@@ -69,8 +69,8 @@ export default function StaffRolesPage() {
     try {
       const res = await seedInstitutionalPermissions();
       if (res.success) {
-        toast({ title: "Framework Initialized", description: "Institutional capabilities established in SQL." });
-        await loadData(); // Force reload to hide the initialize button
+        toast({ title: "Framework Initialized", description: "Institutional capabilities established." });
+        await loadData();
       }
     } catch (e) {
       toast({ variant: "destructive", title: "Initialization Error" });
@@ -120,7 +120,7 @@ export default function StaffRolesPage() {
       } else {
         toast({ 
           variant: "destructive", 
-          title: "Database Error", 
+          title: "Error", 
           description: res.error 
         });
       }
@@ -232,7 +232,6 @@ export default function StaffRolesPage() {
         </CardContent>
       </Card>
 
-      {/* Authority Inventory (READ ONLY) */}
       <Dialog open={isInventoryOpen} onOpenChange={setIsInventoryOpen}>
         <DialogContent className="max-w-3xl rounded-3xl overflow-hidden p-0 border-none shadow-2xl">
           <DialogHeader className="p-8 bg-slate-900 text-white border-b space-y-0">
@@ -280,7 +279,6 @@ export default function StaffRolesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Authority Management (EDIT) - CLEAN HEADERS TO REMOVE DUAL X ICONS */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-[#fcfaf7]">

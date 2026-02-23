@@ -213,7 +213,7 @@ export default function KYCFFQReferencePage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC F&amp;Q Reference</h1>
           </div>
-          <p className="text-muted-foreground text-lg">Institutional SQL knowledge base for compliance queries.</p>
+          <p className="text-muted-foreground text-lg">Institutional knowledge base for compliance queries.</p>
         </div>
         <div className="flex gap-2">
           {canManageFindings && (
@@ -276,7 +276,7 @@ export default function KYCFFQReferencePage() {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-32 gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="font-bold text-muted-foreground">Syncing SQL registry...</p>
+              <p className="font-bold text-muted-foreground">Syncing registry...</p>
             </div>
           ) : filteredFindings.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl text-center">
@@ -284,7 +284,7 @@ export default function KYCFFQReferencePage() {
               <p className="font-bold text-slate-900 text-xl">No Findings Found</p>
               {canManageFindings && findings.length === 0 && (
                 <Button variant="outline" onClick={handleSeedLibrary} className="mt-4 gap-2">
-                  <Plus className="w-4 h-4" /> Seed SQL Library
+                  <Plus className="w-4 h-4" /> Seed Finding Library
                 </Button>
               )}
             </div>
@@ -315,7 +315,7 @@ export default function KYCFFQReferencePage() {
                       </div>
                     </CardContent>
                     <CardFooter className="bg-slate-50/30 border-t p-4 flex justify-between items-center">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase">SQL Archive</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Institutional Archive</span>
                       <div className="flex gap-2">
                         {canManageFindings && (
                           <Button variant="ghost" size="icon" onClick={() => handleDelete(finding.id)} className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
@@ -395,7 +395,7 @@ export default function KYCFFQReferencePage() {
 
           <DialogFooter className="pt-6 border-t mt-4">
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveFinding} className="bg-primary font-black shadow-lg">Commit to SQL</Button>
+            <Button onClick={handleSaveFinding} className="bg-primary font-black shadow-lg">Register Finding</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

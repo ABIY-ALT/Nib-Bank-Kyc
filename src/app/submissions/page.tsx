@@ -76,7 +76,7 @@ export default function SubmissionsPage() {
       setSubmissions(data);
     } catch (error) {
       console.error("Archive load failed:", error);
-      toast({ variant: "destructive", title: "Archive Error", description: "Could not retrieve SQL records." });
+      toast({ variant: "destructive", title: "Archive Error", description: "Could not retrieve archive records." });
     } finally {
       setLoading(false);
     }
@@ -179,7 +179,7 @@ export default function SubmissionsPage() {
           </div>
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Master Case Archive</h1>
-            <p className="text-muted-foreground text-lg font-medium">Historical directory of all network submissions in PostgreSQL.</p>
+            <p className="text-muted-foreground text-lg font-medium">Historical directory of all network submissions.</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -313,7 +313,7 @@ export default function SubmissionsPage() {
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
                   <Loader2 className="animate-spin inline-block w-6 h-6 text-primary mb-2" />
-                  <p className="font-bold">Syncing SQL archive...</p>
+                  <p className="font-bold">Syncing archive...</p>
                 </TableCell>
               </TableRow>
             ) : filteredSubmissions.length === 0 ? (

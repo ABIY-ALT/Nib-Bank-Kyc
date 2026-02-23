@@ -85,7 +85,7 @@ export default function MasterBundleDownloadPage() {
       setBranches(b);
       setDistricts(d);
     } catch (e) {
-      toast({ variant: "destructive", title: "Sync Error", description: "Could not retrieve SQL data." });
+      toast({ variant: "destructive", title: "Sync Error", description: "Could not retrieve records." });
     } finally {
       setLoading(false);
     }
@@ -165,7 +165,7 @@ export default function MasterBundleDownloadPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Master Case Bundle</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Global institutional export for compliance archiving from PostgreSQL.</p>
+          <p className="text-muted-foreground text-lg font-medium">Global institutional export for compliance archiving.</p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-4 py-1.5 font-bold h-10 flex items-center gap-2">
@@ -272,7 +272,7 @@ export default function MasterBundleDownloadPage() {
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-40 gap-4">
                   <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                  <p className="font-black uppercase tracking-widest text-xs">Querying SQL database...</p>
+                  <p className="font-black uppercase tracking-widest text-xs">Querying database...</p>
                 </div>
               ) : filteredSubmissions.length > 0 ? (
                 <div className="divide-y">

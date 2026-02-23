@@ -69,7 +69,7 @@ export default function SystemSettingsPage() {
       ...localSettings,
       updatedBy: currentUser?.name
     });
-    toast({ title: "Configuration Saved", description: "System policies updated in SQL." });
+    toast({ title: "Configuration Saved", description: "Institutional policies updated." });
   };
 
   const handleAddDocType = () => {
@@ -124,7 +124,7 @@ export default function SystemSettingsPage() {
           <Settings className="w-8 h-8 text-primary" />
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">System Configuration</h1>
         </div>
-        <p className="text-muted-foreground font-medium">Global SQL governance and institutional policy management.</p>
+        <p className="text-muted-foreground font-medium">Global governance and institutional policy management.</p>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">

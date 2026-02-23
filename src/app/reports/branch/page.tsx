@@ -1,5 +1,4 @@
-
-"use client"
+'use client';
 
 import { useState, useEffect, useMemo } from "react";
 import { 
@@ -45,7 +44,7 @@ import { getDistricts, getBranches } from "@/actions/hierarchy";
 import { subDays, format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SubmissionStatus } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 
 export default function BranchReportsPage() {
   const { user } = useAuth();
@@ -63,7 +62,7 @@ export default function BranchReportsPage() {
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  const isDistDir = user?.role === 'DISTRICT_DIRECTOR';
+  const isDistDir = user?.roles?.[0]?.role?.name === 'DISTRICT_DIRECTOR';
   const activeDistrict = isDistDir ? user.districtName : (selectedDistrict === 'all' ? undefined : selectedDistrict);
 
   useEffect(() => {
@@ -95,7 +94,7 @@ export default function BranchReportsPage() {
     setLoading(true);
     try {
       const data = await getSubmissions({
-        district: activeDistrict,
+        district: activeDistrict || undefined,
         branch: selectedBranch === 'all' ? undefined : selectedBranch,
         startDate: fromDate,
         endDate: toDate
@@ -103,7 +102,7 @@ export default function BranchReportsPage() {
       setReportData(data);
       toast({
         title: "Report Generated",
-        description: `Retrieved ${data.length} records from the SQL archive.`,
+        description: `Retrieved ${data.length} records from the archive.`,
       });
     } catch (e) {
       toast({ variant: "destructive", title: "Query Failed" });
@@ -167,7 +166,7 @@ export default function BranchReportsPage() {
           <CardTitle className="text-xl flex items-center gap-2">
             <Search className="w-5 h-5 text-primary" /> Audit Parameters
           </CardTitle>
-          <CardDescription>Configure the scope for regulatory data aggregation from PostgreSQL.</CardDescription>
+          <CardDescription>Configure the scope for regulatory data aggregation.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

@@ -64,7 +64,7 @@ export default function StaffAssignmentsPage() {
       setUsers(u || []);
       setBranches(b || []);
     } catch (e) {
-      toast({ variant: "destructive", title: "Sync Failed", description: "Could not retrieve SQL mappings." });
+      toast({ variant: "destructive", title: "Sync Failed", description: "Could not retrieve staff mappings." });
     } finally {
       setLoading(false);
     }
@@ -87,10 +87,6 @@ export default function StaffAssignmentsPage() {
     }
   };
 
-  /**
-   * Specialist Detection Logic.
-   * Resiliently matches manually created roles like KYC_SPECIALIST or KYC_OFFICER.
-   */
   const isSpecialist = (user: any) => {
     return user.roles?.some((ur: any) => {
       const roleName = ur.role?.name?.toUpperCase() || "";
@@ -213,7 +209,7 @@ export default function StaffAssignmentsPage() {
                 <div className="flex gap-3 text-amber-800">
                   <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
                   <p className="text-xs font-bold leading-relaxed">
-                    <strong>SLA Protocol:</strong> Specialist portfolio expansion grants visibility into shared regional queues. All assignments are logged in the IP Audit Vault.
+                    <strong>SLA Protocol:</strong> Specialist portfolio expansion grants visibility into shared regional queues. All assignments are logged in the Institutional Vault.
                   </p>
                 </div>
               </div>
