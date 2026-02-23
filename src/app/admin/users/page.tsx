@@ -25,7 +25,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldAlert,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Users
 } from "lucide-react";
 import { 
   Dialog, 
@@ -93,7 +94,7 @@ export default function UserManagementPage() {
       setBranches(b);
       setRoleDefinitions(r);
     } catch (error) {
-      toast({ variant: "destructive", title: "Data retrieval failed" });
+      toast({ variant: "destructive", title: "Institutional sync failed" });
     } finally {
       setLoading(false);
     }
@@ -191,10 +192,15 @@ export default function UserManagementPage() {
   const isBranchSpecificRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Personnel Directory</h1>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
+              <Users className="w-6 h-6" />
+            </div>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Personnel Directory</h1>
+          </div>
           <p className="text-muted-foreground text-lg font-medium">Manage staff identities and jurisdictional assignments.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -210,7 +216,7 @@ export default function UserManagementPage() {
               className="pl-10 h-11 bg-white border-slate-200 rounded-xl font-medium"
             />
           </div>
-          <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-lg font-bold h-11 px-6 text-white hover:bg-primary/90 rounded-xl">
+          <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90 rounded-xl">
             <UserPlus className="w-4 h-4" />
             Provision User
           </Button>
@@ -221,29 +227,41 @@ export default function UserManagementPage() {
         <Table>
           <TableHeader className="bg-slate-50/50">
             <TableRow>
-              <TableHead className="font-bold py-4 pl-8">Identity</TableHead>
-              <TableHead className="font-bold">Institutional Role</TableHead>
-              <TableHead className="font-bold">Home Node</TableHead>
-              <TableHead className="font-bold">Status</TableHead>
-              <TableHead className="text-right font-bold pr-8">Actions</TableHead>
+              <TableHead className="font-bold py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Identity</TableHead>
+              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Institutional Role</TableHead>
+              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Home Node</TableHead>
+              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
+              <TableHead className="text-right font-bold pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={5} className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" /></TableCell></TableRow>
             ) : filteredUsers.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="py-20 text-center text-muted-foreground italic font-medium">No personnel records discovered in the Vault.</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={5} className="py-32 text-center">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="p-6 bg-slate-50 rounded-full">
+                      <Users className="w-12 h-12 text-slate-200" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-bold text-slate-900 text-lg">No records discovered</p>
+                      <p className="text-sm text-muted-foreground">Adjust filters or search criteria.</p>
+                    </div>
+                  </div>
+                </TableCell>
+              </TableRow>
             ) : paginatedUsers.map((user) => (
-              <TableRow key={user.id} className="hover:bg-slate-50 transition-colors">
-                <TableCell className="pl-8 py-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-500 shadow-inner">
+              <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors group">
+                <TableCell className="pl-8 py-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black shadow-sm group-hover:scale-110 transition-transform">
                       {user.firstName?.charAt(0)}
                     </div>
                     <div className="flex flex-col">
                       <span className="font-black text-slate-900 leading-tight">{user.firstName} {user.lastName}</span>
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold">
-                        <Mail className="w-3 h-3" /> {user.email}
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase mt-0.5">
+                        <Mail className="w-3 h-3 text-slate-300" /> {user.email}
                       </div>
                     </div>
                   </div>
@@ -279,14 +297,36 @@ export default function UserManagementPage() {
         </Table>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-8 py-4 bg-slate-50/50 border-t">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+          <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
               Displaying {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} Staff
             </p>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="h-8 w-8 p-0 rounded-lg"><ChevronLeft className="w-4 h-4" /></Button>
-              <div className="flex items-center gap-1 px-3"><span className="text-sm font-black text-primary">{currentPage}</span><span className="text-sm font-bold text-slate-400">/</span><span className="text-sm font-bold text-slate-400">{totalPages}</span></div>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="h-8 w-8 p-0 rounded-lg"><ChevronRight className="w-4 h-4" /></Button>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+                  disabled={currentPage === 1} 
+                  className="h-9 w-9 p-0 rounded-xl border-slate-200 hover:bg-white hover:text-primary"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <div className="flex items-center gap-2 px-4 h-9 bg-white border border-slate-200 rounded-xl shadow-sm">
+                  <span className="text-sm font-black text-primary">{currentPage}</span>
+                  <span className="text-xs font-bold text-slate-300">/</span>
+                  <span className="text-sm font-bold text-slate-500">{totalPages}</span>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+                  disabled={currentPage === totalPages} 
+                  className="h-9 w-9 p-0 rounded-xl border-slate-200 hover:bg-white hover:text-primary"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </div>
         )}
