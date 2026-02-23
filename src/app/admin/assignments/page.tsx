@@ -17,15 +17,15 @@ import {
   SearchCheck,
   ShieldCheck,
   ChevronRight,
-  ClipboardCheck
+  ClipboardCheck,
+  Check,
+  ChevronsUpDown
 } from "lucide-react";
 import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
+  Popover, 
+  PopoverContent, 
+  PopoverTrigger 
+} from "@/components/ui/popover";
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { getAllUsers, updateUserPortfolio } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
+import { cn } from "@/lib/utils";
 
 export default function StaffAssignmentsPage() {
   const { toast } = useToast();
@@ -47,6 +48,10 @@ export default function StaffAssignmentsPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Searchable Popover State
+  const [branchPopoverOpen, setBranchPopoverOpen] = useState(false);
+  const [branchSearchQuery, setBranchSearchQuery] = useState("");
 
   useEffect(() => {
     loadData();
@@ -112,6 +117,10 @@ export default function StaffAssignmentsPage() {
     return users.filter(u => isSpecialist(u) && u.assignedBranches?.length > 0);
   }, [users]);
 
+  const filteredBranches = useMemo(() => {
+    return branches.filter(b => b.name.toLowerCase().includes(branchSearchQuery.toLowerCase()));
+  }, [branches, branchSearchQuery]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -144,12 +153,60 @@ export default function StaffAssignmentsPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Branch Selection</Label>
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="h-12 rounded-xl font-bold border-slate-200"><SelectValue placeholder="Select target branch..." /></SelectTrigger>
-                  <SelectContent>
-                    {branches.map(b => <SelectItem key={b.id} value={b.name} className="font-bold">{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                
+                <Popover open={branchPopoverOpen} onOpenChange={setBranchPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={branchPopoverOpen}
+                      className="w-full justify-between h-12 rounded-xl font-bold border-slate-200 bg-white"
+                    >
+                      {selectedBranch ? selectedBranch : "Select target branch..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <div className="flex items-center border-b px-3 py-2 bg-slate-50/50">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <Input
+                        placeholder="Search branch name..."
+                        value={branchSearchQuery}
+                        onChange={(e) => setBranchSearchQuery(e.target.value)}
+                        className="h-8 border-none focus-visible:ring-0 p-0 text-sm font-bold bg-transparent"
+                      />
+                    </div>
+                    <ScrollArea className="h-72">
+                      <div className="p-1">
+                        {filteredBranches.map((branch) => (
+                          <div
+                            key={branch.id}
+                            className={cn(
+                              "relative flex cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm font-bold hover:bg-slate-100 transition-colors",
+                              selectedBranch === branch.name && "bg-primary/10 text-primary"
+                            )}
+                            onClick={() => {
+                              setSelectedBranch(branch.name);
+                              setBranchPopoverOpen(false);
+                              setBranchSearchQuery("");
+                            }}
+                          >
+                            <Building2 className="mr-2 h-4 w-4 opacity-50" />
+                            <span className="truncate">{branch.name}</span>
+                            {selectedBranch === branch.name && (
+                              <Check className="ml-auto h-4 w-4" />
+                            )}
+                          </div>
+                        ))}
+                        {filteredBranches.length === 0 && (
+                          <div className="py-6 text-center text-sm text-muted-foreground font-bold">
+                            No matching nodes discovered.
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 shadow-inner">
