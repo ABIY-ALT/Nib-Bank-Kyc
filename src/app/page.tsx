@@ -26,7 +26,7 @@ import {
   Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import Link from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -119,8 +119,8 @@ export default function Dashboard() {
     };
 
     return {
-      title: `${user?.branchName || 'Local'} Branch Portal`,
-      subtitle: 'Branch-level submission and amendment tracking.',
+      title: `${user?.branchName || 'Local'} Branch Overview`,
+      subtitle: 'Local branch overview and amendment tracking.',
       scope: 'Branch',
       icon: Building2
     };
@@ -169,7 +169,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           {hasPermission('CASE_SUBMIT') && (
             <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-black text-lg rounded-2xl">
-              <Link href="/submissions/new">Create New Submission</Link>
+              <a href="/submissions/new">Create New Submission</a>
             </Button>
           )}
         </div>
@@ -197,9 +197,9 @@ export default function Dashboard() {
               <CardDescription>Live tracking for {dashboardContext.scope.toLowerCase()} authorized cases.</CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/5">
-              <Link href="/submissions" className="flex items-center gap-1">
+              <a href="/submissions" className="flex items-center gap-1">
                 View Archive <ChevronRight className="w-4 h-4" />
-              </Link>
+              </a>
             </Button>
           </CardHeader>
           <CardContent className="pt-6">
@@ -231,7 +231,7 @@ export default function Dashboard() {
                         {sub.status?.replace(/_/g, ' ')}
                       </Badge>
                       <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/5 text-primary">
-                        <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>
+                        <a href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></a>
                       </Button>
                     </div>
                   </div>

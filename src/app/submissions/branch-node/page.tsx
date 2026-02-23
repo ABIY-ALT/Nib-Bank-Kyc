@@ -173,14 +173,14 @@ export default function BranchNodeOversightPage() {
               <Building2 className="w-6 h-6" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {isAdmin ? 'Global Command' : `${user.branchName} Node Command`}
+              {isAdmin ? 'Global Command' : `${user.branchName} Branch Overview`}
             </h1>
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground text-lg">
               {isAdmin 
                 ? 'Master institutional monitoring of all branches.' 
-                : `Managing operational compliance at the ${user.branchName} local hub.`}
+                : `Managing operational compliance at the ${user.branchName} local branch.`}
             </p>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
               <ShieldCheck className="w-3 h-3" />
@@ -273,7 +273,7 @@ export default function BranchNodeOversightPage() {
 
                 <Card className="shadow-xl border-slate-200 overflow-hidden">
                   <CardHeader className="bg-slate-50/50 border-b">
-                    <CardTitle className="text-xl">Node Volume Trend</CardTitle>
+                    <CardTitle className="text-xl">Branch Overview trend</CardTitle>
                     <CardDescription>Historical submission traffic.</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-8">

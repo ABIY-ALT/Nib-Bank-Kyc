@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect } from "react"
@@ -123,7 +122,7 @@ export default function OfficerPerformancePage() {
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary text-white rounded-lg shadow-lg"><TrendingUp className="w-6 h-6" /></div>
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Specialist Productivity</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Officer Performance</h1>
             <p className="text-muted-foreground text-lg font-medium">Monitoring throughput and determination accuracy for KYC specialists.</p>
           </div>
         </div>
@@ -194,7 +193,7 @@ export default function OfficerPerformancePage() {
             <div className="max-w-md mx-auto space-y-2">
               <p className="font-bold text-slate-900 text-2xl tracking-tight">Productivity Pool Empty</p>
               <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                No determinations have been recorded by specialists in this timeframe. Check the SQL Archive for historical records.
+                No determinations have been recorded by specialists in this timeframe. Check the Institutional Archive for historical records.
               </p>
             </div>
           </CardContent>
@@ -237,9 +236,9 @@ export default function OfficerPerformancePage() {
             <CardHeader className="border-b bg-slate-50/30 p-6 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-xl flex items-center gap-3 font-headline">
-                  <UserCheck className="w-6 h-6 text-primary" /> Specialist Performance Matrix
+                  <UserCheck className="w-6 h-6 text-primary" /> KYC Officer Performance Data
                 </CardTitle>
-                <CardDescription>Individual accuracy and resolution metrics derived from SQL determinations.</CardDescription>
+                <CardDescription>Individual accuracy and resolution metrics derived from Vault determinations.</CardDescription>
               </div>
               <Badge variant="outline" className="bg-white text-slate-500 font-black px-4 py-1 border-slate-200 shadow-sm">
                 {performanceMatrix.length} Specialists Audited
