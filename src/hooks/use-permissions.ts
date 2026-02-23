@@ -12,9 +12,8 @@ export function usePermissions() {
 
   const isSuperAdmin = useMemo(() => {
     if (!user) return false;
-    const hasRelationalSuper = user.roles?.some((ur: any) => ur.role?.name === 'SUPER_ADMIN');
-    const isMockAdmin = user.email?.toLowerCase().includes('admin');
-    return hasRelationalSuper || isMockAdmin;
+    // Strictly rely on the assigned role in the Institutional Vault
+    return user.roles?.some((ur: any) => ur.role?.name === 'SUPER_ADMIN');
   }, [user]);
 
   const permissions = useMemo(() => {

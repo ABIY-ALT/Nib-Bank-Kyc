@@ -37,7 +37,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 
 /**
  * Optimized Institutional Dashboard.
- * Uses Promise.all for parallel data fetching and SQL-level filtering.
+ * Uses Promise.all for parallel data fetching and Vault-level filtering.
  */
 export default function Dashboard() {
   const { user } = useAuth();
@@ -52,17 +52,28 @@ export default function Dashboard() {
       setLoading(true);
       try {
         const isDirector = user.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
-        const isSpecialist = user.roles?.some(ur => ['KYC_SPECIALIST', 'KYC_OFFICER'].includes(ur.role.name));
+        const isSpecialist = user.roles?.some(ur => ['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR'].includes(ur.role.name));
         
         let filters: any = { limit: 10 }; // Leaner limit for dashboard
 
         if (!isSuperAdmin) {
           if (isDirector && user.districtName) {
             filters.district = user.districtName;
-          } else if (isSpecialist && user.assignedBranches && user.assignedBranches.length > 0) {
-            filters.branches = user.assignedBranches;
+          } else if (isSpecialist) {
+            // Specialists MUST be restricted to their assigned portfolio or home branch
+            if (user.assignedBranches && user.assignedBranches.length > 0) {
+              filters.branches = user.assignedBranches;
+            } else if (user.branchName) {
+              filters.branch = user.branchName;
+            } else {
+              // If an Institutional KYC Officer has no assignments, they see nothing by default
+              filters.branch = "RESTRICTED_ACCESS_PENDING_ASSIGNMENT";
+            }
           } else if (user.branchName) {
             filters.branch = user.branchName;
+          } else {
+            // General catch-all for node-less roles to prevent global data leak
+            filters.branch = "RESTRICTED_ACCESS";
           }
         }
 
@@ -100,7 +111,7 @@ export default function Dashboard() {
       icon: MapPin
     };
 
-    if (['KYC_SPECIALIST', 'KYC_OFFICER'].includes(roleName)) return {
+    if (['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR'].includes(roleName)) return {
       title: 'KYC Verification Hub',
       subtitle: `Portfolio visibility across authorized jurisdiction nodes.`,
       scope: 'Portfolio',

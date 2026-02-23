@@ -28,8 +28,12 @@ export default function ReviewQueuePage() {
         status: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW],
         isExceptional: false,
         isResubmitted: false,
-        // If not super admin, restrict to assigned branches
-        branches: isSuperAdmin ? undefined : (assignedBranches.length > 0 ? assignedBranches : [user.branchName || "NONE"])
+        // If not super admin, strictly restrict to assigned branches or home branch
+        branches: isSuperAdmin ? undefined : (
+          assignedBranches.length > 0 
+            ? assignedBranches 
+            : [user.branchName || "RESTRICTED_NODE_UNASSIGNED"]
+        )
       });
       setSubmissions(data);
       setLoading(false);
