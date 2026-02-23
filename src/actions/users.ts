@@ -49,7 +49,7 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
 }
 
 /**
- * Provisions a new user or updates an existing one, including Branch Transfers.
+ * Provisions a new user or updates an existing one, including Branch Transfers and Role Transitions.
  */
 export async function provisionUser(data: {
   id: string;
@@ -67,7 +67,10 @@ export async function provisionUser(data: {
       // 1. Fetch current state for audit comparison
       const existingUser = await tx.user.findUnique({
         where: { firebaseUid: data.id },
-        include: { branch: true }
+        include: { 
+          branch: true,
+          roles: { include: { role: true } }
+        }
       });
 
       // 2. Upsert the User record
@@ -93,29 +96,44 @@ export async function provisionUser(data: {
         }
       });
 
-      // 3. Handle Branch Transfer Logging (For Managers and Officers)
+      // 3. Handle Branch Transfer Logging
       if (existingUser && existingUser.branchId !== data.branchId) {
         const oldBranchName = existingUser.branch?.name || 'Institutional';
         const newBranch = data.branchId ? await tx.branch.findUnique({ where: { id: data.branchId } }) : null;
         const newBranchName = newBranch?.name || 'Institutional';
-        const roleLabel = data.role.replace(/_/g, ' ');
-
+        
         await tx.auditLog.create({
           data: {
             userId: data.authorizingAdminId || 'SYSTEM',
             action: 'BRANCH_TRANSFER',
-            details: `${roleLabel} ${user.firstName} ${user.lastName} moved from ${oldBranchName} to ${newBranchName}. Jurisdictional handover complete.`,
+            details: `Personnel ${user.firstName} ${user.lastName} moved from ${oldBranchName} to ${newBranchName}. Jurisdictional handover complete.`,
             metadata: {
               targetUserId: user.id,
               previousBranch: oldBranchName,
-              newBranch: newBranchName,
-              role: data.role
+              newBranch: newBranchName
             }
           }
         });
       }
 
-      // 4. Link the role via UserRole relational table
+      // 4. Handle Role Transition (Promotion/Reassignment) Logging
+      const currentRoleName = existingUser?.roles?.[0]?.role?.name;
+      if (existingUser && currentRoleName !== data.role) {
+        await tx.auditLog.create({
+          data: {
+            userId: data.authorizingAdminId || 'SYSTEM',
+            action: 'ROLE_TRANSITION',
+            details: `Personnel ${user.firstName} ${user.lastName} authority updated from ${currentRoleName?.replace(/_/g, ' ')} to ${data.role.replace(/_/g, ' ')}.`,
+            metadata: {
+              targetUserId: user.id,
+              previousRole: currentRoleName,
+              newRole: data.role
+            }
+          }
+        });
+      }
+
+      // 5. Link the role via UserRole relational table
       if (data.role) {
         const role = await tx.role.findUnique({ where: { name: data.role } });
         if (role) {
