@@ -25,7 +25,7 @@ export interface UserProfile {
   branchName?: string | null;
   districtName?: string | null;
   assignedBranches: string[];
-  roles: any[]; // Relational roles from SQL
+  roles: any[]; 
   needsPasswordChange?: boolean;
 }
 
@@ -52,8 +52,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isMockMode) {
       const savedUser = localStorage.getItem('nib_mock_user');
-      if (savedUser) setUser(JSON.parse(savedUser));
-      setLoading(false);
+      if (savedUser) {
+        // Refresh mock user from DB to ensure roles/data are current
+        const refreshMock = async () => {
+          const parsed = JSON.parse(savedUser);
+          const dbUser = await getUserByEmail(parsed.email);
+          if (dbUser) {
+            const mapped = {
+              ...dbUser,
+              name: `${dbUser.firstName} ${dbUser.lastName}`,
+              branchName: (dbUser as any).branch?.name || null,
+              districtName: (dbUser as any).branch?.district?.name || null,
+              assignedBranches: (dbUser as any).assignedBranches || []
+            } as any;
+            setUser(mapped);
+            localStorage.setItem('nib_mock_user', JSON.stringify(mapped));
+          } else {
+            setUser(parsed);
+          }
+          setLoading(false);
+        };
+        refreshMock();
+      } else {
+        setLoading(false);
+      }
       return;
     }
 
@@ -113,16 +135,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isMockMode) {
       if (pass !== 'nibbank123') throw new Error('Invalid developer credential.');
       
-      const emailId = normalizedEmail.split('@')[0];
       const existingUser = await getUserByEmail(normalizedEmail);
       
-      const userId = existingUser?.id || `mock-${emailId}`;
+      // Use seeded ID if found, otherwise generate
+      const userId = existingUser?.id || `mock-${normalizedEmail.split('@')[0]}`;
+      
       const mockUser: any = {
         id: userId,
         firebaseUid: userId,
-        firstName: existingUser?.firstName || emailId.split('.')[0] || 'User',
-        lastName: existingUser?.lastName || emailId.split('.')[1] || 'Nib',
-        name: existingUser ? `${existingUser.firstName} ${existingUser.lastName}` : emailId.replace('.', ' '),
+        firstName: existingUser?.firstName || normalizedEmail.split('.')[0] || 'User',
+        lastName: existingUser?.lastName || normalizedEmail.split('.')[1]?.split('@')[0] || 'Nib',
         email: normalizedEmail,
         status: existingUser?.status || 'ACTIVE',
         branchId: existingUser?.branchId || null,
@@ -131,6 +153,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         assignedBranches: (existingUser as any)?.assignedBranches || [],
         roles: existingUser?.roles || [{ role: { name: normalizedEmail.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
       };
+      
+      mockUser.name = `${mockUser.firstName} ${mockUser.lastName}`;
       
       setUser(mockUser);
       localStorage.setItem('nib_mock_user', JSON.stringify(mockUser));
@@ -154,7 +178,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const changePassword = async (newPass: string) => {
-    // Mock implementation for change password
     if (user) {
       const updated = { ...user, needsPasswordChange: false };
       setUser(updated);

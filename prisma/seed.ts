@@ -9,7 +9,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('🚀 Institutional Seeding Initialized [REGIONAL MAPPING MODE]...');
+  console.log('🚀 Institutional Seeding Initialized [HIERARCHY MODE]...');
 
   // 1. Seed Roles
   const roles = [
@@ -67,6 +67,14 @@ async function main() {
   const hashedPass = await bcrypt.hash(adminPass, 10);
 
   const testUsers = [
+    // SUPER ADMIN (for your initial login)
+    { 
+      email: 'admin.nib@nibbank.com.et', 
+      first: 'System', last: 'Admin', 
+      role: 'SUPER_ADMIN', 
+      phone: '+251911000000',
+      mapping: {} 
+    },
     // DISTRICT DIRECTOR
     { 
       email: 'director.central@nibbank.com.et', 
@@ -75,8 +83,7 @@ async function main() {
       phone: '+251911000001',
       mapping: { districtId: district.id } 
     },
-
-    // BRANCH MANAGERS
+    // BRANCH MANAGERS (1 per branch)
     { 
       email: 'manager.meskel@nibbank.com.et', 
       first: 'Derartu', last: 'Tulu', 
@@ -98,7 +105,6 @@ async function main() {
       phone: '+251911000004',
       mapping: { branchId: branchMap['Kazanchis Branch'].id } 
     },
-
     // BRANCH OFFICERS (2 per branch)
     { 
       email: 'officer1.meskel@nibbank.com.et', 
@@ -145,6 +151,7 @@ async function main() {
   ];
 
   for (const u of testUsers) {
+    const firebaseUid = `uid-${u.email.split('@')[0]}`;
     const user = await prisma.user.upsert({
       where: { email: u.email },
       update: {
@@ -152,11 +159,12 @@ async function main() {
         lastName: u.last,
         phoneNumber: u.phone,
         passwordHash: hashedPass,
+        firebaseUid: firebaseUid,
         ...u.mapping
       },
       create: {
-        id: `uid-${u.email.split('@')[0]}`,
-        firebaseUid: `uid-${u.email.split('@')[0]}`,
+        id: firebaseUid,
+        firebaseUid: firebaseUid,
         email: u.email,
         firstName: u.first,
         lastName: u.last,

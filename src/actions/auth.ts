@@ -16,8 +16,8 @@ export async function syncUserToSql(userData: SyncUserData) {
     const lastName = nameParts.slice(1).join(' ') || 'User';
 
     const user = await prisma.user.upsert({
-      where: { firebaseUid: userData.id },
-      update: { email: userData.email, firstName, lastName },
+      where: { email: userData.email }, // Sync by email to catch seeded users
+      update: { firebaseUid: userData.id, firstName, lastName },
       create: {
         id: userData.id,
         firebaseUid: userData.id,
@@ -40,7 +40,9 @@ export async function getUserProfile(uid: string) {
     return await prisma.user.findUnique({
       where: { firebaseUid: uid },
       include: { 
-        branch: true, 
+        branch: {
+          include: { district: true }
+        }, 
         roles: { 
           include: { 
             role: { 
@@ -66,7 +68,9 @@ export async function getUserByEmail(email: string) {
     return await prisma.user.findUnique({
       where: { email },
       include: { 
-        branch: true, 
+        branch: {
+          include: { district: true }
+        },
         roles: { 
           include: { 
             role: { 
