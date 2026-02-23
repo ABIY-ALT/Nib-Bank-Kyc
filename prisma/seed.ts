@@ -4,7 +4,6 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  // 1. Environment Safety Check
   if (process.env.ALLOW_SEED !== 'true') {
     console.error('❌ SEED ABORTED: Set ALLOW_SEED=true in your environment to proceed.');
     process.exit(1);
@@ -12,7 +11,7 @@ async function main() {
 
   console.log('🚀 Institutional Seeding Initialized...');
 
-  // 2. Seed Districts
+  // 1. Seed Districts
   const districts = ['Addis North', 'Addis South', 'Addis East', 'Addis West'];
   const districtMap: Record<string, any> = {};
 
@@ -26,7 +25,7 @@ async function main() {
     console.log(`📍 District established: ${name}`);
   }
 
-  // 3. Seed Branches
+  // 2. Seed Branches
   const branches = [
     { name: 'Arada Branch', code: 'BR-101', district: 'Addis North' },
     { name: 'Gullele Branch', code: 'BR-102', district: 'Addis North' },
@@ -53,13 +52,12 @@ async function main() {
     console.log(`  🏢 Branch registered: ${b.name} (${b.code})`);
   }
 
-  // 4. Seed Roles
+  // 3. Seed Roles
   const roles = [
     'SUPER_ADMIN',
     'ADMIN',
     'DISTRICT_DIRECTOR',
     'FOLLOW_UP_TEAM',
-    'BRANCH_OPERATION_DIRECTOR',
     'BRANCH_MANAGER',
     'BRANCH_OFFICER',
     'KYC_OFFICER',
@@ -78,66 +76,83 @@ async function main() {
     console.log(`🛡️ Role provisioned: ${name}`);
   }
 
-  // 5. Seed Users
-  const adminPass = process.env.SEED_ADMIN_PASSWORD || 'ChangeMe123!';
+  // 4. Seed Users
+  const adminPass = process.env.SEED_ADMIN_PASSWORD || 'nibbank123';
   const hashedPass = await bcrypt.hash(adminPass, 10);
 
   const testUsers = [
+    // 1. SUPER ADMIN (Institutional Master)
     { 
       email: 'master.admin@nibbank.com.et', 
-      first: 'Master', 
-      last: 'Admin', 
-      role: 'SUPER_ADMIN', 
-      branch: null // Institutional
+      first: 'Master', last: 'Admin', 
+      role: 'SUPER_ADMIN', branch: null, 
+      phone: '+251111111111' 
+    },
+
+    // 2. TWO DISTRICT DIRECTORS
+    { 
+      email: 'north.director@nibbank.com.et', 
+      first: 'North', last: 'Director', 
+      role: 'DISTRICT_DIRECTOR', branch: null, 
+      phone: '+251911000001' 
     },
     { 
-      email: 'addis.director@nibbank.com.et', 
-      first: 'District', 
-      last: 'Director', 
-      role: 'DISTRICT_DIRECTOR', 
-      branch: null // Institutional
+      email: 'south.director@nibbank.com.et', 
+      first: 'South', last: 'Director', 
+      role: 'DISTRICT_DIRECTOR', branch: null, 
+      phone: '+251911000002' 
+    },
+
+    // 3. TWO BRANCH MANAGERS
+    { 
+      email: 'kirkos.manager@nibbank.com.et', 
+      first: 'Kirkos', last: 'Manager', 
+      role: 'BRANCH_MANAGER', branch: 'Kirkos Branch', 
+      phone: '+251911000003' 
     },
     { 
-      email: 'bole.manager@nibbank.com.et', 
-      first: 'Bole', 
-      last: 'Manager', 
-      role: 'BRANCH_MANAGER', 
-      branch: 'Bole Branch' 
+      email: 'lideta.manager@nibbank.com.et', 
+      first: 'Lideta', last: 'Manager', 
+      role: 'BRANCH_MANAGER', branch: 'Lideta Branch', 
+      phone: '+251911000004' 
     },
+
+    // 4. TWO BRANCH OFFICERS
     { 
       email: 'arada.officer@nibbank.com.et', 
-      first: 'John', 
-      last: 'Officer', 
-      role: 'BRANCH_OFFICER', 
-      branch: 'Arada Branch' 
+      first: 'Arada', last: 'Officer', 
+      role: 'BRANCH_OFFICER', branch: 'Arada Branch', 
+      phone: '+251911000005' 
     },
     { 
-      email: 'kyc.specialist@nibbank.com.et', 
-      first: 'Jane', 
-      last: 'Specialist', 
-      role: 'KYC_OFFICER', 
-      branch: null // Institutional
+      email: 'bole.officer@nibbank.com.et', 
+      first: 'Bole', last: 'Officer', 
+      role: 'BRANCH_OFFICER', branch: 'Bole Branch', 
+      phone: '+251911000006' 
     },
+
+    // 5. TWO KYC OFFICERS
+    { 
+      email: 'kyc.specialist.1@nibbank.com.et', 
+      first: 'Jane', last: 'Specialist', 
+      role: 'KYC_OFFICER', branch: null, 
+      phone: '+251911000007',
+      assignedBranches: ['Arada Branch', 'Bole Branch']
+    },
+    { 
+      email: 'kyc.specialist.2@nibbank.com.et', 
+      first: 'John', last: 'Analyst', 
+      role: 'KYC_OFFICER', branch: null, 
+      phone: '+251911000008',
+      assignedBranches: ['Kirkos Branch', 'Lideta Branch']
+    },
+
+    // 6. ONE SUPERVISOR
     { 
       email: 'supervisor.one@nibbank.com.et', 
-      first: 'Robert', 
-      last: 'Supervisor', 
-      role: 'SUPERVISOR', 
-      branch: null // Institutional
-    },
-    { 
-      email: 'audit.specialist@nibbank.com.et', 
-      first: 'FollowUp', 
-      last: 'Specialist', 
-      role: 'FOLLOW_UP_TEAM', 
-      branch: null // Institutional
-    },
-    { 
-      email: 'chief.retail@nibbank.com.et', 
-      first: 'Chief', 
-      last: 'Officer', 
-      role: 'CHIEF', 
-      branch: null // Institutional
+      first: 'Robert', last: 'Supervisor', 
+      role: 'SUPERVISOR', branch: null, 
+      phone: '+251911000009' 
     }
   ];
 
@@ -149,16 +164,21 @@ async function main() {
       update: {
         firstName: u.first,
         lastName: u.last,
+        phoneNumber: u.phone,
         branchId: branchId,
+        assignedBranches: (u as any).assignedBranches || [],
         passwordHash: hashedPass,
       },
       create: {
+        id: `uid-${u.email.split('@')[0]}`,
         email: u.email,
         firebaseUid: `uid-${u.email.split('@')[0]}`,
         firstName: u.first,
         lastName: u.last,
+        phoneNumber: u.phone,
         status: UserStatus.ACTIVE,
         branchId: branchId,
+        assignedBranches: (u as any).assignedBranches || [],
         passwordHash: hashedPass,
       },
     });
@@ -172,10 +192,10 @@ async function main() {
       create: { userId: user.id, roleId: roleMap[u.role].id },
     });
 
-    console.log(`👤 User provisioned: ${u.email} [${u.role}] -> ${u.branch || 'Institutional Node'}`);
+    console.log(`👤 Personnel provisioned: ${u.email} [${u.role}] -> ${u.branch || 'Institutional Node'}`);
   }
 
-  console.log('✅ Institutional seeding complete. Vault ready.');
+  console.log('✅ Institutional Vault seeding complete.');
 }
 
 main()
