@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma';
 import { UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 
+/**
+ * Retrieves all personnel from the institutional registry.
+ */
 export async function getAllUsers() {
   try {
     return await prisma.user.findMany({
@@ -28,30 +31,14 @@ export async function getAllUsers() {
       orderBy: { firstName: 'asc' }
     });
   } catch (error) {
-    console.error('[SQL] getAllUsers Error:', error);
+    console.error('[Vault] getAllUsers Error:', error);
     return [];
   }
 }
 
-export async function updateUserRole(userId: string, roleName: string) {
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      await tx.userRole.deleteMany({ where: { userId } });
-      const role = await tx.role.findUnique({ where: { name: roleName } });
-      if (role) {
-        return await tx.userRole.create({
-          data: { userId, roleId: role.id }
-        });
-      }
-      return null;
-    });
-    revalidatePath('/admin/users');
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
+/**
+ * Updates a staff member's active status (Active/Inactive).
+ */
 export async function updateUserStatus(userId: string, status: UserStatus) {
   const user = await prisma.user.update({
     where: { id: userId },
@@ -61,6 +48,9 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
   return user;
 }
 
+/**
+ * Provisions a new user or updates an existing one, including Branch Transfers.
+ */
 export async function provisionUser(data: {
   id: string;
   firstName: string;
@@ -68,12 +58,19 @@ export async function provisionUser(data: {
   email: string;
   phoneNumber?: string;
   role: string;
-  branchId?: string;
+  branchId?: string | null;
   status: UserStatus;
+  authorizingAdminId?: string;
 }) {
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Upsert the User record (without the role argument)
+      // 1. Fetch current state for audit comparison
+      const existingUser = await tx.user.findUnique({
+        where: { firebaseUid: data.id },
+        include: { branch: true }
+      });
+
+      // 2. Upsert the User record
       const user = await tx.user.upsert({
         where: { firebaseUid: data.id },
         update: { 
@@ -96,11 +93,30 @@ export async function provisionUser(data: {
         }
       });
 
-      // 2. Link the role via UserRole relational table
+      // 3. Handle Branch Transfer Logging
+      if (existingUser && existingUser.branchId !== data.branchId) {
+        const oldBranchName = existingUser.branch?.name || 'Institutional';
+        const newBranch = data.branchId ? await tx.branch.findUnique({ where: { id: data.branchId } }) : null;
+        const newBranchName = newBranch?.name || 'Institutional';
+
+        await tx.auditLog.create({
+          data: {
+            userId: data.authorizingAdminId || 'SYSTEM',
+            action: 'BRANCH_TRANSFER',
+            details: `Staff member ${user.firstName} ${user.lastName} moved from ${oldBranchName} to ${newBranchName}.`,
+            metadata: {
+              targetUserId: user.id,
+              previousBranch: oldBranchName,
+              newBranch: newBranchName
+            }
+          }
+        });
+      }
+
+      // 4. Link the role via UserRole relational table
       if (data.role) {
         const role = await tx.role.findUnique({ where: { name: data.role } });
         if (role) {
-          // Clear existing and link new role
           await tx.userRole.deleteMany({ where: { userId: user.id } });
           await tx.userRole.create({
             data: { userId: user.id, roleId: role.id }
@@ -111,13 +127,16 @@ export async function provisionUser(data: {
     });
 
     revalidatePath('/admin/users');
-    return result;
+    return { success: true, user: result };
   } catch (error: any) {
-    console.error('[SQL Provisioning] Error:', error);
-    throw new Error(error.message || 'Institutional database fault during user provisioning.');
+    console.error('[Vault Provisioning] Error:', error);
+    return { success: false, error: error.message || 'Institutional registration fault.' };
   }
 }
 
+/**
+ * Updates a specialist's assigned multi-branch portfolio.
+ */
 export async function updateUserPortfolio(userId: string, branches: string[]) {
   try {
     await prisma.user.update({
@@ -129,7 +148,7 @@ export async function updateUserPortfolio(userId: string, branches: string[]) {
     revalidatePath('/admin/assignments');
     return { success: true };
   } catch (error: any) {
-    console.error('[SQL Portfolio Update] Error:', error);
-    throw new Error(error.message || 'Institutional portfolio update fault.');
+    console.error('[Vault Portfolio Update] Error:', error);
+    throw new Error('Institutional portfolio update fault.');
   }
 }
