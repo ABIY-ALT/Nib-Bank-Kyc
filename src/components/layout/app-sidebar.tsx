@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -101,7 +102,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Workflows</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible" defaultOpen={true}>
+              <Collapsible className="group/collapsible" defaultOpen={false}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Identity Verification">
