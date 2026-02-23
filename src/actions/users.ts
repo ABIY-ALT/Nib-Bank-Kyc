@@ -5,7 +5,7 @@ import { UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 
 /**
- * Retrieves all personnel from the institutional registry.
+ * Retrieves all personnel from the institutional registry, sorted alphabetically.
  */
 export async function getAllUsers() {
   try {
@@ -28,10 +28,13 @@ export async function getAllUsers() {
           } 
         }
       },
-      orderBy: { firstName: 'asc' }
+      orderBy: [
+        { firstName: 'asc' },
+        { lastName: 'asc' }
+      ]
     });
   } catch (error) {
-    console.error('[Vault] getAllUsers Error:', error);
+    console.error('[Vault Registry] getAllUsers Error:', error);
     return [];
   }
 }

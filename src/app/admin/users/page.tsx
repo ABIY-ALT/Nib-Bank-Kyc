@@ -102,10 +102,16 @@ export default function UserManagementPage() {
 
   const filteredUsers = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return users.filter(user => 
-      `${user.firstName} ${user.lastName}`.toLowerCase().includes(term) ||
-      user.email.toLowerCase().includes(term)
-    );
+    return users
+      .filter(user => 
+        `${user.firstName} ${user.lastName}`.toLowerCase().includes(term) ||
+        user.email.toLowerCase().includes(term)
+      )
+      .sort((a, b) => {
+        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
   }, [users, searchTerm]);
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);

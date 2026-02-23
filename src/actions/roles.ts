@@ -108,7 +108,7 @@ export async function seedInstitutionalPermissions() {
     revalidatePath('/admin/roles');
     return { success: true };
   } catch (error) {
-    console.error('[SQL Framework] Seeding Error:', error);
+    console.error('[Institutional Framework] Seeding Error:', error);
     return { success: false };
   }
 }
@@ -127,7 +127,7 @@ export async function getRoleDefinitions() {
       orderBy: { name: 'asc' }
     });
   } catch (e) {
-    console.error('[SQL Roles] Fetch Error:', e);
+    console.error('[Vault Roles] Fetch Error:', e);
     return [];
   }
 }
@@ -138,7 +138,7 @@ export async function getAllPermissions() {
       orderBy: [{ group: 'asc' }, { name: 'asc' }]
     });
   } catch (e) {
-    console.error('[SQL Permissions] Fetch Error:', e);
+    console.error('[Permissions Registry] Fetch Error:', e);
     return [];
   }
 }
@@ -178,7 +178,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
     revalidatePath('/admin/roles');
     return { success: true, role };
   } catch (error: any) {
-    console.error('[SQL Upsert] Failure:', error);
+    console.error('[Vault Authority Upsert] Failure:', error);
     return { success: false, error: error.message || 'Institutional database fault during role commit.' };
   }
 }
@@ -191,6 +191,6 @@ export async function deactivateRole(id: string) {
     });
     revalidatePath('/admin/roles');
   } catch (e) {
-    console.error('[SQL Deactivate] Failure:', e);
+    console.error('[Vault Authority Deactivation] Failure:', e);
   }
 }
