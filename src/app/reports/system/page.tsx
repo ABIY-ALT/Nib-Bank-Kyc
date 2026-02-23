@@ -5,7 +5,8 @@ import {
   Card, 
   CardContent, 
   CardHeader, 
-  CardTitle 
+  CardTitle,
+  CardDescription
 } from "@/components/ui/card";
 import { 
   Table, 
@@ -62,7 +63,6 @@ export default function SystemWideReportsPage() {
 
   const handleGenerateReport = () => {
     setLoading(true);
-    // Simulate aggregation
     setTimeout(() => {
       setReportData(MOCK_SYSTEM_STATS);
       setLoading(false);
@@ -108,7 +108,7 @@ export default function SystemWideReportsPage() {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -164,7 +164,7 @@ export default function SystemWideReportsPage() {
       </Card>
 
       {!reportData ? (
-        <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50 shadow-inner">
+        <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50 shadow-inner rounded-[2.5rem]">
           <CardContent className="flex flex-col items-center justify-center py-24 text-center space-y-8">
             <div className="relative p-8 bg-white rounded-full shadow-2xl border border-slate-100">
               <Globe className="w-16 h-16 text-primary" />
@@ -173,7 +173,7 @@ export default function SystemWideReportsPage() {
               <p className="font-extrabold text-slate-900 text-2xl tracking-tight">Network Audit Standby</p>
               <p className="text-slate-500 leading-relaxed font-medium">Run the institutional audit to aggregate data across all network nodes from the Vault.</p>
             </div>
-            <Button size="lg" className="px-12 h-14 font-extrabold text-lg shadow-2xl shadow-primary/20 text-white bg-primary" onClick={handleGenerateReport} disabled={loading}>
+            <Button size="lg" className="px-12 h-14 font-extrabold text-lg shadow-2xl shadow-primary/20 text-white bg-primary rounded-xl" onClick={handleGenerateReport} disabled={loading}>
               {loading ? "Aggregating Intelligence..." : "Execute Global Aggregation"}
             </Button>
           </CardContent>
@@ -181,7 +181,7 @@ export default function SystemWideReportsPage() {
       ) : (
         <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-             <Card className="bg-primary text-white shadow-2xl overflow-hidden border-none">
+             <Card className="bg-primary text-white shadow-2xl overflow-hidden border-none rounded-2xl">
                <CardHeader className="pb-2 bg-white/10">
                  <CardTitle className="text-[10px] font-black uppercase tracking-widest text-white/80">Total Volume</CardTitle>
                </CardHeader>
@@ -189,24 +189,24 @@ export default function SystemWideReportsPage() {
                  <span className="text-5xl font-black text-white tracking-tighter">{reportData.total}</span>
                </CardContent>
              </Card>
-             <Card className="shadow-lg border-slate-200 overflow-hidden bg-white">
-               <CardHeader className="pb-2 bg-primary/5">
+             <Card className="shadow-lg border-slate-200 overflow-hidden bg-white rounded-2xl">
+               <CardHeader className="pb-2 bg-slate-50">
                  <CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Total Approvals</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
                  <span className="text-5xl font-black text-emerald-600 tracking-tighter">{reportData.approved}</span>
                </CardContent>
              </Card>
-             <Card className="shadow-lg border-slate-200 overflow-hidden bg-white">
-               <CardHeader className="pb-2 bg-primary/5">
+             <Card className="shadow-lg border-slate-200 overflow-hidden bg-white rounded-2xl">
+               <CardHeader className="pb-2 bg-slate-50">
                  <CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Review</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
                  <span className="text-5xl font-black text-orange-600 tracking-tighter">{reportData.pending}</span>
                </CardContent>
              </Card>
-             <Card className="shadow-lg border-slate-200 overflow-hidden bg-white">
-               <CardHeader className="pb-2 bg-primary/5">
+             <Card className="shadow-lg border-slate-200 overflow-hidden bg-white rounded-2xl">
+               <CardHeader className="pb-2 bg-slate-50">
                  <CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Accuracy Index</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">

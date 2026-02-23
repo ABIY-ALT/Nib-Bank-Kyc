@@ -18,10 +18,13 @@ export async function getGlobalSettings() {
 }
 
 export async function updateGlobalSettings(data: any) {
+  // Destructure to prevent trying to update the 'id' field which causes Prisma validation errors
+  const { id, ...updateData } = data;
+
   const settings = await prisma.globalSetting.update({
     where: { id: 'global' },
     data: {
-      ...data,
+      ...updateData,
       lastUpdated: new Date()
     }
   });
