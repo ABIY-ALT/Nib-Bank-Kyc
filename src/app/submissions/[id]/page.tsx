@@ -37,7 +37,8 @@ import {
   Download,
   RefreshCw,
   ShieldAlert,
-  ClipboardCheck
+  ClipboardCheck,
+  CheckSquare
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -70,10 +71,15 @@ const KYC_CHECKLIST_ITEMS = [
   { id: 'id_verified', label: 'Identity Document Authenticity' },
   { id: 'photo_match', label: 'Customer Photo Comparison' },
   { id: 'sanction_check', label: 'Sanction & AML Screening' },
+  { id: 'pep_check', label: 'PEP (Politically Exposed Person) Check' },
   { id: 'mother_name', label: "Mother's Name Verification" },
   { id: 't24_sync', label: 'Core Banking (T24) Data Match' },
   { id: 'address_verified', label: 'Residential Address Validation' },
-  { id: 'risk_profile', label: 'Risk Categorization Review' }
+  { id: 'risk_profile', label: 'Risk Categorization Review' },
+  { id: 'funds_source', label: 'Source of Funds/Wealth Verification' },
+  { id: 'beneficial_owner', label: 'Beneficial Ownership Check' },
+  { id: 'blacklist_check', label: 'Blacklist & Caution List Screening' },
+  { id: 'signature_match', label: 'Specimen Signature Verification' }
 ];
 
 export default function SubmissionDetails() {
@@ -162,6 +168,25 @@ export default function SubmissionDetails() {
       await updateSubmissionChecklist(submission.id, nextState);
     } catch (e) {
       toast({ variant: "destructive", title: "Sync Error", description: "Failed to save checklist state." });
+    }
+  };
+
+  const handleSelectAll = async () => {
+    if (!isReviewer || isTerminal) return;
+
+    const allSelected = KYC_CHECKLIST_ITEMS.every(item => checklist[item.id]);
+    const nextState: Record<string, boolean> = {};
+    
+    KYC_CHECKLIST_ITEMS.forEach(item => {
+      nextState[item.id] = !allSelected;
+    });
+
+    setChecklist(nextState);
+    try {
+      await updateSubmissionChecklist(submission.id, nextState);
+      toast({ title: allSelected ? "Checklist Cleared" : "Full Verification Marked" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Sync Error" });
     }
   };
 
@@ -440,14 +465,27 @@ export default function SubmissionDetails() {
           {/* KYC VERIFICATION CHECKLIST */}
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
             <CardHeader className="bg-primary p-5 border-b">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-xl">
-                  <ClipboardCheck className="w-5 h-5 text-white" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/20 rounded-xl">
+                    <ClipboardCheck className="w-5 h-5 text-white" />
+                  </div>
+                  <CardTitle className="text-lg font-black tracking-tight text-white uppercase">Verification Checklist</CardTitle>
                 </div>
-                <CardTitle className="text-lg font-black tracking-tight text-white uppercase">Verification Checklist</CardTitle>
+                {isReviewer && !isTerminal && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleSelectAll}
+                    className="text-[10px] font-black uppercase tracking-wider text-white hover:bg-white/10 h-8 px-3 gap-2"
+                  >
+                    {KYC_CHECKLIST_ITEMS.every(i => checklist[i.id]) ? <RotateCcw className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
+                    {KYC_CHECKLIST_ITEMS.every(i => checklist[i.id]) ? 'Deselect All' : 'Select All'}
+                  </Button>
+                )}
               </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-4">
+            <CardContent className="p-6 space-y-3">
               {KYC_CHECKLIST_ITEMS.map((item) => (
                 <div 
                   key={item.id} 
@@ -466,7 +504,7 @@ export default function SubmissionDetails() {
                   <label 
                     htmlFor={item.id} 
                     className={cn(
-                      "text-xs font-bold leading-tight cursor-pointer",
+                      "text-[11px] font-bold leading-tight cursor-pointer uppercase tracking-tight",
                       checklist[item.id] ? "text-emerald-800" : "text-slate-600",
                       (!isReviewer || isTerminal) && "cursor-not-allowed opacity-70"
                     )}
@@ -520,21 +558,26 @@ export default function SubmissionDetails() {
               <CardContent className="space-y-6 pt-6 px-6 pb-8">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Response Note</Label>
-                  <Textarea 
-                    placeholder="Describe the corrections made (e.g., 'Attached missing ID copy')..." 
-                    value={remarks} 
-                    onChange={(e) => setRemarks(e.target.value)} 
-                    className="min-h-[120px] bg-white border-orange-200 focus-visible:ring-orange-200 rounded-2xl font-medium" 
-                  />
+                  <div className="relative">
+                    <Textarea 
+                      placeholder="Describe the corrections made (e.g., 'Attached missing ID copy')..." 
+                      value={remarks} 
+                      onChange={(e) => setRemarks(e.target.value)} 
+                      className="min-h-[120px] bg-white border-orange-200 focus-visible:ring-orange-200 rounded-2xl font-medium pr-10" 
+                    />
+                    <div className="absolute top-3 right-3">
+                      <MessagesSquare className="w-4 h-4 text-orange-200" />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
                   <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Add Supplemental Documents</Label>
                   <div 
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-orange-200 rounded-2xl p-6 text-center cursor-pointer hover:bg-orange-50 transition-all"
+                    className="border-2 border-dashed border-orange-200 rounded-2xl p-6 text-center cursor-pointer hover:bg-orange-50 transition-all group"
                   >
-                    <Upload className="w-6 h-6 text-orange-400 mx-auto mb-2" />
+                    <Upload className="w-6 h-6 text-orange-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
                     <p className="text-xs font-bold text-orange-600">Click to attach new files</p>
                     <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileSelect} />
                   </div>
@@ -620,16 +663,23 @@ export default function SubmissionDetails() {
 
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Official Decision Remarks</Label>
-                  <Textarea 
-                    placeholder={isCustomRemark ? "Provide detailed instructions or verification notes..." : "Locked: Selected Standard Finding"}
-                    value={remarks} 
-                    onChange={(e) => setRemarks(e.target.value)} 
-                    readOnly={!isCustomRemark}
-                    className={cn(
-                      "min-h-[140px] border-slate-200 focus-visible:ring-primary/20 rounded-2xl font-medium transition-colors duration-200",
-                      !isCustomRemark ? "bg-slate-100 cursor-not-allowed text-slate-600" : "bg-slate-50/50"
+                  <div className="relative">
+                    <Textarea 
+                      placeholder={isCustomRemark ? "Provide detailed instructions or verification notes..." : "Locked: Selected Standard Finding"}
+                      value={remarks} 
+                      onChange={(e) => setRemarks(e.target.value)} 
+                      readOnly={!isCustomRemark}
+                      className={cn(
+                        "min-h-[140px] border-slate-200 focus-visible:ring-primary/20 rounded-2xl font-medium transition-colors duration-200 pr-10",
+                        !isCustomRemark ? "bg-slate-100 cursor-not-allowed text-slate-600" : "bg-slate-50/50"
+                      )}
+                    />
+                    {!isCustomRemark && (
+                      <div className="absolute top-3 right-3">
+                        <Lock className="w-4 h-4 text-slate-300" />
+                      </div>
                     )}
-                  />
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <Button 
