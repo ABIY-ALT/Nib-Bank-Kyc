@@ -35,7 +35,7 @@ import { format } from "date-fns";
 import JSZip from 'jszip';
 import { useState } from "react";
 import { logBundleDownload } from "@/actions/submissions";
-import { KYCStatus, ExceptionalStatus } from "@prisma/client";
+import { KYCStatus } from "@prisma/client";
 
 export function SubmissionsPageContent({ submissions }: { submissions: any[] }) {
   const { toast } = useToast();
@@ -138,9 +138,9 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
               <TableCell className="font-bold text-primary tabular-nums">
                 <div className="flex flex-col gap-1">
                   <span>{sub.id}</span>
-                  {(sub.amendmentCycles || 0) > 0 && (
+                  {(sub.amendCycles || 0) > 0 && (
                     <div className="flex items-center gap-1 text-[9px] text-orange-600 font-black uppercase">
-                      <RefreshCw className="w-2" /> Cycle {sub.amendmentCycles}
+                      <RefreshCw className="w-2.5 h-2.5" /> Cycle {sub.amendCycles}
                     </div>
                   )}
                 </div>

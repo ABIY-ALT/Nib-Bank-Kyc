@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -34,7 +33,8 @@ import {
   X,
   Plus,
   BookOpen,
-  Download
+  Download,
+  RefreshCw
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -259,15 +259,22 @@ export default function SubmissionDetails() {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-3xl font-black font-headline text-slate-900 tracking-tight">{submission.id}</h1>
-              <Badge variant="outline" className={cn(
-                "font-black px-3 py-1 uppercase text-[10px] tracking-widest",
-                submission.status === KYCStatus.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                submission.status === KYCStatus.ACTION_REQUIRED && 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse', 
-                submission.status === KYCStatus.REJECTED && 'bg-red-50 text-red-700 border-red-200',
-                submission.status === KYCStatus.SUBMITTED && 'bg-primary/5 text-primary border-primary/20'
-              )}>
-                {submission.status.replace(/_/g, ' ')}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={cn(
+                  "font-black px-3 py-1 uppercase text-[10px] tracking-widest",
+                  submission.status === KYCStatus.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                  submission.status === KYCStatus.ACTION_REQUIRED && 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse', 
+                  submission.status === KYCStatus.REJECTED && 'bg-red-50 text-red-700 border-red-200',
+                  submission.status === KYCStatus.SUBMITTED && 'bg-primary/5 text-primary border-primary/20'
+                )}>
+                  {submission.status.replace(/_/g, ' ')}
+                </Badge>
+                {(submission.amendCycles || 0) > 0 && (
+                  <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-100 flex items-center gap-1.5 font-black text-[10px] px-3">
+                    <RefreshCw className="w-3 h-3" /> Cycle {submission.amendCycles}
+                  </Badge>
+                )}
+              </div>
             </div>
             <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} • {submission.branchName} Node</p>
           </div>
