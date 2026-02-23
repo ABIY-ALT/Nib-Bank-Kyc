@@ -88,14 +88,14 @@ async function main() {
       first: 'Master', 
       last: 'Admin', 
       role: 'SUPER_ADMIN', 
-      branch: 'Arada Branch' 
+      branch: null // Institutional
     },
     { 
       email: 'addis.director@nibbank.com.et', 
       first: 'District', 
       last: 'Director', 
       role: 'DISTRICT_DIRECTOR', 
-      branch: 'Arada Branch' 
+      branch: null // Institutional
     },
     { 
       email: 'bole.manager@nibbank.com.et', 
@@ -116,38 +116,40 @@ async function main() {
       first: 'Jane', 
       last: 'Specialist', 
       role: 'KYC_OFFICER', 
-      branch: 'Kirkos Branch' 
+      branch: null // Institutional
     },
     { 
       email: 'supervisor.one@nibbank.com.et', 
       first: 'Robert', 
       last: 'Supervisor', 
       role: 'SUPERVISOR', 
-      branch: 'Bole Branch' 
+      branch: null // Institutional
     },
     { 
       email: 'audit.specialist@nibbank.com.et', 
       first: 'FollowUp', 
       last: 'Specialist', 
       role: 'FOLLOW_UP_TEAM', 
-      branch: 'Kirkos Branch' 
+      branch: null // Institutional
     },
     { 
       email: 'chief.retail@nibbank.com.et', 
       first: 'Chief', 
       last: 'Officer', 
       role: 'CHIEF', 
-      branch: 'Arada Branch' 
+      branch: null // Institutional
     }
   ];
 
   for (const u of testUsers) {
+    const branchId = u.branch ? branchMap[u.branch].id : null;
+    
     const user = await prisma.user.upsert({
       where: { email: u.email },
       update: {
         firstName: u.first,
         lastName: u.last,
-        branchId: branchMap[u.branch].id,
+        branchId: branchId,
         passwordHash: hashedPass,
       },
       create: {
@@ -156,7 +158,7 @@ async function main() {
         firstName: u.first,
         lastName: u.last,
         status: UserStatus.ACTIVE,
-        branchId: branchMap[u.branch].id,
+        branchId: branchId,
         passwordHash: hashedPass,
       },
     });
@@ -170,10 +172,10 @@ async function main() {
       create: { userId: user.id, roleId: roleMap[u.role].id },
     });
 
-    console.log(`👤 User provisioned: ${u.email} [${u.role}]`);
+    console.log(`👤 User provisioned: ${u.email} [${u.role}] -> ${u.branch || 'Institutional Node'}`);
   }
 
-  console.log('✅ Institutional seeding complete. Audit vault ready.');
+  console.log('✅ Institutional seeding complete. Vault ready.');
 }
 
 main()
