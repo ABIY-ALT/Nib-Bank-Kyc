@@ -23,7 +23,8 @@ import {
   Phone,
   Search,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ShieldAlert
 } from "lucide-react";
 import { 
   Dialog, 
@@ -46,6 +47,7 @@ import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
 import { UserStatus } from '@prisma/client';
+import { cn } from '@/lib/utils';
 
 export default function UserManagementPage() {
   const { toast } = useToast();
@@ -143,10 +145,17 @@ export default function UserManagementPage() {
       return;
     }
 
+    // Enforce branch removal for non-branch roles during save
+    const isBranchRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFF_ICER' || formData.role === 'BRANCH_OFFICER';
+    const finalFormData = {
+      ...formData,
+      branchId: isBranchRole ? formData.branchId : null
+    };
+
     setIsSyncing(true);
     try {
       const id = editingUser?.firebaseUid || `user-${Math.random().toString(36).substr(2, 9)}`;
-      await provisionUser({ ...formData, id });
+      await provisionUser({ ...finalFormData, id });
       toast({ title: "Profile Synchronized", description: "Institutional staff record updated in SQL." });
       setIsDialogOpen(false);
       loadData();
@@ -167,6 +176,8 @@ export default function UserManagementPage() {
       toast({ variant: "destructive", title: "Action Failed" });
     }
   };
+
+  const isBranchSpecificRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -337,16 +348,27 @@ export default function UserManagementPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Home Branch</Label>
-                <Select value={formData.branchId || ""} onValueChange={val => setFormData({...formData, branchId: val})}>
-                  <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select Branch" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Unmapped</SelectItem>
-                    {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              
+              {isBranchSpecificRole ? (
+                <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                  <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Home Branch</Label>
+                  <Select value={formData.branchId || ""} onValueChange={val => setFormData({...formData, branchId: val})}>
+                    <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select Branch" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unmapped</SelectItem>
+                      {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-2 opacity-60">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Home Branch</Label>
+                  <div className="h-11 rounded-xl border border-slate-100 bg-slate-50 flex items-center px-3 gap-2">
+                    <ShieldAlert className="w-3.5 h-3.5 text-slate-300" />
+                    <span className="text-[10px] font-black text-slate-400 uppercase">Institutional Role</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
