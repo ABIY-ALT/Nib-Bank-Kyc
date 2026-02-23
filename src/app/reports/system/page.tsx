@@ -25,7 +25,8 @@ import {
   Building2,
   Users,
   Calendar as CalendarIcon,
-  FileDown
+  FileDown,
+  Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { subDays, format } from "date-fns";
@@ -38,32 +39,38 @@ const MOCK_SYSTEM_STATS = {
   pending: 185,
   accuracy: "97.2%",
   branches: [
-    { name: "Downtown Branch", count: 420 },
-    { name: "Uptown Branch", count: 310 },
-    { name: "East Side", count: 285 },
-    { name: "Northern Branch", count: 230 },
+    { name: "Meskel Square Branch", count: 420 },
+    { name: "Stadium Branch", count: 310 },
+    { name: "Kazanchis Branch", count: 285 },
+    { name: "Bole Branch", count: 230 },
   ],
   officers: [
-    { name: "Jane Smith", count: 340 },
-    { name: "Robert Brown", count: 310 },
-    { name: "Alice Wilson", count: 290 },
-    { name: "Local Specialist", count: 185 },
+    { name: "Abebe Bikila", count: 340 },
+    { name: "Derartu Tulu", count: 310 },
+    { name: "Fatuma Roba", count: 290 },
+    { name: "Meseret Defar", count: 185 },
   ]
 };
 
 export default function SystemWideReportsPage() {
   const { toast } = useToast();
   const [reportData, setReportData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
   
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const handleGenerateReport = () => {
-    setReportData(MOCK_SYSTEM_STATS);
-    toast({
-      title: "Institutional Audit Complete",
-      description: `Analyzed 1,245 system-wide records from ${fromDate} to ${toDate}.`,
-    });
+    setLoading(true);
+    // Simulate aggregation
+    setTimeout(() => {
+      setReportData(MOCK_SYSTEM_STATS);
+      setLoading(false);
+      toast({
+        title: "Institutional Audit Complete",
+        description: `Analyzed 1,245 system-wide records from ${fromDate} to ${toDate}.`,
+      });
+    }, 800);
   };
 
   const handleExportCSV = () => {
@@ -94,13 +101,6 @@ export default function SystemWideReportsPage() {
     });
   };
 
-  const handleExportPDF = () => {
-    toast({
-      title: "Generating Master PDF Bundle",
-      description: "Compiling institutional audit records into a secure PDF package...",
-    });
-  };
-
   const resetFilters = () => {
     setReportData(null);
     setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
@@ -120,11 +120,11 @@ export default function SystemWideReportsPage() {
           <p className="text-muted-foreground text-lg font-medium">Master institutional oversight of all branches and specialized staff.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 font-bold h-10 px-6 border-slate-200 bg-white" onClick={resetFilters}>
+          <Button variant="outline" className="gap-2 font-bold h-11 px-6 border-slate-200 bg-white" onClick={resetFilters}>
             <History className="w-4 h-4" /> Reset
           </Button>
-          <Button className="gap-2 bg-primary shadow-xl font-bold h-10 px-6 text-white" onClick={handleGenerateReport}>
-            <ShieldCheck className="w-4 h-4" />
+          <Button className="gap-2 bg-primary shadow-xl font-bold h-11 px-6 text-white" onClick={handleGenerateReport} disabled={loading}>
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
             Compile Master Audit
           </Button>
         </div>
@@ -142,7 +142,7 @@ export default function SystemWideReportsPage() {
                     type="date" 
                     value={fromDate}
                     onChange={(e) => setFromDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold shadow-sm"
                   />
                 </div>
               </div>
@@ -154,7 +154,7 @@ export default function SystemWideReportsPage() {
                     type="date" 
                     value={toDate}
                     onChange={(e) => setToDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold"
+                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold shadow-sm"
                   />
                 </div>
               </div>
@@ -170,74 +170,78 @@ export default function SystemWideReportsPage() {
               <Globe className="w-16 h-16 text-primary" />
             </div>
             <div className="max-w-md mx-auto space-y-3">
-              <p className="font-extrabold text-slate-900 text-2xl">Network Audit Offline</p>
-              <p className="text-slate-500 leading-relaxed font-medium">Run the institutional audit to aggregate data across all network nodes.</p>
+              <p className="font-extrabold text-slate-900 text-2xl tracking-tight">Network Audit Standby</p>
+              <p className="text-slate-500 leading-relaxed font-medium">Run the institutional audit to aggregate data across all network nodes from the Vault.</p>
             </div>
-            <Button size="lg" className="px-12 h-14 font-extrabold text-lg shadow-2xl shadow-primary/20 text-white" onClick={handleGenerateReport}>
-              Execute Global Aggregation
+            <Button size="lg" className="px-12 h-14 font-extrabold text-lg shadow-2xl shadow-primary/20 text-white bg-primary" onClick={handleGenerateReport} disabled={loading}>
+              {loading ? "Aggregating Intelligence..." : "Execute Global Aggregation"}
             </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-             <Card className="bg-primary text-white shadow-2xl overflow-hidden">
+             <Card className="bg-primary text-white shadow-2xl overflow-hidden border-none">
                <CardHeader className="pb-2 bg-white/10">
-                 <CardTitle className="text-xs font-bold uppercase tracking-widest text-white/80">Total Volume</CardTitle>
+                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-white/80">Total Volume</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
-                 <span className="text-5xl font-black text-white">{reportData.total}</span>
+                 <span className="text-5xl font-black text-white tracking-tighter">{reportData.total}</span>
                </CardContent>
              </Card>
-             <Card className="shadow-lg border-slate-200 overflow-hidden">
-               <CardHeader className="pb-2 bg-emerald-50">
-                 <CardTitle className="text-xs font-bold uppercase tracking-widest text-emerald-600">Approvals</CardTitle>
+             <Card className="shadow-lg border-slate-200 overflow-hidden bg-white">
+               <CardHeader className="pb-2 bg-primary/5">
+                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Total Approvals</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
-                 <span className="text-5xl font-black text-emerald-600">{reportData.approved}</span>
+                 <span className="text-5xl font-black text-emerald-600 tracking-tighter">{reportData.approved}</span>
                </CardContent>
              </Card>
-             <Card className="shadow-lg border-slate-200 overflow-hidden">
-               <CardHeader className="pb-2 bg-orange-50">
-                 <CardTitle className="text-xs font-bold uppercase tracking-widest text-orange-600">Pending</CardTitle>
+             <Card className="shadow-lg border-slate-200 overflow-hidden bg-white">
+               <CardHeader className="pb-2 bg-primary/5">
+                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Review</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
-                 <span className="text-5xl font-black text-orange-600">{reportData.pending}</span>
+                 <span className="text-5xl font-black text-orange-600 tracking-tighter">{reportData.pending}</span>
                </CardContent>
              </Card>
-             <Card className="shadow-lg border-slate-200 overflow-hidden">
-               <CardHeader className="pb-2 bg-purple-50">
-                 <CardTitle className="text-xs font-bold uppercase tracking-widest text-purple-600">Accuracy</CardTitle>
+             <Card className="shadow-lg border-slate-200 overflow-hidden bg-white">
+               <CardHeader className="pb-2 bg-primary/5">
+                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Accuracy Index</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
-                 <span className="text-5xl font-black text-purple-600">{reportData.accuracy}</span>
+                 <span className="text-5xl font-black text-primary tracking-tighter">{reportData.accuracy}</span>
                </CardContent>
+             </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <Card className="shadow-xl border-slate-200 overflow-hidden">
+            <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
               <CardHeader className="bg-primary text-white border-b p-6 flex flex-row items-center justify-between">
-                <CardTitle className="text-xl font-bold flex items-center gap-2 text-white">
-                  <Building2 className="w-5 h-5 text-white" /> Branch Network
+                <CardTitle className="text-xl font-black flex items-center gap-3 text-white">
+                  <div className="p-2 bg-white/20 rounded-lg"><Building2 className="w-5 h-5 text-white" /></div>
+                  Branch Network
                 </CardTitle>
-                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-white font-bold hover:bg-white/10">
+                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-white font-bold hover:bg-white/10 h-10 px-4">
                   <FileDown className="w-4 h-4 mr-2" /> CSV
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-100/50">
-                      <TableHead className="font-bold py-4">Branch</TableHead>
-                      <TableHead className="font-bold text-right pr-8">Submissions</TableHead>
+                    <TableRow className="bg-slate-50/80">
+                      <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Jurisdiction Node</TableHead>
+                      <TableHead className="font-black text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Throughput</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {reportData.branches.map((branch: any) => (
-                      <TableRow key={branch.name}>
-                        <TableCell className="font-bold text-slate-800 py-4">{branch.name}</TableCell>
+                      <TableRow key={branch.name} className="hover:bg-slate-50 transition-colors">
+                        <TableCell className="font-bold text-slate-800 py-5 pl-8">{branch.name}</TableCell>
                         <TableCell className="text-right pr-8">
-                          <Badge variant="secondary" className="font-bold px-3 py-1">{branch.count}</Badge>
+                          <Badge variant="secondary" className="font-black px-4 py-1.5 bg-primary/5 text-primary border-primary/10">
+                            {branch.count} Cases
+                          </Badge>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -246,29 +250,30 @@ export default function SystemWideReportsPage() {
               </CardContent>
             </Card>
 
-            <Card className="shadow-xl border-slate-200 overflow-hidden">
+            <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
               <CardHeader className="bg-primary text-white border-b p-6 flex flex-row items-center justify-between">
-                <CardTitle className="text-xl font-bold flex items-center gap-2 text-white">
-                  <Users className="w-5 h-5 text-white" /> Officer Throughput
+                <CardTitle className="text-xl font-black flex items-center gap-3 text-white">
+                  <div className="p-2 bg-white/20 rounded-lg"><Users className="w-5 h-5 text-white" /></div>
+                  Specialist Throughput
                 </CardTitle>
-                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-white font-bold hover:bg-white/10">
+                <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-white font-bold hover:bg-white/10 h-10 px-4">
                   <FileDown className="w-4 h-4 mr-2" /> CSV
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-100/50">
-                      <TableHead className="font-bold py-4">Specialist</TableHead>
-                      <TableHead className="font-bold text-right pr-8">Decisions</TableHead>
+                    <TableRow className="bg-slate-50/80">
+                      <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Personnel Name</TableHead>
+                      <TableHead className="font-black text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Decisions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {reportData.officers.map((officer: any) => (
-                      <TableRow key={officer.name}>
-                        <TableCell className="font-bold text-slate-800 py-4">{officer.name}</TableCell>
+                      <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
+                        <TableCell className="font-bold text-slate-800 py-5 pl-8">{officer.name}</TableCell>
                         <TableCell className="text-right pr-8">
-                          <Badge variant="outline" className="font-bold border-primary/20 text-primary px-3 py-1">
+                          <Badge variant="outline" className="font-black border-primary/30 text-primary px-4 py-1.5 bg-white shadow-sm">
                             {officer.count} Reviews
                           </Badge>
                         </TableCell>
@@ -281,7 +286,7 @@ export default function SystemWideReportsPage() {
           </div>
 
           <div className="flex justify-center pt-8">
-            <Button size="lg" className="px-16 h-16 font-bold text-xl gap-3 shadow-2xl text-white" onClick={handleExportPDF}>
+            <Button size="lg" className="px-16 h-16 bg-slate-900 hover:bg-black text-white font-black text-xl gap-3 shadow-2xl rounded-2xl transition-all active:scale-[0.98]">
               <Download className="w-6 h-6" /> Export Master PDF Bundle
             </Button>
           </div>
