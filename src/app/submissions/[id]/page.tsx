@@ -31,7 +31,8 @@ import {
   RotateCcw,
   Upload,
   X,
-  Plus
+  Plus,
+  BookOpen
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -57,6 +58,7 @@ import {
 } from "@/components/ui/select";
 import JSZip from 'jszip';
 import { usePermissions } from "@/hooks/use-permissions";
+import { AMENDMENT_SCENARIOS } from "@/lib/kyc-data";
 
 export default function SubmissionDetails() {
   const params = useParams();
@@ -485,6 +487,30 @@ export default function SubmissionDetails() {
                 <CardTitle className="text-lg font-black tracking-tight">KYC Determination</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6 pt-6 px-6 pb-8">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <BookOpen className="w-3 h-3" /> Standard Findings / Scenarios
+                  </Label>
+                  <Select onValueChange={(val) => {
+                    if (val === "other") {
+                      setRemarks("");
+                    } else {
+                      setRemarks(val);
+                    }
+                  }}>
+                    <SelectTrigger className="h-11 bg-slate-50/50 border-slate-200 focus:ring-primary/20 rounded-xl font-medium">
+                      <SelectValue placeholder="Select a standard comment..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AMENDMENT_SCENARIOS.map((scenario, idx) => (
+                        <SelectItem key={idx} value={scenario.toLowerCase().includes("other") ? "other" : scenario}>
+                          {scenario}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Official Decision Remarks</Label>
                   <Textarea 
