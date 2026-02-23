@@ -70,7 +70,7 @@ const KYC_CHECKLIST_ITEMS = [
   { id: 'id_verified', label: 'Identity Document Authenticity' },
   { id: 'photo_match', label: 'Customer Photo Comparison' },
   { id: 'sanction_check', label: 'Sanction & AML Screening' },
-  { id: 'mother_name', label: 'Mother\'s Name Verification' },
+  { id: 'mother_name', label: "Mother's Name Verification" },
   { id: 't24_sync', label: 'Core Banking (T24) Data Match' },
   { id: 'address_verified', label: 'Residential Address Validation' },
   { id: 'risk_profile', label: 'Risk Categorization Review' }
@@ -131,13 +131,8 @@ export default function SubmissionDetails() {
   const handleAction = async (action: KYCStatus) => {
     if (!submission || !user || isTerminal || isActioning) return;
 
-    if (action === KYCStatus.ACTION_REQUIRED && !remarks.trim()) {
-      toast({ variant: "destructive", title: "Information Required", description: "Amendment requests require detailed remarks." });
-      return;
-    }
-
-    if (action === KYCStatus.ESCALATED && !remarks.trim()) {
-      toast({ variant: "destructive", title: "Justification Required", description: "Please explain the reason for escalation." });
+    if ((action === KYCStatus.ACTION_REQUIRED || action === KYCStatus.ESCALATED) && !remarks.trim()) {
+      toast({ variant: "destructive", title: "Information Required", description: "This action requires detailed remarks or a selected finding." });
       return;
     }
 
@@ -626,12 +621,12 @@ export default function SubmissionDetails() {
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Official Decision Remarks</Label>
                   <Textarea 
-                    placeholder="Provide detailed instructions or verification notes..." 
+                    placeholder={isCustomRemark ? "Provide detailed instructions or verification notes..." : "Locked: Selected Standard Finding"}
                     value={remarks} 
                     onChange={(e) => setRemarks(e.target.value)} 
                     readOnly={!isCustomRemark}
                     className={cn(
-                      "min-h-[140px] border-slate-200 focus-visible:ring-primary/20 rounded-2xl font-medium",
+                      "min-h-[140px] border-slate-200 focus-visible:ring-primary/20 rounded-2xl font-medium transition-colors duration-200",
                       !isCustomRemark ? "bg-slate-100 cursor-not-allowed text-slate-600" : "bg-slate-50/50"
                     )}
                   />
