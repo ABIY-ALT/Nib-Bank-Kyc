@@ -15,7 +15,9 @@ import {
   X,
   CheckSquare,
   Square,
-  Zap
+  Zap,
+  RefreshCcw,
+  AlertTriangle
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -39,6 +41,7 @@ export default function StaffRolesPage() {
   const [allPermissions, setAllPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
@@ -60,6 +63,19 @@ export default function StaffRolesPage() {
       toast({ variant: "destructive", title: "Institutional Sync Failed" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncPermissions = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await seedInstitutionalPermissions();
+      if (res.success) {
+        toast({ title: "Registry Synced", description: "Standard institutional capabilities have been provisioned." });
+        await loadData();
+      }
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -144,7 +160,7 @@ export default function StaffRolesPage() {
   if (loading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -153,54 +169,70 @@ export default function StaffRolesPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Roles</h1>
           </div>
-          <p className="text-muted-foreground text-lg">Master Access Control Matrix.</p>
+          <p className="text-muted-foreground text-lg font-medium">Master Access Control Matrix.</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleOpenAdd} className="bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90">
+          {allPermissions.length === 0 && (
+            <Button variant="outline" onClick={handleSyncPermissions} disabled={isSyncing} className="border-primary/20 text-primary font-black hover:bg-primary/5 gap-2">
+              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
+              Provision Registry
+            </Button>
+          )}
+          <Button onClick={handleOpenAdd} className="bg-primary shadow-xl font-black h-11 px-8 text-white hover:bg-primary/90 rounded-xl">
             <Plus className="w-4 h-4 mr-2" /> Define New Role
           </Button>
         </div>
       </div>
 
       <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
-        <CardHeader className="bg-primary text-white border-b">
-          <CardTitle>Personnel Designations</CardTitle>
-          <CardDescription className="text-white/70">Manage regional and operational authority levels.</CardDescription>
+        <CardHeader className="bg-primary text-white border-b py-6">
+          <CardTitle className="text-xl font-black">Personnel Designations</CardTitle>
+          <CardDescription className="text-white/70 font-medium">Manage regional and operational authority levels.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80">
-                <TableHead className="font-bold py-4 pl-8">Role Name</TableHead>
-                <TableHead className="font-bold">Institutional Status</TableHead>
-                <TableHead className="text-center font-bold">Capability Authority</TableHead>
-                <TableHead className="text-right font-bold pr-8">Actions</TableHead>
+                <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Role Name</TableHead>
+                <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Status</TableHead>
+                <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Capability Authority</TableHead>
+                <TableHead className="text-right font-black pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {roleDefinitions.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="py-20 text-center text-muted-foreground italic">No roles defined. Establish institutional authority groups above.</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={4} className="py-32 text-center">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="p-6 bg-slate-50 rounded-full"><Zap className="w-12 h-12 text-slate-200" /></div>
+                      <div className="space-y-1">
+                        <p className="font-bold text-slate-900 text-lg">No roles defined</p>
+                        <p className="text-sm text-muted-foreground">Establish authority groups to manage staff access.</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : roleDefinitions.map((role) => (
-                <TableRow key={role.id} className="hover:bg-slate-50 transition-colors">
-                  <TableCell className="font-black text-slate-900 pl-8">{role.name.replace(/_/g, ' ')}</TableCell>
+                <TableRow key={role.id} className="hover:bg-slate-50 transition-colors group">
+                  <TableCell className="font-black text-slate-900 pl-8 py-6">{role.name.replace(/_/g, ' ')}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={role.active ? 'text-emerald-600 border-emerald-200 bg-emerald-50' : 'text-slate-400'}>
+                    <Badge variant="outline" className={role.active ? 'text-emerald-600 border-emerald-200 bg-emerald-50 font-black text-[9px] uppercase px-3' : 'text-slate-400 border-slate-200 font-black text-[9px] uppercase'}>
                       {role.active ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <button 
                       onClick={() => handleOpenInventory(role)}
-                      className="flex items-center justify-center gap-2 mx-auto hover:scale-105 transition-transform p-2 rounded-lg hover:bg-emerald-50 group"
+                      className="flex items-center justify-center gap-2 mx-auto hover:scale-105 transition-transform p-3 rounded-xl hover:bg-primary/5 group/btn"
                     >
-                      <span className="font-bold text-slate-700 group-hover:text-emerald-700">{role.permissions.length} Rights</span>
-                      <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                      <span className="font-black text-slate-700 group-hover/btn:text-primary text-xs">{role.permissions.length} Capabilities</span>
+                      <CheckCircle2 className="w-4 h-4 text-primary" />
                     </button>
                   </TableCell>
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-8 w-8 text-primary rounded-full hover:bg-primary/5"><Settings2 className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => { if(confirm('Deactivate this role?')) deactivateRole(role.id).then(loadData); }} className="h-8 w-8 text-destructive rounded-full hover:bg-destructive/5"><Trash2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-10 w-10 text-slate-400 rounded-full hover:bg-primary/5 hover:text-primary"><Settings2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => { if(confirm('Deactivate this role?')) deactivateRole(role.id).then(loadData); }} className="h-10 w-10 text-slate-400 rounded-full hover:bg-destructive/5 hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -241,7 +273,7 @@ export default function StaffRolesPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {perms.map((p: any) => (
                         <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(184,147,52,0.5)]" />
                           <span className="text-xs font-bold text-slate-700">{p.name}</span>
                         </div>
                       ))}
@@ -252,14 +284,14 @@ export default function StaffRolesPage() {
             </ScrollArea>
           </div>
           <DialogFooter className="p-6 bg-slate-50 border-t">
-            <Button onClick={() => { setIsInventoryOpen(false); handleOpenEdit(selectedRole); }} className="bg-primary px-8 font-black text-white hover:bg-primary/90 rounded-xl h-11">Edit Authority Map</Button>
+            <Button onClick={() => { setIsInventoryOpen(false); handleOpenEdit(selectedRole); }} className="bg-primary px-8 font-black text-white hover:bg-primary/90 rounded-xl h-11 shadow-lg">Edit Authority Map</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
-          <div className="bg-[#fcfaf7]">
+          <div className="bg-white">
             <DialogHeader className="p-8 bg-primary text-white border-b space-y-0">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-white/20 rounded-2xl">
@@ -281,90 +313,106 @@ export default function StaffRolesPage() {
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
                 <Input 
                   placeholder="e.g. BRANCH_OFFICER" 
-                  className="h-12 bg-white border-slate-200 font-bold focus-visible:ring-primary/20 rounded-xl"
+                  className="h-12 bg-slate-50 border-slate-200 font-bold focus-visible:ring-primary/20 rounded-xl"
                   value={roleName}
                   onChange={(e) => setRoleName(e.target.value.toUpperCase().replace(/\s+/g, '_'))}
                 />
               </div>
 
-              <ScrollArea className="h-[55vh] pr-4">
-                <div className="space-y-12">
-                  {Object.entries(groupedPermissions).map(([group, perms]) => {
-                    const groupIds = perms.map(p => p.id);
-                    const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
-                    
-                    return (
-                      <div key={group} className="space-y-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4 flex-1">
-                            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-primary whitespace-nowrap">{group}</span>
-                            <div className="h-px flex-1 bg-slate-200" />
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleToggleGroup(group)}
-                            className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-bold text-[10px] uppercase tracking-wider gap-2"
-                          >
-                            {allSelectedInGroup ? (
-                              <><CheckSquare className="w-3.5 h-3.5" /> Deselect All</>
-                            ) : (
-                              <><Square className="w-3.5 h-3.5" /> Select All</>
-                            )}
-                          </Button>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {perms.map((p: any) => {
-                            const isSelected = permissionsForm.includes(p.id);
-                            return (
-                              <div 
-                                key={p.id} 
-                                onClick={() => handleTogglePermission(p.id)}
-                                className={cn(
-                                  "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group",
-                                  isSelected 
-                                    ? "bg-primary/5 border-primary/40 shadow-sm" 
-                                    : "bg-white border-slate-100 hover:border-slate-200 shadow-sm"
-                                )}
-                              >
-                                <div className="flex items-center gap-4">
-                                  <div className={cn(
-                                    "w-2 h-2 rounded-full transition-all",
-                                    isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(var(--primary),0.5)]" : "bg-slate-200"
-                                  )} />
-                                  <span className={cn(
-                                    "text-xs font-bold transition-colors",
-                                    isSelected ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
-                                  )}>{p.name}</span>
-                                </div>
-                                <div className={cn(
-                                  "w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center",
-                                  isSelected ? "bg-primary border-primary" : "bg-white border-slate-200 group-hover:border-primary/30"
-                                )}>
-                                  {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
+              {allPermissions.length === 0 ? (
+                <div className="py-20 text-center space-y-6 bg-slate-50 rounded-3xl border-2 border-dashed">
+                  <div className="bg-white p-4 rounded-full shadow-sm w-fit mx-auto">
+                    <AlertTriangle className="w-10 h-10 text-orange-400" />
+                  </div>
+                  <div className="max-w-xs mx-auto space-y-2">
+                    <p className="font-bold text-slate-900">Registry Empty</p>
+                    <p className="text-sm text-slate-500 font-medium">The capability registry must be provisioned before roles can be mapped.</p>
+                  </div>
+                  <Button onClick={handleSyncPermissions} disabled={isSyncing} className="bg-primary text-white font-black px-10 h-12 rounded-xl shadow-lg">
+                    {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCcw className="w-4 h-4 mr-2" />}
+                    Sync System Capabilities
+                  </Button>
                 </div>
-              </ScrollArea>
+              ) : (
+                <ScrollArea className="h-[50vh] pr-4">
+                  <div className="space-y-12">
+                    {Object.entries(groupedPermissions).map(([group, perms]) => {
+                      const groupIds = perms.map(p => p.id);
+                      const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
+                      
+                      return (
+                        <div key={group} className="space-y-6">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4 flex-1">
+                              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-primary whitespace-nowrap">{group}</span>
+                              <div className="h-px flex-1 bg-slate-100" />
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleToggleGroup(group)}
+                              className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-bold text-[10px] uppercase tracking-wider gap-2"
+                            >
+                              {allSelectedInGroup ? (
+                                <><CheckSquare className="w-3.5 h-3.5" /> Deselect All</>
+                              ) : (
+                                <><Square className="w-3.5 h-3.5" /> Select All</>
+                              )}
+                            </Button>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {perms.map((p: any) => {
+                              const isSelected = permissionsForm.includes(p.id);
+                              return (
+                                <div 
+                                  key={p.id} 
+                                  onClick={() => handleTogglePermission(p.id)}
+                                  className={cn(
+                                    "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group",
+                                    isSelected 
+                                      ? "bg-primary/5 border-primary/40 shadow-sm" 
+                                      : "bg-white border-slate-100 hover:border-slate-200 shadow-sm"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <div className={cn(
+                                      "w-2 h-2 rounded-full transition-all",
+                                      isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(184,147,52,0.5)]" : "bg-slate-200"
+                                    )} />
+                                    <span className={cn(
+                                      "text-xs font-bold transition-colors",
+                                      isSelected ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
+                                    )}>{p.name}</span>
+                                  </div>
+                                  <div className={cn(
+                                    "w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center",
+                                    isSelected ? "bg-primary border-primary" : "bg-white border-slate-200 group-hover:border-primary/30"
+                                  )}>
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              )}
             </div>
 
-            <DialogFooter className="p-8 bg-white border-t flex flex-row justify-end items-center gap-6 rounded-b-3xl">
+            <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row justify-end items-center gap-6 rounded-b-3xl">
               <button 
                 onClick={() => setIsDialogOpen(false)} 
-                className="text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
+                className="text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors"
               >
                 Discard Changes
               </button>
               <Button 
                 onClick={handleSave} 
-                disabled={isSaving}
+                disabled={isSaving || allPermissions.length === 0}
                 className="h-12 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-xl shadow-primary/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
