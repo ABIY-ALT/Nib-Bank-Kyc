@@ -1,4 +1,3 @@
-
 import { PrismaClient, UserStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -10,53 +9,13 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('🚀 Institutional Seeding Initialized [MANUAL MAPPING MODE]...');
+  console.log('🚀 Institutional Seeding Initialized [REGIONAL MAPPING MODE]...');
 
-  // 1. Seed Districts
-  const districts = ['Addis North', 'Addis South', 'Addis East', 'Addis West'];
-  const districtMap: Record<string, any> = {};
-
-  for (const name of districts) {
-    const d = await prisma.district.upsert({
-      where: { name },
-      update: {},
-      create: { name },
-    });
-    districtMap[name] = d;
-    console.log(`📍 District established: ${name}`);
-  }
-
-  // 2. Seed Branches
-  const branches = [
-    { name: 'Arada Branch', code: 'BR-101', district: 'Addis North' },
-    { name: 'Gullele Branch', code: 'BR-102', district: 'Addis North' },
-    { name: 'Kirkos Branch', code: 'BR-201', district: 'Addis South' },
-    { name: 'Nifas Silk Branch', code: 'BR-202', district: 'Addis South' },
-    { name: 'Bole Branch', code: 'BR-301', district: 'Addis East' },
-    { name: 'Yeka Branch', code: 'BR-302', district: 'Addis East' },
-    { name: 'Kolfe Branch', code: 'BR-401', district: 'Addis West' },
-    { name: 'Lideta Branch', code: 'BR-402', district: 'Addis West' },
-  ];
-
-  for (const b of branches) {
-    await prisma.branch.upsert({
-      where: { name: b.name },
-      update: { code: b.code },
-      create: { 
-        name: b.name, 
-        code: b.code, 
-        districtId: districtMap[b.district].id 
-      },
-    });
-    console.log(`  🏢 Branch registered: ${b.name} (${b.code})`);
-  }
-
-  // 3. Seed Roles
+  // 1. Seed Roles
   const roles = [
     'SUPER_ADMIN',
     'ADMIN',
     'DISTRICT_DIRECTOR',
-    'FOLLOW_UP_TEAM',
     'BRANCH_MANAGER',
     'BRANCH_OFFICER',
     'KYC_OFFICER',
@@ -66,83 +25,122 @@ async function main() {
 
   const roleMap: Record<string, any> = {};
   for (const name of roles) {
-    const r = await prisma.role.upsert({
+    roleMap[name] = await prisma.role.upsert({
       where: { name },
       update: {},
       create: { name, description: `Institutional role for ${name.replace(/_/g, ' ')}` },
     });
-    roleMap[name] = r;
     console.log(`🛡️ Role provisioned: ${name}`);
   }
 
-  // 4. Seed Users
+  // 2. Seed District
+  const district = await prisma.district.upsert({
+    where: { name: 'Addis Central' },
+    update: {},
+    create: { name: 'Addis Central' },
+  });
+  console.log(`📍 District established: ${district.name}`);
+
+  // 3. Seed Branches
+  const branches = [
+    { name: 'Meskel Square Branch', code: 'BR-101' },
+    { name: 'Stadium Branch', code: 'BR-102' },
+    { name: 'Kazanchis Branch', code: 'BR-103' },
+  ];
+
+  const branchMap: Record<string, any> = {};
+  for (const b of branches) {
+    branchMap[b.name] = await prisma.branch.upsert({
+      where: { name: b.name },
+      update: { code: b.code },
+      create: { 
+        name: b.name, 
+        code: b.code, 
+        districtId: district.id 
+      },
+    });
+    console.log(`  🏢 Branch registered: ${b.name}`);
+  }
+
+  // 4. Provision Users
   const adminPass = process.env.SEED_ADMIN_PASSWORD || 'nibbank123';
   const hashedPass = await bcrypt.hash(adminPass, 10);
 
-  // ALL USERS INITIALLY UNMAPPED (branchId: null, assignedBranches: [])
   const testUsers = [
-    // 1. SUPER ADMIN
+    // DISTRICT DIRECTOR
     { 
-      email: 'master.admin@nibbank.com.et', 
-      first: 'Master', last: 'Admin', 
-      role: 'SUPER_ADMIN', 
-      phone: '+251111111111' 
-    },
-
-    // 2. TWO DISTRICT DIRECTORS
-    { 
-      email: 'north.director@nibbank.com.et', 
-      first: 'North', last: 'Director', 
-      role: 'DISTRICT_DIRECTOR', 
-      phone: '+251911000001' 
-    },
-    { 
-      email: 'south.director@nibbank.com.et', 
-      first: 'South', last: 'Director', 
-      role: 'DISTRICT_DIRECTOR', 
-      phone: '+251911000002' 
-    },
-
-    // 3. TWO BRANCH MANAGERS
-    { 
-      email: 'manager.one@nibbank.com.et', 
+      email: 'director.central@nibbank.com.et', 
       first: 'Abebe', last: 'Bikila', 
-      role: 'BRANCH_MANAGER', 
-      phone: '+251911000003' 
+      role: 'DISTRICT_DIRECTOR', 
+      phone: '+251911000001',
+      mapping: { districtId: district.id } 
     },
+
+    // BRANCH MANAGERS
     { 
-      email: 'manager.two@nibbank.com.et', 
+      email: 'manager.meskel@nibbank.com.et', 
       first: 'Derartu', last: 'Tulu', 
       role: 'BRANCH_MANAGER', 
-      phone: '+251911000004' 
+      phone: '+251911000002',
+      mapping: { branchId: branchMap['Meskel Square Branch'].id } 
     },
-
-    // 4. TWO BRANCH OFFICERS
     { 
-      email: 'officer.one@nibbank.com.et', 
+      email: 'manager.stadium@nibbank.com.et', 
       first: 'Haile', last: 'Gebrselassie', 
-      role: 'BRANCH_OFFICER', 
-      phone: '+251911000005' 
+      role: 'BRANCH_MANAGER', 
+      phone: '+251911000003',
+      mapping: { branchId: branchMap['Stadium Branch'].id } 
     },
     { 
-      email: 'officer.two@nibbank.com.et', 
+      email: 'manager.kazanchis@nibbank.com.et', 
       first: 'Kenenisa', last: 'Bekele', 
-      role: 'BRANCH_OFFICER', 
-      phone: '+251911000006' 
+      role: 'BRANCH_MANAGER', 
+      phone: '+251911000004',
+      mapping: { branchId: branchMap['Kazanchis Branch'].id } 
     },
 
-    // 5. TWO KYC OFFICERS
+    // BRANCH OFFICERS (2 per branch)
     { 
-      email: 'kyc.analyst.1@nibbank.com.et', 
-      first: 'Jane', last: 'Specialist', 
-      role: 'KYC_OFFICER', 
-      phone: '+251911000007'
+      email: 'officer1.meskel@nibbank.com.et', 
+      first: 'Fatuma', last: 'Roba', 
+      role: 'BRANCH_OFFICER', 
+      phone: '+251911000005',
+      mapping: { branchId: branchMap['Meskel Square Branch'].id } 
     },
     { 
-      email: 'kyc.analyst.2@nibbank.com.et', 
-      first: 'John', last: 'Analyst', 
-      role: 'KYC_OFFICER', 
-      phone: '+251911000008'
+      email: 'officer2.meskel@nibbank.com.et', 
+      first: 'Meseret', last: 'Defar', 
+      role: 'BRANCH_OFFICER', 
+      phone: '+251911000006',
+      mapping: { branchId: branchMap['Meskel Square Branch'].id } 
+    },
+    { 
+      email: 'officer1.stadium@nibbank.com.et', 
+      first: 'Tirunesh', last: 'Dibaba', 
+      role: 'BRANCH_OFFICER', 
+      phone: '+251911000007',
+      mapping: { branchId: branchMap['Stadium Branch'].id } 
+    },
+    { 
+      email: 'officer2.stadium@nibbank.com.et', 
+      first: 'Sileshi', last: 'Sihine', 
+      role: 'BRANCH_OFFICER', 
+      phone: '+251911000008',
+      mapping: { branchId: branchMap['Stadium Branch'].id } 
+    },
+    { 
+      email: 'officer1.kazanchis@nibbank.com.et', 
+      first: 'Gezahegne', last: 'Abera', 
+      role: 'BRANCH_OFFICER', 
+      phone: '+251911000009',
+      mapping: { branchId: branchMap['Kazanchis Branch'].id } 
+    },
+    { 
+      email: 'officer2.kazanchis@nibbank.com.et', 
+      first: 'Berhane', last: 'Adere', 
+      role: 'BRANCH_OFFICER', 
+      phone: '+251911000010',
+      mapping: { branchId: branchMap['Kazanchis Branch'].id } 
     }
   ];
 
@@ -153,25 +151,22 @@ async function main() {
         firstName: u.first,
         lastName: u.last,
         phoneNumber: u.phone,
-        branchId: null, // Force manual mapping
-        assignedBranches: [], // Force manual mapping
         passwordHash: hashedPass,
+        ...u.mapping
       },
       create: {
         id: `uid-${u.email.split('@')[0]}`,
-        email: u.email,
         firebaseUid: `uid-${u.email.split('@')[0]}`,
+        email: u.email,
         firstName: u.first,
         lastName: u.last,
         phoneNumber: u.phone,
         status: UserStatus.ACTIVE,
-        branchId: null,
-        assignedBranches: [],
         passwordHash: hashedPass,
+        ...u.mapping
       },
     });
 
-    // Link Role
     await prisma.userRole.upsert({
       where: { 
         userId_roleId: { userId: user.id, roleId: roleMap[u.role].id } 
@@ -180,10 +175,10 @@ async function main() {
       create: { userId: user.id, roleId: roleMap[u.role].id },
     });
 
-    console.log(`👤 Personnel provisioned: ${u.email} [${u.role}] -> UNMAPPED STANDBY`);
+    console.log(`👤 Personnel provisioned: ${u.email} [${u.role}]`);
   }
 
-  console.log('✅ Institutional Vault seeding complete. Admins must now map jurisdictions via UI.');
+  console.log('✅ Institutional Vault seeding complete. Hierarchy mapped.');
 }
 
 main()
