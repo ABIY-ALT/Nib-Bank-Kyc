@@ -78,14 +78,14 @@ export async function getSubmissions(filters?: {
       skip: filters?.offset || 0,
     });
   } catch (error) {
-    console.error('[SQL] getSubmissions error:', error);
+    console.error('[Vault] getSubmissions error:', error);
     return [];
   }
 }
 
 /**
  * High-Performance Count Aggregator.
- * Replaces client-side filtering with SQL counts for UI notification badges.
+ * Replaces client-side filtering with internal counts for UI notification badges.
  */
 export async function getWorkflowCounts(params: { 
   userId: string, 
@@ -123,7 +123,7 @@ export async function getWorkflowCounts(params: {
       branchNode: branchNodeCount
     };
   } catch (error) {
-    console.error('[SQL Counts] Failure:', error);
+    console.error('[Vault Counts] Failure:', error);
     return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
   }
 }
@@ -415,7 +415,7 @@ export async function resubmitSubmission(formData: FormData) {
     revalidatePath('/submissions/amendments');
     return { success: true };
   } catch (error: any) {
-    console.error('[SQL Resubmission] Failure:', error);
+    console.error('[Vault Resubmission] Failure:', error);
     return { success: false, error: error.message || 'Institutional storage fault during resubmission.' };
   }
 }

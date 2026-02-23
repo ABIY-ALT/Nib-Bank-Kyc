@@ -29,6 +29,6 @@ export async function createAuditLog(data: {
       }
     });
   } catch (error) {
-    console.error('[SQL Audit] Log Failure:', error);
+    console.error('[Vault Audit] Log Failure:', error);
   }
 }

@@ -396,7 +396,7 @@ export default function UserManagementPage() {
               {editingUser ? 'Commit Profile Changes' : 'Initialize Staff Profile'}
             </Button>
           </DialogFooter>
-        </div>
+        </DialogContent>
       </Dialog>
     </div>
   );

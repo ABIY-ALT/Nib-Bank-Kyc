@@ -58,7 +58,7 @@ export async function createBranch(data: { name: string, code?: string, district
     revalidatePath('/admin/branches');
     return branch;
   } catch (error: any) {
-    console.error('[SQL Hierarchy] Error:', error);
+    console.error('[Vault Hierarchy] Error:', error);
     throw new Error(error.message || 'Institutional database fault during branch registration.');
   }
 }

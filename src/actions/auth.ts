@@ -30,8 +30,8 @@ export async function syncUserToSql(userData: SyncUserData) {
 
     return { success: true, user };
   } catch (error) {
-    console.error('[SQL Sync] Error:', error);
-    return { success: false, error: 'Database error.' };
+    console.error('[Vault Sync] Error:', error);
+    return { success: false, error: 'Institutional database error.' };
   }
 }
 
