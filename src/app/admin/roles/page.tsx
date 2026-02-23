@@ -184,10 +184,10 @@ export default function StaffRolesPage() {
         </div>
       </div>
 
-      <Card className="shadow-xl border-slate-200 overflow-hidden">
-        <CardHeader className="bg-slate-50/50 border-b">
+      <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
+        <CardHeader className="bg-slate-900 text-white border-b">
           <CardTitle>Personnel Designations</CardTitle>
-          <CardDescription>Manage regional and operational authority levels.</CardDescription>
+          <CardDescription className="text-slate-400">Manage regional and operational authority levels.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -282,16 +282,16 @@ export default function StaffRolesPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl animate-in zoom-in-95 duration-300">
           <div className="bg-[#fcfaf7]">
-            <DialogHeader className="p-8 bg-white border-b space-y-0">
+            <DialogHeader className="p-8 bg-slate-900 text-white border-b space-y-0">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-primary/10 rounded-2xl">
                   <ShieldCheck className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <DialogTitle className="text-2xl font-black tracking-tight text-slate-900">
+                  <DialogTitle className="text-2xl font-black tracking-tight">
                     {selectedRole ? 'Update Role Rights' : 'Define New Role'}
                   </DialogTitle>
-                  <DialogDescription className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">
+                  <DialogDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">
                     Institutional Capability Assignment Workspace
                   </DialogDescription>
                 </div>

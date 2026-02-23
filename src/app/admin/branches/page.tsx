@@ -123,8 +123,8 @@ export default function BranchesDistrictsPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-12">
-        <Card className="lg:col-span-4 shadow-md h-fit border-slate-200">
-          <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><MapPin className="w-5 h-5 text-primary" /> Districts</CardTitle></CardHeader>
+        <Card className="lg:col-span-4 shadow-md h-fit border-slate-200 rounded-2xl overflow-hidden">
+          <CardHeader className="bg-slate-900 text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><MapPin className="w-5 h-5 text-primary" /> Districts</CardTitle></CardHeader>
           <CardContent className="pt-6 space-y-3">
             {districts.length === 0 ? (
               <p className="text-center py-10 text-muted-foreground italic">No districts defined.</p>
@@ -137,8 +137,8 @@ export default function BranchesDistrictsPage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-8 shadow-xl overflow-hidden border-slate-200">
-          <CardHeader className="bg-slate-50/50 border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-primary" /> Branch Directory</CardTitle></CardHeader>
+        <Card className="lg:col-span-8 shadow-xl overflow-hidden border-slate-200 rounded-3xl">
+          <CardHeader className="bg-slate-900 text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-primary" /> Branch Directory</CardTitle></CardHeader>
           <CardContent className="pt-6">
             {branches.length === 0 ? (
               <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
@@ -167,9 +167,14 @@ export default function BranchesDistrictsPage() {
       </div>
 
       <Dialog open={isBranchDialogOpen} onOpenChange={setIsBranchDialogOpen}>
-        <DialogContent className="max-w-md rounded-3xl">
-          <DialogHeader><DialogTitle className="text-2xl font-bold">Branch Configuration</DialogTitle></DialogHeader>
-          <div className="space-y-6 pt-6">
+        <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-8 bg-slate-900 text-white">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+              <div className="p-2 bg-primary/20 rounded-xl"><Building2 className="w-6 h-6 text-primary" /></div>
+              Branch Configuration
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-8 space-y-6">
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Regional District</Label>
               <Select value={branchForm.districtName} onValueChange={val => setBranchForm({...branchForm, districtName: val})}>
@@ -186,9 +191,9 @@ export default function BranchesDistrictsPage() {
               <Input placeholder="e.g. BR-001" value={branchForm.code} onChange={e => setBranchForm({...branchForm, code: e.target.value})} className="h-12 rounded-xl font-mono" />
             </div>
           </div>
-          <DialogFooter className="pt-8 border-t mt-6">
-            <Button variant="outline" onClick={() => setIsBranchDialogOpen(false)} disabled={isSaving}>Cancel</Button>
-            <Button onClick={handleSaveBranch} disabled={isSaving} className="shadow-xl bg-primary px-10 font-black h-11 rounded-xl">
+          <DialogFooter className="p-8 bg-slate-50 border-t">
+            <Button variant="ghost" onClick={() => setIsBranchDialogOpen(false)} disabled={isSaving} className="font-bold text-slate-500">Cancel</Button>
+            <Button onClick={handleSaveBranch} disabled={isSaving} className="shadow-xl bg-primary px-10 font-black h-12 rounded-xl">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Register Node
             </Button>
@@ -197,17 +202,22 @@ export default function BranchesDistrictsPage() {
       </Dialog>
 
       <Dialog open={isDistrictDialogOpen} onOpenChange={setIsDistrictDialogOpen}>
-        <DialogContent className="max-w-sm rounded-3xl">
-          <DialogHeader><DialogTitle className="text-2xl font-bold">Regional Entity</DialogTitle></DialogHeader>
-          <div className="space-y-4 pt-6">
+        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-8 bg-slate-900 text-white">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+              <div className="p-2 bg-primary/20 rounded-xl"><Globe className="w-6 h-6 text-primary" /></div>
+              Regional Entity
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-8 space-y-4">
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">District Name</Label>
               <Input placeholder="e.g. Central Addis" value={districtForm.name} onChange={e => setDistrictForm({...districtForm, name: e.target.value})} className="h-12 rounded-xl font-bold" />
             </div>
           </div>
-          <DialogFooter className="pt-8 border-t mt-6">
-            <Button variant="outline" onClick={() => setIsDistrictDialogOpen(false)} disabled={isSaving}>Cancel</Button>
-            <Button onClick={handleSaveDistrict} disabled={isSaving} className="font-black bg-primary px-8 h-11 shadow-lg rounded-xl">
+          <DialogFooter className="p-8 bg-slate-50 border-t">
+            <Button variant="ghost" onClick={() => setIsDistrictDialogOpen(false)} disabled={isSaving} className="font-bold text-slate-500">Cancel</Button>
+            <Button onClick={handleSaveDistrict} disabled={isSaving} className="font-black bg-primary px-8 h-12 shadow-lg rounded-xl">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Establish Region
             </Button>

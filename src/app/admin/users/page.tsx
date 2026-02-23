@@ -296,11 +296,13 @@ export default function UserManagementPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
           <DialogHeader className="p-8 bg-slate-900 text-white space-y-1">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/20 rounded-xl">
-                <ShieldCheck className="w-6 h-6 text-primary" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/20 rounded-xl">
+                  <ShieldCheck className="w-6 h-6 text-primary" />
+                </div>
+                <DialogTitle className="text-2xl font-black tracking-tight">Institutional Profile</DialogTitle>
               </div>
-              <DialogTitle className="text-2xl font-black tracking-tight">Institutional Profile</DialogTitle>
             </div>
             <DialogDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest pl-11">
               {editingUser ? 'Managing Jurisdictional Mapping' : 'Provisioning New Staff Credentials'}
@@ -319,9 +321,23 @@ export default function UserManagementPage() {
               </div>
             </div>
             
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Official Email (@nibbank.com.et)</Label>
-              <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl font-black bg-slate-50/50" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Official Email (@nibbank.com.et)</Label>
+                <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl font-black bg-slate-50/50" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Phone Number</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <Input 
+                    value={formData.phoneNumber} 
+                    onChange={e => setFormData({...formData, phoneNumber: e.target.value})} 
+                    placeholder="+251 ..."
+                    className="h-11 rounded-xl font-black bg-slate-50/50 pl-10" 
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -380,7 +396,7 @@ export default function UserManagementPage() {
               {editingUser ? 'Commit Profile Changes' : 'Initialize Staff Profile'}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </div>
       </Dialog>
     </div>
   );
