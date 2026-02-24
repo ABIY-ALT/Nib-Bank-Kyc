@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -220,7 +219,6 @@ export async function updateSubmissionChecklist(id: string, checklistState: any)
       data: { checklistState }
     });
     
-    // Explicitly revalidate the submission detail page to update visibility for all users
     revalidatePath(`/submissions/${id}`);
     revalidatePath('/submissions/queue');
     revalidatePath('/submissions/my');
