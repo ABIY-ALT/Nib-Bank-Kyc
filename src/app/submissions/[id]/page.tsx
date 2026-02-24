@@ -39,7 +39,8 @@ import {
   ShieldAlert,
   ClipboardCheck,
   CheckSquare,
-  Lock
+  Lock,
+  ListTodo
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -68,6 +69,7 @@ import JSZip from 'jszip';
 import { usePermissions } from "@/hooks/use-permissions";
 import { AMENDMENT_SCENARIOS } from "@/lib/kyc-data";
 import Link from "next/link";
+import { Progress } from "@/components/ui/progress";
 
 const KYC_CHECKLIST_ITEMS = [
   { id: 'id_verified', label: 'Identity Document Authenticity' },
@@ -126,11 +128,9 @@ export default function SubmissionDetails() {
   }, [params.id]);
 
   // Reactive Checklist Synchronization
-  // This ensures the local checklist state stays in sync with the submission object from the server
   useEffect(() => {
     if (submission?.checklistState) {
       let state = submission.checklistState;
-      // Defensive parsing for JSON string edge cases
       if (typeof state === 'string') {
         try {
           state = JSON.parse(state);
@@ -154,6 +154,12 @@ export default function SubmissionDetails() {
 
   const isTerminal = submission?.status === KYCStatus.APPROVED || submission?.status === KYCStatus.REJECTED;
   const isActionRequired = submission?.status === KYCStatus.ACTION_REQUIRED;
+
+  const verifiedCount = useMemo(() => {
+    return Object.values(checklist).filter(Boolean).length;
+  }, [checklist]);
+
+  const progressPercentage = (verifiedCount / KYC_CHECKLIST_ITEMS.length) * 100;
 
   const handleAction = async (action: KYCStatus) => {
     if (!submission || !user || isTerminal || isActioning) return;
@@ -488,24 +494,33 @@ export default function SubmissionDetails() {
           {/* KYC VERIFICATION CHECKLIST */}
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
             <CardHeader className="bg-primary p-5 border-b">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white/20 rounded-xl">
-                    <ClipboardCheck className="w-5 h-5 text-white" />
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/20 rounded-xl">
+                      <ClipboardCheck className="w-5 h-5 text-white" />
+                    </div>
+                    <CardTitle className="text-lg font-black tracking-tight text-white uppercase">Verification Findings</CardTitle>
                   </div>
-                  <CardTitle className="text-lg font-black tracking-tight text-white uppercase">Verification Checklist</CardTitle>
+                  {isReviewer && !isTerminal && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleSelectAll}
+                      className="text-[10px] font-black uppercase tracking-wider text-white hover:bg-white/10 h-8 px-3 gap-2"
+                    >
+                      {KYC_CHECKLIST_ITEMS.every(i => checklist[i.id]) ? <RotateCcw className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
+                      {KYC_CHECKLIST_ITEMS.every(i => checklist[i.id]) ? 'Clear' : 'Check All'}
+                    </Button>
+                  )}
                 </div>
-                {isReviewer && !isTerminal && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleSelectAll}
-                    className="text-[10px] font-black uppercase tracking-wider text-white hover:bg-white/10 h-8 px-3 gap-2"
-                  >
-                    {KYC_CHECKLIST_ITEMS.every(i => checklist[i.id]) ? <RotateCcw className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
-                    {KYC_CHECKLIST_ITEMS.every(i => checklist[i.id]) ? 'Deselect All' : 'Select All'}
-                  </Button>
-                )}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase text-white/70">
+                    <span>Specialist Review Progress</span>
+                    <span>{verifiedCount} / {KYC_CHECKLIST_ITEMS.length} Verified</span>
+                  </div>
+                  <Progress value={progressPercentage} className="h-1.5 bg-white/20" />
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-6 space-y-3">
@@ -513,33 +528,51 @@ export default function SubmissionDetails() {
                 <div 
                   key={item.id} 
                   className={cn(
-                    "flex items-center space-x-3 p-3 rounded-xl border transition-all",
-                    checklist[item.id] ? "bg-emerald-50 border-emerald-100" : "bg-white border-slate-100"
+                    "flex items-center justify-between p-3 rounded-xl border transition-all",
+                    checklist[item.id] ? "bg-emerald-50 border-emerald-200 shadow-sm" : "bg-white border-slate-100"
                   )}
                 >
-                  <Checkbox 
-                    id={item.id} 
-                    checked={checklist[item.id] || false} 
-                    onCheckedChange={() => handleChecklistToggle(item.id)}
-                    disabled={!isReviewer || isTerminal}
-                    className="h-5 w-5 rounded-md border-2 border-slate-200 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
-                  />
-                  <label 
-                    htmlFor={item.id} 
-                    className={cn(
-                      "text-[11px] font-bold leading-tight cursor-pointer uppercase tracking-tight",
-                      checklist[item.id] ? "text-emerald-800" : "text-slate-600",
-                      (!isReviewer || isTerminal) && "cursor-not-allowed opacity-70"
-                    )}
-                  >
-                    {item.label}
-                  </label>
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <Checkbox 
+                      id={item.id} 
+                      checked={checklist[item.id] || false} 
+                      onCheckedChange={() => handleChecklistToggle(item.id)}
+                      disabled={!isReviewer || isTerminal}
+                      className={cn(
+                        "h-5 w-5 rounded-md border-2 border-slate-200",
+                        checklist[item.id] ? "data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600" : "data-[state=unchecked]:bg-white"
+                      )}
+                    />
+                    <label 
+                      htmlFor={item.id} 
+                      className={cn(
+                        "text-[11px] font-bold leading-tight cursor-pointer uppercase tracking-tight truncate",
+                        checklist[item.id] ? "text-emerald-800" : "text-slate-600",
+                        (!isReviewer || isTerminal) && "cursor-not-allowed opacity-70"
+                      )}
+                    >
+                      {item.label}
+                    </label>
+                  </div>
+                  {!isReviewer && (
+                    <div className="shrink-0">
+                      {checklist[item.id] ? (
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] h-4 px-1.5 uppercase font-black flex items-center gap-1">
+                          <Check className="w-2.5 h-2.5" /> Verified
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-100 text-[8px] h-4 px-1.5 uppercase font-black">
+                          Pending
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
               {(!isReviewer || isTerminal) && (
                 <div className="mt-4 p-3 bg-slate-50 rounded-xl flex items-center gap-2">
                   <ShieldAlert className="w-4 h-4 text-slate-400" />
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">Read-only institutional record</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">Vault Record: Read-Only Visibility</p>
                 </div>
               )}
             </CardContent>
