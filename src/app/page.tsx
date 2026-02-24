@@ -35,10 +35,6 @@ import { getGlobalSettings } from "@/actions/settings";
 import { KYCStatus } from "@prisma/client";
 import { usePermissions } from "@/hooks/use-permissions";
 
-/**
- * Optimized Institutional Dashboard.
- * Uses Promise.all for parallel data fetching and Vault-level filtering.
- */
 export default function Dashboard() {
   const { user } = useAuth();
   const { hasPermission, loading: permissionsLoading, isSuperAdmin } = usePermissions();
@@ -52,32 +48,28 @@ export default function Dashboard() {
       setLoading(true);
       try {
         const isDirector = user.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
-        const isSpecialist = user.roles?.some(ur => ['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR'].includes(ur.role.name));
+        const isSpecialist = user.roles?.some(ur => ['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST_OFFICER'].includes(ur.role.name));
         
-        let filters: any = { limit: 10 }; // Leaner limit for dashboard
+        let filters: any = { limit: 10 };
 
         if (!isSuperAdmin) {
           if (isDirector && user.districtName) {
             filters.district = user.districtName;
           } else if (isSpecialist) {
-            // Specialists MUST be restricted to their assigned portfolio or home branch
             if (user.assignedBranches && user.assignedBranches.length > 0) {
               filters.branches = user.assignedBranches;
             } else if (user.branchName) {
               filters.branch = user.branchName;
             } else {
-              // If an Institutional KYC Officer has no assignments, they see nothing by default
               filters.branch = "RESTRICTED_ACCESS_PENDING_ASSIGNMENT";
             }
           } else if (user.branchName) {
             filters.branch = user.branchName;
           } else {
-            // General catch-all for node-less roles to prevent global data leak
             filters.branch = "RESTRICTED_ACCESS";
           }
         }
 
-        // Parallel aggregation to prevent waterfalls
         const [subs, globalSettings] = await Promise.all([
           getSubmissions(filters),
           getGlobalSettings()
@@ -96,6 +88,8 @@ export default function Dashboard() {
 
   const dashboardContext = useMemo(() => {
     const roleName = user?.roles?.[0]?.role?.name || 'OFFICER';
+    const rawBranchName = user?.branchName || 'Local';
+    const cleanBranchName = rawBranchName.toLowerCase().includes('branch') ? rawBranchName : `${rawBranchName} Branch`;
     
     if (isSuperAdmin) return {
       title: 'Institutional Command',
@@ -119,7 +113,7 @@ export default function Dashboard() {
     };
 
     return {
-      title: user?.branchName ? `${user.branchName} Overview` : 'Local Branch Overview',
+      title: `${cleanBranchName} Overview`,
       subtitle: 'Local branch activity monitoring and amendment tracking.',
       scope: 'Branch',
       icon: Building2
@@ -169,7 +163,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           {hasPermission('CASE_SUBMIT') && (
             <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-black text-lg rounded-2xl">
-              <a href="/submissions/new">Create New Submission</a>
+              <Link href="/submissions/new">Create New Submission</Link>
             </Button>
           )}
         </div>
@@ -197,9 +191,9 @@ export default function Dashboard() {
               <CardDescription>Live tracking for {dashboardContext.scope.toLowerCase()} authorized cases.</CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/5">
-              <a href="/submissions" className="flex items-center gap-1">
+              <Link href="/submissions" className="flex items-center gap-1">
                 View Archive <ChevronRight className="w-4 h-4" />
-              </a>
+              </Link>
             </Button>
           </CardHeader>
           <CardContent className="pt-6">
@@ -231,7 +225,7 @@ export default function Dashboard() {
                         {sub.status?.replace(/_/g, ' ')}
                       </Badge>
                       <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/5 text-primary">
-                        <a href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></a>
+                        <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>
                       </Button>
                     </div>
                   </div>

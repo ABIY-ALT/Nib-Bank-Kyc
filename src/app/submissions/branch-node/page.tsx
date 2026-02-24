@@ -89,6 +89,12 @@ export default function BranchNodeOversightPage() {
     loadData();
   }, [user, isAdmin, fromDate, toDate]);
 
+  const cleanBranchTitle = useMemo(() => {
+    const raw = isAdmin ? 'Global Command' : user?.branchName || 'Branch Overview';
+    if (isAdmin) return raw;
+    return raw.toLowerCase().includes('branch') ? `${raw} Overview` : `${raw} Branch Overview`;
+  }, [isAdmin, user]);
+
   const analytics = useMemo(() => {
     if (!submissions || submissions.length === 0) return null;
 
@@ -173,7 +179,7 @@ export default function BranchNodeOversightPage() {
               <Building2 className="w-6 h-6" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {isAdmin ? 'Global Command' : user?.branchName ? `${user.branchName} Overview` : 'Branch Overview'}
+              {cleanBranchTitle}
             </h1>
           </div>
           <div className="flex items-center gap-2 mt-1">
@@ -273,7 +279,7 @@ export default function BranchNodeOversightPage() {
 
                 <Card className="shadow-xl border-slate-200 overflow-hidden">
                   <CardHeader className="bg-slate-50/50 border-b">
-                    <CardTitle className="text-xl">Branch Overview trend</CardTitle>
+                    <CardTitle className="text-xl">Historical Trend</CardTitle>
                     <CardDescription>Historical submission traffic.</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-8">

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -38,7 +37,8 @@ import {
   RefreshCw,
   ShieldAlert,
   ClipboardCheck,
-  CheckSquare
+  CheckSquare,
+  Lock
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -312,6 +312,8 @@ export default function SubmissionDetails() {
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
+  const branchCleanTitle = submission.branchName.toLowerCase().includes('branch') ? submission.branchName : `${submission.branchName} Branch`;
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -338,7 +340,7 @@ export default function SubmissionDetails() {
                 )}
               </div>
             </div>
-            <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} • {submission.branchName} Node</p>
+            <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} • {branchCleanTitle} Node</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -535,7 +537,7 @@ export default function SubmissionDetails() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Originating Node</p>
-                  <p className="font-black text-slate-900">{submission.branchName} Branch</p>
+                  <p className="font-black text-slate-900">{branchCleanTitle}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Submitted By</p>
