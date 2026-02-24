@@ -66,6 +66,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import JSZip from 'jszip';
 import { usePermissions } from "@/hooks/use-permissions";
 import { AMENDMENT_SCENARIOS } from "@/lib/kyc-data";
+import Link from "next/link";
 
 const KYC_CHECKLIST_ITEMS = [
   { id: 'id_verified', label: 'Identity Document Authenticity' },
@@ -400,7 +401,7 @@ export default function SubmissionDetails() {
             </CardHeader>
             <CardContent className="pt-6 px-6">
               <div className="grid gap-4">
-                {submission.documents?.map((doc: any) => (
+                {submission.memos?.map((doc: any) => (
                     <div key={doc.id} className="flex items-center justify-between p-5 border rounded-2xl bg-white shadow-sm hover:border-primary/30 transition-all group border-slate-100">
                       <div className="flex items-center gap-4">
                         <div className="p-3 bg-slate-50 rounded-xl group-hover:bg-primary/5 transition-colors">
@@ -412,9 +413,9 @@ export default function SubmissionDetails() {
                         </div>
                       </div>
                       <div className="flex gap-1">
-                         <Button variant="ghost" size="icon" onClick={() => setPreviewFile({ name: doc.name, url: doc.url })} className="rounded-full h-10 w-10 hover:bg-primary/5 text-primary"><Eye className="w-5 h-5" /></Button>
+                         <Button variant="ghost" size="icon" onClick={() => setPreviewFile({ name: doc.name, url: doc.fileUrl })} className="rounded-full h-10 w-10 hover:bg-primary/5 text-primary"><Eye className="w-5 h-5" /></Button>
                          <Button variant="ghost" size="icon" asChild className="rounded-full h-10 w-10 hover:bg-primary/5 text-primary">
-                           <a href={doc.url} download={doc.name}>
+                           <a href={doc.fileUrl} download={doc.name}>
                              <Download className="w-5 h-5" />
                            </a>
                          </Button>

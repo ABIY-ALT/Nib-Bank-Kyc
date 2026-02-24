@@ -28,6 +28,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
+import Link from "next/link";
 
 export default function ExceptionalCasesPage() {
   const { user } = useAuth();

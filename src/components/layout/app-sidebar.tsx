@@ -55,7 +55,7 @@ import {
 } from "@/components/ui/collapsible"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-mock"
-import Link from "next/navigation"
+import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebarCounts } from "@/hooks/use-sidebar-counts"
 import { usePermissions } from "@/hooks/use-permissions"
