@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -105,15 +106,18 @@ export async function provisionUser(data: {
         const newBranch = data.branchId ? await tx.branch.findUnique({ where: { id: data.branchId } }) : null;
         const newBranchName = newBranch?.name || 'Institutional';
         
+        // Only attempt to log if we have a valid authorizing ID that matches a user,
+        // or if userId is allowed to be null in the schema (which we fixed)
         await tx.auditLog.create({
           data: {
-            userId: data.authorizingAdminId || 'SYSTEM',
+            userId: data.authorizingAdminId && data.authorizingAdminId !== 'SYSTEM' ? data.authorizingAdminId : null,
             action: 'BRANCH_TRANSFER',
             details: `Personnel ${user.firstName} ${user.lastName} moved from ${oldBranchName} to ${newBranchName}. Jurisdictional handover complete.`,
             metadata: {
               targetUserId: user.id,
               previousBranch: oldBranchName,
-              newBranch: newBranchName
+              newBranch: newBranchName,
+              authorizer: data.authorizingAdminId || 'SYSTEM'
             }
           }
         });
@@ -124,13 +128,14 @@ export async function provisionUser(data: {
       if (existingUser && currentRoleName !== data.role) {
         await tx.auditLog.create({
           data: {
-            userId: data.authorizingAdminId || 'SYSTEM',
+            userId: data.authorizingAdminId && data.authorizingAdminId !== 'SYSTEM' ? data.authorizingAdminId : null,
             action: 'ROLE_TRANSITION',
             details: `Personnel ${user.firstName} ${user.lastName} authority updated from ${currentRoleName?.replace(/_/g, ' ')} to ${data.role.replace(/_/g, ' ')}.`,
             metadata: {
               targetUserId: user.id,
               previousRole: currentRoleName,
-              newRole: data.role
+              newRole: data.role,
+              authorizer: data.authorizingAdminId || 'SYSTEM'
             }
           }
         });

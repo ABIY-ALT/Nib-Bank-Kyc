@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -26,7 +27,8 @@ import {
   ChevronRight,
   ShieldAlert,
   ArrowRightLeft,
-  Users
+  Users,
+  X
 } from "lucide-react";
 import { 
   Dialog, 
@@ -340,7 +342,7 @@ export default function UserManagementPage() {
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="p-8 bg-primary text-white space-y-1">
+          <DialogHeader className="p-8 bg-primary text-white space-y-1 relative">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-xl">
@@ -348,31 +350,34 @@ export default function UserManagementPage() {
                 </div>
                 <DialogTitle className="text-2xl font-black tracking-tight text-white">Institutional Profile</DialogTitle>
               </div>
+              <button onClick={() => setIsDialogOpen(false)} className="text-white/60 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
             </div>
             <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest pl-11">
-              {editingUser ? 'Managing Jurisdictional Mapping' : 'Provisioning New Staff Credentials'}
+              {editingUser ? 'MANAGING JURISDICTIONAL MAPPING' : 'PROVISIONING NEW STAFF CREDENTIALS'}
             </DialogDescription>
           </DialogHeader>
           
           <div className="p-8 space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">First Name</Label>
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">FIRST NAME</Label>
                 <Input value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="h-11 rounded-xl font-bold bg-slate-50/50" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Last Name</Label>
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">LAST NAME</Label>
                 <Input value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="h-11 rounded-xl font-bold bg-slate-50/50" />
               </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Official Email (@nibbank.com.et)</Label>
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">OFFICIAL EMAIL (@NIBBANK.COM.ET)</Label>
                 <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl font-black bg-slate-50/50" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Phone Number</Label>
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">PHONE NUMBER</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <Input 
@@ -387,7 +392,7 @@ export default function UserManagementPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Authority Role</Label>
+                <Label className="text-[10px] font-black uppercase text-primary tracking-widest">AUTHORITY ROLE</Label>
                 <Select value={formData.role} onValueChange={val => setFormData({...formData, role: val})}>
                   <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Select Role" /></SelectTrigger>
                   <SelectContent>
@@ -401,7 +406,7 @@ export default function UserManagementPage() {
               {isBranchSpecificRole ? (
                 <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
                   <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-1.5">
-                    <ArrowRightLeft className="w-3 h-3" /> Home Branch
+                    <ArrowRightLeft className="w-3 h-3" /> HOME BRANCH
                   </Label>
                   <Select value={formData.branchId || "none"} onValueChange={val => setFormData({...formData, branchId: val})}>
                     <SelectTrigger className="h-11 rounded-xl font-black text-primary border-primary/20 bg-primary/5">
@@ -415,7 +420,7 @@ export default function UserManagementPage() {
                 </div>
               ) : (
                 <div className="space-y-2 opacity-60">
-                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Home Branch</Label>
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">HOME BRANCH</Label>
                   <div className="h-11 rounded-xl border border-slate-100 bg-slate-50 flex items-center px-3 gap-2">
                     <ShieldAlert className="w-3.5 h-3.5 text-slate-300" />
                     <span className="text-[10px] font-black text-slate-400 uppercase">Institutional Level</span>
@@ -424,7 +429,7 @@ export default function UserManagementPage() {
               )}
             </div>
 
-            {editingUser && isBranchSpecificRole && formData.branchId !== editingUser.branchId && (
+            {editingUser && isBranchSpecificRole && formData.branchId !== (editingUser.branchId || 'none') && (
               <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 flex gap-3 animate-in zoom-in-95">
                 <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-[10px] text-amber-800 font-bold leading-relaxed uppercase">
@@ -434,9 +439,18 @@ export default function UserManagementPage() {
             )}
           </div>
 
-          <DialogFooter className="p-8 bg-slate-50 border-t flex items-center justify-end gap-3">
-            <Button variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={isSyncing} className="rounded-xl px-6 font-bold text-slate-500">Discard</Button>
-            <Button onClick={handleSave} disabled={isSyncing} className="bg-primary hover:bg-primary/90 text-white font-black rounded-xl px-10 shadow-xl shadow-primary/20 h-12">
+          <DialogFooter className="p-8 bg-slate-50 border-t flex items-center justify-end gap-6">
+            <button 
+              onClick={() => setIsDialogOpen(false)} 
+              className="text-sm font-bold text-primary hover:underline transition-colors"
+            >
+              Discard
+            </button>
+            <Button 
+              onClick={handleSave} 
+              disabled={isSyncing} 
+              className="bg-primary hover:bg-primary/90 text-white font-black rounded-xl px-10 shadow-xl shadow-primary/20 h-12"
+            >
               {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {editingUser ? 'Commit Profile Changes' : 'Initialize Staff Profile'}
             </Button>
