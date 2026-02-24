@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -30,7 +31,8 @@ import {
   TrendingUp,
   Shield,
   FileArchive,
-  ClipboardCheck
+  ClipboardCheck,
+  Info
 } from "lucide-react"
 
 import {
@@ -68,6 +70,12 @@ export function AppSidebar() {
 
   if (!user || loading) return null;
 
+  const hasAnyVisibleGroups = hasPermission('DASHBOARD_VIEW') || 
+                             hasAnyInGroup('WORKFLOWS') || 
+                             hasPermission('VIEW_FQ_LIBRARY') || 
+                             hasAnyInGroup('REPORTING') || 
+                             hasAnyInGroup('SYSTEM');
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b h-16 flex items-center px-4 bg-sidebar-background">
@@ -80,16 +88,31 @@ export function AppSidebar() {
       </SidebarHeader>
       
       <SidebarContent>
+        {/* FALLBACK IF NO PERMISSIONS DISCOVERED */}
+        {!hasAnyVisibleGroups && (
+          <SidebarGroup>
+            <div className="px-4 py-6 text-center space-y-4">
+              <div className="p-3 bg-white/5 rounded-2xl mx-auto w-fit">
+                <ShieldAlert className="w-6 h-6 text-white/40" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase text-white/60 tracking-widest leading-tight">Access Pending</p>
+                <p className="text-[9px] font-bold text-white/30 uppercase tracking-tighter">Unauthorized Node</p>
+              </div>
+            </div>
+          </SidebarGroup>
+        )}
+
         {/* DASHBOARD GROUP */}
         {hasPermission('DASHBOARD_VIEW') && (
           <SidebarGroup>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
-                  <a href="/">
+                  <Link href="/">
                     <LayoutDashboard className="w-4 h-4" />
                     <span>Dashboard</span>
-                  </a>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -115,10 +138,10 @@ export function AppSidebar() {
                       {hasPermission('CASE_SUBMIT') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/new'}>
-                            <a href="/submissions/new">
+                            <Link href="/submissions/new">
                               <PlusCircle className="w-4 h-4 mr-2" />
                               <span>Create Submission</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -126,10 +149,10 @@ export function AppSidebar() {
                       {hasPermission('CASE_VIEW_OWN') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/my'}>
-                            <a href="/submissions/my">
+                            <Link href="/submissions/my">
                               <Inbox className="w-4 h-4 mr-2" />
                               <span>My Submissions</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.mySubmissions > 0 && (
                             <SidebarMenuBadge className="bg-white/10 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
@@ -142,10 +165,10 @@ export function AppSidebar() {
                       {hasPermission('CASE_VIEW_ACTION_REQUIRED') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>
-                            <a href="/submissions/amendment-requests">
+                            <Link href="/submissions/amendment-requests">
                               <AlertCircle className="w-4 h-4 mr-2 text-orange-400" />
                               <span>Action Required</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.actionRequired > 0 && (
                             <SidebarMenuBadge className="bg-orange-600 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2 animate-pulse">
@@ -158,10 +181,10 @@ export function AppSidebar() {
                       {hasPermission('CASE_VIEW_BRANCH') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
-                            <a href="/submissions/branch-node">
+                            <Link href="/submissions/branch-node">
                               <LayoutList className="w-4 h-4 mr-2 text-primary" />
                               <span>Branch Overview</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.branchNode > 0 && (
                             <SidebarMenuBadge className="bg-primary text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
@@ -174,10 +197,10 @@ export function AppSidebar() {
                       {hasPermission('KYC_VIEW_QUEUE') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/queue'}>
-                            <a href="/submissions/queue">
+                            <Link href="/submissions/queue">
                               <Search className="w-4 h-4 mr-2" />
                               <span>Review Queue</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.reviewQueue > 0 && (
                             <SidebarMenuBadge className="bg-primary text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
@@ -190,10 +213,10 @@ export function AppSidebar() {
                       {hasPermission('KYC_VIEW_RESUBMITTED') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
-                            <a href="/submissions/amendments">
+                            <Link href="/submissions/amendments">
                               <History className="w-4 h-4 mr-2" />
                               <span>Resubmitted Cases</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.resubmitted > 0 && (
                             <SidebarMenuBadge className="bg-primary text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
@@ -206,10 +229,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_ESCALATED_CASES') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/escalated'}>
-                            <a href="/submissions/escalated">
+                            <Link href="/submissions/escalated">
                               <ShieldAlert className="w-4 h-4 mr-2 text-destructive" />
                               <span>Escalated Cases</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.escalated > 0 && (
                             <SidebarMenuBadge className="bg-destructive text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
@@ -222,10 +245,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_GOVERNANCE_QUEUE') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/exceptional'}>
-                            <a href="/submissions/exceptional">
+                            <Link href="/submissions/exceptional">
                               <Zap className="w-4 h-4 mr-2 text-yellow-400" />
                               <span>Exceptional Cases</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                           {counts.exceptional > 0 && (
                             <SidebarMenuBadge className="bg-yellow-600 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
@@ -238,10 +261,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_ARCHIVED_CASE') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions'}>
-                            <a href="/submissions">
+                            <Link href="/submissions">
                               <Archive className="w-4 h-4 mr-2" />
                               <span>Master Case Archive</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -259,10 +282,10 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/kyc-fq-reference'} tooltip="KYC F&Q Reference">
-                  <a href="/kyc-fq-reference">
+                  <Link href="/kyc-fq-reference">
                     <BookOpen className="w-4 h-4" />
                     <span>KYC F&Q Reference</span>
-                  </a>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -288,10 +311,10 @@ export function AppSidebar() {
                       {hasPermission('REPORT_VIEW_SYSTEM') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/system'}>
-                            <a href="/reports/system">
+                            <Link href="/reports/system">
                               <Globe className="w-4 h-4 mr-2 text-primary" />
                               <span>System-wide</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -299,10 +322,10 @@ export function AppSidebar() {
                       {hasPermission('REPORT_VIEW_DISTRICT') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/performance/district'}>
-                            <a href="/performance/district">
+                            <Link href="/performance/district">
                               <Building2 className="w-4 h-4 mr-2" />
                               <span>District Command</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -310,10 +333,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_SPECIALIST_PRODUCTIVITY') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
-                            <a href="/performance/officer">
+                            <Link href="/performance/officer">
                               <Users className="w-4 h-4 mr-2" />
                               <span>KYC Officer Performance</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -321,10 +344,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_AUDIT_POOL') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/head-office/follow-up'}>
-                            <a href="/head-office/follow-up">
+                            <Link href="/head-office/follow-up">
                               <Zap className="w-4 h-4 mr-2 text-primary" />
                               <span>Follow-up Audit</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -332,10 +355,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_AUDIT_LOGS') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/follow-up'}>
-                            <a href="/reports/follow-up">
+                            <Link href="/reports/follow-up">
                               <ClipboardList className="w-4 h-4 mr-2 text-primary" />
                               <span>Audit Reports</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -343,10 +366,10 @@ export function AppSidebar() {
                       {hasPermission('DOWNLOAD_MASTER_ARCHIVE') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/master-bundle'}>
-                            <a href="/submissions/master-bundle">
+                            <Link href="/submissions/master-bundle">
                               <Folders className="w-4 h-4 mr-2 text-emerald-400" />
                               <span>Master Archive</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -377,10 +400,10 @@ export function AppSidebar() {
                       {hasPermission('USER_CREATE') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/users'}>
-                            <a href="/admin/users">
+                            <Link href="/admin/users">
                               <Users className="w-4 h-4 mr-2" />
                               <span>User Access</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -388,10 +411,10 @@ export function AppSidebar() {
                       {hasPermission('ROLE_CREATE') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/roles'}>
-                            <a href="/admin/roles">
+                            <Link href="/admin/roles">
                               <UserCog className="w-4 h-4 mr-2 text-primary" />
                               <span>Assign Roles</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -399,10 +422,10 @@ export function AppSidebar() {
                       {hasPermission('MAP_USERS_TO_BRANCH') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/assignments'}>
-                            <a href="/admin/assignments">
+                            <Link href="/admin/assignments">
                               <ArrowRightLeft className="w-4 h-4 mr-2 text-primary" />
                               <span>Portfolio Mapping</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -410,10 +433,10 @@ export function AppSidebar() {
                       {hasPermission('MANAGE_BRANCHES') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
-                            <a href="/admin/branches">
+                            <Link href="/admin/branches">
                               <Building2 className="w-4 h-4 mr-2" />
                               <span>Hierarchy</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -421,10 +444,10 @@ export function AppSidebar() {
                       {hasPermission('EDIT_SLA_POLICY') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
-                            <a href="/admin/settings">
+                            <Link href="/admin/settings">
                               <Settings className="w-4 h-4" />
                               <span>Configuration</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -432,10 +455,10 @@ export function AppSidebar() {
                       {hasPermission('VIEW_SYSTEM_AUDIT') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/audit'}>
-                            <a href="/admin/audit">
+                            <Link href="/admin/audit">
                               <History className="w-4 h-4 mr-2" />
                               <span>Audit Logs</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
@@ -456,7 +479,7 @@ export function AppSidebar() {
           <div className="flex-1 overflow-hidden text-left">
             <p className="text-sm font-bold leading-tight truncate text-white">{user.name}</p>
             <p className="text-[10px] text-white/40 truncate uppercase tracking-tighter mt-0.5 font-bold">
-              {user.roles?.[0]?.role.name.replace(/_/g, ' ') || 'OFFICER'}
+              {user.roles?.[0]?.role.name.replace(/_/g, ' ') || 'UNASSIGNED'}
             </p>
           </div>
           <Button variant="ghost" size="icon" onClick={() => logout()} className="text-white/40 hover:text-destructive hover:bg-transparent">

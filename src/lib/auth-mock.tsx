@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
@@ -63,7 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               name: `${dbUser.firstName} ${dbUser.lastName}`,
               branchName: (dbUser as any).branch?.name || null,
               districtName: (dbUser as any).branch?.district?.name || null,
-              assignedBranches: (dbUser as any).assignedBranches || []
+              assignedBranches: (dbUser as any).assignedBranches || [],
+              roles: (dbUser.roles && dbUser.roles.length > 0) 
+                ? dbUser.roles 
+                : [{ role: { name: dbUser.email.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
             } as any;
             setUser(mapped);
             localStorage.setItem('nib_mock_user', JSON.stringify(mapped));
@@ -96,7 +100,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 name: `${sqlUser.firstName} ${sqlUser.lastName}`,
                 branchName: (sqlUser as any).branch?.name || null,
                 districtName: (sqlUser as any).branch?.district?.name || null,
-                assignedBranches: (sqlUser as any).assignedBranches || []
+                assignedBranches: (sqlUser as any).assignedBranches || [],
+                roles: (sqlUser.roles && sqlUser.roles.length > 0)
+                  ? sqlUser.roles
+                  : [{ role: { name: sqlUser.email.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
               } as any);
             }
           } else {
@@ -110,7 +117,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser({ 
                 ...u, 
                 name: `${u.firstName} ${u.lastName}`,
-                assignedBranches: [] 
+                assignedBranches: [],
+                roles: [{ role: { name: u.email.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
               } as any);
             }
           }
@@ -151,7 +159,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         branchName: (existingUser as any)?.branch?.name || null,
         districtName: (existingUser as any)?.branch?.district?.name || null,
         assignedBranches: (existingUser as any)?.assignedBranches || [],
-        roles: existingUser?.roles || [{ role: { name: normalizedEmail.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
+        roles: (existingUser?.roles && existingUser.roles.length > 0) 
+          ? existingUser.roles 
+          : [{ role: { name: normalizedEmail.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
       };
       
       mockUser.name = `${mockUser.firstName} ${mockUser.lastName}`;
