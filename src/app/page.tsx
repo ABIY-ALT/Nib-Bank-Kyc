@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from "@/lib/auth-mock";
@@ -23,7 +24,10 @@ import {
   Shield,
   Building2,
   MapPin,
-  Zap
+  Zap,
+  Landmark,
+  ShieldAlert,
+  Inbox
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -102,19 +106,19 @@ export default function Dashboard() {
       title: `${user?.districtName || 'Regional'} District Command`,
       subtitle: `Overseeing operational health for regional branches.`,
       scope: 'Regional',
-      icon: MapPin
+      icon: Landmark
     };
 
     if (['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR'].includes(roleName)) return {
-      title: 'KYC Verification Hub',
+      title: 'Specialist Analysis Hub',
       subtitle: `Portfolio visibility across authorized jurisdiction nodes.`,
       scope: 'Portfolio',
       icon: Zap
     };
 
     return {
-      title: `${cleanBranchName} Overview`,
-      subtitle: 'Local branch activity monitoring and amendment tracking.',
+      title: `${cleanBranchName} Node`,
+      subtitle: 'Local node activity monitoring and methodology tracking.',
       scope: 'Branch',
       icon: Building2
     };
@@ -124,14 +128,14 @@ export default function Dashboard() {
     const scopeLabel = dashboardContext.scope;
     if (!recentSubmissions) return [];
 
-    const approvedCount = recentSubmissions.filter(s => s.status === KYCStatus.APPROVED).length;
+    const authorizedCount = recentSubmissions.filter(s => s.status === KYCStatus.APPROVED).length;
     const actionCount = recentSubmissions.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length;
 
     return [
-      { label: `${scopeLabel} Active`, value: recentSubmissions.length.toString(), icon: History, color: 'text-blue-600' },
-      { label: 'Approved Recently', value: approvedCount.toString(), icon: FileCheck, color: 'text-emerald-600' },
+      { label: `${scopeLabel} Active`, value: recentSubmissions.length.toString(), icon: Inbox, color: 'text-blue-600' },
+      { label: 'Authorized Recently', value: authorizedCount.toString(), icon: ShieldCheck, color: 'text-emerald-600' },
       { label: 'Action Required', value: actionCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
-      { label: 'SLA Compliance', value: '98.4%', icon: TrendingUp, color: 'text-primary' },
+      { label: 'Methodology Index', value: '98.4%', icon: TrendingUp, color: 'text-primary' },
     ];
   }, [recentSubmissions, dashboardContext]);
 
@@ -147,28 +151,30 @@ export default function Dashboard() {
   const Icon = dashboardContext.icon;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-primary/10 rounded-xl text-primary">
-              <Icon className="w-6 h-6" />
+          <div className="flex items-center gap-4 mb-1">
+            <div className="p-3 bg-primary text-white rounded-2xl shadow-xl">
+              <Icon className="w-8 h-8" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {dashboardContext.title}
-            </h1>
+            <div>
+              <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
+                {dashboardContext.title}
+              </h1>
+              <p className="text-muted-foreground text-lg font-medium">{dashboardContext.subtitle}</p>
+            </div>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">{dashboardContext.subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
           {!isSuperAdmin && user?.districtName && (
-            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-1.5 font-bold h-10 flex items-center gap-2">
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-2 font-black h-12 flex items-center gap-2 text-xs rounded-xl shadow-sm">
               <MapPin className="w-4 h-4" /> {user.districtName} Node
             </Badge>
           )}
           {hasPermission('CASE_SUBMIT') && (
-            <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-black text-lg rounded-2xl">
-              <Link href="/submissions/new">Create New Submission</Link>
+            <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-black text-lg rounded-xl transition-all active:scale-95">
+              <Link href="/submissions/new">Initialize Submission</Link>
             </Button>
           )}
         </div>
@@ -176,12 +182,12 @@ export default function Dashboard() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.label} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/30 transition-all rounded-2xl bg-white">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card key={stat.label} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all rounded-2xl bg-white">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50 border-b">
               <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{stat.label}</CardTitle>
               <stat.icon className={cn("h-4 w-4 transition-transform group-hover:scale-125", stat.color)} />
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <div className="text-4xl font-black text-slate-900 tracking-tighter">{stat.value}</div>
             </CardContent>
           </Card>
@@ -192,53 +198,59 @@ export default function Dashboard() {
         <Card className="lg:col-span-4 shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
           <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between p-6">
             <div>
-              <CardTitle className="text-xl font-bold">Activity Stream</CardTitle>
-              <CardDescription>Live tracking for {dashboardContext.scope.toLowerCase()} authorized cases.</CardDescription>
+              <CardTitle className="text-xl font-bold flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" /> Operational Stream
+              </CardTitle>
+              <CardDescription>Live tracking for authorized institutional cases.</CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/5">
               <Link href="/submissions" className="flex items-center gap-1">
-                View Archive <ChevronRight className="w-4 h-4" />
+                Institutional Archive <ChevronRight className="w-4 h-4" />
               </Link>
             </Button>
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
+          <CardContent className="p-0">
+            <div className="divide-y divide-slate-100">
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-primary/30" />
                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Querying Vault...</p>
                 </div>
               ) : recentSubmissions && recentSubmissions.length > 0 ? (
                 recentSubmissions.map((sub) => (
-                  <div key={sub.id} className="flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all group">
+                  <div key={sub.id} className="flex items-center justify-between p-5 hover:bg-slate-50 transition-all group">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-slate-900 group-hover:text-primary transition-colors">{sub.customerName}</p>
-                        {sub.isExceptional && <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 text-[8px] h-4 font-black uppercase">Hierarchy</Badge>}
+                        {sub.isExceptional && (
+                          <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 text-[8px] h-4 font-black uppercase px-1.5">
+                            Hierarchy Process
+                          </Badge>
+                        )}
                       </div>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">
                         {sub.id} • {sub.branch?.name || sub.branchName} Node
                       </p>
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant="outline" className={cn(
-                        "font-black text-[10px] uppercase px-3 py-1",
+                        "font-black text-[9px] uppercase px-3 py-1 border-2",
                         sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
                         sub.status === KYCStatus.ACTION_REQUIRED ? 'bg-orange-50 text-orange-700 border-orange-100' :
                         'bg-blue-50 text-blue-700 border-blue-100'
                       )}>
-                        {sub.status?.replace(/_/g, ' ')}
+                        {sub.status === KYCStatus.APPROVED ? 'AUTHORIZED' : sub.status?.replace(/_/g, ' ')}
                       </Badge>
-                      <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/5 text-primary">
+                      <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/10 text-primary">
                         <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>
                       </Button>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-16 bg-slate-50/50 rounded-2xl border border-dashed">
+                <div className="text-center py-20 bg-slate-50/30 rounded-2xl">
                   <History className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest">No Operational Data Found</p>
+                  <p className="text-sm text-muted-foreground font-black uppercase tracking-widest">No Operational Data Found</p>
                 </div>
               )}
             </div>
@@ -247,27 +259,29 @@ export default function Dashboard() {
 
         <Card className="lg:col-span-3 shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
           <CardHeader className="bg-slate-50/50 border-b p-6">
-            <CardTitle className="text-xl font-bold">Institutional Guidelines</CardTitle>
-            <CardDescription>Critical policy updates for verification specialists.</CardDescription>
+            <CardTitle className="text-xl font-bold flex items-center gap-2">
+              <Info className="w-5 h-5 text-primary" /> Methodology Updates
+            </CardTitle>
+            <CardDescription>Critical policy methodology for specialists.</CardDescription>
           </CardHeader>
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 px-6">
              <div className="space-y-4">
                 {settings?.guidelines && (settings.guidelines as any[]).length > 0 ? (
                   (settings.guidelines as any[]).map((guide) => (
-                    <div key={guide.id} className={`flex gap-4 p-5 rounded-2xl border ${guide.type === 'alert' ? 'bg-orange-50 border-orange-100' : 'bg-blue-50 border-blue-100'}`}>
-                      {guide.type === 'alert' ? <AlertCircle className="w-6 h-6 text-orange-600 shrink-0" /> : <Info className="w-6 h-6 text-blue-600 shrink-0" />}
+                    <div key={guide.id} className={`flex gap-4 p-5 rounded-2xl border transition-all hover:scale-[1.02] ${guide.type === 'alert' ? 'bg-orange-50 border-orange-100' : 'bg-blue-50 border-blue-100'}`}>
+                      {guide.type === 'alert' ? <ShieldAlert className="w-6 h-6 text-orange-600 shrink-0" /> : <Info className="w-6 h-6 text-blue-600 shrink-0" />}
                       <div className="text-sm">
-                        <p className="font-bold text-slate-900">{guide.title}</p>
-                        <p className="text-slate-600 leading-relaxed mt-1 font-medium">{guide.description}</p>
+                        <p className="font-bold text-slate-900 leading-tight">{guide.title}</p>
+                        <p className="text-slate-600 leading-relaxed mt-1 font-medium text-xs">{guide.description}</p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-16 text-muted-foreground italic">
-                    <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Info className="w-8 h-8 opacity-20" />
+                  <div className="text-center py-20 text-muted-foreground italic">
+                    <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed">
+                      <Landmark className="w-8 h-8 opacity-20" />
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-widest">No guidelines published.</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em]">No methodology published.</p>
                   </div>
                 )}
              </div>
