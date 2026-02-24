@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useMemo, useState, useRef } from "react";
@@ -50,24 +51,39 @@ export default function ExceptionalCasesPage() {
   const isAdmin = isSuperAdmin;
   const canTrigger = hasPermission('TRIGGER_GOVERNANCE_FLOW');
 
-  useEffect(() => {
-    async function loadData() {
-      if (!user) return;
-      setLoading(true);
-      
-      // Exceptional cases: If admin, show all. If branch manager, show all exceptional cases but maybe filter by branch?
-      // For now, exceptional queue is usually shared for visibility, but triggering is local.
-      const [exceptional, all] = await Promise.all([
-        getSubmissions({ isExceptional: true }),
-        getSubmissions({ 
-          isExceptional: false, 
-          branch: isAdmin ? undefined : user.branchName || undefined 
-        })
-      ]);
-      setSubmissions(exceptional);
-      setAvailableCases(all);
+  const loadData = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const assignedBranches = user.assignedBranches || [];
+      const branchContext = isAdmin ? undefined : (user.branchName || "RESTRICTED_NODE");
+      const branchesContext = isAdmin ? undefined : (assignedBranches.length > 0 ? assignedBranches : undefined);
+
+      // Fetch existing exceptional cases matching user's jurisdiction
+      const exceptionalPromise = getSubmissions({ 
+        isExceptional: true,
+        branch: branchContext,
+        branches: branchesContext
+      });
+
+      // Fetch regular cases that COULD be promoted to exceptional
+      const availablePromise = getSubmissions({ 
+        isExceptional: false, 
+        branch: branchContext,
+        branches: branchesContext
+      });
+
+      const [exceptional, all] = await Promise.all([exceptionalPromise, availablePromise]);
+      setSubmissions(exceptional || []);
+      setAvailableCases(all || []);
+    } catch (error) {
+      console.error("[Vault] Discovery Failure:", error);
+    } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
     loadData();
   }, [user, isAdmin]);
 
@@ -102,8 +118,7 @@ export default function ExceptionalCasesPage() {
       toast({ title: "Exception Initiated", description: "Case dispatched to Governance nodes." });
       setIsAddDialogOpen(false);
       resetForm();
-      const exceptional = await getSubmissions({ isExceptional: true });
-      setSubmissions(exceptional);
+      await loadData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Action Failed", description: error.message });
     }
@@ -172,7 +187,7 @@ export default function ExceptionalCasesPage() {
           </div>
           <div className="space-y-2">
             <p className="font-bold text-slate-900 text-xl">Exception Queue Empty</p>
-            <p className="text-sm text-slate-500 max-w-xs mx-auto">No high-risk cases currently require hierarchy oversight.</p>
+            <p className="text-sm text-slate-500 max-w-xs mx-auto">No high-risk cases currently require hierarchy oversight in your node.</p>
           </div>
         </div>
       ) : (
