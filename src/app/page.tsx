@@ -27,7 +27,8 @@ import {
   Zap,
   Landmark,
   ShieldAlert,
-  Inbox
+  Inbox,
+  Activity
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -239,7 +240,7 @@ export default function Dashboard() {
                         sub.status === KYCStatus.ACTION_REQUIRED ? 'bg-orange-50 text-orange-700 border-orange-100' :
                         'bg-blue-50 text-blue-700 border-blue-100'
                       )}>
-                        {sub.status === KYCStatus.APPROVED ? 'AUTHORIZED' : sub.status?.replace(/_/g, ' ')}
+                        {sub.status === KYCStatus.APPROVED ? 'SUCCESSFULLY AUTHORIZED' : sub.status?.replace(/_/g, ' ')}
                       </Badge>
                       <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/10 text-primary">
                         <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>

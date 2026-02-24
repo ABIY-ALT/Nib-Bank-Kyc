@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from "react"
@@ -122,8 +123,8 @@ export default function OfficerPerformancePage() {
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary text-white rounded-lg shadow-lg"><TrendingUp className="w-6 h-6" /></div>
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Officer Performance</h1>
-            <p className="text-muted-foreground text-lg font-medium">Monitoring throughput and determination accuracy for KYC specialists.</p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Specialist Performance Metrics</h1>
+            <p className="text-muted-foreground text-lg font-medium">Monitoring throughput and accuracy for Specialist Analysis staff.</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
@@ -193,7 +194,7 @@ export default function OfficerPerformancePage() {
             <div className="max-w-md mx-auto space-y-2">
               <p className="font-bold text-slate-900 text-2xl tracking-tight">Productivity Pool Empty</p>
               <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                No determinations have been recorded by specialists in this timeframe. Check the Institutional Archive for historical records.
+                No institutional verdicts have been recorded in this timeframe.
               </p>
             </div>
           </CardContent>
@@ -203,7 +204,7 @@ export default function OfficerPerformancePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card className="shadow-lg border-slate-200 bg-white overflow-hidden group hover:border-primary/40 transition-all">
               <CardHeader className="pb-2 bg-slate-50/50 border-b">
-                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Determinations</CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Analyst Decisions</CardTitle>
               </CardHeader>
               <CardContent className="pt-6 flex items-center justify-between">
                 <span className="text-5xl font-black text-slate-900 tracking-tighter">{performanceMatrix.reduce((acc, o) => acc + o.total, 0)}</span>
@@ -223,7 +224,7 @@ export default function OfficerPerformancePage() {
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500 bg-white overflow-hidden">
               <CardHeader className="pb-2 bg-slate-50/50 border-b">
-                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Amendments Issued</CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Methodology Corrections</CardTitle>
               </CardHeader>
               <CardContent className="pt-6 flex items-center justify-between">
                 <span className="text-5xl font-black text-orange-600 tracking-tighter">{performanceMatrix.reduce((acc, o) => acc + o.amended, 0)}</span>
@@ -236,12 +237,12 @@ export default function OfficerPerformancePage() {
             <CardHeader className="border-b bg-slate-50/30 p-6 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-xl flex items-center gap-3 font-headline">
-                  <UserCheck className="w-6 h-6 text-primary" /> KYC Officer Performance Data
+                  <UserCheck className="w-6 h-6 text-primary" /> Specialist Productivity Data
                 </CardTitle>
-                <CardDescription>Individual accuracy and resolution metrics derived from Vault determinations.</CardDescription>
+                <CardDescription>Individual accuracy and verdict metrics derived from the Institutional Vault.</CardDescription>
               </div>
               <Badge variant="outline" className="bg-white text-slate-500 font-black px-4 py-1 border-slate-200 shadow-sm">
-                {performanceMatrix.length} Specialists Audited
+                {performanceMatrix.length} Analysts Audited
               </Badge>
             </CardHeader>
             <CardContent className="p-0">
@@ -249,9 +250,9 @@ export default function OfficerPerformancePage() {
                 <TableHeader className="bg-slate-50/80">
                   <TableRow>
                     <TableHead className="font-black py-5 pl-8 text-slate-500 text-[11px] uppercase tracking-widest">Specialist Name</TableHead>
-                    <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase tracking-widest text-center">Total Reviews</TableHead>
-                    <TableHead className="font-black py-5 text-emerald-600 text-[11px] uppercase tracking-widest text-center">Approved</TableHead>
-                    <TableHead className="font-black py-5 text-orange-600 text-[11px] uppercase tracking-widest text-center">Amended</TableHead>
+                    <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase tracking-widest text-center">Total Verdicts</TableHead>
+                    <TableHead className="font-black py-5 text-emerald-600 text-[11px] uppercase tracking-widest text-center">Successfully Authorized</TableHead>
+                    <TableHead className="font-black py-5 text-orange-600 text-[11px] uppercase tracking-widest text-center">Action Required</TableHead>
                     <TableHead className="text-right font-black py-5 pr-8 text-slate-500 text-[11px] uppercase tracking-widest">Accuracy Index</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -264,7 +265,7 @@ export default function OfficerPerformancePage() {
                         </div>
                         <div className="flex flex-col">
                           <span>{officer.name}</span>
-                          <span className="text-[9px] font-black text-slate-400 uppercase">KYC Specialist</span>
+                          <span className="text-[9px] font-black text-slate-400 uppercase">Specialist Analyst</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-center font-bold text-slate-700">{officer.total}</TableCell>

@@ -24,7 +24,9 @@ import {
   Zap,
   Target,
   ArrowUpRight,
-  ShieldAlert
+  ShieldAlert,
+  Clock,
+  CheckCircle2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -135,9 +137,9 @@ export default function DistrictPerformancePage() {
               {activeDistrict ? `${activeDistrict} Regional Command` : 'Global Network Oversight'}
             </h1>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-muted-foreground text-lg font-medium">Relational health monitoring for institutional branch nodes.</p>
+              <p className="text-muted-foreground text-lg font-medium">Institutional health monitoring for regional branch nodes.</p>
               <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-black px-3 py-1">
-                {branchCount} Active Nodes
+                {branchCount} Authorized Nodes
               </Badge>
             </div>
           </div>
@@ -184,7 +186,7 @@ export default function DistrictPerformancePage() {
         </Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 bg-white overflow-hidden rounded-2xl">
           <CardHeader className="pb-2 text-[10px] font-black uppercase text-emerald-600 bg-slate-50/50">
-            Authorized Cases
+            Successfully Authorized
           </CardHeader>
           <CardContent className="pt-4 flex items-end justify-between">
             <span className="text-5xl font-black text-emerald-600 tracking-tighter">{analytics.approved}</span>
@@ -202,7 +204,7 @@ export default function DistrictPerformancePage() {
         </Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary bg-white overflow-hidden rounded-2xl">
           <CardHeader className="pb-2 text-[10px] font-black uppercase text-primary bg-slate-50/50">
-            In Specialist Review
+            Specialist Analysis
           </CardHeader>
           <CardContent className="pt-4 flex items-end justify-between">
             <span className="text-5xl font-black text-primary tracking-tighter">{analytics.pending}</span>
@@ -218,7 +220,7 @@ export default function DistrictPerformancePage() {
               <CardTitle className="text-xl flex items-center gap-3 font-headline text-slate-900">
                 <LayoutGrid className="w-5 h-5 text-primary" /> Branch Throughput Matrix
               </CardTitle>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Comparative efficiency metrics across authorized regional branches.</CardDescription>
+              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Comparative efficiency metrics across regional nodes.</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -296,7 +298,7 @@ export default function DistrictPerformancePage() {
                   <div className="p-4 rounded-xl bg-orange-50 border border-orange-100 flex gap-3">
                     <ShieldAlert className="w-5 h-5 text-orange-600 shrink-0" />
                     <p className="text-[10px] text-orange-800 font-bold leading-relaxed uppercase">
-                      High Methodology Gaps detected in the region. Specialist intervention recommended for training.
+                      High Methodology Gaps detected in the region. Specialist intervention recommended for node training.
                     </p>
                   </div>
                 ) : (
