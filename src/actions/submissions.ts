@@ -25,6 +25,22 @@ export async function getSubmissions(filters?: {
   submittedBy?: string;
 }) {
   try {
+    // Correctly handle date ranges to include the full end day
+    let dateFilter = undefined;
+    if (filters?.startDate || filters?.endDate) {
+      const start = filters.startDate ? new Date(filters.startDate) : undefined;
+      const end = filters.endDate ? new Date(filters.endDate) : undefined;
+      
+      if (end) {
+        end.setHours(23, 59, 59, 999);
+      }
+
+      dateFilter = {
+        gte: start,
+        lte: end,
+      };
+    }
+
     return await prisma.kYC.findMany({
       where: {
         status: filters?.status ? { in: filters.status } : undefined,
@@ -32,18 +48,19 @@ export async function getSubmissions(filters?: {
         createdById: filters?.createdById || filters?.submittedBy,
         isResubmitted: filters?.isResubmitted,
         isExceptional: filters?.isExceptional,
-        branch: filters?.branches && filters.branches.length > 0 ? {
-          name: { in: filters.branches }
+        // Match by denormalized branchName for higher reliability
+        branchName: filters?.branches && filters.branches.length > 0 ? {
+          in: filters.branches
         } : filters?.branch ? { 
-          name: filters.branch 
-        } : filters?.district ? {
+          equals: filters.branch,
+          mode: 'insensitive'
+        } : undefined,
+        // Fallback to relational district filter if no branch name provided
+        branch: (!filters?.branch && !filters?.branches && filters?.district) ? {
           district: { name: filters.district }
         } : undefined,
         active: true,
-        createdAt: (filters?.startDate || filters?.endDate) ? {
-          gte: filters.startDate ? new Date(filters.startDate) : undefined,
-          lte: filters.endDate ? new Date(filters.endDate) : undefined,
-        } : undefined,
+        createdAt: dateFilter,
       },
       select: {
         id: true,
@@ -99,7 +116,7 @@ export async function getWorkflowCounts(params: {
   const { userId, branchName, branches, isSuperAdmin } = params;
 
   const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? {
-    branch: { name: { in: branches } }
+    branchName: { in: branches }
   } : {
     branchName: branchName || "NONE"
   });
@@ -427,13 +444,18 @@ export async function logBundleDownload(data: any) {
 
 export async function initiateExceptionalWorkflow(kycId: string, data: any) {
   try {
-    return await prisma.kYC.update({
+    const kyc = await prisma.kYC.update({
       where: { id: kycId },
       data: {
         isExceptional: true,
         updatedAt: new Date()
       }
     });
+    
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/');
+    
+    return kyc;
   } catch (e) {
     throw e;
   }
