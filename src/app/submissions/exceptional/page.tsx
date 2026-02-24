@@ -32,7 +32,7 @@ import Link from "next/link";
 
 export default function ExceptionalCasesPage() {
   const { user } = useAuth();
-  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
+  const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [availableCases, setAvailableCases] = useState<any[]>([]);
@@ -48,14 +48,21 @@ export default function ExceptionalCasesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = isSuperAdmin;
+  const canTrigger = hasPermission('TRIGGER_GOVERNANCE_FLOW');
 
   useEffect(() => {
     async function loadData() {
       if (!user) return;
       setLoading(true);
+      
+      // Exceptional cases: If admin, show all. If branch manager, show all exceptional cases but maybe filter by branch?
+      // For now, exceptional queue is usually shared for visibility, but triggering is local.
       const [exceptional, all] = await Promise.all([
         getSubmissions({ isExceptional: true }),
-        getSubmissions({ isExceptional: false, branch: isAdmin ? undefined : user.branchName || undefined })
+        getSubmissions({ 
+          isExceptional: false, 
+          branch: isAdmin ? undefined : user.branchName || undefined 
+        })
       ]);
       setSubmissions(exceptional);
       setAvailableCases(all);
@@ -79,7 +86,7 @@ export default function ExceptionalCasesPage() {
 
   const handleInitiateException = async () => {
     if (!user || !selectedCaseId || !exceptionReason || !riskJustification || !memoFile) {
-      toast({ variant: "destructive", title: "Validation Error", description: "All fields are required." });
+      toast({ variant: "destructive", title: "Validation Error", description: "All fields (including PDF memo) are required." });
       return;
     }
 
@@ -92,7 +99,7 @@ export default function ExceptionalCasesPage() {
         memoData: { name: memoFile.name }
       });
       
-      toast({ title: "Exception Initiated", description: "Case dispatched to District Director." });
+      toast({ title: "Exception Initiated", description: "Case dispatched to Governance nodes." });
       setIsAddDialogOpen(false);
       resetForm();
       const exceptional = await getSubmissions({ isExceptional: true });
@@ -125,7 +132,7 @@ export default function ExceptionalCasesPage() {
           <p className="text-muted-foreground text-lg font-medium">Hierarchy oversight for high-risk and non-standard verification requests.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {isAdmin && (
+          {canTrigger && (
             <Button 
               onClick={() => setIsAddDialogOpen(true)}
               className="bg-[#B89334] hover:bg-[#A6822D] text-white font-bold h-12 px-8 shadow-xl gap-2 rounded-lg transition-all active:scale-95"
@@ -173,38 +180,42 @@ export default function ExceptionalCasesPage() {
       )}
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-              <Zap className="w-6 h-6 text-yellow-600 fill-yellow-600" />
-              Initiate Exceptional Request
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl p-0 border-none shadow-2xl">
+          <DialogHeader className="p-8 bg-primary text-white space-y-1">
+            <DialogTitle className="text-2xl font-black flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-xl"><Zap className="w-6 h-6 text-white fill-white" /></div>
+              Initiate Exceptional Flow
             </DialogTitle>
-            <DialogDescription>Assign a high-level approval workflow to an existing case.</DialogDescription>
+            <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest pl-11">
+              Promoting case to hierarchy governance
+            </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-6 pt-4">
+          <div className="p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Case ID Selection</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target Case ID</Label>
                 <Select value={selectedCaseId} onValueChange={setSelectedCaseId}>
-                  <SelectTrigger className="h-12 border-slate-200"><SelectValue placeholder="Select Case ID..." /></SelectTrigger>
+                  <SelectTrigger className="h-12 border-slate-200 rounded-xl font-bold"><SelectValue placeholder="Select ID..." /></SelectTrigger>
                   <SelectContent>
-                    {availableCases.map(c => <SelectItem key={c.id} value={c.id}>{c.id}</SelectItem>)}
+                    {availableCases.length === 0 ? (
+                      <SelectItem value="none" disabled>No cases discovered in node</SelectItem>
+                    ) : availableCases.map(c => <SelectItem key={c.id} value={c.id}>{c.id}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Customer Full Name</Label>
-                <div className="h-12 border rounded-md bg-slate-50 px-3 flex items-center text-sm font-bold text-slate-900 truncate">
-                  {selectedCase ? selectedCase.customerName : "Select Case..."}
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Customer Identity</Label>
+                <div className="h-12 border rounded-xl bg-slate-50 px-4 flex items-center text-sm font-black text-slate-900 truncate">
+                  {selectedCase ? selectedCase.customerName : "---"}
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Exception Reason</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Escalation Trigger</Label>
               <Select value={exceptionReason} onValueChange={setExceptionReason}>
-                <SelectTrigger className="h-12 border-slate-200"><SelectValue placeholder="Select reason..." /></SelectTrigger>
+                <SelectTrigger className="h-12 border-slate-200 rounded-xl font-bold"><SelectValue placeholder="Select classification..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Missing critical documents">Missing critical documents</SelectItem>
                   <SelectItem value="High deposit amount">High deposit amount</SelectItem>
@@ -215,26 +226,44 @@ export default function ExceptionalCasesPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Risk Justification</Label>
-              <Textarea placeholder="Explain why..." className="min-h-[80px]" value={riskJustification} onChange={(e) => setRiskJustification(e.target.value)} />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Governance Justification</Label>
+              <Textarea 
+                placeholder="Detail why this case requires high-level sign-off..." 
+                className="min-h-[100px] rounded-xl font-medium" 
+                value={riskJustification} 
+                onChange={(e) => setRiskJustification(e.target.value)} 
+              />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Supporting Memo (PDF Only)</Label>
-              <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-primary/30 rounded-xl p-8 text-center cursor-pointer hover:bg-primary/5 transition-all bg-white shadow-sm">
-                <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Upload className="w-6 h-6 text-primary" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Institutional Memo (PDF)</Label>
+              <div 
+                onClick={() => fileInputRef.current?.click()} 
+                className="border-2 border-dashed border-primary/20 rounded-2xl p-8 text-center cursor-pointer hover:bg-primary/5 transition-all bg-white group"
+              >
+                <div className="bg-primary/10 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                  <Upload className="w-7 h-7 text-primary" />
                 </div>
-                <p className="text-sm font-bold text-slate-900">{memoFile ? memoFile.name : "Select Institutional Memo"}</p>
+                <p className="text-sm font-black text-slate-900">{memoFile ? memoFile.name : "Select Signature-Authorized Memo"}</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Maximum 10MB • Regulatory Format</p>
               </div>
               <input type="file" ref={fileInputRef} className="hidden" accept="application/pdf" onChange={(e) => setMemoFile(e.target.files?.[0] || null)} />
             </div>
           </div>
 
-          <DialogFooter className="pt-6 border-t mt-4 gap-2">
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
-            <Button className="bg-[#B89334] text-white font-black px-10 shadow-lg h-11" disabled={!selectedCaseId || !memoFile} onClick={handleInitiateException}>
-              Dispatch Exception
+          <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row items-center justify-end gap-4 rounded-b-3xl">
+            <button 
+              onClick={() => setIsAddDialogOpen(false)} 
+              className="text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors"
+            >
+              Abort Request
+            </button>
+            <Button 
+              className="bg-primary hover:bg-primary/90 text-white font-black px-10 shadow-xl h-14 rounded-xl" 
+              disabled={!selectedCaseId || !memoFile} 
+              onClick={handleInitiateException}
+            >
+              Dispatch to Governance
             </Button>
           </DialogFooter>
         </DialogContent>
