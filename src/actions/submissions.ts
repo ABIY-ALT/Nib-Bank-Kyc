@@ -61,6 +61,7 @@ export async function getSubmissions(filters?: {
         branchName: true,
         entityType: true,
         isExceptional: true,
+        exceptionalStatus: true,
         isResubmitted: true,
         amendCycles: true,
         createdById: true,
@@ -210,6 +211,55 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
   return kyc;
 }
 
+export async function processExceptionalStep(id: string, nextStatus: string, reviewerId: string, remarks: string, actionLabel: string) {
+  const now = new Date();
+  const current = await prisma.kYC.findUnique({ where: { id } });
+  if (!current) throw new Error("KYC record not found");
+
+  const history = (current.commentHistory as any[]) || [];
+  const reviewer = await prisma.user.findUnique({ 
+    where: { id: reviewerId },
+    include: { roles: { include: { role: true } } }
+  });
+
+  const newEntry = {
+    role: reviewer?.roles?.[0]?.role?.name || 'GOVERNANCE',
+    performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
+    timestamp: now.toISOString(),
+    comment: remarks || actionLabel,
+    action: actionLabel
+  };
+
+  const data: any = {
+    exceptionalStatus: nextStatus,
+    updatedAt: now,
+    commentHistory: [...history, newEntry]
+  };
+
+  // If completing the flow
+  if (nextStatus === 'COMPLETED') {
+    data.status = KYCStatus.APPROVED;
+  }
+
+  const kyc = await prisma.kYC.update({
+    where: { id },
+    data
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: reviewerId,
+      kycId: id,
+      action: AuditAction.STATUS_CHANGE,
+      details: `Exceptional flow transition: ${actionLabel}`,
+      metadata: { nextStatus, remarks }
+    }
+  });
+
+  revalidatePath(`/submissions/${id}`);
+  return kyc;
+}
+
 export async function updateSubmissionChecklist(id: string, checklistState: any) {
   try {
     const kyc = await prisma.kYC.update({
@@ -279,6 +329,7 @@ export async function createSubmission(formData: FormData) {
         entityType,
         active: true,
         checklistState: {},
+        exceptionalStatus: 'None',
         commentHistory: remarks ? [{
           role: 'BRANCH_OFFICER',
           performedBy: createdByName,
@@ -336,12 +387,66 @@ export async function initiateExceptionalWorkflow(kycId: string, data: any) {
       where: { id: kycId },
       data: {
         isExceptional: true,
+        exceptionalStatus: 'AWAITING_DISTRICT',
         updatedAt: new Date()
       }
     });
     revalidatePath('/submissions/exceptional');
+    revalidatePath(`/submissions/${kycId}`);
     return kyc;
   } catch (e) {
     throw e;
+  }
+}
+
+export async function resubmitSubmission(formData: FormData) {
+  try {
+    const id = formData.get('id') as string;
+    const userId = formData.get('userId') as string;
+    const remarks = formData.get('remarks') as string;
+    const files = formData.getAll('files') as File[];
+    const types = formData.getAll('types') as string[];
+
+    const current = await prisma.kYC.findUnique({ where: { id } });
+    if (!current) throw new Error("Case not found");
+
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    const memoData = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const type = types[i];
+      const timestamp = Date.now();
+      const storedFileName = `resubmit_${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      const filePath = path.join(uploadDir, storedFileName);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(filePath, buffer);
+      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: userId });
+    }
+
+    const now = new Date();
+    const history = (current.commentHistory as any[]) || [];
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    const updated = await prisma.kYC.update({
+      where: { id },
+      data: {
+        status: KYCStatus.SUBMITTED,
+        isResubmitted: true,
+        updatedAt: now,
+        commentHistory: [...history, {
+          role: 'BRANCH_OFFICER',
+          performedBy: `${user?.firstName} ${user?.lastName}`,
+          timestamp: now.toISOString(),
+          comment: remarks,
+          action: 'RESUBMIT'
+        }],
+        memos: { create: memoData }
+      }
+    });
+
+    revalidatePath(`/submissions/${id}`);
+    return { success: true, kyc: updated };
+  } catch (e: any) {
+    return { success: false, error: e.message };
   }
 }

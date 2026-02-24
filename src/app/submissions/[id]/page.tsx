@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -44,12 +43,14 @@ import {
   Shield,
   Gavel,
   Scale,
-  Landmark
+  Landmark,
+  UserCheck,
+  Users
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissionById, updateSubmissionStatus, resubmitSubmission, updateSubmissionChecklist } from "@/actions/submissions";
+import { getSubmissionById, updateSubmissionStatus, resubmitSubmission, updateSubmissionChecklist, processExceptionalStep } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { KYCStatus } from "@prisma/client";
 import { Label } from "@/components/ui/label";
@@ -69,10 +70,8 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import JSZip from 'jszip';
 import { usePermissions } from "@/hooks/use-permissions";
 import { AMENDMENT_SCENARIOS } from "@/lib/kyc-data";
-import Link from "next/link";
 import { Progress } from "@/components/ui/progress";
 
 const KYC_CHECKLIST_ITEMS = [
@@ -95,7 +94,7 @@ export default function SubmissionDetails() {
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isSuperAdmin } = usePermissions();
   
   const [submission, setSubmission] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
@@ -107,9 +106,6 @@ export default function SubmissionDetails() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isActioning, setIsActioning] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
-
-  const [resubmitFiles, setResubmitFiles] = useState<{file: File, type: string, id: string}[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -150,6 +146,10 @@ export default function SubmissionDetails() {
     return hasPermission('KYC_VERIFY_CHECKLIST') || hasPermission('KYC_APPROVE_STANDARD');
   }, [hasPermission]);
 
+  const isKYCDirector = useMemo(() => {
+    return isSuperAdmin || user?.roles?.some(ur => ur.role.name === 'KYC_DIRECTOR' || ur.role.name === 'DISTRICT_DIRECTOR');
+  }, [user, isSuperAdmin]);
+
   const canRespond = useMemo(() => {
     return hasPermission('CASE_RESPOND_AMENDMENT') || hasPermission('CASE_RESUBMIT');
   }, [hasPermission]);
@@ -167,7 +167,7 @@ export default function SubmissionDetails() {
     if (!submission || !user || isTerminal || isActioning) return;
 
     if ((action === KYCStatus.ACTION_REQUIRED || action === KYCStatus.ESCALATED) && !remarks.trim()) {
-      toast({ variant: "destructive", title: "Information Required", description: "This action requires detailed remarks or a selected finding." });
+      toast({ variant: "destructive", title: "Information Required", description: "This action requires detailed remarks." });
       return;
     }
 
@@ -175,11 +175,9 @@ export default function SubmissionDetails() {
     try {
       await updateSubmissionStatus(submission.id, action, user.id, remarks);
       toast({ title: "Workflow Updated", description: `Case moved to ${action.replace(/_/g, ' ')}.` });
-      
       const updated = await getSubmissionById(submission.id);
       setSubmission(updated);
       setRemarks("");
-      setIsCustomRemark(true);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Action Failed", description: error.message });
     } finally {
@@ -187,74 +185,31 @@ export default function SubmissionDetails() {
     }
   };
 
-  const handleChecklistToggle = async (itemId: string) => {
-    if (!isReviewer || isTerminal) return;
-
-    const nextState = { ...checklist, [itemId]: !checklist[itemId] };
-    setChecklist(nextState);
-
-    try {
-      const res = await updateSubmissionChecklist(submission.id, nextState);
-      if (!res.success) throw new Error(res.error);
-    } catch (e) {
-      toast({ variant: "destructive", title: "Sync Error", description: "Failed to save checklist state." });
-    }
-  };
-
-  const handleSelectAll = async () => {
-    if (!isReviewer || isTerminal) return;
-
-    const allSelected = KYC_CHECKLIST_ITEMS.every(item => checklist[item.id]);
-    const nextState: Record<string, boolean> = {};
-    
-    KYC_CHECKLIST_ITEMS.forEach(item => {
-      nextState[item.id] = !allSelected;
-    });
-
-    setChecklist(nextState);
-    try {
-      const res = await updateSubmissionChecklist(submission.id, nextState);
-      if (!res.success) throw new Error(res.error);
-      toast({ title: allSelected ? "Checklist Cleared" : "Full Verification Marked" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Sync Error" });
-    }
-  };
-
-  const handleResubmit = async () => {
+  const handleExceptionalStep = async (nextStatus: string, actionLabel: string) => {
     if (!submission || !user || isActioning) return;
-    if (!remarks.trim()) {
-      toast({ variant: "destructive", title: "Notes Required", description: "Explain the corrections made." });
-      return;
-    }
-
-    setIsActioning(KYCStatus.SUBMITTED);
+    
+    setIsActioning(nextStatus);
     try {
-      const formData = new FormData();
-      formData.append('id', submission.id);
-      formData.append('userId', user.id);
-      formData.append('remarks', remarks);
-      
-      resubmitFiles.forEach(f => {
-        formData.append('files', f.file);
-        formData.append('types', f.type);
-      });
-
-      const res = await resubmitSubmission(formData);
-      if (res.success) {
-        toast({ title: "Case Resubmitted", description: "Corrections and documents dispatched." });
-        const updated = await getSubmissionById(submission.id);
-        setSubmission(updated);
-        setRemarks("");
-        setIsCustomRemark(true);
-        setResubmitFiles([]);
-      } else {
-        throw new Error(res.error);
-      }
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Resubmission Failed", description: e.message });
+      await processExceptionalStep(submission.id, nextStatus, user.id, remarks, actionLabel);
+      toast({ title: "Governance Decision Recorded", description: `Case transitioned: ${actionLabel}` });
+      const updated = await getSubmissionById(submission.id);
+      setSubmission(updated);
+      setRemarks("");
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Transition Failed" });
     } finally {
       setIsActioning(null);
+    }
+  };
+
+  const handleChecklistToggle = async (itemId: string) => {
+    if (!isReviewer || isTerminal) return;
+    const nextState = { ...checklist, [itemId]: !checklist[itemId] };
+    setChecklist(nextState);
+    try {
+      await updateSubmissionChecklist(submission.id, nextState);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Sync Error" });
     }
   };
 
@@ -262,128 +217,50 @@ export default function SubmissionDetails() {
     if (!submission) return [];
     
     const status = submission.status as KYCStatus;
+    const excStatus = submission.exceptionalStatus;
     const isExc = submission.isExceptional;
     
     if (isExc) {
       return [
-        { 
-          id: 'submitted', 
-          label: 'Originating Branch', 
-          description: 'Case Dispatched',
-          state: 'completed',
-          icon: CheckCircle2
-        },
-        { 
-          id: 'review', 
-          label: 'Specialist Analysis', 
-          description: 'Technical Review',
-          state: status === KYCStatus.SUBMITTED ? 'active' : 'completed',
-          icon: Search
-        },
-        { 
-          id: 'regional', 
-          label: 'Regional Command', 
-          description: 'District Director Review',
-          state: (status === KYCStatus.IN_REVIEW || status === KYCStatus.SUBMITTED) ? 'pending' : (status === KYCStatus.APPROVED ? 'completed' : 'active'),
-          icon: Landmark
-        },
-        { 
-          id: 'executive', 
-          label: 'Executive Sign-off', 
-          description: 'Management Verdict',
-          state: (status === KYCStatus.APPROVED) ? 'completed' : 'pending',
-          icon: Shield
-        },
-        { 
-          id: 'audit', 
-          label: 'Audit Conclusion', 
-          description: 'Supervisor Archive',
-          state: (status === KYCStatus.APPROVED) ? 'completed' : 'pending',
-          icon: FileArchive
-        }
+        { id: 'sub', label: 'Submitted', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
+        { id: 'dist', label: 'District Director', desc: 'Regional Oversight', state: excStatus === 'AWAITING_DISTRICT' ? 'active' : (['None', 'AWAITING_DISTRICT'].includes(excStatus) ? 'pending' : 'completed'), icon: Landmark },
+        { id: 'kycdir', label: 'KYC Director', desc: 'Strategic Risk Review', state: excStatus === 'AWAITING_DIRECTOR' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Shield },
+        { id: 'chief', label: 'Chief Retail & SME', desc: 'Optional: High-Risk Node', state: excStatus === 'AWAITING_CHIEF' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: ShieldAlert },
+        { id: 'div', label: 'Division Manager', desc: 'Resource Allocation', state: excStatus === 'AWAITING_DIVISION' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF', 'AWAITING_DIVISION'].includes(excStatus) ? 'pending' : 'completed'), icon: Scale },
+        { id: 'super', label: 'Supervisor', desc: 'Operational Audit', state: excStatus === 'AWAITING_SUPERVISOR' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF', 'AWAITING_DIVISION', 'AWAITING_SUPERVISOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Gavel },
+        { id: 'kyco', label: 'KYC Officer', desc: 'Lifecycle Conclusion', state: excStatus === 'COMPLETED' ? 'completed' : 'pending', icon: UserCheck }
       ];
     }
 
     return [
-      { 
-        id: 'submitted', 
-        label: 'Submission', 
-        description: 'Case Dispatched',
-        state: 'completed',
-        icon: CheckCircle2
-      },
-      { 
-        id: 'review', 
-        label: 'Specialist Analysis', 
-        description: 'Technical Review',
-        state: status === KYCStatus.SUBMITTED ? 'active' : 'completed',
-        icon: Search
-      },
-      { 
-        id: 'determination', 
-        label: 'Institutional Verdict', 
-        description: status === KYCStatus.ACTION_REQUIRED ? 'Action Required' : status === KYCStatus.ESCALATED ? 'Senior Assessment' : 'Final Authorization',
-        state: status === KYCStatus.ACTION_REQUIRED ? 'alert' : 
-               status === KYCStatus.IN_REVIEW ? 'active' : 
-               status === KYCStatus.ESCALATED ? 'active' :
-               (status === KYCStatus.APPROVED || status === KYCStatus.REJECTED) ? 'completed' : 'pending',
-        icon: status === KYCStatus.ACTION_REQUIRED ? AlertCircle : 
-              status === KYCStatus.ESCALATED ? ShieldAlert :
-              status === KYCStatus.REJECTED ? XCircle : ShieldCheck
-      },
-      { 
-        id: 'finalized', 
-        label: 'Case Closed', 
-        description: 'Lifecycle Conclusion',
-        state: (status === KYCStatus.APPROVED || status === KYCStatus.REJECTED) ? 'completed' : 'pending',
-        icon: FileArchive
-      }
+      { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
+      { id: 'review', label: 'Specialist Analysis', desc: 'Technical Review', state: status === KYCStatus.SUBMITTED ? 'active' : 'completed', icon: Search },
+      { id: 'verdict', label: 'Institutional Verdict', desc: 'Final Assessment', state: status === KYCStatus.IN_REVIEW ? 'active' : (isTerminal ? 'completed' : 'pending'), icon: ShieldCheck },
+      { id: 'closed', label: 'Case Closed', desc: 'Lifecycle Conclusion', state: isTerminal ? 'completed' : 'pending', icon: FileArchive }
     ];
-  }, [submission]);
+  }, [submission, isTerminal]);
 
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
-  const rawBranchName = submission.branchName || "Local";
-  const branchCleanTitle = rawBranchName.toLowerCase().includes('branch') ? rawBranchName : `${rawBranchName} Branch`;
-
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-primary/5 text-primary"><ArrowLeft className="w-5 h-5" /></Button>
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-3xl font-black font-headline text-slate-900 tracking-tight">{submission.id}</h1>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className={cn(
-                  "font-black px-3 py-1 uppercase text-[10px] tracking-widest",
-                  submission.status === KYCStatus.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                  submission.status === KYCStatus.ACTION_REQUIRED && 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse', 
-                  submission.status === KYCStatus.REJECTED && 'bg-red-50 text-red-700 border-red-200',
-                  submission.status === KYCStatus.SUBMITTED && 'bg-primary/5 text-primary border-primary/20',
-                  submission.status === KYCStatus.ESCALATED && 'bg-purple-50 text-purple-700 border-purple-200'
-                )}>
-                  {submission.status === KYCStatus.APPROVED ? 'SUCCESSFULLY AUTHORIZED' : 
-                   submission.status === KYCStatus.REJECTED ? 'RISK REJECTED' :
-                   submission.status === KYCStatus.ESCALATED ? 'SENIOR ASSESSMENT' :
-                   submission.status.replace(/_/g, ' ')}
-                </Badge>
-                {(submission.amendCycles || 0) > 0 && (
-                  <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-100 flex items-center gap-1.5 font-black text-[10px] px-3">
-                    <RefreshCw className="w-3 h-3" /> Cycle {submission.amendCycles}
-                  </Badge>
-                )}
-              </div>
+              <Badge variant="outline" className={cn(
+                "font-black px-3 py-1 uppercase text-[10px] tracking-widest",
+                submission.status === KYCStatus.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                submission.isExceptional && 'bg-yellow-50 text-yellow-700 border-yellow-200'
+              )}>
+                {submission.status === KYCStatus.APPROVED ? 'SUCCESSFULLY AUTHORIZED' : submission.status.replace(/_/g, ' ')}
+              </Badge>
             </div>
-            <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} • {branchCleanTitle} Node</p>
+            <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} • {submission.branchName}</p>
           </div>
-        </div>
-        <div className="flex gap-2">
-           <Button className="bg-primary hover:bg-primary/90 text-white font-black px-6 shadow-xl h-11 rounded-xl gap-2" onClick={() => {}} disabled={isDownloading}>
-            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileArchive className="w-4 h-4" />}
-            Download Archive
-           </Button>
         </div>
       </div>
 
@@ -399,21 +276,13 @@ export default function SubmissionDetails() {
                     "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-sm border-2",
                     step.state === 'completed' && "bg-primary border-primary text-white shadow-primary/20",
                     step.state === 'active' && "bg-white border-primary text-primary animate-pulse shadow-xl",
-                    step.state === 'alert' && "bg-orange-50 border-orange-500 text-orange-600 shadow-orange-100",
                     step.state === 'pending' && "bg-slate-50 border-slate-100 text-slate-300"
                   )}>
                     <Icon className="w-6 h-6" />
                   </div>
                   <div className="text-left md:text-center space-y-0.5 max-w-[120px]">
-                    <p className={cn(
-                      "text-[10px] font-black uppercase tracking-[0.1em] leading-tight",
-                      step.state === 'completed' ? "text-primary" : 
-                      step.state === 'active' ? "text-primary" : 
-                      step.state === 'alert' ? "text-orange-600" : "text-slate-400"
-                    )}>
-                      {step.label}
-                    </p>
-                    <p className="text-[9px] font-bold text-slate-400">{step.description}</p>
+                    <p className={cn("text-[10px] font-black uppercase tracking-[0.1em] leading-tight", step.state === 'pending' ? "text-slate-400" : "text-primary")}>{step.label}</p>
+                    <p className="text-[9px] font-bold text-slate-400">{step.desc}</p>
                   </div>
                 </div>
               );
@@ -425,75 +294,35 @@ export default function SubmissionDetails() {
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-8">
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
-            <CardHeader className="flex flex-row items-center justify-between border-b bg-primary p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-xl">
-                  <FileText className="w-5 h-5 text-white" />
-                </div>
-                <CardTitle className="text-xl font-black tracking-tight text-white uppercase">Documentation Portfolio</CardTitle>
-              </div>
-              <Badge variant="secondary" className="bg-white/20 border-white/20 font-bold text-white uppercase text-[10px] tracking-widest px-3">{submission.memos?.length || 0} Files</Badge>
+            <CardHeader className="bg-primary p-6 border-b flex flex-row items-center justify-between">
+              <div className="flex items-center gap-3"><FileText className="w-5 h-5 text-white" /><CardTitle className="text-xl font-black text-white">Documentation</CardTitle></div>
             </CardHeader>
             <CardContent className="pt-6 px-6">
               <div className="grid gap-4">
                 {submission.memos?.map((doc: any) => (
-                    <div key={doc.id} className="flex items-center justify-between p-5 border rounded-2xl bg-white shadow-sm hover:border-primary/30 transition-all group border-slate-100">
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 bg-slate-50 rounded-xl group-hover:bg-primary/5 transition-colors">
-                          <FileText className="w-6 h-6 text-slate-400 group-hover:text-primary transition-colors" />
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-900 group-hover:text-primary transition-colors">{doc.name}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-[0.1em] font-black">{doc.type}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                         <Button variant="ghost" size="icon" onClick={() => {}} className="rounded-full h-10 w-10 hover:bg-primary/5 text-primary"><Eye className="w-5 h-5" /></Button>
-                         <Button variant="ghost" size="icon" asChild className="rounded-full h-10 w-10 hover:bg-primary/5 text-primary">
-                           <a href={doc.fileUrl} download={doc.name}>
-                             <Download className="w-5 h-5" />
-                           </a>
-                         </Button>
-                      </div>
-                    </div>
+                  <div key={doc.id} className="flex items-center justify-between p-5 border rounded-2xl bg-white shadow-sm border-slate-100 group hover:border-primary/30 transition-all">
+                    <div className="flex items-center gap-4"><FileText className="w-6 h-6 text-slate-400 group-hover:text-primary transition-colors" /><div><p className="font-black text-slate-900">{doc.name}</p><p className="text-[10px] text-muted-foreground uppercase font-black">{doc.type}</p></div></div>
+                    <Button variant="ghost" size="icon" asChild className="rounded-full h-10 w-10 text-primary hover:bg-primary/5"><a href={doc.fileUrl} download={doc.name}><Download className="w-5 h-5" /></a></Button>
+                  </div>
                 ))}
               </div>
             </CardContent>
           </Card>
 
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl">
-            <CardHeader className="bg-primary p-6 border-b flex flex-row items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-xl">
-                  <MessagesSquare className="w-5 h-5 text-white" />
-                </div>
-                <CardTitle className="text-xl font-black tracking-tight text-white">Institutional Verdict History</CardTitle>
-              </div>
-            </CardHeader>
+            <CardHeader className="bg-primary p-6 border-b"><CardTitle className="text-xl font-black text-white">Verdict History</CardTitle></CardHeader>
             <CardContent className="pt-8 px-8 pb-10">
               <div className="relative space-y-8">
                 <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
-                {submission.commentHistory && (submission.commentHistory as any[]).length > 0 ? (
-                  (submission.commentHistory as any[]).map((entry, idx) => (
-                    <div key={idx} className="relative flex gap-6 animate-in slide-in-from-left duration-500" style={{ animationDelay: `${idx * 100}ms` }}>
-                      <div className="z-10 w-10 h-10 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center shrink-0 shadow-sm group-hover:border-primary/20 transition-colors">
-                        <MessageSquare className="w-5 h-5 text-slate-400" />
-                      </div>
-                      <div className="flex-1 bg-slate-50/50 p-5 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 gap-1">
-                          <span className="text-xs font-black text-slate-900 uppercase tracking-widest">{entry.performedBy} <span className="text-primary ml-1">[{entry.role}]</span></span>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">{new Date(entry.timestamp).toLocaleString()}</span>
-                        </div>
-                        <p className="text-sm text-slate-700 leading-relaxed font-medium">{entry.comment}</p>
-                      </div>
+                {submission.commentHistory?.map((entry: any, idx: number) => (
+                  <div key={idx} className="relative flex gap-6">
+                    <div className="z-10 w-10 h-10 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5 text-slate-400" /></div>
+                    <div className="flex-1 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+                      <div className="flex justify-between mb-2"><span className="text-xs font-black text-slate-900 uppercase">{entry.performedBy} <span className="text-primary">[{entry.role}]</span></span><span className="text-[10px] font-bold text-slate-400">{new Date(entry.timestamp).toLocaleString()}</span></div>
+                      <p className="text-sm text-slate-700 font-medium">{entry.comment}</p>
                     </div>
-                  ))
-                ) : (
-                  <div className="py-12 text-center text-muted-foreground italic flex flex-col items-center gap-3">
-                    <Activity className="w-10 h-10 opacity-10" />
-                    <p className="text-[10px] font-black uppercase tracking-widest">No verdict history recorded.</p>
                   </div>
-                )}
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -501,191 +330,72 @@ export default function SubmissionDetails() {
 
         <div className="space-y-8">
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
-            <CardHeader className="bg-primary p-5 border-b">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/20 rounded-xl">
-                      <ClipboardCheck className="w-5 h-5 text-white" />
-                    </div>
-                    <CardTitle className="text-lg font-black tracking-tight text-white uppercase">Verification Protocol</CardTitle>
-                  </div>
-                  {isReviewer && !isTerminal && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={handleSelectAll}
-                      className="text-[10px] font-black uppercase tracking-wider text-white hover:bg-white/10 h-8 px-3 gap-2"
-                    >
-                      {KYC_CHECKLIST_ITEMS.every(i => checklist[i.id]) ? <RotateCcw className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
-                      {KYC_CHECKLIST_ITEMS.every(i => checklist[i.id]) ? 'Clear' : 'Verify All'}
-                    </Button>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[10px] font-black uppercase text-white/70">
-                    <span>Analysis Completion</span>
-                    <span>{verifiedCount} / {KYC_CHECKLIST_ITEMS.length} Confirmed</span>
-                  </div>
-                  <Progress value={progressPercentage} className="h-1.5 bg-white/20" />
-                </div>
-              </div>
+            <CardHeader className="bg-primary p-5 border-b text-white">
+              <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><ClipboardCheck className="w-5 h-5" /><CardTitle className="text-lg font-black uppercase">Protocol</CardTitle></div><span className="text-[10px] font-black">{verifiedCount}/12</span></div>
+              <Progress value={progressPercentage} className="h-1.5 bg-white/20" />
             </CardHeader>
             <CardContent className="p-6 space-y-3">
               {KYC_CHECKLIST_ITEMS.map((item) => (
-                <div 
-                  key={item.id} 
-                  className={cn(
-                    "flex items-center justify-between p-3 rounded-xl border transition-all",
-                    checklist[item.id] ? "bg-emerald-50 border-emerald-200 shadow-sm" : "bg-white border-slate-100"
-                  )}
-                >
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <Checkbox 
-                      id={item.id} 
-                      checked={checklist[item.id] || false} 
-                      onCheckedChange={() => handleChecklistToggle(item.id)}
-                      disabled={!isReviewer || isTerminal}
-                      className={cn(
-                        "h-5 w-5 rounded-md border-2 border-slate-200",
-                        checklist[item.id] ? "data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600" : "data-[state=unchecked]:bg-white"
-                      )}
-                    />
-                    <label 
-                      htmlFor={item.id} 
-                      className={cn(
-                        "text-[11px] font-bold leading-tight cursor-pointer uppercase tracking-tight truncate",
-                        checklist[item.id] ? "text-emerald-800" : "text-slate-600",
-                        (!isReviewer || isTerminal) && "cursor-not-allowed opacity-70"
-                      )}
-                    >
-                      {item.label}
-                    </label>
-                  </div>
-                  {!isReviewer && (
-                    <div className="shrink-0">
-                      {checklist[item.id] ? (
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] h-4 px-1.5 uppercase font-black flex items-center gap-1">
-                          <Check className="w-2.5 h-2.5" /> Verified
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-100 text-[8px] h-4 px-1.5 uppercase font-black">
-                          Pending
-                        </Badge>
-                      )}
-                    </div>
-                  )}
+                <div key={item.id} className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", checklist[item.id] ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-100")}>
+                  <div className="flex items-center space-x-3"><Checkbox id={item.id} checked={checklist[item.id] || false} onCheckedChange={() => handleChecklistToggle(item.id)} disabled={!isReviewer || isTerminal} /><label htmlFor={item.id} className="text-[11px] font-bold uppercase tracking-tight">{item.label}</label></div>
+                  {checklist[item.id] && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] h-4 uppercase font-black">Verified</Badge>}
                 </div>
               ))}
             </CardContent>
           </Card>
 
-          <Card className="shadow-xl border-primary/20 bg-primary/5 overflow-hidden rounded-3xl sticky top-24">
-            <CardHeader className="bg-primary border-b border-white/10 py-5 px-6">
-              <CardTitle className="text-[11px] font-black uppercase tracking-[0.2em] text-white flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-white" /> Institutional Context
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Entity</p>
-                  <p className="font-black text-slate-900 text-lg leading-tight">{submission.customerName}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Originating Node</p>
-                  <p className="font-black text-slate-900">{branchCleanTitle}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Submitted By</p>
-                  <p className="font-black text-slate-900">{submission.createdBy?.firstName} {submission.createdBy?.lastName || 'Institutional Staff'}</p>
-                </div>
-                <div className="space-y-1 pt-4 border-t border-primary/10">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Workflow</p>
-                  <p className="font-black text-primary uppercase text-sm">{submission.status.replace(/_/g, ' ')}</p>
-                </div>
-            </CardContent>
-          </Card>
-
-          {isActionRequired && canRespond && (
-            <Card className="border-orange-200 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-500 bg-orange-50/10">
-              <CardHeader className="bg-orange-600 text-white border-b py-5">
-                <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2 text-white">
-                  <RotateCcw className="w-5 h-5 text-white" /> Correction Workspace
-                </CardTitle>
+          {submission.isExceptional && !isTerminal && (
+            <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden bg-primary/5">
+              <CardHeader className="bg-primary text-white border-b py-5">
+                <CardTitle className="text-lg font-black tracking-tight text-white flex items-center gap-2"><Gavel className="w-5 h-5" /> Governance Determination</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6 pt-6 px-6 pb-8">
+              <CardContent className="p-6 space-y-6">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Response Note</Label>
-                  <Textarea 
-                    placeholder="Describe the corrections made..." 
-                    value={remarks} 
-                    onChange={(e) => setRemarks(e.target.value)} 
-                    className="min-h-[120px] bg-white border-orange-200 rounded-2xl font-medium" 
-                  />
+                  <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Verdict Remarks</Label>
+                  <Textarea placeholder="Provide justification for governance sign-off..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[100px] bg-white rounded-xl" />
                 </div>
-                <Button 
-                  onClick={handleResubmit} 
-                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-black h-14 rounded-xl shadow-lg gap-2" 
-                  disabled={!!isActioning || !remarks.trim()}
-                >
-                  {isActioning === KYCStatus.SUBMITTED ? <Loader2 className="w-5 h-5 animate-spin" /> : <SendHorizontal className="w-5 h-5" />}
-                  Resubmit Corrected Case
-                </Button>
+
+                {submission.exceptionalStatus === 'AWAITING_DISTRICT' && hasPermission('REPORT_VIEW_DISTRICT') && (
+                  <Button onClick={() => handleExceptionalStep('AWAITING_DIRECTOR', 'District Approve')} className="w-full h-12 bg-primary text-white font-black rounded-xl shadow-lg" disabled={!!isActioning}>Regional Sign-off</Button>
+                )}
+
+                {submission.exceptionalStatus === 'AWAITING_DIRECTOR' && isKYCDirector && (
+                  <div className="grid gap-3">
+                    <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Approve & Forward to Division')} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl flex flex-col items-center justify-center leading-none" disabled={!!isActioning}>
+                      <span>Approve & Forward to Division</span>
+                      <span className="text-[9px] text-white/60 mt-1 uppercase font-bold tracking-widest">Standard Sequential Path</span>
+                    </Button>
+                    <Button variant="outline" onClick={() => handleExceptionalStep('AWAITING_CHIEF', 'Forward to Chief for High-Risk Review')} className="w-full h-14 border-primary text-primary font-black rounded-xl shadow-md flex flex-col items-center justify-center leading-none hover:bg-primary/5" disabled={!!isActioning}>
+                      <span>Forward to Chief for High-Risk Review</span>
+                      <span className="text-[9px] text-primary/60 mt-1 uppercase font-bold tracking-widest">Optional Strategic Path</span>
+                    </Button>
+                  </div>
+                )}
+
+                {submission.exceptionalStatus === 'AWAITING_CHIEF' && isSuperAdmin && (
+                  <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Chief Authorize')} className="w-full h-12 bg-slate-900 text-white font-black rounded-xl shadow-lg" disabled={!!isActioning}>Executive Authorization</Button>
+                )}
+
+                {submission.exceptionalStatus === 'AWAITING_DIVISION' && isSuperAdmin && (
+                  <Button onClick={() => handleExceptionalStep('AWAITING_SUPERVISOR', 'Division Approve')} className="w-full h-12 bg-primary text-white font-black rounded-xl shadow-lg" disabled={!!isActioning}>Resource Sign-off</Button>
+                )}
+
+                {submission.exceptionalStatus === 'AWAITING_SUPERVISOR' && hasPermission('VIEW_SPECIALIST_PRODUCTIVITY') && (
+                  <Button onClick={() => handleExceptionalStep('COMPLETED', 'Final Hierarchy Approval')} className="w-full h-12 bg-emerald-600 text-white font-black rounded-xl shadow-lg" disabled={!!isActioning}>Conclude Lifecycle</Button>
+                )}
+
+                <Button variant="ghost" onClick={() => handleAction(KYCStatus.REJECTED)} className="w-full text-destructive font-bold text-xs" disabled={!!isActioning}>Reject Entire Process</Button>
               </CardContent>
             </Card>
           )}
 
-          {!isTerminal && !isActionRequired && isReviewer && (
-            <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-500">
-              <CardHeader className="bg-primary text-white border-b py-5">
-                <CardTitle className="text-lg font-black tracking-tight text-white">Institutional Verdict</CardTitle>
-              </CardHeader>
+          {!submission.isExceptional && !isTerminal && isReviewer && (
+            <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden">
+              <CardHeader className="bg-primary text-white border-b py-5"><CardTitle className="text-lg font-black text-white">Verdict</CardTitle></CardHeader>
               <CardContent className="space-y-6 pt-6 px-6 pb-8">
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <BookOpen className="w-3 h-3" /> Methodology Findings
-                  </Label>
-                  <Select onValueChange={(val) => {
-                    if (val.toLowerCase().includes("other")) {
-                      setIsCustomRemark(true);
-                      setRemarks("");
-                    } else {
-                      setIsCustomRemark(false);
-                      setRemarks(val);
-                    }
-                  }}>
-                    <SelectTrigger className="h-11 bg-slate-50/50 border-slate-200 rounded-xl font-medium">
-                      <SelectValue placeholder="Select Methodology Scenario..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AMENDMENT_SCENARIOS.map((scenario, idx) => (
-                        <SelectItem key={idx} value={scenario}>{scenario}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Final Verdict Remarks</Label>
-                  <div className="relative">
-                    <Textarea 
-                      placeholder={isCustomRemark ? "Provide verdict justification..." : "Locked: Methodology Scenario Active"}
-                      value={remarks} 
-                      onChange={(e) => setRemarks(e.target.value)} 
-                      readOnly={!isCustomRemark}
-                      className={cn(
-                        "min-h-[140px] border-slate-200 rounded-2xl font-medium transition-colors duration-200 pr-10",
-                        !isCustomRemark ? "bg-slate-100 cursor-not-allowed text-slate-600" : "bg-slate-50/50"
-                      )}
-                    />
-                    {!isCustomRemark && <div className="absolute top-3 right-3"><Lock className="w-4 h-4 text-slate-300" /></div>}
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <Button onClick={() => handleAction(KYCStatus.APPROVED)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl shadow-lg shadow-emerald-100" disabled={!!isActioning}>Authorize</Button>
-                  <Button onClick={() => handleAction(KYCStatus.ACTION_REQUIRED)} variant="outline" className="text-orange-600 border-orange-200 font-black h-12 rounded-xl hover:bg-orange-50" disabled={!!isActioning}>Require Action</Button>
-                  <Button onClick={() => handleAction(KYCStatus.ESCALATED)} className="bg-purple-600 hover:bg-purple-700 text-white font-black h-12 rounded-xl shadow-lg shadow-purple-100" disabled={!!isActioning}>Senior Assess</Button>
-                </div>
+                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Methodology</Label><Select onValueChange={(v) => { setIsCustomRemark(v.includes("other")); setRemarks(v.includes("other") ? "" : v); }}><SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Scenario..." /></SelectTrigger><SelectContent>{AMENDMENT_SCENARIOS.map((s, i) => <SelectItem key={i} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remarks</Label><Textarea placeholder="Justification..." value={remarks} onChange={(e) => setRemarks(e.target.value)} readOnly={!isCustomRemark} className="min-h-[140px] rounded-2xl bg-slate-50/50" /></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3"><Button onClick={() => handleAction(KYCStatus.APPROVED)} className="bg-emerald-600 text-white font-black h-12 rounded-xl" disabled={!!isActioning}>Authorize</Button><Button onClick={() => handleAction(KYCStatus.ACTION_REQUIRED)} variant="outline" className="text-orange-600 font-black h-12 rounded-xl" disabled={!!isActioning}>Amend</Button><Button onClick={() => handleAction(KYCStatus.ESCALATED)} className="bg-purple-600 text-white font-black h-12 rounded-xl" disabled={!!isActioning}>Senior Assess</Button></div>
               </CardContent>
             </Card>
           )}
