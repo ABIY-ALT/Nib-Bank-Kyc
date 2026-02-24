@@ -32,7 +32,8 @@ import {
   Shield,
   FileArchive,
   ClipboardCheck,
-  Info
+  Info,
+  Map
 } from "lucide-react"
 
 import {
@@ -175,6 +176,17 @@ export function AppSidebar() {
                               {counts.actionRequired}
                             </SidebarMenuBadge>
                           )}
+                        </SidebarMenuSubItem>
+                      )}
+
+                      {hasPermission('DASHBOARD_VIEW_DISTRICT') && (
+                        <SidebarMenuSubItem className="relative">
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/district-node'}>
+                            <Link href="/submissions/district-node">
+                              <Map className="w-4 h-4 mr-2 text-primary" />
+                              <span>District Command</span>
+                            </Link>
+                          </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
 

@@ -1,0 +1,393 @@
+
+"use client"
+
+import { useMemo, useState, useEffect } from "react";
+import { 
+  Loader2, 
+  Search, 
+  ShieldCheck, 
+  Users, 
+  TrendingUp, 
+  AlertCircle,
+  CheckCircle2,
+  Inbox,
+  Activity,
+  Calendar as CalendarIcon,
+  Building2,
+  ShieldAlert,
+  RefreshCw,
+  Map,
+  ArrowUpRight
+} from "lucide-react";
+import { useAuth } from "@/lib/auth-mock";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Progress } from "@/components/ui/progress";
+import { Label } from "@/components/ui/label";
+import { subDays, format } from "date-fns";
+import { 
+  Bar, 
+  BarChart, 
+  XAxis, 
+  YAxis, 
+  Tooltip as RechartsTooltip,
+  Cell,
+  PieChart,
+  Pie
+} from "recharts";
+import { type ChartConfig, ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import { SubmissionsPageContent } from "../submissions-content";
+import { getSubmissions } from "@/actions/submissions";
+import { KYCStatus } from "@prisma/client";
+
+const STATUS_COLORS = {
+  APPROVED: "#10B981",
+  SUBMITTED: "#3F51B5",
+  ACTION_REQUIRED: "#F59E0B",
+  REJECTED: "#EF4444",
+  ESCALATED: "#8B5CF6"
+};
+
+const chartConfig = {
+  APPROVED: { label: "Successfully Authorized", color: STATUS_COLORS.APPROVED },
+  SUBMITTED: { label: "Specialist Analysis", color: STATUS_COLORS.SUBMITTED },
+  ACTION_REQUIRED: { label: "Action Required", color: STATUS_COLORS.ACTION_REQUIRED },
+  REJECTED: { label: "Risk Rejected", color: STATUS_COLORS.REJECTED },
+} satisfies ChartConfig;
+
+const volumeConfig = {
+  count: { label: "Volume", color: "hsl(var(--primary))" }
+} satisfies ChartConfig;
+
+export default function DistrictNodeCommandPage() {
+  const { user } = useAuth();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+
+  const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
+  const districtName = user?.districtName || "Central";
+
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      setLoading(true);
+      try {
+        const data = await getSubmissions({
+          district: isAdmin ? undefined : districtName,
+          startDate: fromDate,
+          endDate: toDate
+        });
+        setSubmissions(data);
+      } catch (error) {
+        console.error("Load failed:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [user, isAdmin, fromDate, toDate, districtName]);
+
+  const analytics = useMemo(() => {
+    if (!submissions || submissions.length === 0) return null;
+
+    const stats = {
+      total: submissions.length,
+      approved: submissions.filter(s => s.status === KYCStatus.APPROVED).length,
+      pending: submissions.filter(s => [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status)).length,
+      rejected: submissions.filter(s => s.status === KYCStatus.REJECTED).length,
+      amended: submissions.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length,
+      branches: {} as Record<string, { name: string, total: number, approved: number, pending: number, amended: number }>,
+      officers: {} as Record<string, { name: string, total: number, approved: number, amended: number, pending: number, cycles: number }>,
+      byStatus: [
+        { name: 'APPROVED', value: 0, fill: STATUS_COLORS.APPROVED },
+        { name: 'SUBMITTED', value: 0, fill: STATUS_COLORS.SUBMITTED },
+        { name: 'ACTION_REQUIRED', value: 0, fill: STATUS_COLORS.ACTION_REQUIRED },
+        { name: 'REJECTED', value: 0, fill: STATUS_COLORS.REJECTED },
+      ],
+      volumeHistory: [] as { date: string, count: number }[]
+    };
+
+    const dateMap: Record<string, number> = {};
+
+    submissions.forEach(sub => {
+      // Branch Aggregation
+      const bName = sub.branch?.name || sub.branchName || "Unknown Node";
+      if (!stats.branches[bName]) {
+        stats.branches[bName] = { name: bName, total: 0, approved: 0, pending: 0, amended: 0 };
+      }
+      stats.branches[bName].total++;
+
+      // Officer Aggregation
+      const officerName = sub.createdBy ? `${sub.createdBy.firstName} ${sub.createdBy.lastName}` : 'Institutional Staff';
+      const officerKey = sub.createdById || 'SYSTEM';
+      if (!stats.officers[officerKey]) {
+        stats.officers[officerKey] = { name: officerName, total: 0, approved: 0, amended: 0, pending: 0, cycles: 0 };
+      }
+      stats.officers[officerKey].total++;
+      stats.officers[officerKey].cycles += (sub.amendCycles || 0);
+      
+      if (sub.status === KYCStatus.APPROVED) {
+        stats.branches[bName].approved++;
+        stats.officers[officerKey].approved++;
+        stats.byStatus[0].value++;
+      } else if (sub.status === KYCStatus.ACTION_REQUIRED) {
+        stats.branches[bName].amended++;
+        stats.officers[officerKey].amended++;
+        stats.byStatus[2].value++;
+      } else if ([KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status)) {
+        stats.branches[bName].pending++;
+        stats.officers[officerKey].pending++;
+        stats.byStatus[1].value++;
+      } else if (sub.status === KYCStatus.REJECTED) {
+        stats.byStatus[3].value++;
+      }
+
+      const d = format(new Date(sub.submittedAt), 'MMM dd');
+      dateMap[d] = (dateMap[d] || 0) + 1;
+    });
+
+    stats.volumeHistory = Object.entries(dateMap).map(([date, count]) => ({ date, count }));
+
+    return stats;
+  }, [submissions]);
+
+  const filteredSubmissions = useMemo(() => {
+    if (!submissions) return [];
+    const term = searchTerm.toLowerCase();
+    return submissions.filter(sub => 
+      sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
+    );
+  }, [submissions, searchTerm]);
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
+              <Map className="w-6 h-6" />
+            </div>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
+              {isAdmin ? "Global Command Center" : `${districtName} Regional Command`}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-muted-foreground text-lg font-medium">
+              Institutional oversight of branch nodes within the regional jurisdiction.
+            </p>
+            <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
+              <ShieldCheck className="w-3 h-3" />
+              {isAdmin ? "MASTER" : "DISTRICT DIRECTOR"} Authorization
+            </Badge>
+          </div>
+        </div>
+      </div>
+
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col md:flex-row items-end gap-6">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Period Start</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="pl-10 h-12 rounded-xl border-slate-200 font-bold shadow-sm bg-slate-50/30" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Period End</Label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="pl-10 h-12 rounded-xl border-slate-200 font-bold shadow-sm bg-slate-50/30" />
+                </div>
+              </div>
+            </div>
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input placeholder="Search regional archive..." className="pl-11 h-12 rounded-xl border-slate-200 bg-white" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-40 gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Aggregating Regional Intelligence...</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all duration-300">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Regional Volume</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-slate-900 tracking-tighter">{analytics?.total || 0}</span><div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/5 group-hover:text-primary transition-colors"><Inbox className="w-6 h-6" /></div></CardContent>
+            </Card>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Successfully Authorized</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-emerald-600 tracking-tighter">{analytics?.approved || 0}</span><div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-6 h-6" /></div></CardContent>
+            </Card>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Methodology Gaps</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-orange-600 tracking-tighter">{analytics?.amended || 0}</span><div className="p-3 bg-orange-50 rounded-2xl text-orange-600"><AlertCircle className="w-6 h-6" /></div></CardContent>
+            </Card>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Specialist Analysis</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{analytics?.pending || 0}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
+            </Card>
+          </div>
+
+          <Tabs defaultValue="summary" className="space-y-6">
+            <TabsList className="bg-slate-100 p-1 border h-12">
+              <TabsTrigger value="summary" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><TrendingUp className="w-4 h-4 mr-2" />Regional Pulse</TabsTrigger>
+              <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Activity className="w-4 h-4 mr-2" />Regional Archive</TabsTrigger>
+              <TabsTrigger value="branch-matrix" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Building2 className="w-4 h-4 mr-2" />Branch Throughput</TabsTrigger>
+              <TabsTrigger value="staff-matrix" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Users className="w-4 h-4 mr-2" />Staff Productivity</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="summary" className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
+                  <CardHeader className="bg-slate-50/50 border-b">
+                    <CardTitle className="text-xl">Workflow Distribution</CardTitle>
+                    <CardDescription>Breakdown of regional verification determinations.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-8 flex flex-col items-center">
+                    <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                      <PieChart>
+                        <Pie data={analytics?.byStatus || []} cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={5} dataKey="value">
+                          {analytics?.byStatus.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} stroke="none" />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip content={<ChartTooltipContent />} />
+                      </PieChart>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
+                  <CardHeader className="bg-slate-50/50 border-b">
+                    <CardTitle className="text-xl">Regional Traffic Trend</CardTitle>
+                    <CardDescription>Historical submission volume across all regional nodes.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-8">
+                    <ChartContainer config={volumeConfig} className="h-[400px] w-full">
+                      <BarChart data={analytics?.volumeHistory || []}>
+                        <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                        <RechartsTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="all-cases">
+              <SubmissionsPageContent submissions={filteredSubmissions || []} />
+            </TabsContent>
+
+            <TabsContent value="branch-matrix">
+              <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
+                <CardHeader className="bg-slate-50/50 border-b">
+                  <CardTitle className="text-xl">Branch Throughput Matrix</CardTitle>
+                  <CardDescription>Comparative efficiency data for local branch nodes.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-slate-50/80">
+                      <TableRow>
+                        <TableHead className="font-bold py-4 pl-8">Branch Node</TableHead>
+                        <TableHead className="font-bold text-center">Case Volume</TableHead>
+                        <TableHead className="font-bold text-center text-emerald-600">Authorized</TableHead>
+                        <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
+                        <TableHead className="font-bold text-right pr-8">Efficiency Index</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.values(analytics?.branches || {}).map((branch) => {
+                        const efficiency = Math.round((branch.approved / (branch.total - branch.pending || 1)) * 100);
+                        return (
+                          <TableRow key={branch.name} className="hover:bg-slate-50 transition-colors">
+                            <TableCell className="py-4 pl-8 font-bold text-slate-900 flex items-center gap-3">
+                              <Building2 className="w-4 h-4 text-slate-400" />
+                              {branch.name}
+                            </TableCell>
+                            <TableCell className="text-center font-bold">{branch.total}</TableCell>
+                            <TableCell className="text-center"><Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold">{branch.approved}</Badge></TableCell>
+                            <TableCell className="text-center"><Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold">{branch.amended}</Badge></TableCell>
+                            <TableCell className="text-right pr-8">
+                              <div className="flex flex-col items-end gap-1.5">
+                                <span className="text-xs font-black text-emerald-600">{efficiency}%</span>
+                                <Progress value={efficiency} className="w-24 h-1.5 bg-slate-100" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="staff-matrix">
+              <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
+                <CardHeader className="bg-slate-50/50 border-b">
+                  <CardTitle className="text-xl">Regional Staff Productivity</CardTitle>
+                  <CardDescription>Individual officer performance aggregated across the district.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-slate-50/80">
+                      <TableRow>
+                        <TableHead className="font-bold py-4 pl-8">Staff Member</TableHead>
+                        <TableHead className="font-bold text-center">Total Requests</TableHead>
+                        <TableHead className="font-bold text-center text-emerald-600">Approved</TableHead>
+                        <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
+                        <TableHead className="font-bold text-center text-primary">Total Cycles</TableHead>
+                        <TableHead className="font-bold text-right pr-8">Efficiency Score</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.values(analytics?.officers || {}).map((officer) => {
+                        const efficiency = Math.round((officer.approved / (officer.total - officer.pending || 1)) * 100);
+                        return (
+                          <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
+                            <TableCell className="py-4 pl-8 font-bold text-slate-900">{officer.name}</TableCell>
+                            <TableCell className="text-center font-bold">{officer.total}</TableCell>
+                            <TableCell className="text-center"><Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold">{officer.approved}</Badge></TableCell>
+                            <TableCell className="text-center"><Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold">{officer.amended}</Badge></TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="border-primary/30 text-primary font-black flex items-center gap-1.5 w-fit mx-auto">
+                                <RefreshCw className="w-3 h-3" /> {officer.cycles}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right pr-8">
+                              <div className="flex flex-col items-end gap-1.5">
+                                <span className="text-xs font-black text-emerald-600">{efficiency}%</span>
+                                <Progress value={efficiency} className="w-24 h-1.5 bg-slate-100" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </>
+      )}
+    </div>
+  );
+}
