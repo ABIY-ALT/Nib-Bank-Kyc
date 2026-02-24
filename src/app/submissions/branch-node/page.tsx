@@ -13,7 +13,8 @@ import {
   Activity,
   Calendar as CalendarIcon,
   Building2,
-  ShieldAlert
+  ShieldAlert,
+  RefreshCw
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-mock";
 import { Badge } from "@/components/ui/badge";
@@ -117,21 +118,26 @@ export default function BranchNodeOversightPage() {
     const dateMap: Record<string, number> = {};
 
     submissions.forEach(sub => {
-      const officer = sub.submittedBy?.name || 'Unknown';
-      if (!stats.officers[officer]) {
-        stats.officers[officer] = { name: officer, total: 0, approved: 0, amended: 0, pending: 0, cycles: 0 };
+      // Correctly identifying officer using relation data to avoid "Unknown" names
+      const officerName = sub.createdBy ? `${sub.createdBy.firstName} ${sub.createdBy.lastName}` : 'Institutional Staff';
+      const officerKey = sub.createdById || 'SYSTEM';
+
+      if (!stats.officers[officerKey]) {
+        stats.officers[officerKey] = { name: officerName, total: 0, approved: 0, amended: 0, pending: 0, cycles: 0 };
       }
-      stats.officers[officer].total++;
-      stats.officers[officer].cycles += (sub.amendmentCycles || 0);
+      
+      stats.officers[officerKey].total++;
+      // Aggregating amendment cycles per officer
+      stats.officers[officerKey].cycles += (sub.amendCycles || 0);
       
       if (sub.status === KYCStatus.APPROVED) {
-        stats.officers[officer].approved++;
+        stats.officers[officerKey].approved++;
         stats.byStatus[0].value++;
       } else if (sub.status === KYCStatus.ACTION_REQUIRED) {
-        stats.officers[officer].amended++;
+        stats.officers[officerKey].amended++;
         stats.byStatus[2].value++;
       } else if ([KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status)) {
-        stats.officers[officer].pending++;
+        stats.officers[officerKey].pending++;
         stats.byStatus[1].value++;
       } else if (sub.status === KYCStatus.REJECTED) {
         stats.byStatus[3].value++;
@@ -303,7 +309,7 @@ export default function BranchNodeOversightPage() {
             <TabsContent value="officer-performance">
               <Card className="shadow-xl border-slate-200 overflow-hidden">
                 <CardHeader className="bg-slate-50/50 border-b">
-                  <CardTitle className="text-xl">Local Productivity Matrix</CardTitle>
+                  <CardTitle className="text-xl">Staff Productivity</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
@@ -313,6 +319,7 @@ export default function BranchNodeOversightPage() {
                         <TableHead className="font-bold text-center">Total Requests</TableHead>
                         <TableHead className="font-bold text-center text-emerald-600">Approved</TableHead>
                         <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
+                        <TableHead className="font-bold text-center text-primary">Total Cycles</TableHead>
                         <TableHead className="font-bold text-right pr-8">Efficiency Score</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -325,6 +332,11 @@ export default function BranchNodeOversightPage() {
                             <TableCell className="text-center font-bold">{officer.total}</TableCell>
                             <TableCell className="text-center"><Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold">{officer.approved}</Badge></TableCell>
                             <TableCell className="text-center"><Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold">{officer.amended}</Badge></TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="border-primary/30 text-primary font-black flex items-center gap-1.5 w-fit mx-auto">
+                                <RefreshCw className="w-3 h-3" /> {officer.cycles}
+                              </Badge>
+                            </TableCell>
                             <TableCell className="text-right pr-8">
                               <div className="flex flex-col items-end gap-1.5">
                                 <span className="text-xs font-black text-emerald-600">{efficiency}%</span>
