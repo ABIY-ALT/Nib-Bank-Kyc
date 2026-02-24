@@ -1,8 +1,7 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { KYCStatus, UserStatus, AuditAction } from '@prisma/client';
+import { KYCStatus, AuditAction } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs/promises';
 import path from 'path';
@@ -58,12 +57,20 @@ export async function getSubmissions(filters?: {
         isResubmitted: true,
         amendCycles: true,
         createdById: true,
+        checklistState: true,
         createdBy: {
           select: {
             firstName: true,
             lastName: true,
           }
         },
+        assignedTo: {
+          select: {
+            firstName: true,
+            lastName: true,
+          }
+        },
+        assignedToId: true,
         branch: {
           select: {
             name: true,
@@ -254,22 +261,7 @@ export async function createSubmission(formData: FormData) {
       }
     });
 
-    const nameParts = createdByName.split(' ');
-    await prisma.user.upsert({
-      where: { id: createdById },
-      update: { firstName: nameParts[0] || 'Branch', lastName: nameParts[1] || 'Officer' },
-      create: {
-        id: createdById,
-        firebaseUid: createdById,
-        email: `${createdById}@nibbank.com.et`,
-        firstName: nameParts[0] || 'Branch',
-        lastName: nameParts[1] || 'Officer',
-        status: UserStatus.ACTIVE,
-        branchId: branch.id
-      }
-    });
-
-    const uploadDir = path.join(process.cwd(), 'uploads');
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
     try {
       await fs.access(uploadDir);
     } catch {
@@ -290,7 +282,7 @@ export async function createSubmission(formData: FormData) {
       memoData.push({
         name: file.name,
         type: type,
-        fileUrl: `uploads/${storedFileName}`,
+        fileUrl: `/uploads/${storedFileName}`,
         uploadedById: createdById
       });
     }
@@ -301,7 +293,6 @@ export async function createSubmission(formData: FormData) {
       data: {
         id,
         customerName,
-        customerIdNumber: id,
         branchId: branch.id,
         branchName: branchName,
         createdById,
@@ -363,7 +354,7 @@ export async function resubmitSubmission(formData: FormData) {
       include: { roles: { include: { role: true } } }
     });
 
-    const uploadDir = path.join(process.cwd(), 'uploads');
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
     try {
       await fs.access(uploadDir);
     } catch {
@@ -384,7 +375,7 @@ export async function resubmitSubmission(formData: FormData) {
       memoData.push({
         name: file.name,
         type: type,
-        fileUrl: `uploads/${storedFileName}`,
+        fileUrl: `/uploads/${storedFileName}`,
         uploadedById: userId
       });
     }
