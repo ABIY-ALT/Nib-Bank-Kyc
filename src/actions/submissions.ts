@@ -211,9 +211,12 @@ export async function updateSubmissionChecklist(id: string, checklistState: any)
       where: { id },
       data: { checklistState }
     });
+    // Global revalidation to ensure other users see updated state upon navigation/refresh
     revalidatePath(`/submissions/${id}`);
+    revalidatePath('/submissions/queue');
     return { success: true, kyc };
   } catch (error: any) {
+    console.error('[Vault checklistState Sync Error]:', error);
     return { success: false, error: error.message };
   }
 }
@@ -304,6 +307,7 @@ export async function createSubmission(formData: FormData) {
         active: true,
         isExceptional: false,
         isResubmitted: false,
+        checklistState: {},
         commentHistory: remarks ? [{
           role: 'BRANCH_OFFICER',
           performedBy: createdByName,

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -104,6 +105,7 @@ export default function SubmissionDetails() {
   const [resubmitFiles, setResubmitFiles] = useState<{file: File, type: string, id: string}[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Initial Data Load
   useEffect(() => {
     async function loadData() {
       if (!params.id) return;
@@ -114,7 +116,6 @@ export default function SubmissionDetails() {
         ]);
         setSubmission(sub);
         setSettings(s);
-        setChecklist((sub?.checklistState as Record<string, boolean>) || {});
       } catch (error) {
         console.error("Load failed:", error);
       } finally {
@@ -123,6 +124,25 @@ export default function SubmissionDetails() {
     }
     loadData();
   }, [params.id]);
+
+  // Reactive Checklist Synchronization
+  // This ensures the local checklist state stays in sync with the submission object from the server
+  useEffect(() => {
+    if (submission?.checklistState) {
+      let state = submission.checklistState;
+      // Defensive parsing for JSON string edge cases
+      if (typeof state === 'string') {
+        try {
+          state = JSON.parse(state);
+        } catch {
+          state = {};
+        }
+      }
+      setChecklist(state as Record<string, boolean>);
+    } else {
+      setChecklist({});
+    }
+  }, [submission]);
 
   const isReviewer = useMemo(() => {
     return hasPermission('KYC_VERIFY_CHECKLIST') || hasPermission('KYC_APPROVE_STANDARD');
