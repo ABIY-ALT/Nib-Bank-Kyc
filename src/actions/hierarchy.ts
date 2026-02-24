@@ -35,9 +35,17 @@ export async function createDistrict(name: string) {
   return district;
 }
 
+export async function updateDistrict(id: string, name: string) {
+  const district = await prisma.district.update({
+    where: { id },
+    data: { name }
+  });
+  revalidatePath('/admin/branches');
+  return district;
+}
+
 export async function createBranch(data: { name: string, code?: string, districtName: string }) {
   try {
-    // 1. Find the parent district ID
     const district = await prisma.district.findUnique({
       where: { name: data.districtName }
     });
@@ -46,7 +54,6 @@ export async function createBranch(data: { name: string, code?: string, district
       throw new Error(`Parent District "${data.districtName}" not found. Create the district first.`);
     }
 
-    // 2. Create branch linked via districtId
     const branch = await prisma.branch.create({
       data: {
         name: data.name,
@@ -60,6 +67,33 @@ export async function createBranch(data: { name: string, code?: string, district
   } catch (error: any) {
     console.error('[Vault Hierarchy] Error:', error);
     throw new Error(error.message || 'Institutional database fault during branch registration.');
+  }
+}
+
+export async function updateBranch(id: string, data: { name: string, code?: string, districtName: string }) {
+  try {
+    const district = await prisma.district.findUnique({
+      where: { name: data.districtName }
+    });
+
+    if (!district) {
+      throw new Error(`Parent District "${data.districtName}" not found.`);
+    }
+
+    const branch = await prisma.branch.update({
+      where: { id },
+      data: {
+        name: data.name,
+        code: data.code,
+        districtId: district.id
+      }
+    });
+
+    revalidatePath('/admin/branches');
+    return branch;
+  } catch (error: any) {
+    console.error('[Vault Hierarchy] Update Error:', error);
+    throw new Error(error.message || 'Institutional database fault during branch update.');
   }
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Building2, Plus, MapPin, Trash2, Loader2, Globe } from "lucide-react";
+import { Building2, Plus, MapPin, Trash2, Loader2, Globe, Edit2 } from "lucide-react";
 import { 
   Dialog, 
   DialogContent, 
@@ -22,7 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getBranches, getDistricts, createBranch, createDistrict, deleteNode } from '@/actions/hierarchy';
+import { getBranches, getDistricts, createBranch, updateBranch, createDistrict, updateDistrict, deleteNode } from '@/actions/hierarchy';
 
 export default function BranchesDistrictsPage() {
   const { toast } = useToast();
@@ -33,6 +33,8 @@ export default function BranchesDistrictsPage() {
   
   const [isBranchDialogOpen, setIsBranchDialogOpen] = useState(false);
   const [isDistrictDialogOpen, setIsDistrictDialogOpen] = useState(false);
+  const [editingNode, setEditingNode] = useState<{ type: 'district' | 'branch', id: string } | null>(null);
+  
   const [branchForm, setBranchForm] = useState<any>({ name: '', districtName: '', code: '' });
   const [districtForm, setDistrictForm] = useState<any>({ name: '' });
 
@@ -53,6 +55,32 @@ export default function BranchesDistrictsPage() {
     }
   };
 
+  const handleOpenBranchDialog = (branch?: any) => {
+    if (branch) {
+      setEditingNode({ type: 'branch', id: branch.id });
+      setBranchForm({ 
+        name: branch.name, 
+        districtName: branch.district?.name || '', 
+        code: branch.code || '' 
+      });
+    } else {
+      setEditingNode(null);
+      setBranchForm({ name: '', districtName: districts[0]?.name || '', code: '' });
+    }
+    setIsBranchDialogOpen(true);
+  };
+
+  const handleOpenDistrictDialog = (district?: any) => {
+    if (district) {
+      setEditingNode({ type: 'district', id: district.id });
+      setDistrictForm({ name: district.name });
+    } else {
+      setEditingNode(null);
+      setDistrictForm({ name: '' });
+    }
+    setIsDistrictDialogOpen(true);
+  };
+
   const handleSaveBranch = async () => {
     if (!branchForm.name || !branchForm.districtName) {
       toast({ variant: "destructive", title: "Information Required" });
@@ -61,13 +89,17 @@ export default function BranchesDistrictsPage() {
     
     setIsSaving(true);
     try {
-      await createBranch(branchForm);
-      toast({ title: "Branch Registered" });
+      if (editingNode?.type === 'branch') {
+        await updateBranch(editingNode.id, branchForm);
+        toast({ title: "Branch Updated" });
+      } else {
+        await createBranch(branchForm);
+        toast({ title: "Branch Registered" });
+      }
       setIsBranchDialogOpen(false);
-      setBranchForm({ name: '', districtName: '', code: '' });
       loadData();
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Registration Failed", description: e.message });
+      toast({ variant: "destructive", title: "Action Failed", description: e.message });
     } finally {
       setIsSaving(false);
     }
@@ -78,13 +110,17 @@ export default function BranchesDistrictsPage() {
     
     setIsSaving(true);
     try {
-      await createDistrict(districtForm.name);
-      toast({ title: "District Established" });
+      if (editingNode?.type === 'district') {
+        await updateDistrict(editingNode.id, districtForm.name);
+        toast({ title: "District Updated" });
+      } else {
+        await createDistrict(districtForm.name);
+        toast({ title: "District Established" });
+      }
       setIsDistrictDialogOpen(false);
-      setDistrictForm({ name: '' });
       loadData();
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Creation Failed" });
+      toast({ variant: "destructive", title: "Action Failed" });
     } finally {
       setIsSaving(false);
     }
@@ -106,17 +142,17 @@ export default function BranchesDistrictsPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Hierarchy</h1>
           <p className="text-muted-foreground text-lg">Manage regional nodes and districts.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsDistrictDialogOpen(true)} className="gap-2 h-11 px-6 border-primary/20 text-primary font-bold">
+          <Button variant="outline" onClick={() => handleOpenDistrictDialog()} className="gap-2 h-11 px-6 border-primary/20 text-primary font-bold">
             <Globe className="w-4 h-4" /> Add District
           </Button>
-          <Button onClick={() => setIsBranchDialogOpen(true)} className="gap-2 h-11 px-8 shadow-lg bg-primary hover:bg-primary/90 font-bold" disabled={districts.length === 0}>
+          <Button onClick={() => handleOpenBranchDialog()} className="gap-2 h-11 px-8 shadow-lg bg-primary hover:bg-primary/90 font-bold" disabled={districts.length === 0}>
             <Plus className="w-4 h-4" /> Add Branch
           </Button>
         </div>
@@ -131,7 +167,10 @@ export default function BranchesDistrictsPage() {
             ) : districts.map(dist => (
               <div key={dist.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all group">
                 <span className="font-bold text-slate-700">{dist.name}</span>
-                <Button variant="ghost" size="icon" onClick={() => handleDelete('district', dist.id)} className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3.5 h-3.5" /></Button>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" onClick={() => handleOpenDistrictDialog(dist)} className="h-8 w-8 text-primary hover:bg-primary/5"><Edit2 className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete('district', dist.id)} className="h-8 w-8 text-destructive hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></Button>
+                </div>
               </div>
             ))}
           </CardContent>
@@ -157,7 +196,10 @@ export default function BranchesDistrictsPage() {
                       </Badge>
                       {branch.code && <Badge variant="outline" className="text-[10px] font-mono font-bold text-slate-400 border-slate-200">{branch.code}</Badge>}
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete('branch', branch.id)} className="absolute top-4 right-4 h-9 w-9 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></Button>
+                    <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenBranchDialog(branch)} className="h-9 w-9 text-primary hover:bg-primary/5"><Edit2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete('branch', branch.id)} className="h-9 w-9 text-destructive hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -171,7 +213,7 @@ export default function BranchesDistrictsPage() {
           <DialogHeader className="p-8 bg-primary text-white">
             <DialogTitle className="text-2xl font-bold flex items-center gap-3">
               <div className="p-2 bg-white/20 rounded-xl"><Building2 className="w-6 h-6 text-white" /></div>
-              Branch Configuration
+              {editingNode ? 'Modify Node' : 'Branch Configuration'}
             </DialogTitle>
           </DialogHeader>
           <div className="p-8 space-y-6">
@@ -195,7 +237,7 @@ export default function BranchesDistrictsPage() {
             <Button variant="ghost" onClick={() => setIsBranchDialogOpen(false)} disabled={isSaving} className="font-bold text-slate-500">Cancel</Button>
             <Button onClick={handleSaveBranch} disabled={isSaving} className="shadow-xl bg-primary px-10 font-black h-12 rounded-xl">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Register Node
+              {editingNode ? 'Commit Changes' : 'Register Node'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -206,7 +248,7 @@ export default function BranchesDistrictsPage() {
           <DialogHeader className="p-8 bg-primary text-white">
             <DialogTitle className="text-2xl font-bold flex items-center gap-3">
               <div className="p-2 bg-white/20 rounded-xl"><Globe className="w-6 h-6 text-white" /></div>
-              Regional Entity
+              {editingNode ? 'Update Region' : 'Regional Entity'}
             </DialogTitle>
           </DialogHeader>
           <div className="p-8 space-y-4">
@@ -219,7 +261,7 @@ export default function BranchesDistrictsPage() {
             <Button variant="ghost" onClick={() => setIsDistrictDialogOpen(false)} disabled={isSaving} className="font-bold text-slate-500">Cancel</Button>
             <Button onClick={handleSaveDistrict} disabled={isSaving} className="font-black bg-primary px-8 h-12 shadow-lg rounded-xl text-white">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Establish Region
+              {editingNode ? 'Save Changes' : 'Establish Region'}
             </Button>
           </DialogFooter>
         </DialogContent>
