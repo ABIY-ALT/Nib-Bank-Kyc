@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect } from "react"
@@ -89,7 +88,7 @@ export default function DistrictPerformancePage() {
       setSubmissions(subs);
       setDistricts(dists);
     } catch (e) {
-      toast({ variant: "destructive", title: "Sync Failed" });
+      toast({ variant: "destructive", title: "Sync Failed", description: "Institutional database connection lost." });
     } finally {
       setLoading(false);
     }
@@ -153,13 +152,13 @@ export default function DistrictPerformancePage() {
                   <Globe className="w-4 h-4 text-primary" /> {selectedDistrict === 'all' ? 'All Regions' : selectedDistrict}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => setSelectedDistrict('all')}>All Regions (Global)</DropdownMenuItem>
-                {districts.map(d => <DropdownMenuItem key={d.id} onClick={() => setSelectedDistrict(d.name)}>{d.name} District</DropdownMenuItem>)}
+              <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-2xl">
+                <DropdownMenuItem onClick={() => setSelectedDistrict('all')} className="font-bold">All Regions (Global)</DropdownMenuItem>
+                {districts.map(d => <DropdownMenuItem key={d.id} onClick={() => setSelectedDistrict(d.name)} className="font-medium">{d.name} District</DropdownMenuItem>)}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button className="gap-2 h-12 px-8 bg-slate-900 text-white font-black shadow-xl rounded-xl" onClick={() => toast({ title: "Compiling Report..." })}>
+          <Button className="gap-2 h-12 px-8 bg-slate-900 text-white font-black shadow-xl rounded-xl" onClick={() => toast({ title: "Compiling Master Deck..." })}>
             <FileDown className="w-5 h-5" /> Export Command Deck
           </Button>
         </div>
@@ -227,14 +226,20 @@ export default function DistrictPerformancePage() {
             <Table>
               <TableHeader className="bg-slate-50/80">
                 <TableRow>
-                  <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest">Branch Node</TableHead>
-                  <TableHead className="font-black text-center text-[11px] uppercase tracking-widest">Case Volume</TableHead>
+                  <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Branch Node</TableHead>
+                  <TableHead className="font-black text-center text-[11px] uppercase tracking-widest text-slate-500">Case Volume</TableHead>
                   <TableHead className="font-black text-center text-emerald-600 text-[11px] uppercase tracking-widest">Authorized</TableHead>
-                  <TableHead className="font-black text-right pr-8 text-[11px] uppercase tracking-widest w-[180px]">Efficiency Index</TableHead>
+                  <TableHead className="font-black text-right pr-8 text-[11px] uppercase tracking-widest w-[180px] text-slate-500">Efficiency Index</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Object.entries(analytics.byBranch).map(([name, data]) => {
+                {branchCount === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-24 text-center italic text-slate-400 bg-slate-50/30">
+                      No jurisdictional node data discovered for this analysis period.
+                    </TableCell>
+                  </TableRow>
+                ) : Object.entries(analytics.byBranch).map(([name, data]) => {
                   const efficiency = Math.round((data.approved / (data.total - data.pending || 1)) * 100);
                   return (
                     <TableRow key={name} className="hover:bg-slate-50 transition-colors group">
@@ -259,7 +264,10 @@ export default function DistrictPerformancePage() {
                             )}>{efficiency}%</span>
                             <ArrowUpRight className="w-3 h-3 text-slate-300" />
                           </div>
-                          <Progress value={efficiency} className="w-full h-1.5 bg-slate-100" />
+                          <Progress value={efficiency} className={cn(
+                            "w-full h-1.5 bg-slate-100",
+                            efficiency >= 90 ? "[&>div]:bg-emerald-500" : efficiency >= 70 ? "[&>div]:bg-primary" : "[&>div]:bg-orange-500"
+                          )} />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -281,7 +289,9 @@ export default function DistrictPerformancePage() {
               <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black text-slate-400 uppercase">Analysis Period</span>
-                  <Badge variant="outline" className="font-bold text-[9px]">{format(new Date(fromDate), 'MMM dd')} - {format(new Date(toDate), 'MMM dd')}</Badge>
+                  <Badge variant="outline" className="font-bold text-[9px] bg-white border-slate-200">
+                    {format(new Date(fromDate), 'MMM dd')} - {format(new Date(toDate), 'MMM dd')}
+                  </Badge>
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs font-bold text-slate-700">
@@ -295,17 +305,24 @@ export default function DistrictPerformancePage() {
               <div className="space-y-4">
                 <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Jurisdictional Alert Console</Label>
                 {analytics.amended > 5 ? (
-                  <div className="p-4 rounded-xl bg-orange-50 border border-orange-100 flex gap-3">
+                  <div className="p-4 rounded-xl bg-orange-50 border border-orange-100 flex gap-3 animate-pulse">
                     <ShieldAlert className="w-5 h-5 text-orange-600 shrink-0" />
                     <p className="text-[10px] text-orange-800 font-bold leading-relaxed uppercase">
-                      High Methodology Gaps detected in the region. Specialist intervention recommended for node training.
+                      High Methodology Gaps detected in the region. specialist intervention recommended for local node training.
                     </p>
                   </div>
-                ) : (
+                ) : branchCount > 0 ? (
                   <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 flex gap-3">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                     <p className="text-[10px] text-emerald-800 font-bold leading-relaxed uppercase">
-                      Regional compliance levels are within authorized safety parameters.
+                      Regional compliance levels are within authorized safety parameters. Maintain standard oversight.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-100 flex gap-3">
+                    <Zap className="w-5 h-5 text-blue-600 shrink-0" />
+                    <p className="text-[10px] text-blue-800 font-bold leading-relaxed uppercase">
+                      System standby. Waiting for regional data aggregation to initiate intelligence console.
                     </p>
                   </div>
                 )}
@@ -321,15 +338,15 @@ export default function DistrictPerformancePage() {
             </CardHeader>
             <CardContent className="p-6 space-y-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">Period Start</Label>
-                <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-11 font-bold bg-white rounded-xl" />
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Period Start</Label>
+                <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-11 font-bold bg-white rounded-xl border-slate-200" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">Period End</Label>
-                <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-11 font-bold bg-white rounded-xl" />
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Period Conclusion</Label>
+                <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-11 font-bold bg-white rounded-xl border-slate-200" />
               </div>
-              <Button onClick={loadData} className="w-full h-12 bg-primary text-white font-black rounded-xl shadow-lg mt-2">
-                Refresh Intelligence
+              <Button onClick={loadData} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl shadow-primary/20 mt-2 hover:bg-primary/90 transition-all active:scale-95">
+                Refresh Command Deck
               </Button>
             </CardContent>
           </Card>
