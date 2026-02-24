@@ -211,9 +211,12 @@ export async function updateSubmissionChecklist(id: string, checklistState: any)
       where: { id },
       data: { checklistState }
     });
-    // Global revalidation to ensure other users see updated state upon navigation/refresh
+    
+    // Explicitly revalidate the submission detail page to update visibility for all users
     revalidatePath(`/submissions/${id}`);
     revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    
     return { success: true, kyc };
   } catch (error: any) {
     console.error('[Vault checklistState Sync Error]:', error);

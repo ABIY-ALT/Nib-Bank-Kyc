@@ -131,6 +131,7 @@ export default function SubmissionDetails() {
   useEffect(() => {
     if (submission?.checklistState) {
       let state = submission.checklistState;
+      // Handle cases where Prisma might return a string or an object
       if (typeof state === 'string') {
         try {
           state = JSON.parse(state);
@@ -192,7 +193,8 @@ export default function SubmissionDetails() {
     setChecklist(nextState);
 
     try {
-      await updateSubmissionChecklist(submission.id, nextState);
+      const res = await updateSubmissionChecklist(submission.id, nextState);
+      if (!res.success) throw new Error(res.error);
     } catch (e) {
       toast({ variant: "destructive", title: "Sync Error", description: "Failed to save checklist state." });
     }
@@ -210,7 +212,8 @@ export default function SubmissionDetails() {
 
     setChecklist(nextState);
     try {
-      await updateSubmissionChecklist(submission.id, nextState);
+      const res = await updateSubmissionChecklist(submission.id, nextState);
+      if (!res.success) throw new Error(res.error);
       toast({ title: allSelected ? "Checklist Cleared" : "Full Verification Marked" });
     } catch (e) {
       toast({ variant: "destructive", title: "Sync Error" });
@@ -339,7 +342,8 @@ export default function SubmissionDetails() {
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
-  const branchCleanTitle = submission.branchName.toLowerCase().includes('branch') ? submission.branchName : `${submission.branchName} Branch`;
+  const rawBranchName = submission.branchName || "Local";
+  const branchCleanTitle = rawBranchName.toLowerCase().includes('branch') ? rawBranchName : `${rawBranchName} Branch`;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -423,7 +427,7 @@ export default function SubmissionDetails() {
                 </div>
                 <CardTitle className="text-xl font-black tracking-tight text-white">Case Documents</CardTitle>
               </div>
-              <Badge variant="secondary" className="bg-white/20 border-white/20 font-bold text-white uppercase text-[10px] tracking-widest px-3">{submission.documents?.length || 0} Files</Badge>
+              <Badge variant="secondary" className="bg-white/20 border-white/20 font-bold text-white uppercase text-[10px] tracking-widest px-3">{submission.memos?.length || 0} Files</Badge>
             </CardHeader>
             <CardContent className="pt-6 px-6">
               <div className="grid gap-4">
