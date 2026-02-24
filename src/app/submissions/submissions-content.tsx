@@ -1,4 +1,3 @@
-
 "use client"
 
 import { 
@@ -23,7 +22,9 @@ import {
   Loader2,
   ShieldCheck,
   XCircle,
-  ShieldAlert
+  ShieldAlert,
+  Building2,
+  MapPin
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -53,12 +54,28 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
     try {
       const zip = new JSZip();
       const now = new Date();
+      
+      // Institutional Folder Naming: District_Branch_YYYYMMDD_HHMMSS
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      const bundleName = `${(sub.districtName || "Central").replace(/\s+/g, '_')}_${(sub.branchName || "Global").replace(/\s+/g, '_')}_${timestamp}`;
+      const districtName = (sub.branch?.district?.name || "INSTITUTIONAL").replace(/\s+/g, '_');
+      const branchName = (sub.branch?.name || sub.branchName || "HEADQUARTERS").replace(/\s+/g, '_');
+      const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
-      const manifest = `Nib Bank KYC Bundle\nGenerated: ${now.toLocaleString()}\nCase ID: ${sub.id}\nCustomer: ${sub.customerName}`;
-      zip.file("nib_bank_manifest.txt", manifest);
+      // Formal Manifest for Audit
+      const manifest = `NIB BANK INSTITUTIONAL ARCHIVE\n` +
+                       `--------------------------------------------------\n` +
+                       `CASE IDENTIFIER: ${sub.id}\n` +
+                       `CUSTOMER ENTITY: ${sub.customerName}\n` +
+                       `DISPATCH NODE:   ${sub.branch?.name || sub.branchName}\n` +
+                       `REGIONAL DIST:   ${sub.branch?.district?.name || "General"}\n` +
+                       `EXPORTED BY:     ${user.name}\n` +
+                       `TIMESTAMP:       ${now.toLocaleString()}\n` +
+                       `--------------------------------------------------\n\n` +
+                       `This bundle contains all signature-authorized assets for the specified identity verification lifecycle.`;
+      
+      zip.file("nib_institutional_manifest.txt", manifest);
 
+      // Generating the ZIP as a blob
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const link = document.body.appendChild(document.createElement('a'));
@@ -68,17 +85,21 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 100);
 
+      // Log the source information for download history & audit
       await logBundleDownload({
         submissionId: sub.id,
         performedBy: user.name,
         bundleName: bundleName,
-        sourceDistrict: sub.districtName || "Central",
-        sourceBranch: sub.branchName || "Global"
+        sourceDistrict: sub.branch?.district?.name || "Institutional",
+        sourceBranch: sub.branch?.name || sub.branchName || "Headquarters"
       });
 
-      toast({ title: "Bundle Compiled", description: `Nib Bank archive is ready.` });
+      toast({ 
+        title: "Bundle Compiled", 
+        description: `Source: ${branchName.replace(/_/g, ' ')} node. Vault record updated.` 
+      });
     } catch (error) {
-      toast({ variant: "destructive", title: "Bundle Error", description: "Failed to compile bundle." });
+      toast({ variant: "destructive", title: "Archiving Error", description: "Could not compile institutional bundle." });
     } finally {
       setDownloadingId(null);
     }
@@ -161,7 +182,12 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
                   <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-tight">{sub.entityType?.replace(/_/g, ' ') || 'Individual'} Account</span>
                 </div>
               </TableCell>
-              <TableCell className="text-slate-600 font-bold text-xs">{sub.branchName}</TableCell>
+              <TableCell>
+                <div className="flex flex-col">
+                  <span className="text-slate-600 font-bold text-xs">{sub.branch?.name || sub.branchName}</span>
+                  <span className="text-[9px] text-slate-400 font-black uppercase">{sub.branch?.district?.name || "Central"} District</span>
+                </div>
+              </TableCell>
               <TableCell>{getStatusBadge(sub)}</TableCell>
               <TableCell className="text-slate-400 tabular-nums font-bold text-[10px] uppercase">
                 {format(new Date(sub.submittedAt), 'MMM dd, yyyy')}

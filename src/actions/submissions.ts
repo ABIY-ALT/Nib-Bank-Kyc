@@ -25,20 +25,12 @@ export async function getSubmissions(filters?: {
   submittedBy?: string;
 }) {
   try {
-    // Correctly handle date ranges to include the full end day
     let dateFilter = undefined;
     if (filters?.startDate || filters?.endDate) {
       const start = filters.startDate ? new Date(filters.startDate) : undefined;
       const end = filters.endDate ? new Date(filters.endDate) : undefined;
-      
-      if (end) {
-        end.setHours(23, 59, 59, 999);
-      }
-
-      dateFilter = {
-        gte: start,
-        lte: end,
-      };
+      if (end) end.setHours(23, 59, 59, 999);
+      dateFilter = { gte: start, lte: end };
     }
 
     return await prisma.kYC.findMany({
@@ -48,14 +40,12 @@ export async function getSubmissions(filters?: {
         createdById: filters?.createdById || filters?.submittedBy,
         isResubmitted: filters?.isResubmitted,
         isExceptional: filters?.isExceptional,
-        // Match by denormalized branchName for higher reliability
         branchName: filters?.branches && filters.branches.length > 0 ? {
           in: filters.branches
         } : filters?.branch ? { 
           equals: filters.branch,
           mode: 'insensitive'
         } : undefined,
-        // Fallback to relational district filter if no branch name provided
         branch: (!filters?.branch && !filters?.branches && filters?.district) ? {
           district: { name: filters.district }
         } : undefined,
@@ -114,7 +104,6 @@ export async function getWorkflowCounts(params: {
   isSuperAdmin: boolean 
 }) {
   const { userId, branchName, branches, isSuperAdmin } = params;
-
   const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? {
     branchName: { in: branches }
   } : {
@@ -142,7 +131,6 @@ export async function getWorkflowCounts(params: {
       branchNode: branchNodeCount
     };
   } catch (error) {
-    console.error('[Vault Counts] Failure:', error);
     return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
   }
 }
@@ -155,15 +143,11 @@ export async function getSubmissionById(id: string) {
         createdBy: true,
         assignedTo: true,
         branch: { include: { district: true } },
-        memos: {
-          orderBy: { createdAt: 'desc' }
-        },
+        memos: { orderBy: { createdAt: 'desc' } },
         auditLogs: { orderBy: { timestamp: 'desc' } },
       }
     });
-
     if (!kyc) return null;
-
     return {
       ...kyc,
       branchName: kyc.branch.name,
@@ -182,7 +166,6 @@ export async function getSubmissionById(id: string) {
 
 export async function updateSubmissionStatus(id: string, status: KYCStatus, reviewerId: string, remarks?: string) {
   const now = new Date();
-  
   const current = await prisma.kYC.findUnique({ where: { id } });
   if (!current) throw new Error("KYC record not found");
 
@@ -224,8 +207,6 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
 
   revalidatePath(`/submissions/${id}`);
   revalidatePath('/submissions');
-  revalidatePath('/submissions/queue');
-  revalidatePath('/submissions/amendments');
   return kyc;
 }
 
@@ -235,14 +216,9 @@ export async function updateSubmissionChecklist(id: string, checklistState: any)
       where: { id },
       data: { checklistState }
     });
-    
     revalidatePath(`/submissions/${id}`);
-    revalidatePath('/submissions/queue');
-    revalidatePath('/submissions/my');
-    
     return { success: true, kyc };
   } catch (error: any) {
-    console.error('[Vault checklistState Sync Error]:', error);
     return { success: false, error: error.message };
   }
 }
@@ -257,7 +233,6 @@ export async function createSubmission(formData: FormData) {
     const createdById = formData.get('submittedById') as string;
     const createdByName = formData.get('submittedByName') as string;
     const remarks = formData.get('remarks') as string;
-    
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
 
@@ -278,11 +253,7 @@ export async function createSubmission(formData: FormData) {
     });
 
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    try {
-      await fs.access(uploadDir);
-    } catch {
-      await fs.mkdir(uploadDir, { recursive: true });
-    }
+    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
 
     const memoData = [];
     for (let i = 0; i < files.length; i++) {
@@ -291,20 +262,12 @@ export async function createSubmission(formData: FormData) {
       const timestamp = Date.now();
       const storedFileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
       const filePath = path.join(uploadDir, storedFileName);
-      
       const buffer = Buffer.from(await file.arrayBuffer());
       await fs.writeFile(filePath, buffer);
-
-      memoData.push({
-        name: file.name,
-        type: type,
-        fileUrl: `/uploads/${storedFileName}`,
-        uploadedById: createdById
-      });
+      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: createdById });
     }
 
     const now = new Date();
-    
     const kyc = await prisma.kYC.create({
       data: {
         id,
@@ -315,8 +278,6 @@ export async function createSubmission(formData: FormData) {
         status: KYCStatus.SUBMITTED,
         entityType,
         active: true,
-        isExceptional: false,
-        isResubmitted: false,
         checklistState: {},
         commentHistory: remarks ? [{
           role: 'BRANCH_OFFICER',
@@ -325,121 +286,48 @@ export async function createSubmission(formData: FormData) {
           comment: remarks,
           action: 'SUBMIT'
         }] : [],
-        memos: {
-          create: memoData
-        }
+        memos: { create: memoData }
       }
     });
 
     await prisma.auditLog.create({
-      data: {
-        userId: createdById,
-        kycId: kyc.id,
-        action: AuditAction.CREATE,
-        details: `Initial submission for ${customerName}`
-      }
+      data: { userId: createdById, kycId: kyc.id, action: AuditAction.CREATE, details: `Initial submission for ${customerName}` }
     });
 
     revalidatePath('/');
-    revalidatePath('/submissions');
-    revalidatePath('/submissions/my');
-    revalidatePath('/submissions/queue');
     return { success: true, kyc };
   } catch (error: any) {
-    console.error('[Blueprint Error]:', error);
     return { success: false, error: error.message || 'Institutional storage fault.' };
   }
 }
 
-export async function resubmitSubmission(formData: FormData) {
+export async function logBundleDownload(data: {
+  submissionId: string;
+  performedBy: string;
+  bundleName: string;
+  sourceDistrict: string;
+  sourceBranch: string;
+}) {
   try {
-    const id = formData.get('id') as string;
-    const userId = formData.get('userId') as string;
-    const remarks = formData.get('remarks') as string;
-    const files = formData.getAll('files') as File[];
-    const types = formData.getAll('types') as string[];
-
-    const current = await prisma.kYC.findUnique({ 
-      where: { id },
-      include: { createdBy: true }
-    });
-    if (!current) throw new Error("KYC record not found");
-
-    const user = await prisma.user.findUnique({ 
-      where: { id: userId },
-      include: { roles: { include: { role: true } } }
-    });
-
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    try {
-      await fs.access(uploadDir);
-    } catch {
-      await fs.mkdir(uploadDir, { recursive: true });
-    }
-
-    const memoData = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const type = types[i];
-      const timestamp = Date.now();
-      const storedFileName = `${timestamp}_resubmit_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-      const filePath = path.join(uploadDir, storedFileName);
-      
-      const buffer = Buffer.from(await file.arrayBuffer());
-      await fs.writeFile(filePath, buffer);
-
-      memoData.push({
-        name: file.name,
-        type: type,
-        fileUrl: `/uploads/${storedFileName}`,
-        uploadedById: userId
-      });
-    }
-
-    const now = new Date();
-    const history = (current.commentHistory as any[]) || [];
-    const newEntry = {
-      role: user?.roles?.[0]?.role?.name || 'BRANCH_OFFICER',
-      performedBy: `${user?.firstName} ${user?.lastName}`,
-      timestamp: now.toISOString(),
-      comment: remarks || `Case resubmitted with ${files.length} new documents.`,
-      action: 'RESUBMIT'
-    };
-
-    const kyc = await prisma.kYC.update({
-      where: { id },
+    await prisma.auditLog.create({
       data: {
-        status: KYCStatus.SUBMITTED,
-        isResubmitted: true,
-        updatedAt: now,
-        commentHistory: [...history, newEntry],
-        memos: {
-          create: memoData
+        userId: null, // SYSTEM log
+        kycId: data.submissionId,
+        action: 'BUNDLE_DOWNLOAD',
+        details: `Case bundle exported by ${data.performedBy}. Source Node: ${data.sourceDistrict} / ${data.sourceBranch}. Bundle: ${data.bundleName}`,
+        metadata: {
+          bundleName: data.bundleName,
+          district: data.sourceDistrict,
+          branch: data.sourceBranch,
+          official: data.performedBy
         }
       }
     });
-
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        kycId: id,
-        action: AuditAction.STATUS_CHANGE,
-        details: `Resubmitted with ${files.length} new documents. Remarks: ${remarks}`
-      }
-    });
-
-    revalidatePath(`/submissions/${id}`);
-    revalidatePath('/submissions/queue');
-    revalidatePath('/submissions/amendments');
-    return { success: true };
-  } catch (error: any) {
-    console.error('[Vault Resubmission] Failure:', error);
-    return { success: false, error: error.message || 'Institutional storage fault during resubmission.' };
+    return true;
+  } catch (error) {
+    console.error('[Archiving Audit] Log Failure:', error);
+    return false;
   }
-}
-
-export async function logBundleDownload(data: any) {
-  return true;
 }
 
 export async function initiateExceptionalWorkflow(kycId: string, data: any) {
@@ -451,10 +339,7 @@ export async function initiateExceptionalWorkflow(kycId: string, data: any) {
         updatedAt: new Date()
       }
     });
-    
     revalidatePath('/submissions/exceptional');
-    revalidatePath('/');
-    
     return kyc;
   } catch (e) {
     throw e;
