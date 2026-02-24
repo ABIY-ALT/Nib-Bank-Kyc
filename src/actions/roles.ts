@@ -116,7 +116,6 @@ export async function seedInstitutionalPermissions() {
 export async function getRoleDefinitions() {
   try {
     return await prisma.role.findMany({
-      where: { active: true },
       include: { 
         permissions: { 
           include: { 
@@ -183,14 +182,16 @@ export async function upsertRole(data: { id?: string, name: string, description:
   }
 }
 
-export async function deactivateRole(id: string) {
+export async function toggleRoleStatus(id: string, currentStatus: boolean) {
   try {
-    await prisma.role.update({
+    const role = await prisma.role.update({
       where: { id },
-      data: { active: false }
+      data: { active: !currentStatus }
     });
     revalidatePath('/admin/roles');
+    return { success: true, role };
   } catch (e) {
-    console.error('[Vault Authority Deactivation] Failure:', e);
+    console.error('[Vault Authority Toggle] Failure:', e);
+    return { success: false };
   }
 }

@@ -17,12 +17,14 @@ import {
   Square,
   Zap,
   RefreshCcw,
-  AlertTriangle
+  AlertTriangle,
+  UserX,
+  UserCheck
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getRoleDefinitions, getAllPermissions, upsertRole, deactivateRole, seedInstitutionalPermissions } from '@/actions/roles';
+import { getRoleDefinitions, getAllPermissions, upsertRole, toggleRoleStatus, seedInstitutionalPermissions } from '@/actions/roles';
 import {
   Dialog,
   DialogContent,
@@ -42,6 +44,7 @@ export default function StaffRolesPage() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isToggling, setIsToggling] = useState<string | null>(null);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
@@ -129,6 +132,22 @@ export default function StaffRolesPage() {
     }
   };
 
+  const handleToggleStatus = async (role: any) => {
+    setIsToggling(role.id);
+    try {
+      const res = await toggleRoleStatus(role.id, role.active);
+      if (res.success) {
+        toast({ 
+          title: role.active ? "Role Deactivated" : "Role Restored", 
+          description: `designated as ${role.active ? 'Inactive' : 'Active'} in the Vault.`
+        });
+        await loadData();
+      }
+    } finally {
+      setIsToggling(null);
+    }
+  };
+
   const handleTogglePermission = (id: string) => {
     setPermissionsForm(prev => 
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
@@ -213,10 +232,12 @@ export default function StaffRolesPage() {
                   </TableCell>
                 </TableRow>
               ) : roleDefinitions.map((role) => (
-                <TableRow key={role.id} className="hover:bg-slate-50 transition-colors group">
-                  <TableCell className="font-black text-slate-900 pl-8 py-6">{role.name.replace(/_/g, ' ')}</TableCell>
+                <TableRow key={role.id} className={cn("hover:bg-slate-50 transition-colors group", !role.active && "bg-slate-50/30 opacity-80")}>
+                  <TableCell className={cn("font-black pl-8 py-6", role.active ? "text-slate-900" : "text-slate-400")}>
+                    {role.name.replace(/_/g, ' ')}
+                  </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={role.active ? 'text-emerald-600 border-emerald-200 bg-emerald-50 font-black text-[9px] uppercase px-3' : 'text-slate-400 border-slate-200 font-black text-[9px] uppercase'}>
+                    <Badge variant="outline" className={role.active ? 'text-emerald-600 border-emerald-200 bg-emerald-50 font-black text-[9px] uppercase px-3' : 'text-slate-400 border-slate-200 bg-white font-black text-[9px] uppercase px-3'}>
                       {role.active ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
@@ -232,7 +253,24 @@ export default function StaffRolesPage() {
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
                       <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-10 w-10 text-slate-400 rounded-full hover:bg-primary/5 hover:text-primary"><Settings2 className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => { if(confirm('Deactivate this role?')) deactivateRole(role.id).then(loadData); }} className="h-10 w-10 text-slate-400 rounded-full hover:bg-destructive/5 hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleToggleStatus(role)} 
+                        disabled={isToggling === role.id}
+                        className={cn(
+                          "h-10 w-10 rounded-full transition-colors",
+                          role.active ? "text-destructive hover:bg-destructive/5" : "text-emerald-600 hover:bg-emerald-50"
+                        )}
+                      >
+                        {isToggling === role.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : role.active ? (
+                          <UserX className="w-4 h-4" />
+                        ) : (
+                          <UserCheck className="w-4 h-4" />
+                        )}
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
