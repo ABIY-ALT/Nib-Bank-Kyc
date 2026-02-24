@@ -35,7 +35,8 @@ import {
   Map,
   Loader2,
   CheckCircle2,
-  Clock
+  Clock,
+  ShieldCheck
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-mock";
@@ -45,6 +46,7 @@ import { subDays, format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { KYCStatus } from "@prisma/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function BranchReportsPage() {
   const { user } = useAuth();
@@ -62,8 +64,8 @@ export default function BranchReportsPage() {
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  const isDistDir = user?.roles?.[0]?.role?.name === 'DISTRICT_DIRECTOR';
-  const activeDistrict = isDistDir ? user.districtName : (selectedDistrict === 'all' ? undefined : selectedDistrict);
+  const isDistDir = user?.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
+  const activeDistrict = isDistDir ? user?.districtName : (selectedDistrict === 'all' ? undefined : selectedDistrict);
 
   useEffect(() => {
     async function loadConfig() {
@@ -73,7 +75,7 @@ export default function BranchReportsPage() {
         setDistricts(d);
         setBranches(b);
         
-        if (isDistDir && user.districtName) {
+        if (isDistDir && user?.districtName) {
           setSelectedDistrict(user.districtName);
         }
       } catch (e) {
@@ -160,6 +162,15 @@ export default function BranchReportsPage() {
           </Button>
         </div>
       </div>
+
+      {isDistDir && user?.districtName && (
+        <Alert className="bg-primary/5 border-primary/20 text-primary-foreground shadow-sm">
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          <AlertDescription className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
+            Regional Audit Mode: Locked to <Badge className="bg-primary text-white font-black">{user.districtName} District</Badge>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <CardHeader className="bg-slate-50/50 border-b">

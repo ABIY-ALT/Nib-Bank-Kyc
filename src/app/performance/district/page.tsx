@@ -18,7 +18,8 @@ import {
   Building2,
   TrendingUp,
   LayoutGrid,
-  MapPin
+  MapPin,
+  ShieldCheck
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -149,6 +150,15 @@ export default function DistrictPerformancePage() {
         </div>
       </div>
 
+      {activeDistrict && !isAdmin && (
+        <Alert className="bg-primary/5 border-primary/20 text-primary-foreground shadow-sm">
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          <AlertDescription className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
+            Authorized Jurisdiction: <Badge className="bg-primary text-white font-black">{activeDistrict}</Badge> Command Node Active
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
@@ -192,10 +202,10 @@ export default function DistrictPerformancePage() {
       <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
         <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-xl flex items-center gap-2 font-headline">
+            <CardTitle className="text-xl flex items-center gap-2 font-headline text-slate-900">
               <LayoutGrid className="w-5 h-5 text-primary" /> Branch Throughput Matrix
             </CardTitle>
-            <CardDescription>Efficiency and volume comparison across regional branch nodes.</CardDescription>
+            <CardDescription className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Efficiency and volume comparison across regional branch nodes.</CardDescription>
           </div>
           {activeDistrict && (
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-bold px-4 py-1.5 flex items-center gap-2">
@@ -271,3 +281,5 @@ export default function DistrictPerformancePage() {
     </div>
   )
 }
+
+import { Alert, AlertDescription } from "@/components/ui/alert";

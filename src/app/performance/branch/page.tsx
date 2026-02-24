@@ -6,7 +6,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { 
   Filter, 
   FileDown, 
-  Loader2
+  Loader2,
+  MapPin,
+  ShieldCheck
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
@@ -24,6 +26,8 @@ import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
 import { usePermissions } from "@/hooks/use-permissions";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function BranchPerformancePage() {
   const { user } = useAuth();
@@ -116,6 +120,15 @@ export default function BranchPerformancePage() {
           <Button className="gap-2 h-10 px-6 bg-primary font-bold shadow-lg" onClick={handleExportCSV}><FileDown className="w-4 h-4" /> Export</Button>
         </div>
       </div>
+
+      {isDistDir && !isAdmin && user?.districtName && (
+        <Alert className="bg-primary/5 border-primary/20 text-primary-foreground shadow-sm mb-6">
+          <MapPin className="h-4 w-4 text-primary" />
+          <AlertDescription className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
+            Regional Monitoring Active: <Badge className="bg-primary text-white font-black">{user.districtName} District</Badge>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">

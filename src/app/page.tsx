@@ -161,6 +161,11 @@ export default function Dashboard() {
           <p className="text-muted-foreground text-lg font-medium">{dashboardContext.subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
+          {!isSuperAdmin && user?.districtName && (
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-1.5 font-bold h-10 flex items-center gap-2">
+              <MapPin className="w-4 h-4" /> {user.districtName} Node
+            </Badge>
+          )}
           {hasPermission('CASE_SUBMIT') && (
             <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-black text-lg rounded-2xl">
               <Link href="/submissions/new">Create New Submission</Link>
