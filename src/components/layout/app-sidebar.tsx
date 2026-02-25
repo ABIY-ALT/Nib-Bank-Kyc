@@ -319,10 +319,9 @@ export function AppSidebar() {
                     <BookOpen className="w-4 h-4" />
                     <span>KYC F&Q Reference</span>
                   </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
         )}
 
         {/* AUDIT & REPORTING GROUP */}
