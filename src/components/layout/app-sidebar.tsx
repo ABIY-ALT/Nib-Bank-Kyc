@@ -252,6 +252,33 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
+              {/* DOCUMENTS DROPDOWN */}
+              {hasPermission('MANAGE_VAULT_STORAGE') && (
+                <Collapsible className="group/collapsible" defaultOpen={pathname === '/admin/storage'}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip="KYC Document">
+                        <HardDrive className="w-4 h-4" />
+                        <span>KYC Document</span>
+                        <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/storage'}>
+                            <Link href="/admin/storage">
+                              <Folders className="w-4 h-4 mr-2 text-primary" />
+                              <span>Document Vault</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
+
               {/* ARCHIVE DROPDOWN */}
               {hasPermission('VIEW_ARCHIVED_CASE') && (
                 <Collapsible className="group/collapsible" defaultOpen={pathname === '/submissions'}>
@@ -442,17 +469,6 @@ export function AppSidebar() {
                             <Link href="/admin/branches">
                               <Building2 className="w-4 h-4 mr-2" />
                               <span>Hierarchy</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )}
-
-                      {hasPermission('MANAGE_VAULT_STORAGE') && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/storage'}>
-                            <Link href="/admin/storage">
-                              <HardDrive className="w-4 h-4 mr-2 text-primary" />
-                              <span>Vault Storage</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>

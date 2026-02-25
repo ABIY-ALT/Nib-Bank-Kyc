@@ -157,7 +157,7 @@ export default function StorageVaultPage() {
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
               <HardDrive className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Storage Vault</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Document Vault</h1>
           </div>
           <p className="text-muted-foreground text-lg font-medium">Managing signature-authorized assets across the network.</p>
         </div>
@@ -307,7 +307,7 @@ export default function StorageVaultPage() {
           </Table>
         </CardContent>
         <CardFooter className="bg-slate-50/50 border-t py-4 px-8 flex justify-between items-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vault Inventory &bull; {filteredFiles.length} Records Displayed</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vault Inventory & bull; {filteredFiles.length} Records Displayed</p>
           <div className="flex items-center gap-2 text-[9px] font-mono font-black text-primary/40 uppercase">
             <ShieldCheck className="w-3 h-3" /> Digital Asset Tracking Active
           </div>
