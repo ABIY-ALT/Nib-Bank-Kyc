@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useAuth } from "@/lib/auth-mock.tsx";
+import { useAuth } from "@/lib/auth";
 import { useMemo, useCallback } from "react";
 
 /**

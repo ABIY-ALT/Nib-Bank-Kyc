@@ -1,44 +1,12 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { UserStatus } from '@prisma/client';
 
-interface SyncUserData {
-  id: string;
-  email: string;
-  name: string;
-}
-
-export async function syncUserToSql(userData: SyncUserData) {
-  try {
-    const nameParts = userData.name.split(' ');
-    const firstName = nameParts[0] || 'Unknown';
-    const lastName = nameParts.slice(1).join(' ') || 'User';
-
-    const user = await prisma.user.upsert({
-      where: { email: userData.email }, // Sync by email to catch seeded users
-      update: { firebaseUid: userData.id, firstName, lastName },
-      create: {
-        id: userData.id,
-        firebaseUid: userData.id,
-        email: userData.email,
-        firstName,
-        lastName,
-        status: UserStatus.ACTIVE,
-      },
-    });
-
-    return { success: true, user };
-  } catch (error) {
-    console.error('[Vault Sync] Error:', error);
-    return { success: false, error: 'Institutional database error.' };
-  }
-}
-
-export async function getUserProfile(uid: string) {
+export async function getUserProfile(userId: string) {
   try {
     return await prisma.user.findUnique({
-      where: { firebaseUid: uid },
+      where: { id: userId },
       include: { 
         branch: {
           include: { district: true }

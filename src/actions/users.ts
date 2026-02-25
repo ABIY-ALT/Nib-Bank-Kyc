@@ -4,6 +4,7 @@
 import { prisma } from '@/lib/prisma';
 import { UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
+import bcrypt from 'bcryptjs';
 
 /**
  * Retrieves all personnel from the institutional registry, sorted alphabetically.
@@ -56,10 +57,11 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
  * Provisions a new user or updates an existing one, including Branch Transfers and Role Transitions.
  */
 export async function provisionUser(data: {
-  id: string;
+  id?: string;
   firstName: string;
   lastName: string;
   email: string;
+  password?: string;
   phoneNumber?: string;
   role: string;
   branchId?: string | null;
@@ -70,30 +72,34 @@ export async function provisionUser(data: {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Fetch current state for audit comparison
       const existingUser = await tx.user.findUnique({
-        where: { firebaseUid: data.id },
+        where: { email: data.email.toLowerCase() },
         include: { 
           branch: true,
           roles: { include: { role: true } }
         }
       });
 
+      let hashedPassword = undefined;
+      if (data.password) {
+        hashedPassword = await bcrypt.hash(data.password, 10);
+      }
+
       // 2. Upsert the User record
       const user = await tx.user.upsert({
-        where: { firebaseUid: data.id },
+        where: { email: data.email.toLowerCase() },
         update: { 
           firstName: data.firstName,
           lastName: data.lastName,
-          email: data.email,
           phoneNumber: data.phoneNumber,
           branchId: data.branchId || null,
-          status: data.status
+          status: data.status,
+          password: hashedPassword
         },
         create: { 
-          id: data.id,
-          firebaseUid: data.id,
+          email: data.email.toLowerCase(),
+          password: hashedPassword || await bcrypt.hash("nibbank123", 10), // Default if not provided
           firstName: data.firstName,
           lastName: data.lastName,
-          email: data.email,
           phoneNumber: data.phoneNumber,
           branchId: data.branchId || null,
           status: data.status
@@ -106,8 +112,6 @@ export async function provisionUser(data: {
         const newBranch = data.branchId ? await tx.branch.findUnique({ where: { id: data.branchId } }) : null;
         const newBranchName = newBranch?.name || 'Institutional';
         
-        // Only attempt to log if we have a valid authorizing ID that matches a user,
-        // or if userId is allowed to be null in the schema (which we fixed)
         await tx.auditLog.create({
           data: {
             userId: data.authorizingAdminId && data.authorizingAdminId !== 'SYSTEM' ? data.authorizingAdminId : null,
@@ -123,7 +127,7 @@ export async function provisionUser(data: {
         });
       }
 
-      // 4. Handle Role Transition (Promotion/Reassignment) Logging
+      // 4. Handle Role Transition Logging
       const currentRoleName = existingUser?.roles?.[0]?.role?.name;
       if (existingUser && currentRoleName !== data.role) {
         await tx.auditLog.create({

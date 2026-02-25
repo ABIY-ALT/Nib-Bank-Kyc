@@ -1,8 +1,7 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
-import {FirebaseClientProvider} from '@/firebase/client-provider';
-import {FirebaseErrorListener} from '@/components/firebase-error-listener';
-import {AuthProvider} from '@/lib/auth-mock';
+import {AuthProvider} from '@/lib/auth';
 import {ThemeProvider} from '@/components/theme-provider';
 import { AuthGuard } from '@/components/auth-guard';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
@@ -25,23 +24,20 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased bg-background">
-        <FirebaseClientProvider>
-          <AuthProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange
-            >
-              <FirebaseErrorListener />
-              <AuthGuard>
-                <DashboardShell>
-                  {children}
-                </DashboardShell>
-              </AuthGuard>
-            </ThemeProvider>
-          </AuthProvider>
-        </FirebaseClientProvider>
+        <AuthProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <AuthGuard>
+              <DashboardShell>
+                {children}
+              </DashboardShell>
+            </AuthGuard>
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );
