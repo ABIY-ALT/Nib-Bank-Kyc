@@ -48,15 +48,6 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuItem
-} from "@/components/ui/dropdown-menu"
-import { 
   BarChart, 
   Bar, 
   XAxis, 
@@ -68,8 +59,6 @@ import {
   Pie, 
   Cell, 
   Legend,
-  LineChart,
-  Line,
   RadialBarChart,
   RadialBar
 } from 'recharts';
@@ -83,8 +72,6 @@ import { cn } from "@/lib/utils";
 import { KYCStatus } from "@prisma/client";
 import Link from "next/link";
 
-const COLORS = ['#B89334', '#10B981', '#3F51B5', '#F59E0B', '#EF4444', '#8B5CF6'];
-
 export default function KYCOperationsMonitoringPage() {
   const { user } = useAuth();
   const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
@@ -96,8 +83,8 @@ export default function KYCOperationsMonitoringPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [lastUpdated, setLastUpdated] = useState(new Date());
   
-  const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "custom">("week");
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+  const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "custom">("month");
+  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   // ROLE DETECTION
@@ -106,16 +93,15 @@ export default function KYCOperationsMonitoringPage() {
     const roleName = user.roles?.[0]?.role?.name || '';
     if (isSuperAdmin || roleName === 'DISTRICT_DIRECTOR') return 'DIRECTOR';
     if (roleName === 'SUPERVISOR' || roleName === 'BRANCH_MANAGER') return 'SUPERVISOR';
-    if (hasPermission('VIEW_AUDIT_POOL')) return 'QC';
     return 'OFFICER';
-  }, [user, isSuperAdmin, hasPermission]);
+  }, [user, isSuperAdmin]);
 
   useEffect(() => {
     loadData();
     const interval = setInterval(() => {
       loadData();
       setLastUpdated(new Date());
-    }, 30000); // Real-time simulated refresh every 30s
+    }, 30000); 
     return () => clearInterval(interval);
   }, [fromDate, toDate, roleContext]);
 
@@ -124,17 +110,16 @@ export default function KYCOperationsMonitoringPage() {
     try {
       let filters: any = { startDate: fromDate, endDate: toDate, limit: 1000 };
       
-      // Role-based visibility logic
       if (roleContext === 'OFFICER') {
-        filters.submittedBy = user?.id; // Only assigned to self
-      } else if (roleContext === 'SUPERVISOR') {
-        filters.branch = user?.branchName || undefined; // Team + branch context
+        filters.createdById = user?.id;
+      } else if (roleContext === 'SUPERVISOR' && user?.branchName) {
+        filters.branch = user.branchName;
       }
       
       const data = await getSubmissions(filters);
       setSubmissions(data);
     } catch (e) {
-      toast({ variant: "destructive", title: "Institutional Audit Error" });
+      toast({ variant: "destructive", title: "Audit Error" });
     } finally {
       setLoading(false);
     }
@@ -143,12 +128,9 @@ export default function KYCOperationsMonitoringPage() {
   const analytics = useMemo(() => {
     const total = submissions.length;
     const completed = submissions.filter(s => s.status === KYCStatus.APPROVED).length;
-    const pending = submissions.filter(s => [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status)).length;
-    const returned = submissions.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length;
     
-    // SLA Calculations
     const slaItems = submissions.map(sub => {
-      const deadline = addHours(new Date(sub.submittedAt), 24);
+      const deadline = addHours(new Date(sub.submittedAt || sub.createdAt), 24);
       const now = new Date();
       const hoursLeft = differenceInHours(deadline, now);
       const isBreached = isAfter(now, deadline);
@@ -163,40 +145,25 @@ export default function KYCOperationsMonitoringPage() {
     });
 
     const slaHealth = total > 0 ? Math.round((slaItems.filter(s => s.slaStatus !== 'BREACHED').length / total) * 100) : 100;
-    
-    // Role-specific goal progress (Mocked based on institutional targets)
     const dailyTarget = roleContext === 'OFFICER' ? 50 : 200;
     const goalProgress = Math.min(Math.round((completed / dailyTarget) * 100), 100);
 
-    return { total, completed, pending, returned, slaHealth, goalProgress, slaItems };
+    return { total, completed, slaHealth, goalProgress, slaItems };
   }, [submissions, roleContext]);
 
   const chartData = useMemo(() => {
-    // Processing Trend
-    const trends = [
-      { name: 'Mon', volume: 45 },
-      { name: 'Tue', volume: 52 },
-      { name: 'Wed', volume: 38 },
-      { name: 'Thu', volume: 61 },
-      { name: 'Fri', volume: 55 },
-      { name: 'Sat', volume: 20 },
-      { name: 'Sun', volume: 15 },
-    ];
-
-    // SLA Gauge
-    const slaGauge = [
-      { name: 'Compliant', value: analytics.slaHealth, fill: '#10B981' },
-      { name: 'Remaining', value: 100 - analytics.slaHealth, fill: '#f1f5f9' },
-    ];
-
-    // Workload Distribution (For Supervisor/Director)
     const distribution = [
       { name: 'Individual', value: 400 },
       { name: 'Corporate', value: 300 },
       { name: 'NGO', value: 150 },
     ];
 
-    return { trends, slaGauge, distribution };
+    const slaGauge = [
+      { name: 'Compliant', value: analytics.slaHealth, fill: '#10B981' },
+      { name: 'Remaining', value: 100 - analytics.slaHealth, fill: '#f1f5f9' },
+    ];
+
+    return { distribution, slaGauge };
   }, [analytics]);
 
   const toggleRow = (id: string) => {
@@ -263,7 +230,7 @@ export default function KYCOperationsMonitoringPage() {
         <Card className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all rounded-3xl">
           <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-              {roleContext === 'OFFICER' ? 'My Queue' : (roleContext === 'SUPERVISOR' ? 'Team Queue' : 'Global Queue')}
+              {roleContext === 'DIRECTOR' ? 'Global Queue' : (roleContext === 'SUPERVISOR' ? 'Team Queue' : 'My Queue')}
             </span>
             <Inbox className="w-3.5 h-3.5 text-primary" />
           </CardHeader>
@@ -350,7 +317,7 @@ export default function KYCOperationsMonitoringPage() {
                     <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Customer Entity</TableHead>
                     <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Deadline</TableHead>
                     <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">SLA Status</TableHead>
-                    {roleContext !== 'OFFICER' && <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Assigned</TableHead>}
+                    <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Assigned</TableHead>
                     <TableHead className="text-right pr-8 font-black text-[11px] uppercase text-slate-500 tracking-widest">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -385,11 +352,9 @@ export default function KYCOperationsMonitoringPage() {
                             {sub.slaStatus.replace('_', ' ')}
                           </Badge>
                         </TableCell>
-                        {roleContext !== 'OFFICER' && (
-                          <TableCell className="text-[11px] font-bold text-slate-600">
-                            {sub.createdBy?.firstName || 'System'}
-                          </TableCell>
-                        )}
+                        <TableCell className="text-[11px] font-bold text-slate-600">
+                          {sub.createdBy?.firstName || 'System'}
+                        </TableCell>
                         <TableCell className="text-right pr-8">
                           <div className="flex justify-end gap-2">
                             <Button size="sm" asChild className="h-8 bg-primary hover:bg-primary/90 text-white font-black text-[10px] rounded-lg">
@@ -403,7 +368,7 @@ export default function KYCOperationsMonitoringPage() {
                       </TableRow>
                       {expandedRows.has(sub.id) && (
                         <TableRow className="bg-slate-50/50 border-b border-slate-100 animate-in slide-in-from-top-2">
-                          <TableCell colSpan={roleContext === 'OFFICER' ? 5 : 6} className="p-8">
+                          <TableCell colSpan={6} className="p-8">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                               <div className="space-y-3">
                                 <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><MessageSquare className="w-3 h-3" /> Recent Activity</Label>
@@ -435,7 +400,7 @@ export default function KYCOperationsMonitoringPage() {
             <CardFooter className="bg-slate-50/50 border-t py-4 px-8 flex justify-between items-center">
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-600" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">SLA Breached</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">At Risk (&lt;4h)</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">At Risk (<4h)</span></div>
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">On Track</span></div>
               </div>
               <p className="text-[9px] font-mono font-black text-primary/40 uppercase tracking-tighter">
@@ -481,7 +446,7 @@ export default function KYCOperationsMonitoringPage() {
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="p-6 border-b bg-slate-50/50">
               <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-500">
-                {roleContext === 'OFFICER' ? 'My SLA Gauge' : (roleContext === 'SUPERVISOR' ? 'Workload Distribution' : 'Institutional Trend')}
+                {roleContext === 'OFFICER' ? 'My SLA Gauge' : 'Institutional Trend'}
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-8 h-[240px]">
