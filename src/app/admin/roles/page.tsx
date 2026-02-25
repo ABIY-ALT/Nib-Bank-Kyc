@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -28,7 +29,19 @@ import {
   Monitor,
   ArrowRightLeft,
   History,
-  ClipboardList
+  ClipboardList,
+  BarChart3,
+  Inbox,
+  LayoutList,
+  Search,
+  AlertCircle,
+  FileBarChart2,
+  Globe,
+  Archive,
+  BarChartHorizontal,
+  ClipboardCheck,
+  UserCog,
+  Gavel
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -46,16 +59,15 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Define the precise UI modules matching the sidebar
+// Define precisely the grouping matching the Sidebar
 const UI_MODULES = [
   { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
-  { id: 'MONITORING', label: 'Regional Monitoring', icon: Map },
-  { id: 'DOCUMENT', label: 'KYC Document', icon: HardDrive },
-  { id: 'ARCHIVE', label: 'Institutional Archive', icon: Folders },
-  { id: 'REFERENCE', label: 'KYC F&Q Reference', icon: BookOpen },
+  { id: 'CASE_MANAGEMENT', label: 'KYC: Case Management', icon: FileText },
+  { id: 'MONITORING', label: 'KYC: Monitoring', icon: Map },
+  { id: 'INFRASTRUCTURE', label: 'KYC: Infrastructure', icon: HardDrive },
+  { id: 'REFERENCE', label: 'KYC: Reference Library', icon: BookOpen },
   { id: 'REPORTING', label: 'Reporting Suite', icon: FileBarChart },
-  { id: 'SYSTEM', label: 'System Administration', icon: Settings },
+  { id: 'SYSTEM', label: 'System Management', icon: Settings },
 ];
 
 export default function StaffRolesPage() {
@@ -171,14 +183,13 @@ export default function StaffRolesPage() {
     );
   };
 
-  // Grouping logic strictly aligned with sidebar logic
+  // Grouping logic refined to match the sidebar EXACTLY
   const groupedPermissions = useMemo(() => {
     const groups: Record<string, any[]> = {
       'DASHBOARD': [],
       'CASE_MANAGEMENT': [],
       'MONITORING': [],
-      'DOCUMENT': [],
-      'ARCHIVE': [],
+      'INFRASTRUCTURE': [],
       'REFERENCE': [],
       'REPORTING': [],
       'SYSTEM': []
@@ -195,13 +206,12 @@ export default function StaffRolesPage() {
       } else if (group === 'REPORTING') {
         groups['REPORTING'].push(p);
       } else if (group === 'SYSTEM') {
-        if (slug === 'MANAGE_VAULT_STORAGE') groups['DOCUMENT'].push(p);
-        else groups['SYSTEM'].push(p);
+        groups['SYSTEM'].push(p);
       } else if (group === 'WORKFLOWS') {
         if (slug.includes('MONITORING') || slug.includes('_BRANCH') || slug.includes('DISTRICT_NODE')) {
           groups['MONITORING'].push(p);
-        } else if (slug.includes('ARCHIVED') || slug.includes('EXPORT_CASE_ZIP')) {
-          groups['ARCHIVE'].push(p);
+        } else if (slug.includes('ARCHIVED') || slug.includes('EXPORT_CASE_ZIP') || slug.includes('VAULT_STORAGE')) {
+          groups['INFRASTRUCTURE'].push(p);
         } else {
           groups['CASE_MANAGEMENT'].push(p);
         }
@@ -352,11 +362,10 @@ export default function StaffRolesPage() {
                     if (section.id === 'DASHBOARD') return group === 'DASHBOARD';
                     if (section.id === 'REFERENCE') return group === 'REFERENCE';
                     if (section.id === 'REPORTING') return group === 'REPORTING';
-                    if (section.id === 'DOCUMENT') return slug === 'MANAGE_VAULT_STORAGE';
-                    if (section.id === 'SYSTEM') return group === 'SYSTEM' && slug !== 'MANAGE_VAULT_STORAGE';
-                    if (section.id === 'CASE_MANAGEMENT') return group === 'WORKFLOWS' && !slug.includes('MONITORING') && !slug.includes('_BRANCH') && !slug.includes('DISTRICT_NODE') && !slug.includes('ARCHIVED') && !slug.includes('EXPORT_CASE_ZIP');
+                    if (section.id === 'INFRASTRUCTURE') return slug.includes('ARCHIVED') || slug.includes('EXPORT_CASE_ZIP') || slug.includes('VAULT_STORAGE');
+                    if (section.id === 'SYSTEM') return group === 'SYSTEM';
+                    if (section.id === 'CASE_MANAGEMENT') return group === 'WORKFLOWS' && !slug.includes('MONITORING') && !slug.includes('_BRANCH') && !slug.includes('DISTRICT_NODE') && !slug.includes('ARCHIVED') && !slug.includes('EXPORT_CASE_ZIP') && !slug.includes('VAULT_STORAGE');
                     if (section.id === 'MONITORING') return group === 'WORKFLOWS' && (slug.includes('MONITORING') || slug.includes('_BRANCH') || slug.includes('DISTRICT_NODE'));
-                    if (section.id === 'ARCHIVE') return group === 'WORKFLOWS' && (slug.includes('ARCHIVED') || slug.includes('EXPORT_CASE_ZIP'));
                     return false;
                   });
 
