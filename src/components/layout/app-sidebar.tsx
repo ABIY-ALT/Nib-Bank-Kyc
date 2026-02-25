@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -252,56 +251,26 @@ export function AppSidebar() {
 
               {/* KYC DOCUMENT */}
               {hasPermission('MANAGE_VAULT_STORAGE') && (
-                <Collapsible className="group/collapsible" defaultOpen={pathname === '/admin/storage'}>
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton tooltip="KYC Document">
-                        <HardDrive className="w-4 h-4" />
-                        <span>KYC Document</span>
-                        <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/storage'}>
-                            <Link href="/admin/storage">
-                              <Folders className="w-4 h-4 mr-2 text-primary" />
-                              <span>Document Vault</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === '/admin/storage'} tooltip="KYC Document">
+                    <Link href="/admin/storage">
+                      <HardDrive className="w-4 h-4" />
+                      <span>KYC Document</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               )}
 
               {/* ARCHIVE */}
               {hasPermission('VIEW_ARCHIVED_CASE') && (
-                <Collapsible className="group/collapsible" defaultOpen={pathname === '/submissions'}>
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton tooltip="Archive">
-                        <Folders className="w-4 h-4" />
-                        <span>Archive</span>
-                        <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions'}>
-                            <Link href="/submissions">
-                              <Archive className="w-4 h-4 mr-2" />
-                              <span>Case Archive</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === '/submissions'} tooltip="Archive">
+                    <Link href="/submissions">
+                      <Folders className="w-4 h-4" />
+                      <span>Case Archive</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               )}
             </SidebarMenu>
           </SidebarGroup>
