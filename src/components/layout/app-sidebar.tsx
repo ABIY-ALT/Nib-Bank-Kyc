@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -98,13 +97,13 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* KYC OPERATIONS DROPDOWNS */}
+        {/* KYC OPERATIONS GROUP */}
         {hasAnyInGroup('WORKFLOWS') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">KYC Operations</SidebarGroupLabel>
             <SidebarMenu>
               
-              {/* CASE MANAGEMENT */}
+              {/* CASE MANAGEMENT DROPDOWN */}
               <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions') && !['/submissions', '/submissions/branch-node', '/submissions/district-node', '/submissions/master-bundle', '/admin/storage'].includes(pathname)}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -211,7 +210,7 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* MONITORING */}
+              {/* MONITORING DROPDOWN */}
               <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions/branch-node') || pathname.includes('/submissions/district-node')}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>

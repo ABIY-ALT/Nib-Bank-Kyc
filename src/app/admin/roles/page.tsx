@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -24,7 +23,9 @@ import {
   BookOpen,
   FileBarChart,
   Settings,
-  MoreHorizontal
+  MoreHorizontal,
+  Map,
+  X
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -42,17 +43,17 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Sidebar Sections for page-by-page mapping
-const SIDEBAR_SECTIONS: Record<string, { icon: any, label: string }> = {
-  'DASHBOARD': { icon: LayoutDashboard, label: 'Dashboard' },
-  'WORKFLOWS': { icon: FileText, label: 'Case Management' },
-  'MONITORING': { icon: Building2, label: 'Regional Monitoring' },
-  'DOCUMENT': { icon: HardDrive, label: 'KYC Document' },
-  'ARCHIVE': { icon: Folders, label: 'Institutional Archive' },
-  'REFERENCE': { icon: BookOpen, label: 'KYC F&Q Reference' },
-  'REPORTING': { icon: FileBarChart, label: 'Reporting Suite' },
-  'SYSTEM': { icon: Settings, label: 'System Administration' }
-};
+// Define the Sidebar Sections for UI Grouping
+const UI_SECTIONS = [
+  { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
+  { id: 'MONITORING', label: 'Regional Monitoring', icon: Map },
+  { id: 'DOCUMENT', label: 'KYC Document', icon: HardDrive },
+  { id: 'ARCHIVE', label: 'Institutional Archive', icon: Folders },
+  { id: 'REFERENCE', label: 'KYC F&Q Reference', icon: BookOpen },
+  { id: 'REPORTING', label: 'Reporting Suite', icon: FileBarChart },
+  { id: 'SYSTEM', label: 'System Administration', icon: Settings },
+];
 
 export default function StaffRolesPage() {
   const { toast } = useToast();
@@ -152,7 +153,7 @@ export default function StaffRolesPage() {
       if (res.success) {
         toast({ 
           title: role.active ? "Role Deactivated" : "Role Restored", 
-          description: `designated as ${role.active ? 'Inactive' : 'Active'} in the Vault.`
+          description: `Designated as ${role.active ? 'Inactive' : 'Active'} in the Vault.`
         });
         await loadData();
       }
@@ -168,24 +169,46 @@ export default function StaffRolesPage() {
   };
 
   const groupedPermissions = useMemo(() => {
-    const groups: Record<string, any[]> = {};
+    const groups: Record<string, any[]> = {
+      'DASHBOARD': [],
+      'CASE_MANAGEMENT': [],
+      'MONITORING': [],
+      'DOCUMENT': [],
+      'ARCHIVE': [],
+      'REFERENCE': [],
+      'REPORTING': [],
+      'SYSTEM': []
+    };
+
     allPermissions.forEach(p => {
-      // Map PRD groups to our Sidebar Sections
-      let g = p.group;
-      if (g === 'WORKFLOWS') {
-        if (p.slug.includes('MONITORING')) g = 'MONITORING';
-        else if (p.slug.includes('VAULT') || p.slug.includes('STORAGE')) g = 'DOCUMENT';
-        else if (p.slug.includes('ARCHIVE')) g = 'ARCHIVE';
+      const slug = p.slug;
+      const group = p.group;
+
+      if (group === 'DASHBOARD') {
+        groups['DASHBOARD'].push(p);
+      } else if (group === 'REFERENCE') {
+        groups['REFERENCE'].push(p);
+      } else if (group === 'REPORTING') {
+        groups['REPORTING'].push(p);
+      } else if (group === 'SYSTEM') {
+        if (slug === 'MANAGE_VAULT_STORAGE') groups['DOCUMENT'].push(p);
+        else groups['SYSTEM'].push(p);
+      } else if (group === 'WORKFLOWS') {
+        if (slug.includes('MONITORING') || slug.includes('_BRANCH') || slug.includes('DISTRICT_NODE')) {
+          groups['MONITORING'].push(p);
+        } else if (slug.includes('ARCHIVED') || slug.includes('EXPORT_CASE_ZIP')) {
+          groups['ARCHIVE'].push(p);
+        } else {
+          groups['CASE_MANAGEMENT'].push(p);
+        }
       }
-      
-      if (!groups[g]) groups[g] = [];
-      groups[g].push(p);
     });
+
     return groups;
   }, [allPermissions]);
 
-  const handleToggleGroup = (groupName: string) => {
-    const groupPerms = groupedPermissions[groupName] || [];
+  const handleToggleGroup = (groupId: string) => {
+    const groupPerms = groupedPermissions[groupId] || [];
     const groupIds = groupPerms.map(p => p.id);
     const allSelected = groupIds.every(id => permissionsForm.includes(id));
 
@@ -272,7 +295,7 @@ export default function StaffRolesPage() {
                   </TableCell>
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-10 w-10 text-slate-400 rounded-full hover:bg-primary/5 hover:text-primary"><Settings2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-10 w-10 text-slate-400 rounded-full hover:bg-primary/5 hover:text-primary transition-colors"><Settings2 className="w-4 h-4" /></Button>
                       <Button 
                         variant="ghost" 
                         size="icon" 
@@ -318,26 +341,39 @@ export default function StaffRolesPage() {
           <div className="p-8">
             <ScrollArea className="h-[50vh] pr-4">
               <div className="space-y-8">
-                {Object.entries(
-                  selectedRole?.permissions.reduce((acc: any, curr: any) => {
-                    const group = curr.permission.group;
-                    if (!acc[group]) acc[group] = [];
-                    acc[group].push(curr.permission);
-                    return acc;
-                  }, {}) || {}
-                ).map(([group, perms]: [string, any]) => (
-                  <div key={group} className="space-y-4">
-                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-primary">{group}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {perms.map((p: any) => (
-                        <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(184,147,52,0.5)]" />
-                          <span className="text-xs font-bold text-slate-700">{p.name}</span>
-                        </div>
-                      ))}
+                {UI_SECTIONS.map((section) => {
+                  const perms = selectedRole?.permissions.filter((p: any) => {
+                    const slug = p.permission.slug;
+                    const group = p.permission.group;
+                    if (section.id === 'DASHBOARD') return group === 'DASHBOARD';
+                    if (section.id === 'REFERENCE') return group === 'REFERENCE';
+                    if (section.id === 'REPORTING') return group === 'REPORTING';
+                    if (section.id === 'DOCUMENT') return slug === 'MANAGE_VAULT_STORAGE';
+                    if (section.id === 'SYSTEM') return group === 'SYSTEM' && slug !== 'MANAGE_VAULT_STORAGE';
+                    if (section.id === 'CASE_MANAGEMENT') return group === 'WORKFLOWS' && !slug.includes('MONITORING') && !slug.includes('_BRANCH') && !slug.includes('DISTRICT_NODE') && !slug.includes('ARCHIVED') && !slug.includes('EXPORT_CASE_ZIP');
+                    if (section.id === 'MONITORING') return group === 'WORKFLOWS' && (slug.includes('MONITORING') || slug.includes('_BRANCH') || slug.includes('DISTRICT_NODE'));
+                    if (section.id === 'ARCHIVE') return group === 'WORKFLOWS' && (slug.includes('ARCHIVED') || slug.includes('EXPORT_CASE_ZIP'));
+                    return false;
+                  });
+
+                  if (!perms || perms.length === 0) return null;
+
+                  return (
+                    <div key={section.id} className="space-y-4">
+                      <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2">
+                        <section.icon className="w-3 h-3" /> {section.label}
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {perms.map((p: any) => (
+                          <div key={p.permission.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(184,147,52,0.5)]" />
+                            <span className="text-xs font-bold text-slate-700">{p.permission.name}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </ScrollArea>
           </div>
@@ -379,14 +415,16 @@ export default function StaffRolesPage() {
 
               <ScrollArea className="flex-1 pr-4">
                 <div className="space-y-12">
-                  {Object.entries(groupedPermissions).map(([groupId, perms]) => {
-                    const section = SIDEBAR_SECTIONS[groupId] || { icon: ShieldCheck, label: groupId };
+                  {UI_SECTIONS.map((section) => {
+                    const perms = groupedPermissions[section.id] || [];
+                    if (perms.length === 0) return null;
+
                     const groupIds = perms.map(p => p.id);
                     const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
                     const SectionIcon = section.icon;
                     
                     return (
-                      <div key={groupId} className="space-y-6">
+                      <div key={section.id} className="space-y-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4 flex-1">
                             <div className="p-2 bg-primary/5 rounded-lg text-primary">
@@ -398,7 +436,7 @@ export default function StaffRolesPage() {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => handleToggleGroup(groupId)}
+                            onClick={() => handleToggleGroup(section.id)}
                             className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-black text-[10px] uppercase tracking-wider gap-2"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" /> 
