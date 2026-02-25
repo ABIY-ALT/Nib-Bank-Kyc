@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -37,7 +38,8 @@ import {
   Globe,
   Archive,
   ClipboardList,
-  PlusCircle
+  PlusCircle,
+  UserCog
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -59,7 +61,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 const SIDEBAR_GROUPS = [
   { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
-  { id: 'MONITORING', label: 'Monitoring', icon: Map },
+  { id: 'MONITORING', label: 'Monitoring', icon: BarChart3 },
   { id: 'KYC_DOCUMENT', label: 'KYC Document', icon: HardDrive },
   { id: 'ARCHIVE', label: 'Institutional Archive', icon: Folders },
   { id: 'REFERENCE', label: 'KYC F&Q Reference', icon: BookOpen },
@@ -196,7 +198,7 @@ export default function StaffRolesPage() {
       const slug = p.slug;
       
       if (slug === 'DASHBOARD_VIEW') {
-        groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard", icon: LayoutDashboard });
+        groups['DASHBOARD'].push({ ...p, desc: "Permit view of general and node-specific oversight dashboards", icon: LayoutDashboard });
       } else if (slug === 'CASE_SUBMIT') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit upload documents and other necessary initiation steps", icon: PlusCircle });
       } else if (slug === 'CASE_VIEW_OWN') {
@@ -209,22 +211,22 @@ export default function StaffRolesPage() {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process high-priority senior assessments", icon: ShieldAlert });
       } else if (slug === 'VIEW_GOVERNANCE_QUEUE') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit process high-risk hierarchy governance flows", icon: Zap });
-      } else if (slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_BRANCH') {
-        groups['MONITORING'].push({ ...p, desc: "Permit operational oversight at the local branch node", icon: Building2 });
-      } else if (slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE') {
+      } else if (slug === 'CASE_VIEW_BRANCH') {
+        groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at the local branch node", icon: Building2 });
+      } else if (slug === 'DASHBOARD_VIEW_DISTRICT') {
         groups['MONITORING'].push({ ...p, desc: "Permit regional oversight across the district jurisdiction", icon: Map });
       } else if (slug === 'MANAGE_VAULT_STORAGE') {
         groups['KYC_DOCUMENT'].push({ ...p, desc: "Permit management of jurisdictional vault storage assets", icon: HardDrive });
       } else if (slug === 'VIEW_ARCHIVED_CASE') {
-        groups['ARCHIVE'].push({ ...p, desc: "Permit access to historical case records in the archive", icon: Folders });
+        groups['ARCHIVE'].push({ ...p, desc: "Permit access to global historical case records", icon: Folders });
       } else if (slug === 'EXPORT_CASE_ZIP') {
         groups['ARCHIVE'].push({ ...p, desc: "Permit batch export of institutional case bundles", icon: FileArchive });
       } else if (p.group === 'REFERENCE') {
         groups['REFERENCE'].push({ ...p, desc: "Permit management of the standardized findings knowledge base", icon: BookOpen });
       } else if (p.group === 'REPORTING') {
-        groups['REPORTING'].push({ ...p, desc: "Permit generation of institutional and specialist reports", icon: FileBarChart });
+        groups['REPORTING'].push({ ...p, desc: "Permit generation of institutional, management, and specialist reports", icon: FileBarChart });
       } else if (p.group === 'SYSTEM') {
-        groups['SYSTEM'].push({ ...p, desc: "Permit administration of institutional personnel and configuration", icon: Settings });
+        groups['SYSTEM'].push({ ...p, desc: "Permit administration of institutional personnel, roles, and configuration", icon: Settings });
       }
     });
 

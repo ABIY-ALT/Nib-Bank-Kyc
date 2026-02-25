@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -25,7 +26,11 @@ import {
   BarChartHorizontal,
   Monitor,
   HardDrive,
-  ClipboardList
+  ClipboardList,
+  UserCog,
+  ArrowRightLeft,
+  History,
+  FileArchive
 } from "lucide-react"
 
 import {
