@@ -344,7 +344,12 @@ export default function StaffRolesPage() {
             <div className="p-8 flex-1 overflow-hidden flex flex-col gap-8">
               <div className="space-y-2 max-w-sm shrink-0">
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
-                <Input placeholder="e.g. KYC_AUDITOR" className="h-12 bg-slate-50 border-slate-200 font-bold focus-visible:ring-primary/20 rounded-xl" value={roleName} onChange={(e) => setRoleName(e.target.value.toUpperCase().replace(/\s+/g, '_'))} />
+                <input 
+                  placeholder="e.g. KYC_AUDITOR" 
+                  className="h-12 w-full px-4 bg-slate-50 border border-slate-200 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 rounded-xl" 
+                  value={roleName} 
+                  onChange={(e) => setRoleName(e.target.value.toUpperCase().replace(/\s+/g, '_'))} 
+                />
               </div>
 
               <ScrollArea className="flex-1 pr-4">
