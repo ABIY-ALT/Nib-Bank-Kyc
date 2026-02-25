@@ -13,25 +13,19 @@ import {
   Inbox,
   AlertCircle,
   BarChart3,
-  History,
   ChevronDown,
   ShieldAlert,
   Search,
   FileBarChart,
   Globe,
-  Archive,
-  ArrowRightLeft,
-  UserCog,
-  Zap,
-  BookOpen,
-  ClipboardList,
   Folders,
-  Shield,
-  FileArchive,
+  BookOpen,
+  Zap,
   Map,
   BarChartHorizontal,
   Monitor,
-  HardDrive
+  HardDrive,
+  ClipboardList
 } from "lucide-react"
 
 import {

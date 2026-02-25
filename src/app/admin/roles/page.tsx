@@ -29,7 +29,6 @@ import {
   Inbox,
   AlertCircle,
   ShieldAlert,
-  ClipboardCheck,
   Search,
   ArrowRightLeft,
   History,
@@ -37,7 +36,8 @@ import {
   BarChartHorizontal,
   Globe,
   Archive,
-  ClipboardList
+  ClipboardList,
+  PlusCircle
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -61,8 +61,8 @@ const SIDEBAR_GROUPS = [
   { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
   { id: 'MONITORING', label: 'Monitoring', icon: Map },
   { id: 'KYC_DOCUMENT', label: 'KYC Document', icon: HardDrive },
-  { id: 'ARCHIVE', label: 'Archive', icon: Folders },
-  { id: 'REFERENCE', label: 'Reference', icon: BookOpen },
+  { id: 'ARCHIVE', label: 'Institutional Archive', icon: Folders },
+  { id: 'REFERENCE', label: 'KYC F&Q Reference', icon: BookOpen },
   { id: 'REPORTING', label: 'Reporting Suite', icon: FileBarChart },
   { id: 'SYSTEM', label: 'Administration', icon: Settings },
 ];
@@ -195,37 +195,36 @@ export default function StaffRolesPage() {
     allPermissions.forEach(p => {
       const slug = p.slug;
       
-      // Explicit Mapping based on PRD requirements
       if (slug === 'DASHBOARD_VIEW') {
-        groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard" });
+        groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard", icon: LayoutDashboard });
       } else if (slug === 'CASE_SUBMIT') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit upload documents and initiate new cases", icon: PlusCircle });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit upload documents and other necessary initiation steps", icon: PlusCircle });
       } else if (slug === 'CASE_VIEW_OWN') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view personal submission history", icon: Inbox });
       } else if (slug === 'KYC_VIEW_QUEUE') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process technical queue", icon: Search });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process the verification queue", icon: Search });
       } else if (slug === 'CASE_VIEW_ACTION_REQUIRED') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and manage returned cases", icon: AlertCircle });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and manage returned cases requiring correction", icon: AlertCircle });
       } else if (slug === 'VIEW_ESCALATED_CASES') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view senior assessment queue", icon: ShieldAlert });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process high-priority senior assessments", icon: ShieldAlert });
       } else if (slug === 'VIEW_GOVERNANCE_QUEUE') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit process hierarchy governance flows", icon: Zap });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit process high-risk hierarchy governance flows", icon: Zap });
       } else if (slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_BRANCH') {
-        groups['MONITORING'].push({ ...p, desc: "Permit branch-level oversight", icon: Building2 });
+        groups['MONITORING'].push({ ...p, desc: "Permit operational oversight at the local branch node", icon: Building2 });
       } else if (slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE') {
-        groups['MONITORING'].push({ ...p, desc: "Permit regional district oversight", icon: Map });
+        groups['MONITORING'].push({ ...p, desc: "Permit regional oversight across the district jurisdiction", icon: Map });
       } else if (slug === 'MANAGE_VAULT_STORAGE') {
-        groups['KYC_DOCUMENT'].push({ ...p, desc: "Permit management of jurisdictional vault storage", icon: HardDrive });
+        groups['KYC_DOCUMENT'].push({ ...p, desc: "Permit management of jurisdictional vault storage assets", icon: HardDrive });
       } else if (slug === 'VIEW_ARCHIVED_CASE') {
-        groups['ARCHIVE'].push({ ...p, desc: "Permit access to historical case records", icon: Folders });
+        groups['ARCHIVE'].push({ ...p, desc: "Permit access to historical case records in the archive", icon: Folders });
       } else if (slug === 'EXPORT_CASE_ZIP') {
-        groups['ARCHIVE'].push({ ...p, desc: "Permit batch export of case assets", icon: FileArchive });
+        groups['ARCHIVE'].push({ ...p, desc: "Permit batch export of institutional case bundles", icon: FileArchive });
       } else if (p.group === 'REFERENCE') {
-        groups['REFERENCE'].push({ ...p, desc: "Permit access to standardized findings library", icon: BookOpen });
+        groups['REFERENCE'].push({ ...p, desc: "Permit management of the standardized findings knowledge base", icon: BookOpen });
       } else if (p.group === 'REPORTING') {
-        groups['REPORTING'].push({ ...p, desc: "Permit generation of institutional reports", icon: FileBarChart });
+        groups['REPORTING'].push({ ...p, desc: "Permit generation of institutional and specialist reports", icon: FileBarChart });
       } else if (p.group === 'SYSTEM') {
-        groups['SYSTEM'].push({ ...p, desc: "Permit administration of institutional data", icon: Settings });
+        groups['SYSTEM'].push({ ...p, desc: "Permit administration of institutional personnel and configuration", icon: Settings });
       }
     });
 
@@ -256,7 +255,7 @@ export default function StaffRolesPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Roles</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Define authorities exactly as they appear in the navigation.</p>
+          <p className="text-muted-foreground text-lg font-medium">Define authorities precisely aligned with the operational navigation.</p>
         </div>
         <div className="flex gap-2">
           {allPermissions.length === 0 && (
@@ -335,7 +334,7 @@ export default function StaffRolesPage() {
                     {selectedRole ? 'Update Role Rights' : 'Define New Role'}
                   </DialogTitle>
                   <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">
-                    Institutional Mapping: Aligning rights with sidebar pages
+                    Institutional Mapping: Aligning rights page-by-page
                   </DialogDescription>
                 </div>
               </div>
@@ -376,6 +375,7 @@ export default function StaffRolesPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {perms.map((p: any) => {
                             const isSelected = permissionsForm.includes(p.id);
+                            const PermIcon = p.icon || SectionIcon;
                             return (
                               <div 
                                 key={p.id} 
@@ -386,7 +386,9 @@ export default function StaffRolesPage() {
                                 )}
                               >
                                 <div className="flex gap-4 z-10">
-                                  <div className={cn("w-2 h-2 rounded-full mt-1.5 transition-all", isSelected ? "bg-primary scale-125" : "bg-slate-200")} />
+                                  <div className={cn("p-2 rounded-xl h-fit transition-all", isSelected ? "bg-primary text-white" : "bg-slate-50 text-slate-400")}>
+                                    <PermIcon className="w-4 h-4" />
+                                  </div>
                                   <div className="flex flex-col">
                                     <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>{p.name}</span>
                                     <span className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-2">{p.desc}</span>
