@@ -11,7 +11,7 @@ async function main() {
 
   console.log('🚀 Institutional Seeding Initialized [NIB BANK BLUEPRINT]...');
 
-  // 1. Provision Permission Registry
+  // 1. Provision Permission Registry (Aligned with KYC Operations Layout)
   const permissions = [
     // DASHBOARD
     { slug: 'DASHBOARD_VIEW', name: 'View General Dashboard', group: 'DASHBOARD' },
@@ -19,42 +19,44 @@ async function main() {
     { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Specific Dashboard', group: 'DASHBOARD' },
     { slug: 'DASHBOARD_VIEW_SYSTEM', name: 'View System-wide Command Dashboard', group: 'DASHBOARD' },
 
-    // WORKFLOWS
-    { slug: 'CASE_UPLOAD_DOCUMENT', name: 'Upload Customer Documents', group: 'WORKFLOWS' },
-    { slug: 'CASE_SUBMIT', name: 'Submit New KYC Case', group: 'WORKFLOWS' },
-    { slug: 'CASE_VIEW_OWN', name: 'View Own Submissions', group: 'WORKFLOWS' },
-    { slug: 'CASE_RESUBMIT', name: 'Resubmit Corrected Case', group: 'WORKFLOWS' },
-    { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Amendment Requests', group: 'WORKFLOWS' },
-    { slug: 'CASE_RESPOND_AMENDMENT', name: 'Respond to Amendments', group: 'WORKFLOWS' },
-    { slug: 'CASE_VIEW_BRANCH', name: 'View All Branch Cases', group: 'WORKFLOWS' },
-    { slug: 'KYC_VIEW_QUEUE', name: 'View Review Queue', group: 'WORKFLOWS' },
-    { slug: 'KYC_VERIFY_CHECKLIST', name: 'Perform Verification', group: 'WORKFLOWS' },
-    { slug: 'KYC_REQUEST_AMENDMENT', name: 'Request Case Amendments', group: 'WORKFLOWS' },
-    { slug: 'KYC_APPROVE_STANDARD', name: 'Approve Standard Cases', group: 'WORKFLOWS' },
-    { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalation Queue', group: 'WORKFLOWS' },
-    { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Queue', group: 'WORKFLOWS' },
+    // WORKFLOWS - Case Management
+    { slug: 'CASE_SUBMIT', name: 'Create New Submission', group: 'WORKFLOWS' },
+    { slug: 'CASE_VIEW_OWN', name: 'View My Submissions', group: 'WORKFLOWS' },
+    { slug: 'KYC_VIEW_QUEUE', name: 'Access Review & Action', group: 'WORKFLOWS' },
+    { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Returned Cases', group: 'WORKFLOWS' },
+    { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
+    { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'WORKFLOWS' },
     { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
-    { slug: 'VIEW_ARCHIVED_CASE', name: 'View Master Archive', group: 'WORKFLOWS' },
     
+    // WORKFLOWS - Monitoring
+    { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'WORKFLOWS' },
+    { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'WORKFLOWS' },
+    
+    // WORKFLOWS - Archive
+    { slug: 'VIEW_ARCHIVED_CASE', name: 'Access Case Archive', group: 'WORKFLOWS' },
+    { slug: 'EXPORT_CASE_ZIP', name: 'Download Case Bundle', group: 'WORKFLOWS' },
+
     // REFERENCE
     { slug: 'VIEW_FQ_LIBRARY', name: 'View F&Q Library', group: 'REFERENCE' },
     { slug: 'CREATE_FQ_ENTRY', name: 'Create F&Q Entry', group: 'REFERENCE' },
+    { slug: 'EDIT_FQ_ENTRY', name: 'Edit F&Q Entry', group: 'REFERENCE' },
+    { slug: 'DELETE_FQ_ENTRY', name: 'Deactivate F&Q Entry', group: 'REFERENCE' },
     
     // REPORTING
+    { slug: 'VIEW_SPECIALIST_PRODUCTIVITY', name: 'View Ops Monitoring', group: 'REPORTING' },
+    { slug: 'REPORT_VIEW_MANAGEMENT', name: 'View Management Report', group: 'REPORTING' },
     { slug: 'REPORT_VIEW_SYSTEM', name: 'View System-wide Reports', group: 'REPORTING' },
-    { slug: 'REPORT_VIEW_DISTRICT', name: 'View District Command', group: 'REPORTING' },
-    { slug: 'VIEW_SPECIALIST_PRODUCTIVITY', name: 'View Specialist Matrix', group: 'REPORTING' },
-    { slug: 'VIEW_AUDIT_POOL', name: 'View Audit Pool', group: 'REPORTING' },
-    { slug: 'VIEW_AUDIT_LOGS', name: 'View Audit Logs', group: 'REPORTING' },
+    { slug: 'VIEW_AUDIT_POOL', name: 'Access Follow-up Audit', group: 'REPORTING' },
+    { slug: 'VIEW_AUDIT_LOGS', name: 'View Audit Reports', group: 'REPORTING' },
     { slug: 'DOWNLOAD_MASTER_ARCHIVE', name: 'Download Master Archive', group: 'REPORTING' },
 
     // SYSTEM
-    { slug: 'USER_CREATE', name: 'Provision New Users', group: 'SYSTEM' },
-    { slug: 'ROLE_CREATE', name: 'Define New Role', group: 'SYSTEM' },
-    { slug: 'MAP_USERS_TO_BRANCH', name: 'Link Users to Nodes', group: 'SYSTEM' },
-    { slug: 'MANAGE_BRANCHES', name: 'Manage Branches', group: 'SYSTEM' },
-    { slug: 'EDIT_SLA_POLICY', name: 'Modify Institutional SLA', group: 'SYSTEM' },
-    { slug: 'VIEW_SYSTEM_AUDIT', name: 'View Master Audit Log', group: 'SYSTEM' },
+    { slug: 'USER_CREATE', name: 'Manage User Access', group: 'SYSTEM' },
+    { slug: 'ROLE_CREATE', name: 'Manage Assign Roles', group: 'SYSTEM' },
+    { slug: 'MAP_USERS_TO_BRANCH', name: 'Manage Portfolio Mapping', group: 'SYSTEM' },
+    { slug: 'MANAGE_BRANCHES', name: 'Manage Hierarchy', group: 'SYSTEM' },
+    { slug: 'EDIT_SLA_POLICY', name: 'Modify System Configuration', group: 'SYSTEM' },
+    { slug: 'VIEW_SYSTEM_AUDIT', name: 'View System Audit Logs', group: 'SYSTEM' },
   ];
 
   const permMap: Record<string, string> = {};
@@ -87,14 +89,61 @@ async function main() {
     });
   }
 
-  // 3. Right Mappings (Sync with Sidebar expectations)
+  // 3. Right Mappings (Strict alignment with Sidebar)
   const rolePermissions: Record<string, string[]> = {
-    BRANCH_OFFICER: ['DASHBOARD_VIEW', 'CASE_SUBMIT', 'CASE_VIEW_OWN', 'CASE_UPLOAD_DOCUMENT', 'CASE_RESUBMIT', 'CASE_RESPOND_AMENDMENT', 'VIEW_FQ_LIBRARY'],
-    KYC_OFFICER: ['DASHBOARD_VIEW', 'KYC_VIEW_QUEUE', 'KYC_VERIFY_CHECKLIST', 'KYC_REQUEST_AMENDMENT', 'KYC_APPROVE_STANDARD', 'VIEW_FQ_LIBRARY', 'VIEW_SPECIALIST_PRODUCTIVITY'],
-    SUPERVISOR: ['DASHBOARD_VIEW', 'KYC_VIEW_QUEUE', 'KYC_APPROVE_STANDARD', 'VIEW_ESCALATED_CASES', 'VIEW_SPECIALIST_PRODUCTIVITY', 'VIEW_FQ_LIBRARY'],
-    BRANCH_MANAGER: ['DASHBOARD_VIEW', 'CASE_VIEW_BRANCH', 'DASHBOARD_VIEW_BRANCH', 'VIEW_FQ_LIBRARY', 'VIEW_GOVERNANCE_QUEUE', 'TRIGGER_GOVERNANCE_FLOW'],
-    DISTRICT_DIRECTOR: ['DASHBOARD_VIEW', 'DASHBOARD_VIEW_DISTRICT', 'REPORT_VIEW_DISTRICT', 'CASE_VIEW_BRANCH', 'VIEW_FQ_LIBRARY', 'VIEW_GOVERNANCE_QUEUE', 'TRIGGER_GOVERNANCE_FLOW', 'VIEW_SPECIALIST_PRODUCTIVITY'],
-    KYC_DIRECTOR: ['DASHBOARD_VIEW', 'DASHBOARD_VIEW_SYSTEM', 'REPORT_VIEW_SYSTEM', 'VIEW_FQ_LIBRARY', 'VIEW_GOVERNANCE_QUEUE', 'TRIGGER_GOVERNANCE_FLOW', 'VIEW_SPECIALIST_PRODUCTIVITY']
+    BRANCH_OFFICER: [
+      'DASHBOARD_VIEW', 
+      'CASE_SUBMIT', 
+      'CASE_VIEW_OWN', 
+      'CASE_VIEW_ACTION_REQUIRED', 
+      'VIEW_ARCHIVED_CASE', 
+      'VIEW_FQ_LIBRARY'
+    ],
+    KYC_OFFICER: [
+      'DASHBOARD_VIEW', 
+      'KYC_VIEW_QUEUE', 
+      'VIEW_ARCHIVED_CASE', 
+      'VIEW_FQ_LIBRARY', 
+      'VIEW_SPECIALIST_PRODUCTIVITY'
+    ],
+    SUPERVISOR: [
+      'DASHBOARD_VIEW', 
+      'KYC_VIEW_QUEUE', 
+      'VIEW_ESCALATED_CASES', 
+      'VIEW_ARCHIVED_CASE', 
+      'VIEW_FQ_LIBRARY', 
+      'VIEW_SPECIALIST_PRODUCTIVITY'
+    ],
+    BRANCH_MANAGER: [
+      'DASHBOARD_VIEW', 
+      'CASE_VIEW_BRANCH', 
+      'DASHBOARD_VIEW_BRANCH', 
+      'VIEW_GOVERNANCE_QUEUE', 
+      'TRIGGER_GOVERNANCE_FLOW', 
+      'VIEW_ARCHIVED_CASE', 
+      'VIEW_FQ_LIBRARY'
+    ],
+    DISTRICT_DIRECTOR: [
+      'DASHBOARD_VIEW', 
+      'DASHBOARD_VIEW_DISTRICT', 
+      'DASHBOARD_VIEW_DISTRICT_NODE', 
+      'REPORT_VIEW_MANAGEMENT', 
+      'VIEW_GOVERNANCE_QUEUE', 
+      'VIEW_ARCHIVED_CASE', 
+      'VIEW_FQ_LIBRARY', 
+      'VIEW_SPECIALIST_PRODUCTIVITY'
+    ],
+    KYC_DIRECTOR: [
+      'DASHBOARD_VIEW', 
+      'DASHBOARD_VIEW_SYSTEM', 
+      'REPORT_VIEW_SYSTEM', 
+      'REPORT_VIEW_MANAGEMENT', 
+      'VIEW_GOVERNANCE_QUEUE', 
+      'VIEW_ARCHIVED_CASE', 
+      'VIEW_FQ_LIBRARY', 
+      'VIEW_SPECIALIST_PRODUCTIVITY'
+    ],
+    SUPER_ADMIN: permissions.map(p => p.slug)
   };
 
   for (const [roleName, slugs] of Object.entries(rolePermissions)) {
@@ -110,7 +159,7 @@ async function main() {
     }
   }
 
-  // 4. Institutional Hierarchy (Districts & Branches)
+  // 4. Institutional Hierarchy
   const districts = [
     { name: 'Addis Central', branches: ['Meskel Square', 'Stadium', 'Kazanchis'] },
     { name: 'Addis North', branches: ['Bole', 'Megenagna', 'Arat Kilo'] },
@@ -184,90 +233,7 @@ async function main() {
     });
   }
 
-  // 6. Sample Submission Data
-  const meskelBranch = branchNodes.find(b => b.name === 'Meskel Square');
-  if (meskelBranch) {
-    const samples = [
-      { id: 'MESKEL-KYC-1001', name: 'Tekle Giyorgis', status: KYCStatus.APPROVED, type: 'Individual' },
-      { id: 'MESKEL-KYC-1002', name: 'Blue Nile Construction', status: KYCStatus.IN_REVIEW, type: 'Company' },
-      { id: 'MESKEL-KYC-1003', name: 'Zewditu Solomon', status: KYCStatus.ACTION_REQUIRED, type: 'Individual', cycles: 1 },
-      { id: 'STADIUM-KYC-2001', name: 'Awash Winery PLC', status: KYCStatus.ESCALATED, type: 'Company', exceptional: true, excStatus: 'AWAITING_DIRECTOR' }
-    ];
-
-    const officer = await prisma.user.findFirst({ where: { email: 'officer.meskel@nibbank.com.et' } });
-    const specialist = await prisma.user.findFirst({ where: { email: 'specialist.nib@nibbank.com.et' } });
-
-    for (const s of samples) {
-      await prisma.kYC.upsert({
-        where: { id: s.id },
-        update: {},
-        create: {
-          id: s.id,
-          customerName: s.name,
-          status: s.status,
-          entityType: s.type,
-          branchId: meskelBranch.id,
-          branchName: meskelBranch.name,
-          createdById: officer!.id,
-          assignedToId: specialist!.id,
-          amendCycles: s.cycles || 0,
-          isExceptional: s.exceptional || false,
-          exceptionalStatus: s.excStatus || 'None',
-          commentHistory: [
-            { role: 'BRANCH_OFFICER', performedBy: officer!.firstName, timestamp: new Date().toISOString(), comment: 'Initial deployment.', action: 'SUBMIT' }
-          ]
-        }
-      });
-    }
-  }
-
-  // 7. Methodology Registry (Findings)
-  const findings = [
-    { code: 'FQ-101', title: 'CID Authorization missing', category: FindingCategory.COMPLIANCE, severity: FindingSeverity.HIGH, desc: 'The Customer Identification data has not been authorized in the core banking system.' },
-    { code: 'FQ-102', title: 'Trade License Expiry', category: FindingCategory.DOCUMENTATION, severity: FindingSeverity.CRITICAL, desc: 'The business trade license is not renewed for the current fiscal year.' }
-  ];
-
-  for (const f of findings) {
-    await prisma.finding.upsert({
-      where: { code: f.code },
-      update: {},
-      create: { 
-        code: f.code, 
-        title: f.title, 
-        description: f.desc, 
-        category: f.category, 
-        severity: f.severity, 
-        applicableTo: ['Individual', 'Company'] 
-      }
-    });
-  }
-
-  // 8. Global Settings Initialization
-  await prisma.globalSetting.upsert({
-    where: { id: 'global' },
-    update: {},
-    create: {
-      id: 'global',
-      autoEscalation: true,
-      escalationHours: 72,
-      strictSla: true,
-      slaHours: 24,
-      documentTypes: [
-        { id: 'id_card', label: 'National ID' },
-        { id: 'passport', label: 'Passport' },
-        { id: 'license', label: 'Trade License' }
-      ],
-      entityTypes: [
-        { id: 'individual', label: 'Individual Account' },
-        { id: 'company', label: 'Company Account' }
-      ],
-      guidelines: [
-        { id: 'g1', title: 'NBE 2024 Mandate', type: 'alert', description: 'Strict verification of MOA/AOA required for all corporate accounts.' }
-      ]
-    }
-  });
-
-  console.log('✅ Institutional Vault established. Personnel mapped. Monitoring history generated.');
+  console.log('✅ Institutional Framework Synced. Personnel Mapped.');
 }
 
 main()
