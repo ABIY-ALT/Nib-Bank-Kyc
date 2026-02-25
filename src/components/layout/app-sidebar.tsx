@@ -33,7 +33,8 @@ import {
   FileArchive,
   ClipboardCheck,
   Info,
-  Map
+  Map,
+  BarChartHorizontal
 } from "lucide-react"
 
 import {
@@ -89,21 +90,6 @@ export function AppSidebar() {
       </SidebarHeader>
       
       <SidebarContent>
-        {/* FALLBACK IF NO PERMISSIONS DISCOVERED */}
-        {!hasAnyVisibleGroups && (
-          <SidebarGroup>
-            <div className="px-4 py-6 text-center space-y-4">
-              <div className="p-3 bg-white/5 rounded-2xl mx-auto w-fit">
-                <ShieldAlert className="w-6 h-6 text-white/40" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase text-white/60 tracking-widest leading-tight">Access Pending</p>
-                <p className="text-[9px] font-bold text-white/30 uppercase tracking-tighter">Unauthorized Node</p>
-              </div>
-            </div>
-          </SidebarGroup>
-        )}
-
         {/* DASHBOARD GROUP */}
         {hasPermission('DASHBOARD_VIEW') && (
           <SidebarGroup>
@@ -320,6 +306,17 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
+                      {hasPermission('REPORT_VIEW_SYSTEM') && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/reports/management'}>
+                            <Link href="/reports/management">
+                              <BarChartHorizontal className="w-4 h-4 mr-2 text-primary" />
+                              <span>Management Report</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+
                       {hasPermission('REPORT_VIEW_SYSTEM') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/system'}>
