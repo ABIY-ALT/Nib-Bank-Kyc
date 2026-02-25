@@ -159,6 +159,22 @@ export function AppSidebar() {
                         </SidebarMenuSubItem>
                       )}
 
+                      {hasPermission('VIEW_AMENDMENT_QUEUE') && (
+                        <SidebarMenuSubItem className="relative">
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
+                            <Link href="/submissions/amendments">
+                              <History className="w-4 h-4 mr-2" />
+                              <span>Amendment Review</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                          {counts.resubmitted > 0 && (
+                            <SidebarMenuBadge className="bg-indigo-600 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                              {counts.resubmitted}
+                            </SidebarMenuBadge>
+                          )}
+                        </SidebarMenuSubItem>
+                      )}
+
                       {hasPermission('CASE_VIEW_ACTION_REQUIRED') && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendment-requests'}>

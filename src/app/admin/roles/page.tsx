@@ -79,7 +79,6 @@ export default function StaffRolesPage() {
   const [isToggling, setIsToggling] = useState<string | null>(null);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<any>(null);
   const [roleName, setRoleName] = useState("");
   const [permissionsForm, setPermissionsForm] = useState<string[]>([]);
@@ -126,11 +125,6 @@ export default function StaffRolesPage() {
     setRoleName(role.name);
     setPermissionsForm(role.permissions.map((rp: any) => rp.permissionId));
     setIsDialogOpen(true);
-  };
-
-  const handleOpenInventory = (role: any) => {
-    setSelectedRole(role);
-    setIsInventoryOpen(true);
   };
 
   const handleSave = async () => {
@@ -204,7 +198,9 @@ export default function StaffRolesPage() {
       } else if (slug === 'CASE_VIEW_OWN') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view personal submission history", icon: Inbox });
       } else if (slug === 'KYC_VIEW_QUEUE') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process the verification queue", icon: Search });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process the verification queue (Initial submissions)", icon: Search });
+      } else if (slug === 'VIEW_AMENDMENT_QUEUE') {
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process resubmitted cases from Branch Officers", icon: History });
       } else if (slug === 'CASE_VIEW_ACTION_REQUIRED') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and manage returned cases requiring correction / respond to specialist comments", icon: AlertCircle });
       } else if (slug === 'VIEW_ESCALATED_CASES') {
@@ -300,13 +296,10 @@ export default function StaffRolesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <button 
-                      onClick={() => handleOpenInventory(role)}
-                      className="flex items-center justify-center gap-2 mx-auto hover:scale-105 transition-transform p-3 rounded-xl hover:bg-primary/5 group/btn"
-                    >
-                      <span className="font-black text-slate-700 group-hover/btn:text-primary text-xs">{role.permissions.length} Capabilities</span>
+                    <div className="flex items-center justify-center gap-2 mx-auto p-3 rounded-xl">
+                      <span className="font-black text-slate-700 text-xs">{role.permissions.length} Capabilities</span>
                       <CheckCircle2 className="w-4 h-4 text-primary" />
-                    </button>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
@@ -335,7 +328,7 @@ export default function StaffRolesPage() {
                   <DialogTitle className="text-2xl font-black tracking-tight text-white">
                     {selectedRole ? 'Update Role Rights' : 'Define New Role'}
                   </DialogTitle>
-                  <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">
+                  <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-0.5">
                     Institutional Mapping: Aligning rights page-by-page
                   </DialogDescription>
                 </div>
@@ -392,7 +385,7 @@ export default function StaffRolesPage() {
                                     <PermIcon className="w-4 h-4" />
                                   </div>
                                   <div className="flex flex-col">
-                                    <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>{p.name}</span>
+                                    <span className="text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")>{p.name}</span>
                                     <span className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-2">{p.desc}</span>
                                   </div>
                                 </div>
