@@ -32,7 +32,8 @@ import {
   Inbox,
   PlusCircle,
   BarChart3,
-  Map
+  Map,
+  FileArchive
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -78,7 +79,6 @@ export default function StaffRolesPage() {
   const [roleName, setRoleName] = useState("");
   const [permissionsForm, setPermissionsForm] = useState<string[]>([]);
 
-  // Security Gate: Direct URL Protection
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('ROLE_CREATE')) {
       router.push('/');
