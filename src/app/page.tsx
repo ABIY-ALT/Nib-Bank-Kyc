@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { 
   Card, 
   CardContent, 

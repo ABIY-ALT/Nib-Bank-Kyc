@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@/lib/auth-mock';
+import { useAuth } from '@/lib/auth';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader2, ShieldCheck } from 'lucide-react';

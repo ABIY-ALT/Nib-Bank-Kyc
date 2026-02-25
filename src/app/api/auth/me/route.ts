@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +13,7 @@ export async function GET(req: Request) {
   const secret = process.env.JWT_SECRET;
 
   if (!secret) {
-    return NextResponse.json({ message: "Configuration fault." }, { status: 500 });
+    return NextResponse.json({ message: "Configuration fault: Missing JWT Secret." }, { status: 500 });
   }
 
   try {
@@ -41,7 +40,7 @@ export async function GET(req: Request) {
     });
 
     if (!user || user.status !== 'ACTIVE') {
-      return NextResponse.json({ message: "Account restricted." }, { status: 401 });
+      return NextResponse.json({ message: "Account restricted or inactive." }, { status: 401 });
     }
 
     return NextResponse.json({
@@ -59,6 +58,7 @@ export async function GET(req: Request) {
       }
     });
   } catch (error) {
+    console.error("[Auth ME] Verification failed:", error);
     return NextResponse.json({ message: "Session verification failed." }, { status: 401 });
   }
 }

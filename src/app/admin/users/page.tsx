@@ -48,7 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/lib/auth-mock.tsx";
+import { useAuth } from "@/lib/auth";
 import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
@@ -173,10 +173,8 @@ export default function UserManagementPage() {
 
     setIsSyncing(true);
     try {
-      const fbId = editingUser?.firebaseUid || `user-${Math.random().toString(36).substr(2, 9)}`;
       const res = await provisionUser({ 
         ...formData, 
-        id: fbId, 
         branchId: finalBranchId,
         authorizingAdminId: currentUser?.id 
       });

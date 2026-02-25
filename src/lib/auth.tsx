@@ -1,4 +1,3 @@
-
 'use client';
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -101,7 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const changePassword = async (newPass: string) => {
-    // In a production app, this would call an API to update the database
     if (user) {
       setUser({ ...user, needsPasswordChange: false });
     }
