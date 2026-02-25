@@ -264,7 +264,7 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* KYC DOCUMENT */}
+              {/* INFRASTRUCTURE - KYC DOCUMENT */}
               {hasPermission('MANAGE_VAULT_STORAGE') && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === '/admin/storage'} tooltip="KYC Document">
@@ -276,7 +276,7 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               )}
 
-              {/* ARCHIVE */}
+              {/* INFRASTRUCTURE - ARCHIVE */}
               {hasPermission('VIEW_ARCHIVED_CASE') && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === '/submissions'} tooltip="Archive">

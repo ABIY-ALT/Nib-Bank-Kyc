@@ -1,22 +1,21 @@
 'use client';
 
 import { useAuth } from "@/lib/auth-mock.tsx";
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 
 /**
  * Production-ready Permission Engine.
- * Optimized to prevent unmount flickers by deriving loading from Auth context.
+ * Optimized to prevent infinite update loops by using useCallback for helper functions.
  */
 export function usePermissions() {
   const { user, loading: authLoading } = useAuth();
 
   const isSuperAdmin = useMemo(() => {
     if (!user) return false;
-    // Strictly rely on the assigned role in the Institutional Vault
     return user.roles?.some((ur: any) => ur.role?.name === 'SUPER_ADMIN');
   }, [user]);
 
-  const permissions = useMemo(() => {
+  const permissionsSlugs = useMemo(() => {
     const aggregatedSlugs = new Set<string>();
     if (!user) return aggregatedSlugs;
 
@@ -34,23 +33,25 @@ export function usePermissions() {
     return aggregatedSlugs;
   }, [user]);
 
-  const hasPermission = (slug: string) => isSuperAdmin || permissions.has(slug);
+  const hasPermission = useCallback((slug: string) => {
+    return isSuperAdmin || permissionsSlugs.has(slug);
+  }, [isSuperAdmin, permissionsSlugs]);
   
-  const hasAnyInGroup = (group: string) => {
+  const hasAnyInGroup = useCallback((group: string) => {
     if (isSuperAdmin) return true;
     if (!user || !user.roles) return false;
     
     return user.roles.some((ur: any) => 
       ur.role?.permissions?.some((pr: any) => pr.permission?.group === group)
     );
-  };
+  }, [isSuperAdmin, user]);
 
   return { 
-    permissions, 
+    permissions: permissionsSlugs, 
     hasPermission, 
     hasAnyInGroup, 
     isSuperAdmin,
-    loading: authLoading, // Direct derivation prevents navigation lag
+    loading: authLoading,
     canManageFindings: hasPermission('VIEW_FQ_LIBRARY')
   };
 }

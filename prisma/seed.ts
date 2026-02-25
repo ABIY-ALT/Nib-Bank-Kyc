@@ -11,7 +11,7 @@ async function main() {
 
   console.log('🚀 Institutional Seeding Initialized [NIB BANK BLUEPRINT]...');
 
-  // 1. Provision Permission Registry (Aligned with KYC Operations Layout)
+  // 1. Provision Permission Registry (Aligned with Sidebar)
   const permissions = [
     // DASHBOARD
     { slug: 'DASHBOARD_VIEW', name: 'View General Dashboard', group: 'DASHBOARD' },
@@ -33,7 +33,8 @@ async function main() {
     { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'WORKFLOWS' },
     { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'WORKFLOWS' },
     
-    // WORKFLOWS - Archive
+    // WORKFLOWS - Infrastructure
+    { slug: 'MANAGE_VAULT_STORAGE', name: 'Manage Vault Storage', group: 'WORKFLOWS' },
     { slug: 'VIEW_ARCHIVED_CASE', name: 'Access Case Archive', group: 'WORKFLOWS' },
     { slug: 'EXPORT_CASE_ZIP', name: 'Download Case Bundle', group: 'WORKFLOWS' },
 

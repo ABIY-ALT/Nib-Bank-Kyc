@@ -36,7 +36,6 @@ import {
   FileArchive,
   ClipboardList,
   PlusCircle,
-  UserCog,
   BarChart3
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
@@ -61,8 +60,7 @@ const SIDEBAR_GROUPS = [
   { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
   { id: 'MONITORING', label: 'Monitoring', icon: BarChart3 },
-  { id: 'KYC_DOCUMENT', label: 'KYC Document', icon: HardDrive },
-  { id: 'ARCHIVE', label: 'Institutional Archive', icon: Folders },
+  { id: 'INFRASTRUCTURE', label: 'Infrastructure', icon: HardDrive },
   { id: 'REFERENCE', label: 'KYC F&Q Reference', icon: BookOpen },
   { id: 'REPORTING', label: 'Reporting Suite', icon: FileBarChart },
   { id: 'SYSTEM', label: 'Administration', icon: Settings },
@@ -191,8 +189,7 @@ export default function StaffRolesPage() {
       'DASHBOARD': [],
       'CASE_MANAGEMENT': [],
       'MONITORING': [],
-      'KYC_DOCUMENT': [],
-      'ARCHIVE': [],
+      'INFRASTRUCTURE': [],
       'REFERENCE': [],
       'REPORTING': [],
       'SYSTEM': []
@@ -222,11 +219,11 @@ export default function StaffRolesPage() {
       } else if (slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE') {
         groups['MONITORING'].push({ ...p, desc: "Permit regional oversight across the district jurisdiction", icon: Map });
       } else if (slug === 'MANAGE_VAULT_STORAGE') {
-        groups['KYC_DOCUMENT'].push({ ...p, desc: "Permit management of jurisdictional vault storage assets", icon: HardDrive });
+        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit management of jurisdictional vault storage assets", icon: HardDrive });
       } else if (slug === 'VIEW_ARCHIVED_CASE') {
-        groups['ARCHIVE'].push({ ...p, desc: "Permit access to global historical case records", icon: Folders });
+        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit access to global historical case records", icon: Folders });
       } else if (slug === 'EXPORT_CASE_ZIP') {
-        groups['ARCHIVE'].push({ ...p, desc: "Permit batch export of institutional case bundles", icon: FileArchive });
+        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit batch export of institutional case bundles", icon: FileArchive });
       } else if (p.group === 'REFERENCE') {
         groups['REFERENCE'].push({ ...p, desc: "Permit management of the standardized findings knowledge base", icon: BookOpen });
       } else if (p.group === 'REPORTING') {
