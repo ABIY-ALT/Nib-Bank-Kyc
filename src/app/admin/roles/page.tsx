@@ -257,11 +257,9 @@ export default function StaffRolesPage() {
           <p className="text-muted-foreground text-lg font-medium">Define authorities precisely aligned with the operational navigation.</p>
         </div>
         <div className="flex gap-2">
-          {allPermissions.length === 0 && (
-            <Button variant="outline" onClick={handleSyncPermissions} disabled={isSyncing} className="border-primary/20 text-primary font-black gap-2">
-              <RefreshCcw className="w-4 h-4" /> Provision Registry
-            </Button>
-          )}
+          <Button variant="outline" onClick={handleSyncPermissions} disabled={isSyncing} className="border-primary/20 text-primary font-black gap-2">
+            <RefreshCcw className="w-4 h-4" /> Provision Registry
+          </Button>
           <Button onClick={handleOpenAdd} className="bg-primary shadow-xl font-black h-11 px-8 text-white hover:bg-primary/90 rounded-xl">
             <Plus className="w-4 h-4 mr-2" /> Define New Role
           </Button>
