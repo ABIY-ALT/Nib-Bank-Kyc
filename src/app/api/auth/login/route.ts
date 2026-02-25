@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+/**
+ * Institutional Authentication Gateway.
+ * Authenticates @nibbank.com.et credentials and issues a secure JWT.
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -18,9 +22,6 @@ export async function POST(req: Request) {
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       include: {
-        branch: {
-          include: { district: true }
-        },
         roles: {
           include: {
             role: {
@@ -31,12 +32,14 @@ export async function POST(req: Request) {
               }
             }
           }
+        },
+        branch: {
+          include: { district: true }
         }
       }
     });
 
     if (!user) {
-      console.log(`[AUTH] User not found: ${normalizedEmail}`);
       return NextResponse.json({ message: "Institutional account not discovered." }, { status: 401 });
     }
 
@@ -44,26 +47,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: `Access restricted: Account is ${user.status}.` }, { status: 401 });
     }
 
-    // Explicit bcryptjs comparison
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      console.log(`[AUTH] Password mismatch for: ${normalizedEmail}`);
       return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 401 });
     }
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-      console.error("[CRITICAL] Missing JWT_SECRET in environment.");
-      return NextResponse.json({ message: "Internal system security fault: JWT_SECRET not configured." }, { status: 500 });
+      console.error("[CRITICAL] JWT_SECRET is missing from .env");
+      return NextResponse.json({ message: "System security fault: JWT_SECRET not configured." }, { status: 500 });
     }
 
     const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        branchId: user.branchId,
-      },
+      { id: user.id, email: user.email },
       secret,
       { expiresIn: "1d" }
     );
