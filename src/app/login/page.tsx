@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/lib/auth-mock';
+import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import { 
   Card, 
@@ -22,13 +22,12 @@ import {
   Building2,
   ChevronRight,
   Eye,
-  EyeOff,
-  Terminal
+  EyeOff
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
-  const { login, user, isMock } = useAuth();
+  const { login, user } = useAuth();
   const router = useRouter();
   
   const [email, setEmail] = useState("");
@@ -81,15 +80,6 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent className="pt-8 px-8 pb-8">
             <form onSubmit={handleSubmit} className="space-y-6">
-              {isMock && (
-                <Alert className="bg-blue-50 border-blue-200 text-blue-800 mb-2">
-                  <Terminal className="h-4 w-4 text-blue-600" />
-                  <AlertDescription className="text-[11px] font-bold">
-                    DEV MODE: Firebase keys missing. Using <span className="underline">nibbank123</span> to authenticate and sync to SQL.
-                  </AlertDescription>
-                </Alert>
-              )}
-
               {error && (
                 <Alert variant="destructive" className="animate-in slide-in-from-top-2">
                   <AlertCircle className="h-4 w-4" />
