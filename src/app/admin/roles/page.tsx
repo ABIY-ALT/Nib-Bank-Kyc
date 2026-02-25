@@ -54,7 +54,7 @@ import {
   DialogFooter,
   DialogDescription
 } from "@/components/ui/dialog";
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -207,7 +207,7 @@ export default function StaffRolesPage() {
       } else if (slug === 'KYC_VIEW_QUEUE') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process the verification queue", icon: Search });
       } else if (slug === 'CASE_VIEW_ACTION_REQUIRED') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and manage returned cases requiring correction", icon: AlertCircle });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and manage returned cases requiring correction / respond to specialist comments", icon: AlertCircle });
       } else if (slug === 'VIEW_ESCALATED_CASES') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit access high-priority senior assessments", icon: ShieldAlert });
       } else if (slug === 'VIEW_GOVERNANCE_QUEUE') {
