@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -31,8 +32,7 @@ import {
   Map,
   BarChartHorizontal,
   Monitor,
-  HardDrive,
-  FileSearch
+  HardDrive
 } from "lucide-react"
 
 import {
@@ -105,7 +105,7 @@ export function AppSidebar() {
             <SidebarMenu>
               
               {/* CASE MANAGEMENT */}
-              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions') && !['/submissions', '/submissions/branch-node', '/submissions/district-node', '/submissions/master-bundle'].includes(pathname)}>
+              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions') && !['/submissions', '/submissions/branch-node', '/submissions/district-node', '/submissions/master-bundle', '/admin/storage'].includes(pathname)}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Case Management">

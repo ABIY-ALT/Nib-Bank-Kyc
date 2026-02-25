@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -11,16 +12,19 @@ import {
   Settings2,
   Check,
   CheckCircle2,
-  X,
-  CheckSquare,
-  Square,
   Zap,
   RefreshCcw,
-  AlertTriangle,
   UserX,
   UserCheck,
-  ChevronRight,
-  Info
+  LayoutDashboard,
+  FileText,
+  Building2,
+  HardDrive,
+  Folders,
+  BookOpen,
+  FileBarChart,
+  Settings,
+  MoreHorizontal
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -37,6 +41,18 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+
+// Sidebar Sections for page-by-page mapping
+const SIDEBAR_SECTIONS: Record<string, { icon: any, label: string }> = {
+  'DASHBOARD': { icon: LayoutDashboard, label: 'Dashboard' },
+  'WORKFLOWS': { icon: FileText, label: 'Case Management' },
+  'MONITORING': { icon: Building2, label: 'Regional Monitoring' },
+  'DOCUMENT': { icon: HardDrive, label: 'KYC Document' },
+  'ARCHIVE': { icon: Folders, label: 'Institutional Archive' },
+  'REFERENCE': { icon: BookOpen, label: 'KYC F&Q Reference' },
+  'REPORTING': { icon: FileBarChart, label: 'Reporting Suite' },
+  'SYSTEM': { icon: Settings, label: 'System Administration' }
+};
 
 export default function StaffRolesPage() {
   const { toast } = useToast();
@@ -154,7 +170,14 @@ export default function StaffRolesPage() {
   const groupedPermissions = useMemo(() => {
     const groups: Record<string, any[]> = {};
     allPermissions.forEach(p => {
-      const g = p.group;
+      // Map PRD groups to our Sidebar Sections
+      let g = p.group;
+      if (g === 'WORKFLOWS') {
+        if (p.slug.includes('MONITORING')) g = 'MONITORING';
+        else if (p.slug.includes('VAULT') || p.slug.includes('STORAGE')) g = 'DOCUMENT';
+        else if (p.slug.includes('ARCHIVE')) g = 'ARCHIVE';
+      }
+      
       if (!groups[g]) groups[g] = [];
       groups[g].push(p);
     });
@@ -200,7 +223,7 @@ export default function StaffRolesPage() {
         </div>
       </div>
 
-      <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
+      <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
         <CardHeader className="bg-primary text-white border-b py-6">
           <CardTitle className="text-xl font-black">Personnel Designations</CardTitle>
           <CardDescription className="text-white/70 font-medium">Manage regional and operational authority levels.</CardDescription>
@@ -325,9 +348,9 @@ export default function StaffRolesPage() {
       </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
-          <div className="bg-white">
-            <DialogHeader className="p-8 bg-primary text-white border-b space-y-0">
+        <DialogContent className="max-w-5xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+          <div className="bg-white flex flex-col h-[90vh]">
+            <DialogHeader className="p-8 bg-primary text-white border-b space-y-0 shrink-0">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-white/20 rounded-2xl">
                   <ShieldCheck className="w-6 h-6 text-white" />
@@ -343,8 +366,8 @@ export default function StaffRolesPage() {
               </div>
             </DialogHeader>
             
-            <div className="p-8">
-              <div className="space-y-2 mb-10 max-w-sm">
+            <div className="p-8 flex-1 overflow-hidden flex flex-col gap-8">
+              <div className="space-y-2 max-w-sm shrink-0">
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
                 <Input 
                   placeholder="e.g. BRANCH_OFFICER" 
@@ -354,91 +377,81 @@ export default function StaffRolesPage() {
                 />
               </div>
 
-              {allPermissions.length === 0 ? (
-                <div className="py-20 text-center space-y-6 bg-slate-50 rounded-3xl border-2 border-dashed">
-                  <div className="bg-white p-4 rounded-full shadow-sm w-fit mx-auto">
-                    <AlertTriangle className="w-10 h-10 text-orange-400" />
-                  </div>
-                  <div className="max-w-xs mx-auto space-y-2">
-                    <p className="font-bold text-slate-900">Registry Empty</p>
-                    <p className="text-sm text-slate-500 font-medium">The capability registry must be provisioned before roles can be mapped.</p>
-                  </div>
-                  <Button onClick={handleSyncPermissions} disabled={isSyncing} className="bg-primary text-white font-black px-10 h-12 rounded-xl shadow-lg">
-                    {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCcw className="w-4 h-4 mr-2" />}
-                    Sync System Capabilities
-                  </Button>
-                </div>
-              ) : (
-                <ScrollArea className="h-[50vh] pr-4">
-                  <div className="space-y-12">
-                    {Object.entries(groupedPermissions).map(([group, perms]) => {
-                      const groupIds = perms.map(p => p.id);
-                      const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
-                      
-                      return (
-                        <div key={group} className="space-y-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 flex-1">
-                              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-primary whitespace-nowrap">{group}</span>
-                              <div className="h-px flex-1 bg-slate-100" />
+              <ScrollArea className="flex-1 pr-4">
+                <div className="space-y-12">
+                  {Object.entries(groupedPermissions).map(([groupId, perms]) => {
+                    const section = SIDEBAR_SECTIONS[groupId] || { icon: ShieldCheck, label: groupId };
+                    const groupIds = perms.map(p => p.id);
+                    const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
+                    const SectionIcon = section.icon;
+                    
+                    return (
+                      <div key={groupId} className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className="p-2 bg-primary/5 rounded-lg text-primary">
+                              <SectionIcon className="w-4 h-4" />
                             </div>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleToggleGroup(group)}
-                              className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-bold text-[10px] uppercase tracking-wider gap-2"
-                            >
-                              {allSelectedInGroup ? (
-                                <><CheckSquare className="w-3.5 h-3.5" /> Deselect All</>
-                              ) : (
-                                <><Square className="w-3.5 h-3.5" /> Select All</>
-                              )}
-                            </Button>
+                            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900 whitespace-nowrap">{section.label}</span>
+                            <div className="h-px flex-1 bg-slate-100" />
                           </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {perms.map((p: any) => {
-                              const isSelected = permissionsForm.includes(p.id);
-                              return (
-                                <div 
-                                  key={p.id} 
-                                  onClick={() => handleTogglePermission(p.id)}
-                                  className={cn(
-                                    "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group",
-                                    isSelected 
-                                      ? "bg-primary/5 border-primary/40 shadow-sm" 
-                                      : "bg-white border-slate-100 hover:border-slate-200 shadow-sm"
-                                  )}
-                                >
-                                  <div className="flex items-center gap-4">
-                                    <div className={cn(
-                                      "w-2 h-2 rounded-full transition-all",
-                                      isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(184,147,52,0.5)]" : "bg-slate-200"
-                                    )} />
-                                    <span className={cn(
-                                      "text-xs font-bold transition-colors",
-                                      isSelected ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
-                                    )}>{p.name}</span>
-                                  </div>
-                                  <div className={cn(
-                                    "w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center",
-                                    isSelected ? "bg-primary border-primary" : "bg-white border-slate-200 group-hover:border-primary/30"
-                                  )}>
-                                    {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleToggleGroup(groupId)}
+                            className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-black text-[10px] uppercase tracking-wider gap-2"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> 
+                            {allSelectedInGroup ? "Deselect Section" : "Grant All in Section"}
+                          </Button>
                         </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              )}
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                          {perms.map((p: any) => {
+                            const isSelected = permissionsForm.includes(p.id);
+                            return (
+                              <div 
+                                key={p.id} 
+                                onClick={() => handleTogglePermission(p.id)}
+                                className={cn(
+                                  "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group relative overflow-hidden",
+                                  isSelected 
+                                    ? "bg-[#FCFAF7] border-primary shadow-[0_0_0_1px_rgba(184,147,52,1)]" 
+                                    : "bg-white border-slate-100 hover:border-slate-200"
+                                )}
+                              >
+                                <div className="flex items-center gap-4 z-10">
+                                  <div className={cn(
+                                    "w-2 h-2 rounded-full transition-all",
+                                    isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(184,147,52,0.5)]" : "bg-slate-200"
+                                  )} />
+                                  <span className={cn(
+                                    "text-sm font-bold transition-colors",
+                                    isSelected ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"
+                                  )}>{p.name}</span>
+                                </div>
+                                
+                                <div className="z-10">
+                                  {isSelected ? (
+                                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+                                      <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-6 h-6 rounded-full border-2 border-slate-100 group-hover:border-primary/20" />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </div>
 
-            <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row justify-end items-center gap-6 rounded-b-3xl">
+            <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row justify-end items-center gap-6 rounded-b-3xl shrink-0">
               <button 
                 onClick={() => setIsDialogOpen(false)} 
                 className="text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors"
@@ -448,10 +461,10 @@ export default function StaffRolesPage() {
               <Button 
                 onClick={handleSave} 
                 disabled={isSaving || allPermissions.length === 0}
-                className="h-12 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-xl shadow-primary/20 transition-all active:scale-95"
+                className="h-14 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-2xl shadow-primary/20 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Commit Rights Map
+                Commit Authority Map
               </Button>
             </DialogFooter>
           </div>
