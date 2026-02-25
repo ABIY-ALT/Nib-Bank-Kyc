@@ -16,7 +16,7 @@ async function main() {
     // DASHBOARD
     { slug: 'DASHBOARD_VIEW', name: 'View General Dashboard', group: 'DASHBOARD' },
     { slug: 'DASHBOARD_VIEW_BRANCH', name: 'View Branch Specific Dashboard', group: 'DASHBOARD' },
-    { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Specific Dashboard', group: 'DASHBOARD' },
+    { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Specific Dashboard', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_SYSTEM', name: 'View System-wide Command Dashboard', group: 'DASHBOARD' },
 
     // WORKFLOWS - Case Management
@@ -30,13 +30,13 @@ async function main() {
     { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
     
     // WORKFLOWS - Monitoring
-    { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'WORKFLOWS' },
-    { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'WORKFLOWS' },
+    { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },
+    { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'MONITORING' },
     
     // WORKFLOWS - Infrastructure
-    { slug: 'MANAGE_VAULT_STORAGE', name: 'Manage Vault Storage', group: 'WORKFLOWS' },
-    { slug: 'VIEW_ARCHIVED_CASE', name: 'Access Case Archive', group: 'WORKFLOWS' },
-    { slug: 'EXPORT_CASE_ZIP', name: 'Download Case Bundle', group: 'WORKFLOWS' },
+    { slug: 'MANAGE_VAULT_STORAGE', name: 'Manage Vault Storage', group: 'INFRASTRUCTURE' },
+    { slug: 'VIEW_ARCHIVED_CASE', name: 'Access Case Archive', group: 'INFRASTRUCTURE' },
+    { slug: 'EXPORT_CASE_ZIP', name: 'Download Case Bundle', group: 'INFRASTRUCTURE' },
 
     // REFERENCE
     { slug: 'VIEW_FQ_LIBRARY', name: 'View F&Q Library', group: 'REFERENCE' },

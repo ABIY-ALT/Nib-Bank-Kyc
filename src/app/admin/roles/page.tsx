@@ -33,7 +33,8 @@ import {
   PlusCircle,
   BarChart3,
   Map,
-  FileArchive
+  FileArchive,
+  Monitor
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -191,38 +192,37 @@ export default function StaffRolesPage() {
     allPermissions.forEach(p => {
       const slug = p.slug;
       
-      if (slug.includes('DASHBOARD_VIEW')) {
+      // Categorize based on slug and navigation logic
+      if (slug === 'DASHBOARD_VIEW' || slug === 'DASHBOARD_VIEW_SYSTEM' || slug === 'DASHBOARD_VIEW_BRANCH') {
         groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard", icon: LayoutDashboard });
+      } else if (slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE') {
+        groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at authorized nodes", icon: BarChart3 });
       } else if (slug === 'CASE_SUBMIT') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit upload documents and other necessary initiation steps", icon: PlusCircle });
       } else if (slug === 'CASE_VIEW_OWN') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view personal submission history", icon: Inbox });
       } else if (slug === 'KYC_VIEW_QUEUE') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process the verification queue (Initial submissions)", icon: Search });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process the verification queue", icon: Search });
       } else if (slug === 'VIEW_AMENDMENT_QUEUE') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process resubmitted cases from Branch Officers", icon: History });
       } else if (slug === 'CASE_VIEW_ACTION_REQUIRED') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and manage returned cases requiring correction / respond to specialist comments", icon: AlertCircle });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit manage returned cases and respond to comments", icon: AlertCircle });
       } else if (slug === 'VIEW_ESCALATED_CASES') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit access high-priority senior assessments", icon: ShieldAlert });
       } else if (slug === 'VIEW_GOVERNANCE_QUEUE') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit process hierarchy governance flows", icon: Zap });
-      } else if (slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_BRANCH') {
-        groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at the local branch node", icon: Building2 });
-      } else if (slug === 'DASHBOARD_VIEW_DISTRICT_NODE' || slug === 'DASHBOARD_VIEW_DISTRICT') {
-        groups['MONITORING'].push({ ...p, desc: "Permit regional oversight across the district jurisdiction", icon: Map });
       } else if (slug === 'MANAGE_VAULT_STORAGE') {
-        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit management of jurisdictional vault storage assets", icon: HardDrive });
+        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit management of jurisdictional vault assets", icon: HardDrive });
       } else if (slug === 'VIEW_ARCHIVED_CASE') {
-        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit access to global historical case records", icon: Folders });
+        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit access to global historical records", icon: Folders });
       } else if (slug === 'EXPORT_CASE_ZIP') {
-        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit batch export of institutional case bundles", icon: FileArchive });
+        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit batch export of institutional bundles", icon: FileArchive });
       } else if (p.group === 'REFERENCE') {
         groups['REFERENCE'].push({ ...p, desc: "Permit management of the standardized findings knowledge base", icon: BookOpen });
       } else if (p.group === 'REPORTING') {
-        groups['REPORTING'].push({ ...p, desc: "Permit generation of institutional, management, and specialist reports", icon: FileBarChart });
+        groups['REPORTING'].push({ ...p, desc: "Permit generation of institutional reports", icon: FileBarChart });
       } else if (p.group === 'SYSTEM') {
-        groups['SYSTEM'].push({ ...p, desc: "Permit administration of institutional personnel, roles, and configuration", icon: Settings });
+        groups['SYSTEM'].push({ ...p, desc: "Permit administration of personnel and configuration", icon: Settings });
       }
     });
 
@@ -390,7 +390,9 @@ export default function StaffRolesPage() {
                                     <PermIcon className="w-4 h-4" />
                                   </div>
                                   <div className="flex flex-col">
-                                    <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>{p.name}</span>
+                                    <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>
+                                      {p.name}
+                                    </span>
                                     <span className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-2">{p.desc}</span>
                                   </div>
                                 </div>

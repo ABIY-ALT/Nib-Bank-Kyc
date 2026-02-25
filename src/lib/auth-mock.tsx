@@ -8,7 +8,7 @@ import {
   signOut, 
 } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { syncUserToSql, getUserProfile, getUserByEmail } from '@/actions/auth';
+import { syncUserToSql, getUserProfile } from '@/actions/auth';
 import { UserStatus } from '@prisma/client';
 
 export interface UserProfile {
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               } as any);
             }
           } else {
-            // Fallback for new users: Sync them to SQL immediately
+            // New user registration
             const result = await syncUserToSql({
               id: fbUser.uid,
               email: fbUser.email!,
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } catch (e) {
-          console.error("Auth profile synchronization failed:", e);
+          console.error("Institutional profile sync failed:", e);
         }
       } else {
         setUser(null);
