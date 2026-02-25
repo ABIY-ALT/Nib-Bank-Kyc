@@ -335,17 +335,6 @@ export function AppSidebar() {
                         </SidebarMenuSubItem>
                       )}
                       
-                      {hasPermission('REPORT_VIEW_DISTRICT') && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/performance/district'}>
-                            <Link href="/performance/district">
-                              <Building2 className="w-4 h-4 mr-2" />
-                              <span>District Command</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )}
-
                       {hasPermission('VIEW_SPECIALIST_PRODUCTIVITY') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
