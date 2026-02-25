@@ -6,7 +6,8 @@ import jwt from "jsonwebtoken";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
+    const body = await req.json();
+    const { email, password } = body;
 
     if (!email || !password) {
       return NextResponse.json({ message: "Identity and credential required." }, { status: 400 });
@@ -34,8 +35,8 @@ export async function POST(req: Request) {
       }
     });
 
-    // Helpful check: if user not found or inactive
     if (!user) {
+      console.log(`[AUTH] User not found: ${normalizedEmail}`);
       return NextResponse.json({ message: "Institutional account not discovered." }, { status: 401 });
     }
 
@@ -43,16 +44,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: `Access restricted: Account is ${user.status}.` }, { status: 401 });
     }
 
+    // Explicit bcryptjs comparison
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
+      console.log(`[AUTH] Password mismatch for: ${normalizedEmail}`);
       return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 401 });
     }
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       console.error("[CRITICAL] Missing JWT_SECRET in environment.");
-      return NextResponse.json({ message: "Internal system security fault." }, { status: 500 });
+      return NextResponse.json({ message: "Internal system security fault: JWT_SECRET not configured." }, { status: 500 });
     }
 
     const token = jwt.sign(

@@ -161,11 +161,19 @@ async function main() {
 
   // 4. Provision Initial Admin Account
   const adminEmail = 'admin.user@nibbank.com.et';
+  // Use 10 rounds for consistency
   const hashedPassword = await bcrypt.hash('Password123', 10);
   
+  console.log(`Setting up Admin: ${adminEmail} / Password123`);
+
   const systemAdmin = await prisma.user.upsert({
     where: { email: adminEmail },
-    update: { password: hashedPassword, status: UserStatus.ACTIVE },
+    update: { 
+      password: hashedPassword, 
+      status: UserStatus.ACTIVE,
+      firstName: 'System',
+      lastName: 'Administrator'
+    },
     create: {
       email: adminEmail,
       password: hashedPassword,
