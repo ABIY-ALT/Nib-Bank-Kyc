@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect } from "react"
@@ -325,9 +324,8 @@ export default function KYCOperationsMonitoringPage() {
                   {analytics.slaItems.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="py-32 text-center italic text-slate-400 bg-slate-50/30">Vault clear. No pending operations discovered.</TableCell></TableRow>
                   ) : analytics.slaItems.filter(s => s.customerName.toLowerCase().includes(searchTerm.toLowerCase())).map((sub) => (
-                    <>
+                    <React.Fragment key={sub.id}>
                       <TableRow 
-                        key={sub.id} 
                         className={cn(
                           "group transition-all cursor-pointer",
                           sub.slaStatus === 'BREACHED' ? "bg-red-50/30 border-l-4 border-l-red-600" : (sub.slaStatus === 'AT_RISK' ? "bg-amber-50/30 border-l-4 border-l-amber-500" : "hover:bg-slate-50")
@@ -392,7 +390,7 @@ export default function KYCOperationsMonitoringPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -400,7 +398,7 @@ export default function KYCOperationsMonitoringPage() {
             <CardFooter className="bg-slate-50/50 border-t py-4 px-8 flex justify-between items-center">
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-600" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">SLA Breached</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">At Risk (<4h)</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">At Risk (&lt;4h)</span></div>
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">On Track</span></div>
               </div>
               <p className="text-[9px] font-mono font-black text-primary/40 uppercase tracking-tighter">
