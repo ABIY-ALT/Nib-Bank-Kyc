@@ -39,7 +39,8 @@ import {
   Archive,
   ClipboardList,
   PlusCircle,
-  UserCog
+  UserCog,
+  BarChart3
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -208,12 +209,12 @@ export default function StaffRolesPage() {
       } else if (slug === 'CASE_VIEW_ACTION_REQUIRED') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and manage returned cases requiring correction", icon: AlertCircle });
       } else if (slug === 'VIEW_ESCALATED_CASES') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process high-priority senior assessments", icon: ShieldAlert });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit access high-priority senior assessments", icon: ShieldAlert });
       } else if (slug === 'VIEW_GOVERNANCE_QUEUE') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit process high-risk hierarchy governance flows", icon: Zap });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit process hierarchy governance flows", icon: Zap });
       } else if (slug === 'CASE_VIEW_BRANCH') {
         groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at the local branch node", icon: Building2 });
-      } else if (slug === 'DASHBOARD_VIEW_DISTRICT') {
+      } else if (slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE') {
         groups['MONITORING'].push({ ...p, desc: "Permit regional oversight across the district jurisdiction", icon: Map });
       } else if (slug === 'MANAGE_VAULT_STORAGE') {
         groups['KYC_DOCUMENT'].push({ ...p, desc: "Permit management of jurisdictional vault storage assets", icon: HardDrive });
