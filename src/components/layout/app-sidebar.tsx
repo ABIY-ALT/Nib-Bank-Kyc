@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -31,7 +32,8 @@ import {
   Map,
   BarChartHorizontal,
   Monitor,
-  HardDrive
+  HardDrive,
+  FileSearch
 } from "lucide-react"
 
 import {
@@ -447,6 +449,15 @@ export function AppSidebar() {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       )}
+
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/rbac-blueprint'}>
+                          <Link href="/admin/rbac-blueprint">
+                            <FileSearch className="w-4 h-4 mr-2 text-primary" />
+                            <span>RBAC Blueprint</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
 
                       {hasPermission('MAP_USERS_TO_BRANCH') && (
                         <SidebarMenuSubItem>
