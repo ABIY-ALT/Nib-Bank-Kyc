@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -11,7 +12,6 @@ export async function seedInstitutionalPermissions() {
   const permissions = [
     // DASHBOARD
     { slug: 'DASHBOARD_VIEW', name: 'View General Dashboard', group: 'DASHBOARD' },
-    { slug: 'DASHBOARD_VIEW_BRANCH', name: 'View Branch Specific Dashboard', group: 'DASHBOARD' },
     { slug: 'DASHBOARD_VIEW_SYSTEM', name: 'View System-wide Command Dashboard', group: 'DASHBOARD' },
 
     // WORKFLOWS - KYC Operations
@@ -26,6 +26,7 @@ export async function seedInstitutionalPermissions() {
     
     // WORKFLOWS - Monitoring
     { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },
+    { slug: 'DASHBOARD_VIEW_BRANCH', name: 'View Branch Specific Dashboard', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Dashboard', group: 'MONITORING' },
     
