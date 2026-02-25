@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
-import { UserProfile } from "@/lib/auth-mock";
+import { UserProfile } from "@/lib/auth";
 import { getWorkflowCounts } from '@/actions/submissions';
 import { usePermissions } from './use-permissions';
 
@@ -10,7 +11,7 @@ import { usePermissions } from './use-permissions';
  * Calls a specialized SQL-level count action to avoid fetching full data payloads.
  */
 export function useSidebarCounts(user: UserProfile | null) {
-  const { isSuperAdmin, hasPermission } = usePermissions();
+  const { isSuperAdmin } = usePermissions();
   const [counts, setCounts] = useState({
     mySubmissions: 0,
     actionRequired: 0,
@@ -40,7 +41,6 @@ export function useSidebarCounts(user: UserProfile | null) {
     };
 
     fetchCounts();
-    // Poll counts every 60 seconds instead of 30 to reduce server load
     const interval = setInterval(fetchCounts, 60000);
     return () => clearInterval(interval);
   }, [user, isSuperAdmin]);

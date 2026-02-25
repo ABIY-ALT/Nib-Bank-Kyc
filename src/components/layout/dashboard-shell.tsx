@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth-mock';
+import { useAuth } from '@/lib/auth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -17,7 +17,6 @@ import { ForcePasswordChangeModal } from '@/components/auth/force-password-chang
  */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { user } = useAuth();
 
   const isLoginPage = pathname === '/login';
@@ -35,7 +34,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   // Determine if we should show the security gate modal
   const showForceChange = user?.needsPasswordChange && !isLoginPage;
 
-  // For all other pages, render the full institutional shell
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background relative">
