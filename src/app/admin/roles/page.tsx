@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -54,7 +53,7 @@ import {
   DialogFooter,
   DialogDescription
 } from "@/components/ui/dialog";
-import { Label } from '@/components/label';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
