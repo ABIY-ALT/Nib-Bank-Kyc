@@ -164,7 +164,30 @@ async function main() {
     }
   }
 
-  console.log('✅ Institutional Framework Synced.');
+  // 4. Provision Initial Admin Account
+  const adminEmail = 'admin.user@nibbank.com.et';
+  const hashedPassword = await bcrypt.hash('Password123', 10);
+  
+  const systemAdmin = await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: { password: hashedPassword, status: UserStatus.ACTIVE },
+    create: {
+      email: adminEmail,
+      password: hashedPassword,
+      firstName: 'System',
+      lastName: 'Administrator',
+      status: UserStatus.ACTIVE,
+    }
+  });
+
+  const superAdminRole = roleMap['SUPER_ADMIN'];
+  await prisma.userRole.upsert({
+    where: { userId_roleId: { userId: systemAdmin.id, roleId: superAdminRole.id } },
+    update: {},
+    create: { userId: systemAdmin.id, roleId: superAdminRole.id }
+  });
+
+  console.log('✅ Institutional Framework Synced. Admin provisioned: admin.user@nibbank.com.et / Password123');
 }
 
 main()

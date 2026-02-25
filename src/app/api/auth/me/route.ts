@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
@@ -54,7 +55,8 @@ export async function GET(req: Request) {
         branchName: user.branch?.name || null,
         districtName: user.branch?.district?.name || null,
         assignedBranches: user.assignedBranches || [],
-        roles: user.roles || []
+        roles: user.roles || [],
+        needsPasswordChange: user.needsPasswordChange || false
       }
     });
   } catch (error) {
