@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,7 +11,7 @@ import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
 import { usePermissions } from "@/hooks/use-permissions";
 
-export default function ReviewQueuePage() {
+export default function ReviewActionPage() {
   const { user } = useAuth();
   const { isSuperAdmin } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -28,7 +29,6 @@ export default function ReviewQueuePage() {
         status: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW],
         isExceptional: false,
         isResubmitted: false,
-        // If not super admin, strictly restrict to assigned branches or home branch
         branches: isSuperAdmin ? undefined : (
           assignedBranches.length > 0 
             ? assignedBranches 
@@ -55,7 +55,7 @@ export default function ReviewQueuePage() {
         <div>
           <div className="flex items-center gap-2">
             <Inbox className="w-8 h-8 text-primary" />
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Review Queue</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Review & Action</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <p className="text-muted-foreground text-lg">Central hub for processing applications.</p>

@@ -62,7 +62,7 @@ const volumeConfig = {
   count: { label: "Volume", color: "hsl(var(--primary))" }
 } satisfies ChartConfig;
 
-export default function DistrictNodeCommandPage() {
+export default function DistrictMonitoringPage() {
   const { user } = useAuth();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,14 +117,12 @@ export default function DistrictNodeCommandPage() {
     const dateMap: Record<string, number> = {};
 
     submissions.forEach(sub => {
-      // Branch Aggregation
       const bName = sub.branch?.name || sub.branchName || "Unknown Node";
       if (!stats.branches[bName]) {
         stats.branches[bName] = { name: bName, total: 0, approved: 0, pending: 0, amended: 0 };
       }
       stats.branches[bName].total++;
 
-      // Officer Aggregation
       const officerName = sub.createdBy ? `${sub.createdBy.firstName} ${sub.createdBy.lastName}` : 'Institutional Staff';
       const officerKey = sub.createdById || 'SYSTEM';
       if (!stats.officers[officerKey]) {
@@ -175,7 +173,7 @@ export default function DistrictNodeCommandPage() {
               <Map className="w-6 h-6" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {isAdmin ? "Global Command Center" : `${districtName} Regional Command`}
+              {isAdmin ? "Global Monitoring" : `${districtName} District Monitoring`}
             </h1>
           </div>
           <div className="flex items-center gap-2 mt-1">
@@ -211,7 +209,7 @@ export default function DistrictNodeCommandPage() {
             </div>
             <div className="relative w-full md:w-80">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input placeholder="Search regional archive..." className="pl-11 h-12 rounded-xl border-slate-200 bg-white" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <Input placeholder="Search records..." className="pl-11 h-12 rounded-xl border-slate-200 bg-white" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
           </div>
         </CardContent>
@@ -220,7 +218,7 @@ export default function DistrictNodeCommandPage() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-40 gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Aggregating Regional Intelligence...</p>
+          <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Aggregating Monitoring Data...</p>
         </div>
       ) : (
         <>
@@ -246,7 +244,7 @@ export default function DistrictNodeCommandPage() {
           <Tabs defaultValue="summary" className="space-y-6">
             <TabsList className="bg-slate-100 p-1 border h-12">
               <TabsTrigger value="summary" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><TrendingUp className="w-4 h-4 mr-2" />Regional Pulse</TabsTrigger>
-              <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Activity className="w-4 h-4 mr-2" />Regional Archive</TabsTrigger>
+              <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Activity className="w-4 h-4 mr-2" />Monitoring Archive</TabsTrigger>
               <TabsTrigger value="branch-matrix" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Building2 className="w-4 h-4 mr-2" />Branch Throughput</TabsTrigger>
               <TabsTrigger value="staff-matrix" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Users className="w-4 h-4 mr-2" />Staff Productivity</TabsTrigger>
             </TabsList>
@@ -275,7 +273,7 @@ export default function DistrictNodeCommandPage() {
                 <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
                   <CardHeader className="bg-slate-50/50 border-b">
                     <CardTitle className="text-xl">Regional Traffic Trend</CardTitle>
-                    <CardDescription>Historical submission volume across all regional nodes.</CardDescription>
+                    <CardDescription>Historical monitoring traffic trend.</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-8">
                     <ChartContainer config={volumeConfig} className="h-[400px] w-full">
@@ -299,7 +297,7 @@ export default function DistrictNodeCommandPage() {
               <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
                 <CardHeader className="bg-slate-50/50 border-b">
                   <CardTitle className="text-xl">Branch Throughput Matrix</CardTitle>
-                  <CardDescription>Comparative efficiency data for local branch nodes.</CardDescription>
+                  <CardDescription>Comparative monitoring data for local branch nodes.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
@@ -342,8 +340,8 @@ export default function DistrictNodeCommandPage() {
             <TabsContent value="staff-matrix">
               <Card className="shadow-xl border-slate-200 overflow-hidden bg-white">
                 <CardHeader className="bg-slate-50/50 border-b">
-                  <CardTitle className="text-xl">Regional Staff Productivity</CardTitle>
-                  <CardDescription>Individual officer performance aggregated across the district.</CardDescription>
+                  <CardTitle className="text-xl">Staff Productivity</CardTitle>
+                  <CardDescription>Individual officer performance aggregated across the district monitoring zone.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
@@ -351,7 +349,7 @@ export default function DistrictNodeCommandPage() {
                       <TableRow>
                         <TableHead className="font-bold py-4 pl-8">Staff Member</TableHead>
                         <TableHead className="font-bold text-center">Total Requests</TableHead>
-                        <TableHead className="font-bold text-center text-emerald-600">Approved</TableHead>
+                        <TableHead className="font-bold text-center text-emerald-600">Authorized</TableHead>
                         <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
                         <TableHead className="font-bold text-center text-primary">Total Cycles</TableHead>
                         <TableHead className="font-bold text-right pr-8">Efficiency Score</TableHead>

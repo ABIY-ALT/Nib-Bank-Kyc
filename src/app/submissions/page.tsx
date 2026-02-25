@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react";
@@ -51,7 +52,7 @@ const STATUS_OPTIONS = [
   { id: KYCStatus.REJECTED, label: 'Rejected' }
 ];
 
-export default function SubmissionsPage() {
+export default function CaseArchivePage() {
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,16 +154,16 @@ export default function SubmissionsPage() {
     const status = sub.status as KYCStatus;
     switch (status) {
       case KYCStatus.APPROVED: 
-        return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-bold px-3 py-1">Approved</Badge>;
+        return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-bold px-3 py-1">Authorized</Badge>;
       case KYCStatus.SUBMITTED: 
       case KYCStatus.IN_REVIEW:
         return <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5" /> {status.replace(/_/g, ' ')}
+          <Clock className="w-3.5 h-3.5" /> Analysis
         </Badge>;
       case KYCStatus.ACTION_REQUIRED: 
-        return <Badge className="bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100 font-bold px-3 py-1">Action Required</Badge>;
+        return <Badge className="bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100 font-bold px-3 py-1">Returned</Badge>;
       case KYCStatus.REJECTED: 
-        return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 hover:bg-red-100 font-bold px-3 py-1">Rejected</Badge>;
+        return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 hover:bg-red-100 font-bold px-3 py-1">Risk Rejected</Badge>;
       case KYCStatus.ESCALATED: 
         return <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100 font-bold px-3 py-1">Escalated</Badge>;
       default: 
@@ -178,7 +179,7 @@ export default function SubmissionsPage() {
             <Archive className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Master Case Archive</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Case Archive</h1>
             <p className="text-muted-foreground text-lg font-medium">Historical directory of all network submissions.</p>
           </div>
         </div>
@@ -284,7 +285,7 @@ export default function SubmissionsPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input 
-                    placeholder="Search name, ID, or branch..." 
+                    placeholder="Search archive..." 
                     className="pl-10 h-12 rounded-xl border-slate-200 bg-white" 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}

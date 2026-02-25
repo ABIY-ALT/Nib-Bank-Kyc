@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
@@ -59,7 +60,7 @@ const volumeConfig = {
   count: { label: "Volume", color: "hsl(var(--primary))" }
 } satisfies ChartConfig;
 
-export default function BranchNodeOversightPage() {
+export default function BranchMonitoringPage() {
   const { user } = useAuth();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,9 +92,9 @@ export default function BranchNodeOversightPage() {
   }, [user, isAdmin, fromDate, toDate]);
 
   const cleanBranchTitle = useMemo(() => {
-    const raw = isAdmin ? 'Global Command' : user?.branchName || 'Branch Overview';
+    const raw = isAdmin ? 'Global Monitoring' : user?.branchName || 'Branch Monitoring';
     if (isAdmin) return raw;
-    return raw.toLowerCase().includes('branch') ? `${raw} Overview` : `${raw} Branch Overview`;
+    return raw.toLowerCase().includes('branch') ? raw : `${raw} Branch Monitoring`;
   }, [isAdmin, user]);
 
   const analytics = useMemo(() => {
@@ -118,7 +119,6 @@ export default function BranchNodeOversightPage() {
     const dateMap: Record<string, number> = {};
 
     submissions.forEach(sub => {
-      // Correctly identifying officer using relation data to avoid "Unknown" names
       const officerName = sub.createdBy ? `${sub.createdBy.firstName} ${sub.createdBy.lastName}` : 'Institutional Staff';
       const officerKey = sub.createdById || 'SYSTEM';
 
@@ -127,7 +127,6 @@ export default function BranchNodeOversightPage() {
       }
       
       stats.officers[officerKey].total++;
-      // Aggregating amendment cycles per officer
       stats.officers[officerKey].cycles += (sub.amendCycles || 0);
       
       if (sub.status === KYCStatus.APPROVED) {
@@ -160,22 +159,6 @@ export default function BranchNodeOversightPage() {
     );
   }, [submissions, searchTerm]);
 
-  if (!user?.branchName && !isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-6 animate-in fade-in duration-500">
-        <div className="p-6 bg-white rounded-full shadow-sm border border-slate-100">
-          <ShieldAlert className="w-16 h-16 text-slate-200" />
-        </div>
-        <div className="text-center space-y-2 max-w-sm">
-          <p className="font-bold text-slate-900 text-2xl tracking-tight">Access Denied: Unmapped Role</p>
-          <p className="text-sm text-muted-foreground font-medium">
-            This dashboard requires an institutional branch assignment.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -196,7 +179,7 @@ export default function BranchNodeOversightPage() {
             </p>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
               <ShieldCheck className="w-3 h-3" />
-              {user.roles?.[0]?.role.name.replace(/_/g, ' ') || 'OFFICER'} Authorization
+              {user?.roles?.[0]?.role.name.replace(/_/g, ' ') || 'OFFICER'} Authorization
             </Badge>
           </div>
         </div>
@@ -223,7 +206,7 @@ export default function BranchNodeOversightPage() {
             </div>
             <div className="relative w-full md:w-80">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input placeholder="Search local records..." className="pl-11 h-12 rounded-xl border-slate-200 bg-white" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <Input placeholder="Search records..." className="pl-11 h-12 rounded-xl border-slate-200 bg-white" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
           </div>
         </CardContent>
@@ -232,7 +215,7 @@ export default function BranchNodeOversightPage() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-40 gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Retrieving Institutional Data...</p>
+          <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Retrieving Monitoring Data...</p>
         </div>
       ) : (
         <>
@@ -242,15 +225,15 @@ export default function BranchNodeOversightPage() {
               <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-slate-900 tracking-tighter">{analytics?.total || 0}</span><div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/5 group-hover:text-primary transition-colors"><Inbox className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500">
-              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Successfully Approved</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Successfully Authorized</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-emerald-600 tracking-tighter">{analytics?.approved || 0}</span><div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
-              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Corrections Required</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Methodology Gaps</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-orange-600 tracking-tighter">{analytics?.amended || 0}</span><div className="p-3 bg-orange-50 rounded-2xl text-orange-600"><AlertCircle className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
-              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Review</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Analysis</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{analytics?.pending || 0}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
             </Card>
           </div>
@@ -258,7 +241,7 @@ export default function BranchNodeOversightPage() {
           <Tabs defaultValue="summary" className="space-y-6">
             <TabsList className="bg-slate-100 p-1 border h-12">
               <TabsTrigger value="summary" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><TrendingUp className="w-4 h-4 mr-2" />Summary Analytics</TabsTrigger>
-              <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Activity className="w-4 h-4 mr-2" />Case Archive</TabsTrigger>
+              <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Activity className="w-4 h-4 mr-2" />Monitoring Archive</TabsTrigger>
               <TabsTrigger value="officer-performance" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Users className="w-4 h-4 mr-2" />Staff Productivity</TabsTrigger>
             </TabsList>
 
@@ -286,7 +269,7 @@ export default function BranchNodeOversightPage() {
                 <Card className="shadow-xl border-slate-200 overflow-hidden">
                   <CardHeader className="bg-slate-50/50 border-b">
                     <CardTitle className="text-xl">Historical Trend</CardTitle>
-                    <CardDescription>Historical submission traffic.</CardDescription>
+                    <CardDescription>Historical monitoring traffic.</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-8">
                     <ChartContainer config={volumeConfig} className="h-[400px] w-full">
@@ -317,7 +300,7 @@ export default function BranchNodeOversightPage() {
                       <TableRow>
                         <TableHead className="font-bold py-4 pl-8">Staff Member</TableHead>
                         <TableHead className="font-bold text-center">Total Requests</TableHead>
-                        <TableHead className="font-bold text-center text-emerald-600">Approved</TableHead>
+                        <TableHead className="font-bold text-center text-emerald-600">Authorized</TableHead>
                         <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
                         <TableHead className="font-bold text-center text-primary">Total Cycles</TableHead>
                         <TableHead className="font-bold text-right pr-8">Efficiency Score</TableHead>

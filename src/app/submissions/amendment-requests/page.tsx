@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,7 +11,7 @@ import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
 import { usePermissions } from "@/hooks/use-permissions";
 
-export default function AmendmentRequestsPage() {
+export default function ReturnedCasesPage() {
   const { user } = useAuth();
   const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -51,7 +52,7 @@ export default function AmendmentRequestsPage() {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-8 h-8 text-orange-600" />
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Action Required</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Returned Cases</h1>
           </div>
           <div className="flex items-center gap-2">
             <p className="text-muted-foreground text-lg">
@@ -69,7 +70,7 @@ export default function AmendmentRequestsPage() {
           <div className="relative w-full md:w-80">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input 
-              placeholder="Search action items..." 
+              placeholder="Search returned items..." 
               className="pl-11 h-12 rounded-full border-2 border-primary focus-visible:ring-primary/20 bg-white shadow-sm font-medium"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -81,7 +82,7 @@ export default function AmendmentRequestsPage() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="font-medium">Synchronizing correction queue...</p>
+          <p className="font-medium">Synchronizing returned queue...</p>
         </div>
       ) : (
         <SubmissionsPageContent submissions={filteredSubmissions || []} />
