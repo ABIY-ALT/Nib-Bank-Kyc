@@ -12,8 +12,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Identity and credential required." }, { status: 400 });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: normalizedEmail },
       include: {
         branch: {
           include: { district: true }
@@ -32,8 +34,13 @@ export async function POST(req: Request) {
       }
     });
 
-    if (!user || user.status !== 'ACTIVE') {
-      return NextResponse.json({ message: "Institutional access denied or account inactive." }, { status: 401 });
+    // Helpful check: if user not found or inactive
+    if (!user) {
+      return NextResponse.json({ message: "Institutional account not discovered." }, { status: 401 });
+    }
+
+    if (user.status !== 'ACTIVE') {
+      return NextResponse.json({ message: `Access restricted: Account is ${user.status}.` }, { status: 401 });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -44,7 +51,8 @@ export async function POST(req: Request) {
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-      throw new Error("System security fault: Missing JWT Secret.");
+      console.error("[CRITICAL] Missing JWT_SECRET in environment.");
+      return NextResponse.json({ message: "Internal system security fault." }, { status: 500 });
     }
 
     const token = jwt.sign(

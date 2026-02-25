@@ -5,20 +5,15 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  if (process.env.ALLOW_SEED !== 'true') {
-    console.error('❌ SEED ABORTED: Set ALLOW_SEED=true in your environment to proceed.');
-    process.exit(1);
-  }
-
   console.log('🚀 Institutional Seeding Initialized [NIB BANK BLUEPRINT]...');
 
-  // 1. Provision Permission Registry (Aligned with Sidebar)
+  // 1. Provision Permission Registry
   const permissions = [
     // DASHBOARD
     { slug: 'DASHBOARD_VIEW', name: 'View General Dashboard', group: 'DASHBOARD' },
     { slug: 'DASHBOARD_VIEW_SYSTEM', name: 'View System-wide Command Dashboard', group: 'DASHBOARD' },
 
-    // WORKFLOWS - Case Management
+    // WORKFLOWS
     { slug: 'CASE_SUBMIT', name: 'Create New Submission', group: 'WORKFLOWS' },
     { slug: 'CASE_VIEW_OWN', name: 'View My Submissions', group: 'WORKFLOWS' },
     { slug: 'KYC_VIEW_QUEUE', name: 'Access Review & Action', group: 'WORKFLOWS' },
@@ -28,13 +23,13 @@ async function main() {
     { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'WORKFLOWS' },
     { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
     
-    // WORKFLOWS - Monitoring
+    // MONITORING
     { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_BRANCH', name: 'View Branch Specific Dashboard', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Dashboard', group: 'MONITORING' },
     
-    // WORKFLOWS - Infrastructure
+    // INFRASTRUCTURE
     { slug: 'MANAGE_VAULT_STORAGE', name: 'Manage Vault Storage', group: 'INFRASTRUCTURE' },
     { slug: 'VIEW_ARCHIVED_CASE', name: 'Access Case Archive', group: 'INFRASTRUCTURE' },
     { slug: 'EXPORT_CASE_ZIP', name: 'Download Case Bundle', group: 'INFRASTRUCTURE' },
