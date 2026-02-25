@@ -22,7 +22,6 @@ import {
   BookOpen,
   Zap,
   Map,
-  BarChartHorizontal,
   Monitor,
   HardDrive,
   ClipboardList,
@@ -339,7 +338,7 @@ export function AppSidebar() {
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/management'}>
                             <Link href="/reports/management">
-                              <BarChartHorizontal className="w-4 h-4 mr-2 text-primary" />
+                              <BarChart3 className="w-4 h-4 mr-2 text-primary" />
                               <span>Management Report</span>
                             </Link>
                           </SidebarMenuSubButton>

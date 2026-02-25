@@ -33,7 +33,6 @@ import {
   ArrowRightLeft,
   History,
   FileArchive,
-  BarChartHorizontal,
   Globe,
   Archive,
   ClipboardList,
@@ -57,7 +56,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Define the grouping matching the Sidebar Sections EXACTLY
+// Section grouping precisely matching the institutional sidebar
 const SIDEBAR_GROUPS = [
   { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
@@ -192,7 +191,7 @@ export default function StaffRolesPage() {
       const slug = p.slug;
       
       if (slug === 'DASHBOARD_VIEW') {
-        groups['DASHBOARD'].push({ ...p, desc: "Permit view of general and node-specific oversight dashboards", icon: LayoutDashboard });
+        groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard", icon: LayoutDashboard });
       } else if (slug === 'CASE_SUBMIT') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit upload documents and other necessary initiation steps", icon: PlusCircle });
       } else if (slug === 'CASE_VIEW_OWN') {
@@ -320,18 +319,23 @@ export default function StaffRolesPage() {
         <DialogContent className="max-w-5xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
           <div className="bg-white flex flex-col h-[90vh]">
             <DialogHeader className="p-8 bg-primary text-white border-b space-y-0 shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-white/20 rounded-2xl">
-                  <ShieldCheck className="w-6 h-6 text-white" />
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-white/20 rounded-2xl">
+                    <ShieldCheck className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-2xl font-black tracking-tight text-white">
+                      {selectedRole ? 'Update Role Rights' : 'Define New Role'}
+                    </DialogTitle>
+                    <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-0.5">
+                      Institutional Mapping: Aligning rights page-by-page
+                    </DialogDescription>
+                  </div>
                 </div>
-                <div>
-                  <DialogTitle className="text-2xl font-black tracking-tight text-white">
-                    {selectedRole ? 'Update Role Rights' : 'Define New Role'}
-                  </DialogTitle>
-                  <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-0.5">
-                    Institutional Mapping: Aligning rights page-by-page
-                  </DialogDescription>
-                </div>
+                <button onClick={() => setIsDialogOpen(false)} className="text-white/60 hover:text-white transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
               </div>
             </DialogHeader>
             
@@ -385,7 +389,7 @@ export default function StaffRolesPage() {
                                     <PermIcon className="w-4 h-4" />
                                   </div>
                                   <div className="flex flex-col">
-                                    <span className="text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")>{p.name}</span>
+                                    <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>{p.name}</span>
                                     <span className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-2">{p.desc}</span>
                                   </div>
                                 </div>
