@@ -1,4 +1,4 @@
-import { PrismaClient, UserStatus, KYCStatus, FindingCategory, FindingSeverity } from '@prisma/client';
+import { PrismaClient, UserStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -91,7 +91,7 @@ async function main() {
     });
   }
 
-  // 3. Right Mappings (Strict alignment with Sidebar)
+  // 3. Right Mappings
   const rolePermissions: Record<string, string[]> = {
     BRANCH_OFFICER: [
       'DASHBOARD_VIEW', 
@@ -163,81 +163,7 @@ async function main() {
     }
   }
 
-  // 4. Institutional Hierarchy
-  const districts = [
-    { name: 'Addis Central', branches: ['Meskel Square', 'Stadium', 'Kazanchis'] },
-    { name: 'Addis North', branches: ['Bole', 'Megenagna', 'Arat Kilo'] },
-    { name: 'Southern Hub', branches: ['Hawassa Node', 'Arba Minch'] }
-  ];
-
-  const branchNodes: any[] = [];
-  for (const d of districts) {
-    const dist = await prisma.district.upsert({
-      where: { name: d.name },
-      update: {},
-      create: { name: d.name }
-    });
-
-    for (const bName of d.branches) {
-      const branch = await prisma.branch.upsert({
-        where: { name: bName },
-        update: {},
-        create: { 
-          name: bName, 
-          code: `BR-${Math.floor(100 + Math.random() * 900)}`, 
-          districtId: dist.id 
-        }
-      });
-      branchNodes.push(branch);
-    }
-  }
-
-  // 5. Personnel Seeding
-  const adminPass = process.env.SEED_ADMIN_PASSWORD || 'nibbank123';
-  const hashedPass = await bcrypt.hash(adminPass, 10);
-
-  const testUsers = [
-    { email: 'admin.nib@nibbank.com.et', first: 'System', last: 'Admin', role: 'SUPER_ADMIN', branch: null },
-    { email: 'director.central@nibbank.com.et', first: 'Abebe', last: 'Bikila', role: 'DISTRICT_DIRECTOR', branch: null },
-    { email: 'manager.meskel@nibbank.com.et', first: 'Derartu', last: 'Tulu', role: 'BRANCH_MANAGER', branch: 'Meskel Square' },
-    { email: 'officer.meskel@nibbank.com.et', first: 'Fatuma', last: 'Roba', role: 'BRANCH_OFFICER', branch: 'Meskel Square' },
-    { email: 'specialist.nib@nibbank.com.et', first: 'Meseret', last: 'Defar', role: 'KYC_OFFICER', branch: null, portfolio: ['Meskel Square', 'Stadium'] },
-    { email: 'supervisor.nib@nibbank.com.et', first: 'Haile', last: 'Gebrselassie', role: 'SUPERVISOR', branch: null }
-  ];
-
-  for (const u of testUsers) {
-    const branchId = u.branch ? branchNodes.find(b => b.name === u.branch)?.id : null;
-    const firebaseUid = `uid-${u.email.split('@')[0]}`;
-    
-    const user = await prisma.user.upsert({
-      where: { email: u.email },
-      update: { 
-        passwordHash: hashedPass, 
-        firebaseUid,
-        branchId,
-        assignedBranches: u.portfolio || []
-      },
-      create: {
-        id: firebaseUid,
-        firebaseUid,
-        email: u.email,
-        firstName: u.first,
-        lastName: u.last,
-        status: UserStatus.ACTIVE,
-        passwordHash: hashedPass,
-        branchId,
-        assignedBranches: u.portfolio || []
-      },
-    });
-
-    await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: user.id, roleId: roleMap[u.role].id } },
-      update: {},
-      create: { userId: user.id, roleId: roleMap[u.role].id },
-    });
-  }
-
-  console.log('✅ Institutional Framework Synced. Personnel Mapped.');
+  console.log('✅ Institutional Framework Synced.');
 }
 
 main()

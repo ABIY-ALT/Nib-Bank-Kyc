@@ -34,7 +34,8 @@ export function usePermissions() {
   }, [user]);
 
   const hasPermission = useCallback((slug: string) => {
-    return isSuperAdmin || permissionsSlugs.has(slug);
+    if (isSuperAdmin) return true;
+    return permissionsSlugs.has(slug);
   }, [isSuperAdmin, permissionsSlugs]);
   
   const hasAnyInGroup = useCallback((group: string) => {

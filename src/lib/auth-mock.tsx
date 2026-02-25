@@ -9,7 +9,6 @@ import {
 } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { syncUserToSql, getUserProfile, getUserByEmail } from '@/actions/auth';
-import { firebaseConfig } from '@/firebase/config';
 import { UserStatus } from '@prisma/client';
 
 export interface UserProfile {
@@ -46,50 +45,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  const isMockMode = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined' || firebaseConfig.apiKey === 'INITIALIZING';
 
   useEffect(() => {
-    if (isMockMode) {
-      const savedUser = localStorage.getItem('nib_mock_user');
-      if (savedUser) {
-        // Maintain loading until DB sync is done to prevent refresh glitches
-        const refreshMock = async () => {
-          try {
-            const parsed = JSON.parse(savedUser);
-            const dbUser = await getUserByEmail(parsed.email);
-            if (dbUser) {
-              const mapped = {
-                ...dbUser,
-                name: `${dbUser.firstName} ${dbUser.lastName}`,
-                branchName: (dbUser as any).branch?.name || null,
-                districtName: (dbUser as any).branch?.district?.name || null,
-                assignedBranches: (dbUser as any).assignedBranches || [],
-                roles: (dbUser.roles && dbUser.roles.length > 0) 
-                  ? dbUser.roles 
-                  : [{ role: { name: dbUser.email.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
-              } as any;
-              setUser(mapped);
-              localStorage.setItem('nib_mock_user', JSON.stringify(mapped));
-            } else {
-              setUser(parsed);
-            }
-          } catch (e) {
-            console.error("Mock recovery failed:", e);
-          } finally {
-            setLoading(false);
-          }
-        };
-        refreshMock();
-      } else {
-        setLoading(false);
-      }
-      return;
-    }
-
     if (!auth) return;
 
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      setLoading(true);
       if (fbUser) {
         try {
           const sqlUser = await getUserProfile(fbUser.uid);
@@ -107,10 +68,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 assignedBranches: (sqlUser as any).assignedBranches || [],
                 roles: (sqlUser.roles && sqlUser.roles.length > 0)
                   ? sqlUser.roles
-                  : [{ role: { name: sqlUser.email.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
+                  : [{ role: { name: 'BRANCH_OFFICER' } }]
               } as any);
             }
           } else {
+            // Fallback for new users: Sync them to SQL immediately
             const result = await syncUserToSql({
               id: fbUser.uid,
               email: fbUser.email!,
@@ -122,12 +84,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 ...u, 
                 name: `${u.firstName} ${u.lastName}`,
                 assignedBranches: [],
-                roles: [{ role: { name: u.email.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
+                roles: [{ role: { name: 'BRANCH_OFFICER' } }]
               } as any);
             }
           }
         } catch (e) {
-          console.error("Auth profile sync failed:", e);
+          console.error("Auth profile synchronization failed:", e);
         }
       } else {
         setUser(null);
@@ -136,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [auth, toast, isMockMode]);
+  }, [auth, toast]);
 
   const login = async (email: string, pass: string) => {
     const normalizedEmail = email.toLowerCase();
@@ -144,45 +106,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Institutional access restricted to @nibbank.com.et domain.');
     }
 
-    if (isMockMode) {
-      if (pass !== 'nibbank123') throw new Error('Invalid developer credential.');
-      
-      const existingUser = await getUserByEmail(normalizedEmail);
-      const userId = existingUser?.id || `mock-${normalizedEmail.split('@')[0]}`;
-      
-      const mockUser: any = {
-        id: userId,
-        firebaseUid: userId,
-        firstName: existingUser?.firstName || normalizedEmail.split('.')[0] || 'User',
-        lastName: existingUser?.lastName || normalizedEmail.split('.')[1]?.split('@')[0] || 'Nib',
-        email: normalizedEmail,
-        status: existingUser?.status || 'ACTIVE',
-        branchId: existingUser?.branchId || null,
-        branchName: (existingUser as any)?.branch?.name || null,
-        districtName: (existingUser as any)?.branch?.district?.name || null,
-        assignedBranches: (existingUser as any)?.assignedBranches || [],
-        roles: (existingUser?.roles && existingUser.roles.length > 0) 
-          ? existingUser.roles 
-          : [{ role: { name: normalizedEmail.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
-      };
-      
-      mockUser.name = `${mockUser.firstName} ${mockUser.lastName}`;
-      
-      setUser(mockUser);
-      localStorage.setItem('nib_mock_user', JSON.stringify(mockUser));
-      await syncUserToSql(mockUser);
-      return;
-    }
-
-    if (!auth) return;
+    if (!auth) throw new Error('Authentication gateway not initialized.');
     await signInWithEmailAndPassword(auth, normalizedEmail, pass);
   };
 
   const logout = async (reason: string = 'User Logout') => {
     setUser(null);
-    if (isMockMode) {
-      localStorage.removeItem('nib_mock_user');
-    } else if (auth) {
+    if (auth) {
       await signOut(auth);
     }
     window.location.href = '/login';
@@ -193,12 +123,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) {
       const updated = { ...user, needsPasswordChange: false };
       setUser(updated);
-      if (isMockMode) localStorage.setItem('nib_mock_user', JSON.stringify(updated));
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isMock: isMockMode, login, logout, changePassword }}>
+    <AuthContext.Provider value={{ user, loading, isMock: false, login, logout, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

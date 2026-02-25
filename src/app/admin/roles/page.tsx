@@ -36,7 +36,6 @@ import {
   FileArchive
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getRoleDefinitions, getAllPermissions, upsertRole, toggleRoleStatus, seedInstitutionalPermissions } from '@/actions/roles';
 import {
@@ -254,7 +253,7 @@ export default function StaffRolesPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Roles</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Define authorities precisely aligned with the operational navigation.</p>
+          <p className="text-muted-foreground text-lg font-medium">Define authorities precisely aligned with operational requirements.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleSyncPermissions} disabled={isSyncing} className="border-primary/20 text-primary font-black gap-2">
@@ -329,7 +328,7 @@ export default function StaffRolesPage() {
                       {selectedRole ? 'Update Role Rights' : 'Define New Role'}
                     </DialogTitle>
                     <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-0.5">
-                      Institutional Mapping: Aligning rights page-by-page
+                      Institutional Mapping: Aligning rights to operational nodes
                     </DialogDescription>
                   </div>
                 </div>
