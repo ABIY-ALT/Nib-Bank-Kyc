@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -27,21 +26,18 @@ import {
   Map,
   X,
   Monitor,
+  Inbox,
+  AlertCircle,
+  ShieldAlert,
+  ClipboardCheck,
+  Search,
   ArrowRightLeft,
   History,
-  ClipboardList,
-  BarChart3,
-  Inbox,
-  LayoutList,
-  Search,
-  AlertCircle,
-  FileBarChart2,
+  FileArchive,
+  BarChartHorizontal,
   Globe,
   Archive,
-  BarChartHorizontal,
-  ClipboardCheck,
-  UserCog,
-  Gavel
+  ClipboardList
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -59,15 +55,16 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Define precisely the grouping matching the Sidebar
-const UI_MODULES = [
+// Define the grouping matching the Sidebar Sections EXACTLY
+const SIDEBAR_GROUPS = [
   { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'CASE_MANAGEMENT', label: 'KYC: Case Management', icon: FileText },
-  { id: 'MONITORING', label: 'KYC: Monitoring', icon: Map },
-  { id: 'INFRASTRUCTURE', label: 'KYC: Infrastructure', icon: HardDrive },
-  { id: 'REFERENCE', label: 'KYC: Reference Library', icon: BookOpen },
+  { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
+  { id: 'MONITORING', label: 'Monitoring', icon: Map },
+  { id: 'KYC_DOCUMENT', label: 'KYC Document', icon: HardDrive },
+  { id: 'ARCHIVE', label: 'Archive', icon: Folders },
+  { id: 'REFERENCE', label: 'Reference', icon: BookOpen },
   { id: 'REPORTING', label: 'Reporting Suite', icon: FileBarChart },
-  { id: 'SYSTEM', label: 'System Management', icon: Settings },
+  { id: 'SYSTEM', label: 'Administration', icon: Settings },
 ];
 
 export default function StaffRolesPage() {
@@ -183,13 +180,13 @@ export default function StaffRolesPage() {
     );
   };
 
-  // Grouping logic refined to match the sidebar EXACTLY
   const groupedPermissions = useMemo(() => {
     const groups: Record<string, any[]> = {
       'DASHBOARD': [],
       'CASE_MANAGEMENT': [],
       'MONITORING': [],
-      'INFRASTRUCTURE': [],
+      'KYC_DOCUMENT': [],
+      'ARCHIVE': [],
       'REFERENCE': [],
       'REPORTING': [],
       'SYSTEM': []
@@ -197,24 +194,38 @@ export default function StaffRolesPage() {
 
     allPermissions.forEach(p => {
       const slug = p.slug;
-      const group = p.group;
-
-      if (group === 'DASHBOARD') {
-        groups['DASHBOARD'].push(p);
-      } else if (group === 'REFERENCE') {
-        groups['REFERENCE'].push(p);
-      } else if (group === 'REPORTING') {
-        groups['REPORTING'].push(p);
-      } else if (group === 'SYSTEM') {
-        groups['SYSTEM'].push(p);
-      } else if (group === 'WORKFLOWS') {
-        if (slug.includes('MONITORING') || slug.includes('_BRANCH') || slug.includes('DISTRICT_NODE')) {
-          groups['MONITORING'].push(p);
-        } else if (slug.includes('ARCHIVED') || slug.includes('EXPORT_CASE_ZIP') || slug.includes('VAULT_STORAGE')) {
-          groups['INFRASTRUCTURE'].push(p);
-        } else {
-          groups['CASE_MANAGEMENT'].push(p);
-        }
+      
+      // Explicit Mapping based on PRD requirements
+      if (slug === 'DASHBOARD_VIEW') {
+        groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard" });
+      } else if (slug === 'CASE_SUBMIT') {
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit upload documents and initiate new cases", icon: PlusCircle });
+      } else if (slug === 'CASE_VIEW_OWN') {
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view personal submission history", icon: Inbox });
+      } else if (slug === 'KYC_VIEW_QUEUE') {
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process technical queue", icon: Search });
+      } else if (slug === 'CASE_VIEW_ACTION_REQUIRED') {
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and manage returned cases", icon: AlertCircle });
+      } else if (slug === 'VIEW_ESCALATED_CASES') {
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view senior assessment queue", icon: ShieldAlert });
+      } else if (slug === 'VIEW_GOVERNANCE_QUEUE') {
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit process hierarchy governance flows", icon: Zap });
+      } else if (slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_BRANCH') {
+        groups['MONITORING'].push({ ...p, desc: "Permit branch-level oversight", icon: Building2 });
+      } else if (slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE') {
+        groups['MONITORING'].push({ ...p, desc: "Permit regional district oversight", icon: Map });
+      } else if (slug === 'MANAGE_VAULT_STORAGE') {
+        groups['KYC_DOCUMENT'].push({ ...p, desc: "Permit management of jurisdictional vault storage", icon: HardDrive });
+      } else if (slug === 'VIEW_ARCHIVED_CASE') {
+        groups['ARCHIVE'].push({ ...p, desc: "Permit access to historical case records", icon: Folders });
+      } else if (slug === 'EXPORT_CASE_ZIP') {
+        groups['ARCHIVE'].push({ ...p, desc: "Permit batch export of case assets", icon: FileArchive });
+      } else if (p.group === 'REFERENCE') {
+        groups['REFERENCE'].push({ ...p, desc: "Permit access to standardized findings library", icon: BookOpen });
+      } else if (p.group === 'REPORTING') {
+        groups['REPORTING'].push({ ...p, desc: "Permit generation of institutional reports", icon: FileBarChart });
+      } else if (p.group === 'SYSTEM') {
+        groups['SYSTEM'].push({ ...p, desc: "Permit administration of institutional data", icon: Settings });
       }
     });
 
@@ -245,13 +256,12 @@ export default function StaffRolesPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Roles</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Manage operational authorities and capability mapping.</p>
+          <p className="text-muted-foreground text-lg font-medium">Define authorities exactly as they appear in the navigation.</p>
         </div>
         <div className="flex gap-2">
           {allPermissions.length === 0 && (
-            <Button variant="outline" onClick={handleSyncPermissions} disabled={isSyncing} className="border-primary/20 text-primary font-black hover:bg-primary/5 gap-2">
-              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
-              Provision Registry
+            <Button variant="outline" onClick={handleSyncPermissions} disabled={isSyncing} className="border-primary/20 text-primary font-black gap-2">
+              <RefreshCcw className="w-4 h-4" /> Provision Registry
             </Button>
           )}
           <Button onClick={handleOpenAdd} className="bg-primary shadow-xl font-black h-11 px-8 text-white hover:bg-primary/90 rounded-xl">
@@ -263,7 +273,7 @@ export default function StaffRolesPage() {
       <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
         <CardHeader className="bg-primary text-white border-b py-6">
           <CardTitle className="text-xl font-black">Personnel Designations</CardTitle>
-          <CardDescription className="text-white/70 font-medium">Manage regional and operational authority levels.</CardDescription>
+          <CardDescription className="text-white/70 font-medium">Manage jurisdictional and operational authority levels.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -277,17 +287,7 @@ export default function StaffRolesPage() {
             </TableHeader>
             <TableBody>
               {roleDefinitions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-32 text-center">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="p-6 bg-slate-50 rounded-full"><Zap className="w-12 h-12 text-slate-200" /></div>
-                      <div className="space-y-1">
-                        <p className="font-bold text-slate-900 text-lg">No roles defined</p>
-                        <p className="text-sm text-muted-foreground">Establish authority groups to manage staff access.</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={4} className="py-32 text-center text-muted-foreground italic">No roles defined in the vault.</TableCell></TableRow>
               ) : roleDefinitions.map((role) => (
                 <TableRow key={role.id} className={cn("hover:bg-slate-50 transition-colors group", !role.active && "bg-slate-50/30 opacity-80")}>
                   <TableCell className={cn("font-black pl-8 py-6", role.active ? "text-slate-900" : "text-slate-400")}>
@@ -310,23 +310,8 @@ export default function StaffRolesPage() {
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
                       <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-10 w-10 text-slate-400 rounded-full hover:bg-primary/5 hover:text-primary transition-colors"><Settings2 className="w-4 h-4" /></Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => handleToggleStatus(role)} 
-                        disabled={isToggling === role.id}
-                        className={cn(
-                          "h-10 w-10 rounded-full transition-colors",
-                          role.active ? "text-destructive hover:bg-destructive/5" : "text-emerald-600 hover:bg-emerald-50"
-                        )}
-                      >
-                        {isToggling === role.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : role.active ? (
-                          <UserX className="w-4 h-4" />
-                        ) : (
-                          <UserCheck className="w-4 h-4" />
-                        )}
+                      <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(role)} disabled={isToggling === role.id} className={cn("h-10 w-10 rounded-full", role.active ? "text-destructive" : "text-emerald-600")}>
+                        {isToggling === role.id ? <Loader2 className="w-4 h-4 animate-spin" /> : role.active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                       </Button>
                     </div>
                   </TableCell>
@@ -336,65 +321,6 @@ export default function StaffRolesPage() {
           </Table>
         </CardContent>
       </Card>
-
-      <Dialog open={isInventoryOpen} onOpenChange={setIsInventoryOpen}>
-        <DialogContent className="max-w-3xl rounded-3xl overflow-hidden p-0 border-none shadow-2xl">
-          <DialogHeader className="p-8 bg-primary text-white border-b space-y-0">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white/20 rounded-2xl">
-                <ShieldCheck className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <DialogTitle className="text-2xl font-black">{selectedRole?.name.replace(/_/g, ' ')} Authority</DialogTitle>
-                <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">
-                  Institutional Capability Inventory
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-          <div className="p-8">
-            <ScrollArea className="h-[50vh] pr-4">
-              <div className="space-y-8">
-                {UI_MODULES.map((section) => {
-                  const perms = selectedRole?.permissions.filter((p: any) => {
-                    const slug = p.permission.slug;
-                    const group = p.permission.group;
-                    if (section.id === 'DASHBOARD') return group === 'DASHBOARD';
-                    if (section.id === 'REFERENCE') return group === 'REFERENCE';
-                    if (section.id === 'REPORTING') return group === 'REPORTING';
-                    if (section.id === 'INFRASTRUCTURE') return slug.includes('ARCHIVED') || slug.includes('EXPORT_CASE_ZIP') || slug.includes('VAULT_STORAGE');
-                    if (section.id === 'SYSTEM') return group === 'SYSTEM';
-                    if (section.id === 'CASE_MANAGEMENT') return group === 'WORKFLOWS' && !slug.includes('MONITORING') && !slug.includes('_BRANCH') && !slug.includes('DISTRICT_NODE') && !slug.includes('ARCHIVED') && !slug.includes('EXPORT_CASE_ZIP') && !slug.includes('VAULT_STORAGE');
-                    if (section.id === 'MONITORING') return group === 'WORKFLOWS' && (slug.includes('MONITORING') || slug.includes('_BRANCH') || slug.includes('DISTRICT_NODE'));
-                    return false;
-                  });
-
-                  if (!perms || perms.length === 0) return null;
-
-                  return (
-                    <div key={section.id} className="space-y-4">
-                      <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2">
-                        <section.icon className="w-3 h-3" /> {section.label}
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {perms.map((p: any) => (
-                          <div key={p.permission.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                            <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(184,147,52,0.5)]" />
-                            <span className="text-xs font-bold text-slate-700">{p.permission.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          </div>
-          <DialogFooter className="p-6 bg-slate-50 border-t">
-            <Button onClick={() => { setIsInventoryOpen(false); handleOpenEdit(selectedRole); }} className="bg-primary px-8 font-black text-white hover:bg-primary/90 rounded-xl h-11 shadow-lg">Edit Authority Map</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-5xl p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
@@ -409,7 +335,7 @@ export default function StaffRolesPage() {
                     {selectedRole ? 'Update Role Rights' : 'Define New Role'}
                   </DialogTitle>
                   <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">
-                    Institutional Capability Assignment Workspace
+                    Institutional Mapping: Aligning rights with sidebar pages
                   </DialogDescription>
                 </div>
               </div>
@@ -418,17 +344,12 @@ export default function StaffRolesPage() {
             <div className="p-8 flex-1 overflow-hidden flex flex-col gap-8">
               <div className="space-y-2 max-w-sm shrink-0">
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
-                <Input 
-                  placeholder="e.g. BRANCH_OFFICER" 
-                  className="h-12 bg-slate-50 border-slate-200 font-bold focus-visible:ring-primary/20 rounded-xl"
-                  value={roleName}
-                  onChange={(e) => setRoleName(e.target.value.toUpperCase().replace(/\s+/g, '_'))}
-                />
+                <Input placeholder="e.g. KYC_AUDITOR" className="h-12 bg-slate-50 border-slate-200 font-bold focus-visible:ring-primary/20 rounded-xl" value={roleName} onChange={(e) => setRoleName(e.target.value.toUpperCase().replace(/\s+/g, '_'))} />
               </div>
 
               <ScrollArea className="flex-1 pr-4">
                 <div className="space-y-12">
-                  {UI_MODULES.map((section) => {
+                  {SIDEBAR_GROUPS.map((section) => {
                     const perms = groupedPermissions[section.id] || [];
                     if (perms.length === 0) return null;
 
@@ -446,18 +367,13 @@ export default function StaffRolesPage() {
                             <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900 whitespace-nowrap">{section.label}</span>
                             <div className="h-px flex-1 bg-slate-100" />
                           </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleToggleGroup(section.id)}
-                            className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-black text-[10px] uppercase tracking-wider gap-2"
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => handleToggleGroup(section.id)} className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-black text-[10px] uppercase tracking-wider gap-2">
                             <CheckCircle2 className="w-3.5 h-3.5" /> 
                             {allSelectedInGroup ? "Deselect Section" : "Grant All in Section"}
                           </Button>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {perms.map((p: any) => {
                             const isSelected = permissionsForm.includes(p.id);
                             return (
@@ -465,28 +381,20 @@ export default function StaffRolesPage() {
                                 key={p.id} 
                                 onClick={() => handleTogglePermission(p.id)}
                                 className={cn(
-                                  "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group relative overflow-hidden",
-                                  isSelected 
-                                    ? "bg-[#FCFAF7] border-primary shadow-[0_0_0_1px_rgba(184,147,52,1)]" 
-                                    : "bg-white border-slate-100 hover:border-slate-200"
+                                  "flex items-start justify-between p-5 rounded-2xl border transition-all cursor-pointer group relative overflow-hidden",
+                                  isSelected ? "bg-[#FCFAF7] border-primary shadow-[0_0_0_1px_rgba(184,147,52,1)]" : "bg-white border-slate-100 hover:border-slate-200"
                                 )}
                               >
-                                <div className="flex items-center gap-4 z-10">
-                                  <div className={cn(
-                                    "w-2 h-2 rounded-full transition-all",
-                                    isSelected ? "bg-primary scale-125 shadow-[0_0_8px_rgba(184,147,52,0.5)]" : "bg-slate-200"
-                                  )} />
-                                  <span className={cn(
-                                    "text-sm font-bold transition-colors",
-                                    isSelected ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"
-                                  )}>{p.name}</span>
+                                <div className="flex gap-4 z-10">
+                                  <div className={cn("w-2 h-2 rounded-full mt-1.5 transition-all", isSelected ? "bg-primary scale-125" : "bg-slate-200")} />
+                                  <div className="flex flex-col">
+                                    <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>{p.name}</span>
+                                    <span className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-2">{p.desc}</span>
+                                  </div>
                                 </div>
-                                
-                                <div className="z-10">
+                                <div className="z-10 mt-0.5">
                                   {isSelected ? (
-                                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                                      <Check className="w-3.5 h-3.5 text-white stroke-[4px]" />
-                                    </div>
+                                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg"><Check className="w-3.5 h-3.5 text-white stroke-[4px]" /></div>
                                   ) : (
                                     <div className="w-6 h-6 rounded-full border-2 border-slate-100 group-hover:border-primary/20" />
                                   )}
@@ -503,17 +411,8 @@ export default function StaffRolesPage() {
             </div>
 
             <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row justify-end items-center gap-6 rounded-b-3xl shrink-0">
-              <button 
-                onClick={() => setIsDialogOpen(false)} 
-                className="text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors"
-              >
-                Discard Changes
-              </button>
-              <Button 
-                onClick={handleSave} 
-                disabled={isSaving || allPermissions.length === 0}
-                className="h-14 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-2xl shadow-primary/20 transition-all active:scale-95"
-              >
+              <button onClick={() => setIsDialogOpen(false)} className="text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors">Discard Changes</button>
+              <Button onClick={handleSave} disabled={isSaving} className="h-14 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-2xl">
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 Commit Authority Map
               </Button>
