@@ -34,7 +34,8 @@ import {
   ClipboardCheck,
   Info,
   Map,
-  BarChartHorizontal
+  BarChartHorizontal,
+  Monitor
 } from "lucide-react"
 
 import {
@@ -302,7 +303,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Audit & Reporting</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible" defaultOpen={false}>
+              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/reports') || pathname.includes('/performance')}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Reporting Suite">
@@ -313,6 +314,17 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
+                      {hasPermission('VIEW_SPECIALIST_PRODUCTIVITY') && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
+                            <Link href="/performance/officer">
+                              <Monitor className="w-4 h-4 mr-2 text-primary" />
+                              <span>Ops Monitoring</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+
                       {hasPermission('REPORT_VIEW_SYSTEM') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/management'}>
@@ -330,17 +342,6 @@ export function AppSidebar() {
                             <Link href="/reports/system">
                               <Globe className="w-4 h-4 mr-2 text-primary" />
                               <span>System-wide</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )}
-                      
-                      {hasPermission('VIEW_SPECIALIST_PRODUCTIVITY') && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/performance/officer'}>
-                            <Link href="/performance/officer">
-                              <Users className="w-4 h-4 mr-2" />
-                              <span>KYC Officer Performance</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
