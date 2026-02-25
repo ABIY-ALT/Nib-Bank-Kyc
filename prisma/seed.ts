@@ -23,6 +23,7 @@ async function main() {
     { slug: 'CASE_SUBMIT', name: 'Create New Submission', group: 'WORKFLOWS' },
     { slug: 'CASE_VIEW_OWN', name: 'View My Submissions', group: 'WORKFLOWS' },
     { slug: 'KYC_VIEW_QUEUE', name: 'Access Review & Action', group: 'WORKFLOWS' },
+    { slug: 'VIEW_AMENDMENT_QUEUE', name: 'Access Amendment Review', group: 'WORKFLOWS' },
     { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Returned Cases', group: 'WORKFLOWS' },
     { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
     { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'WORKFLOWS' },
@@ -102,6 +103,7 @@ async function main() {
     KYC_OFFICER: [
       'DASHBOARD_VIEW', 
       'KYC_VIEW_QUEUE', 
+      'VIEW_AMENDMENT_QUEUE',
       'VIEW_ARCHIVED_CASE', 
       'VIEW_FQ_LIBRARY', 
       'VIEW_SPECIALIST_PRODUCTIVITY'
@@ -109,6 +111,7 @@ async function main() {
     SUPERVISOR: [
       'DASHBOARD_VIEW', 
       'KYC_VIEW_QUEUE', 
+      'VIEW_AMENDMENT_QUEUE',
       'VIEW_ESCALATED_CASES', 
       'VIEW_ARCHIVED_CASE', 
       'VIEW_FQ_LIBRARY', 
