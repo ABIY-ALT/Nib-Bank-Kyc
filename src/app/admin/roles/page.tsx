@@ -9,7 +9,6 @@ import {
   ShieldCheck, 
   Plus,
   Settings2,
-  Trash2,
   Check,
   CheckCircle2,
   X,

@@ -23,15 +23,11 @@ import {
   ArrowRightLeft,
   UserCog,
   Zap,
-  LayoutList,
   BookOpen,
   ClipboardList,
   Folders,
-  TrendingUp,
   Shield,
   FileArchive,
-  ClipboardCheck,
-  Info,
   Map,
   BarChartHorizontal,
   Monitor,
@@ -77,7 +73,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b h-16 flex items-center px-4 bg-sidebar-background">
         <div className="flex items-center gap-3 font-bold">
-          <div className="bg-primary p-1.5 rounded-lg shadow-sm shrink-0 flex items-center justify-center">
+          <div className="p-1.5 rounded-lg shadow-sm shrink-0 flex items-center justify-center bg-primary">
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
           <span className="group-data-[collapsible=icon]:hidden truncate text-white font-headline tracking-tight text-lg">Nib Bank KYC</span>
@@ -101,14 +97,14 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* KYC OPERATIONS GROUP */}
+        {/* KYC OPERATIONS DROPDOWNS */}
         {hasAnyInGroup('WORKFLOWS') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">KYC Operations</SidebarGroupLabel>
             <SidebarMenu>
               
-              {/* CASE MANAGEMENT DROPDOWN */}
-              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions') && pathname !== '/submissions'}>
+              {/* CASE MANAGEMENT */}
+              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions') && !['/submissions', '/submissions/branch-node', '/submissions/district-node', '/submissions/master-bundle'].includes(pathname)}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Case Management">
@@ -214,7 +210,7 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* MONITORING DROPDOWN */}
+              {/* MONITORING */}
               <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions/branch-node') || pathname.includes('/submissions/district-node')}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -227,7 +223,7 @@ export function AppSidebar() {
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       {hasPermission('CASE_VIEW_BRANCH') && (
-                        <SidebarMenuSubItem className="relative">
+                        <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
                             <Link href="/submissions/branch-node">
                               <Building2 className="w-4 h-4 mr-2 text-primary" />
@@ -238,7 +234,7 @@ export function AppSidebar() {
                       )}
 
                       {hasPermission('DASHBOARD_VIEW_DISTRICT') && (
-                        <SidebarMenuSubItem className="relative">
+                        <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/district-node'}>
                             <Link href="/submissions/district-node">
                               <Map className="w-4 h-4 mr-2 text-primary" />
@@ -252,7 +248,7 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* DOCUMENTS DROPDOWN */}
+              {/* KYC DOCUMENT */}
               {hasPermission('MANAGE_VAULT_STORAGE') && (
                 <Collapsible className="group/collapsible" defaultOpen={pathname === '/admin/storage'}>
                   <SidebarMenuItem>
@@ -279,7 +275,7 @@ export function AppSidebar() {
                 </Collapsible>
               )}
 
-              {/* ARCHIVE DROPDOWN */}
+              {/* ARCHIVE */}
               {hasPermission('VIEW_ARCHIVED_CASE') && (
                 <Collapsible className="group/collapsible" defaultOpen={pathname === '/submissions'}>
                   <SidebarMenuItem>
@@ -319,9 +315,10 @@ export function AppSidebar() {
                     <BookOpen className="w-4 h-4" />
                     <span>KYC F&Q Reference</span>
                   </Link>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroup>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
         )}
 
         {/* AUDIT & REPORTING GROUP */}
@@ -418,7 +415,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Administration</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible" defaultOpen={false}>
+              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/admin/') && pathname !== '/admin/storage'}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="System Management">
