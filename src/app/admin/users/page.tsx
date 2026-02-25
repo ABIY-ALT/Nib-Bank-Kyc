@@ -28,7 +28,9 @@ import {
   ShieldAlert,
   ArrowRightLeft,
   Users,
-  X
+  X,
+  Copy,
+  KeyRound
 } from "lucide-react";
 import { 
   Dialog, 
@@ -38,6 +40,12 @@ import {
   DialogFooter,
   DialogDescription
 } from "@/components/ui/dialog";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
@@ -70,6 +78,9 @@ export default function UserManagementPage() {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   
+  // Track temporary passwords generated during this session
+  const [sessionTempPasswords, setSessionTempPasswords] = useState<Record<string, string>>({});
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -84,7 +95,6 @@ export default function UserManagementPage() {
     branchId: ''
   });
 
-  // Security Check: Direct URL Protection
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('USER_CREATE')) {
       toast({ variant: "destructive", title: "Access Restricted", description: "You do not have administrative clearance for this node." });
@@ -180,9 +190,15 @@ export default function UserManagementPage() {
       });
       
       if (res.success) {
+        if (res.tempPassword) {
+          setSessionTempPasswords(prev => ({ ...prev, [formData.email.toLowerCase()]: res.tempPassword! }));
+        }
+        
         toast({ 
           title: editingUser ? "Profile Updated" : "Staff Provisioned", 
-          description: "Personnel records and jurisdictional mappings have been updated." 
+          description: res.tempPassword 
+            ? `Personnel records updated. Temporary password generated.` 
+            : "Personnel records and jurisdictional mappings have been updated." 
         });
         setIsDialogOpen(false);
         loadData();
@@ -205,6 +221,11 @@ export default function UserManagementPage() {
     } catch (e: any) {
       toast({ variant: "destructive", title: "Action Failed" });
     }
+  };
+
+  const handleCopyPassword = (pass: string) => {
+    navigator.clipboard.writeText(pass);
+    toast({ title: "Credential Copied", description: "Temporary password saved to clipboard." });
   };
 
   const isBranchSpecificRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
@@ -269,48 +290,78 @@ export default function UserManagementPage() {
                   </div>
                 </TableCell>
               </TableRow>
-            ) : paginatedUsers.map((user) => (
-              <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors group">
-                <TableCell className="pl-8 py-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black shadow-sm group-hover:scale-110 transition-transform">
-                      {user.firstName?.charAt(0)}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-black text-slate-900 leading-tight">{user.firstName} {user.lastName}</span>
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase mt-0.5">
-                        <Mail className="w-3 h-3 text-slate-300" /> {user.email}
+            ) : paginatedUsers.map((user) => {
+              const tempPass = sessionTempPasswords[user.email.toLowerCase()];
+              return (
+                <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <TableCell className="pl-8 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black shadow-sm group-hover:scale-110 transition-transform">
+                        {user.firstName?.charAt(0)}
+                      </div>
+                      <div className="flex flex-col">
+                        <TooltipProvider>
+                          <Tooltip delayDuration={0}>
+                            <TooltipTrigger asChild>
+                              <span className={cn("font-black text-slate-900 leading-tight cursor-default", tempPass && "underline decoration-dotted decoration-primary/40 underline-offset-4")}>
+                                {user.firstName} {user.lastName}
+                              </span>
+                            </TooltipTrigger>
+                            {tempPass && (
+                              <TooltipContent className="bg-slate-900 text-white border-none p-4 rounded-2xl shadow-2xl">
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <KeyRound className="w-3.5 h-3.5 text-primary" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Temporary Credential</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 bg-white/5 p-2 rounded-xl border border-white/10">
+                                    <code className="text-lg font-mono font-black text-primary">{tempPass}</code>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-white/10 text-white" onClick={() => handleCopyPassword(tempPass)}>
+                                      <Copy className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                  <p className="text-[9px] font-bold text-slate-500 leading-relaxed max-w-[180px]">
+                                    Provide this to the staff member. They will be forced to change it upon first login.
+                                  </p>
+                                </div>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase mt-0.5">
+                          <Mail className="w-3 h-3 text-slate-300" /> {user.email}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10 font-black uppercase text-[9px] px-3 py-1">
-                    {user.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-slate-400" /> {user.branch?.name || "Institutional Node"}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={user.status === UserStatus.ACTIVE ? 'text-green-600 border-green-200 bg-green-50 font-black text-[9px]' : 'text-slate-400 border-slate-200 bg-slate-50 font-black text-[9px]'}>
-                    {user.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right pr-8">
-                  <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-slate-400 rounded-full h-9 w-9 hover:bg-primary/5 hover:text-primary transition-colors">
-                      <Settings2 className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5 transition-colors">
-                      {user.status === UserStatus.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10 font-black uppercase text-[9px] px-3 py-1">
+                      {user.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" /> {user.branch?.name || "Institutional Node"}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={user.status === UserStatus.ACTIVE ? 'text-green-600 border-green-200 bg-green-50 font-black text-[9px]' : 'text-slate-400 border-slate-200 bg-slate-50 font-black text-[9px]'}>
+                      {user.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right pr-8">
+                    <div className="flex justify-end gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-slate-400 rounded-full h-9 w-9 hover:bg-primary/5 hover:text-primary transition-colors">
+                        <Settings2 className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5 transition-colors">
+                        {user.status === UserStatus.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
 

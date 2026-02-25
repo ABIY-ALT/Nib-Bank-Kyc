@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -55,6 +54,7 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
 
 /**
  * Provisions a new user or updates an existing one, including Branch Transfers and Role Transitions.
+ * Returns the generated temporary password for initial registration.
  */
 export async function provisionUser(data: {
   id?: string;
@@ -69,6 +69,10 @@ export async function provisionUser(data: {
   authorizingAdminId?: string;
 }) {
   try {
+    // Generate a secure temporary password if none provided
+    const tempPass = data.password || Math.random().toString(36).slice(-8);
+    const isNewUser = !data.id;
+
     const result = await prisma.$transaction(async (tx) => {
       // 1. Fetch current state for audit comparison
       const existingUser = await tx.user.findUnique({
@@ -79,10 +83,7 @@ export async function provisionUser(data: {
         }
       });
 
-      let hashedPassword = undefined;
-      if (data.password) {
-        hashedPassword = await bcrypt.hash(data.password, 10);
-      }
+      const hashedPassword = await bcrypt.hash(tempPass, 10);
 
       // 2. Upsert the User record
       const user = await tx.user.upsert({
@@ -93,16 +94,18 @@ export async function provisionUser(data: {
           phoneNumber: data.phoneNumber,
           branchId: data.branchId || null,
           status: data.status,
-          password: hashedPassword
+          // Only update password if manually provided
+          password: data.password ? hashedPassword : undefined
         },
         create: { 
           email: data.email.toLowerCase(),
-          password: hashedPassword || await bcrypt.hash("nibbank123", 10), // Default if not provided
+          password: hashedPassword,
           firstName: data.firstName,
           lastName: data.lastName,
           phoneNumber: data.phoneNumber,
           branchId: data.branchId || null,
-          status: data.status
+          status: data.status,
+          needsPasswordChange: true // Force change on first login
         }
       });
 
@@ -159,7 +162,11 @@ export async function provisionUser(data: {
     });
 
     revalidatePath('/admin/users');
-    return { success: true, user: result };
+    return { 
+      success: true, 
+      user: result, 
+      tempPassword: isNewUser ? tempPass : null 
+    };
   } catch (error: any) {
     console.error('[Vault Provisioning] Error:', error);
     return { success: false, error: error.message || 'Institutional registration fault.' };
