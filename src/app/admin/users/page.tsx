@@ -1,7 +1,7 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Table, 
   TableBody, 
@@ -53,11 +53,15 @@ import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
 import { UserStatus } from '@prisma/client';
+import { usePermissions } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
 
 export default function UserManagementPage() {
+  const router = useRouter();
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  
   const [users, setUsers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [roleDefinitions, setRoleDefinitions] = useState<any[]>([]);
@@ -79,6 +83,14 @@ export default function UserManagementPage() {
     status: UserStatus.ACTIVE,
     branchId: ''
   });
+
+  // Security Check: Direct URL Protection
+  useEffect(() => {
+    if (!permissionsLoading && !hasPermission('USER_CREATE')) {
+      toast({ variant: "destructive", title: "Access Restricted", description: "You do not have administrative clearance for this node." });
+      router.push('/');
+    }
+  }, [hasPermission, permissionsLoading, router, toast]);
 
   useEffect(() => {
     loadData();
@@ -199,6 +211,8 @@ export default function UserManagementPage() {
 
   const isBranchSpecificRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
 
+  if (loading || permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" /></div>;
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -243,9 +257,7 @@ export default function UserManagementPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={5} className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-            ) : filteredUsers.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="py-32 text-center">
                   <div className="flex flex-col items-center gap-4">

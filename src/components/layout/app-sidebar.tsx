@@ -162,7 +162,7 @@ export function AppSidebar() {
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/amendments'}>
                             <Link href="/submissions/amendments">
-                              <History className="w-4 h-4 mr-2" />
+                              <History className="w-4 h-4 mr-2 text-indigo-400" />
                               <span>Amendment Review</span>
                             </Link>
                           </SidebarMenuSubButton>

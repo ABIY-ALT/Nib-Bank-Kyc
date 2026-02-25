@@ -24,8 +24,12 @@ export async function seedInstitutionalPermissions() {
     { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
     { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'WORKFLOWS' },
     { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
+    
+    // WORKFLOWS - Monitoring
     { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'WORKFLOWS' },
     { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'WORKFLOWS' },
+    
+    // WORKFLOWS - Archive
     { slug: 'VIEW_ARCHIVED_CASE', name: 'Access Case Archive', group: 'WORKFLOWS' },
     { slug: 'EXPORT_CASE_ZIP', name: 'Download Case Bundle', group: 'WORKFLOWS' },
 
@@ -34,7 +38,7 @@ export async function seedInstitutionalPermissions() {
     { slug: 'CREATE_FQ_ENTRY', name: 'Create F&Q Entry', group: 'REFERENCE' },
     { slug: 'EDIT_FQ_ENTRY', name: 'Edit F&Q Entry', group: 'REFERENCE' },
     { slug: 'DELETE_FQ_ENTRY', name: 'Deactivate F&Q Entry', group: 'REFERENCE' },
-
+    
     // REPORTING
     { slug: 'VIEW_SPECIALIST_PRODUCTIVITY', name: 'View Ops Monitoring', group: 'REPORTING' },
     { slug: 'REPORT_VIEW_MANAGEMENT', name: 'View Management Report', group: 'REPORTING' },
@@ -100,7 +104,6 @@ export async function getAllPermissions() {
 
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
   try {
-    // Unique constraint pre-flight validation
     const existingByName = await prisma.role.findUnique({
       where: { name: data.name }
     });

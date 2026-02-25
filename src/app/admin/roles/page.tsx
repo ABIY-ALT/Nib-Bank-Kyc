@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
+import { useRouter } from 'next/navigation';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -33,8 +34,6 @@ import {
   ArrowRightLeft,
   History,
   FileArchive,
-  Globe,
-  Archive,
   ClipboardList,
   PlusCircle,
   UserCog,
@@ -55,6 +54,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // Section grouping precisely matching the institutional sidebar
 const SIDEBAR_GROUPS = [
@@ -69,7 +69,10 @@ const SIDEBAR_GROUPS = [
 ];
 
 export default function StaffRolesPage() {
+  const router = useRouter();
   const { toast } = useToast();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  
   const [roleDefinitions, setRoleDefinitions] = useState<any[]>([]);
   const [allPermissions, setAllPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +84,14 @@ export default function StaffRolesPage() {
   const [selectedRole, setSelectedRole] = useState<any>(null);
   const [roleName, setRoleName] = useState("");
   const [permissionsForm, setPermissionsForm] = useState<string[]>([]);
+
+  // Security Check: Direct URL Protection
+  useEffect(() => {
+    if (!permissionsLoading && !hasPermission('ROLE_CREATE')) {
+      toast({ variant: "destructive", title: "Access Restricted", description: "You do not have administrative clearance for this node." });
+      router.push('/');
+    }
+  }, [hasPermission, permissionsLoading, router, toast]);
 
   useEffect(() => {
     loadData();
@@ -240,7 +251,7 @@ export default function StaffRolesPage() {
     }
   };
 
-  if (loading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
+  if (loading || permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-20">
