@@ -23,9 +23,12 @@ import {
   BookOpen,
   FileBarChart,
   Settings,
-  MoreHorizontal,
   Map,
-  X
+  X,
+  Monitor,
+  ArrowRightLeft,
+  History,
+  ClipboardList
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -43,8 +46,8 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Define the Sidebar Sections for UI Grouping
-const UI_SECTIONS = [
+// Define the precise UI modules matching the sidebar
+const UI_MODULES = [
   { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
   { id: 'MONITORING', label: 'Regional Monitoring', icon: Map },
@@ -168,6 +171,7 @@ export default function StaffRolesPage() {
     );
   };
 
+  // Grouping logic strictly aligned with sidebar logic
   const groupedPermissions = useMemo(() => {
     const groups: Record<string, any[]> = {
       'DASHBOARD': [],
@@ -341,7 +345,7 @@ export default function StaffRolesPage() {
           <div className="p-8">
             <ScrollArea className="h-[50vh] pr-4">
               <div className="space-y-8">
-                {UI_SECTIONS.map((section) => {
+                {UI_MODULES.map((section) => {
                   const perms = selectedRole?.permissions.filter((p: any) => {
                     const slug = p.permission.slug;
                     const group = p.permission.group;
@@ -415,7 +419,7 @@ export default function StaffRolesPage() {
 
               <ScrollArea className="flex-1 pr-4">
                 <div className="space-y-12">
-                  {UI_SECTIONS.map((section) => {
+                  {UI_MODULES.map((section) => {
                     const perms = groupedPermissions[section.id] || [];
                     if (perms.length === 0) return null;
 
