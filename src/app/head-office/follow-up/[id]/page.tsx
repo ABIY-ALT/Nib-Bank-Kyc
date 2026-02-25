@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useParams, useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Card, 
@@ -17,16 +18,13 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   FileText, 
-  Download, 
   Eye, 
   ShieldCheck,
   User,
   Building2,
-  Calendar,
   Loader2,
   FolderArchive,
-  Info,
-  FileArchive
+  Download
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
@@ -94,7 +92,7 @@ export default function FollowUpVerificationDetail() {
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ArrowLeft className="w-5 h-5" /></Button>
           <div>
-            <h1 className="text-3xl font-black font-headline">Audit Session: {submission.id}</h1>
+            <h1 className="text-3xl font-black font-headline text-slate-900 tracking-tight">Audit Session: {submission.id}</h1>
             <p className="text-muted-foreground font-medium flex items-center gap-2"><Building2 className="w-4 h-4" /> {submission.branchName} Node</p>
           </div>
         </div>
@@ -111,7 +109,12 @@ export default function FollowUpVerificationDetail() {
                     <div className="p-2 bg-slate-100 rounded-lg"><FileText className="w-6 h-6 text-slate-400" /></div>
                     <div><p className="font-bold text-slate-900">{doc.name}</p><p className="text-[10px] uppercase font-black text-muted-foreground">{doc.type}</p></div>
                   </div>
-                  <Button variant="ghost" size="icon" className="rounded-full"><Eye className="w-4 h-4" /></Button>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="icon" className="rounded-full h-9 w-9"><Eye className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" asChild className="rounded-full h-9 w-9 text-primary hover:bg-primary/5">
+                      <a href={doc.fileUrl} download={doc.name}><Download className="w-4 h-4" /></a>
+                    </Button>
+                  </div>
                 </div>
               ))}
             </CardContent>

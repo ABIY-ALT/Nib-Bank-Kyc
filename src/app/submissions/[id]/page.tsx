@@ -1,7 +1,8 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-mock.tsx";
+import { useAuth } from "@/lib/auth";
 import { 
   Card, 
   CardContent, 
@@ -12,56 +13,33 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   FileText, 
-  Clock, 
   MessageSquare,
   ArrowLeft,
   ShieldCheck,
-  Check,
   Search,
   Eye,
   Loader2,
-  FileArchive,
   MapPin,
-  MessagesSquare,
   CheckCircle2,
   AlertCircle,
-  XCircle,
   Activity,
-  SendHorizontal,
-  RotateCcw,
-  Upload,
-  X,
-  Plus,
-  BookOpen,
   Download,
-  RefreshCw,
-  ShieldAlert,
-  ClipboardCheck,
-  CheckSquare,
-  Lock,
-  ListTodo,
   Shield,
   Gavel,
   Scale,
   Landmark,
   UserCheck,
-  Users
+  ClipboardCheck,
+  Zap
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissionById, updateSubmissionStatus, resubmitSubmission, updateSubmissionChecklist, processExceptionalStep } from "@/actions/submissions";
+import { getSubmissionById, updateSubmissionStatus, updateSubmissionChecklist, processExceptionalStep } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { KYCStatus } from "@prisma/client";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription
-} from "@/components/ui/dialog";
 import { 
   Select, 
   SelectContent, 
@@ -102,8 +80,6 @@ export default function SubmissionDetails() {
   
   const [remarks, setRemarks] = useState("");
   const [isCustomRemark, setIsCustomRemark] = useState(true);
-  const [previewFile, setPreviewFile] = useState<any>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
   const [isActioning, setIsActioning] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
 
@@ -147,15 +123,10 @@ export default function SubmissionDetails() {
   }, [hasPermission]);
 
   const isKYCDirector = useMemo(() => {
-    return isSuperAdmin || user?.roles?.some(ur => ur.role.name === 'KYC_DIRECTOR' || ur.role.name === 'DISTRICT_DIRECTOR');
+    return isSuperAdmin || user?.roles?.some((ur: any) => ur.role.name === 'KYC_DIRECTOR' || ur.role.name === 'DISTRICT_DIRECTOR');
   }, [user, isSuperAdmin]);
 
-  const canRespond = useMemo(() => {
-    return hasPermission('CASE_RESPOND_AMENDMENT') || hasPermission('CASE_RESUBMIT');
-  }, [hasPermission]);
-
   const isTerminal = submission?.status === KYCStatus.APPROVED || submission?.status === KYCStatus.REJECTED;
-  const isActionRequired = submission?.status === KYCStatus.ACTION_REQUIRED;
 
   const verifiedCount = useMemo(() => {
     return Object.values(checklist).filter(Boolean).length;
@@ -218,14 +189,13 @@ export default function SubmissionDetails() {
     
     const status = submission.status as KYCStatus;
     const excStatus = submission.exceptionalStatus;
-    const isExc = submission.isExceptional;
     
-    if (isExc) {
+    if (submission.isExceptional) {
       return [
         { id: 'sub', label: 'Submitted', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
         { id: 'dist', label: 'District Director', desc: 'Regional Oversight', state: excStatus === 'AWAITING_DISTRICT' ? 'active' : (['None', 'AWAITING_DISTRICT'].includes(excStatus) ? 'pending' : 'completed'), icon: Landmark },
         { id: 'kycdir', label: 'KYC Director', desc: 'Strategic Risk Review', state: excStatus === 'AWAITING_DIRECTOR' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Shield },
-        { id: 'chief', label: 'Chief Retail & SME', desc: 'Optional: High-Risk Node', state: excStatus === 'AWAITING_CHIEF' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: ShieldAlert },
+        { id: 'chief', label: 'Chief Retail & SME', desc: 'Optional: High-Risk Node', state: excStatus === 'AWAITING_CHIEF' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: Zap },
         { id: 'div', label: 'Division Manager', desc: 'Resource Allocation', state: excStatus === 'AWAITING_DIVISION' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF', 'AWAITING_DIVISION'].includes(excStatus) ? 'pending' : 'completed'), icon: Scale },
         { id: 'super', label: 'Supervisor', desc: 'Operational Audit', state: excStatus === 'AWAITING_SUPERVISOR' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF', 'AWAITING_DIVISION', 'AWAITING_SUPERVISOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Gavel },
         { id: 'kyco', label: 'KYC Officer', desc: 'Lifecycle Conclusion', state: excStatus === 'COMPLETED' ? 'completed' : 'pending', icon: UserCheck }
@@ -236,7 +206,7 @@ export default function SubmissionDetails() {
       { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
       { id: 'review', label: 'Specialist Analysis', desc: 'Technical Review', state: status === KYCStatus.SUBMITTED ? 'active' : 'completed', icon: Search },
       { id: 'verdict', label: 'Institutional Verdict', desc: 'Final Assessment', state: status === KYCStatus.IN_REVIEW ? 'active' : (isTerminal ? 'completed' : 'pending'), icon: ShieldCheck },
-      { id: 'closed', label: 'Case Closed', desc: 'Lifecycle Conclusion', state: isTerminal ? 'completed' : 'pending', icon: FileArchive }
+      { id: 'closed', label: 'Case Closed', desc: 'Lifecycle Conclusion', state: isTerminal ? 'completed' : 'pending', icon: Activity }
     ];
   }, [submission, isTerminal]);
 

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/lib/auth-mock.tsx";
+import { useAuth } from "@/lib/auth";
 import { 
   Loader2, 
   Settings, 
@@ -16,7 +17,6 @@ import {
   Plus,
   Trash2,
   FileText,
-  Users,
   Megaphone,
   AlertTriangle,
   Info,

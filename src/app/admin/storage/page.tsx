@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { 
   Card, 
@@ -28,22 +29,18 @@ import {
   Search, 
   Download, 
   Trash2, 
-  AlertTriangle, 
   FileText, 
   Building2, 
   Loader2,
   ShieldCheck,
   RotateCcw,
-  CheckCircle2,
-  Info,
-  ExternalLink
+  Info
 } from "lucide-react";
 import { 
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -63,7 +60,6 @@ export default function StorageVaultPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
   
-  // Requirement: Track files downloaded locally to enable delete
   const [downloadedIds, setDownloadedFiles] = useState<Set<string>>(new Set());
   
   const [isPurging, setIsPurging] = useState<string | null>(null);
@@ -112,7 +108,6 @@ export default function StorageVaultPage() {
     link.click();
     document.body.removeChild(link);
     
-    // Unlock deletion for this file
     setDownloadedFiles(prev => new Set([...prev, file.id]));
     
     toast({
@@ -139,7 +134,7 @@ export default function StorageVaultPage() {
     }
   };
 
-  if (permissionsLoading || loading && inventory.length === 0) {
+  if (permissionsLoading || (loading && inventory.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
@@ -150,7 +145,6 @@ export default function StorageVaultPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -169,7 +163,6 @@ export default function StorageVaultPage() {
         </div>
       </div>
 
-      {/* FILTER CONSOLE */}
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl">
         <CardContent className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
           <div className="md:col-span-5 space-y-2">
@@ -205,7 +198,6 @@ export default function StorageVaultPage() {
         </CardContent>
       </Card>
 
-      {/* WARNING BANNER */}
       <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex gap-4 animate-in slide-in-from-top-2 duration-500">
         <div className="bg-amber-100 p-2 rounded-xl h-fit">
           <Info className="w-5 h-5 text-amber-700" />
@@ -218,7 +210,6 @@ export default function StorageVaultPage() {
         </div>
       </div>
 
-      {/* DATA TABLE */}
       <Card className="border-slate-200 shadow-xl overflow-hidden rounded-3xl bg-white">
         <CardContent className="p-0">
           <Table>
@@ -307,14 +298,13 @@ export default function StorageVaultPage() {
           </Table>
         </CardContent>
         <CardFooter className="bg-slate-50/50 border-t py-4 px-8 flex justify-between items-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vault Inventory & bull; {filteredFiles.length} Records Displayed</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vault Inventory &bull; {filteredFiles.length} Records Displayed</p>
           <div className="flex items-center gap-2 text-[9px] font-mono font-black text-primary/40 uppercase">
             <ShieldCheck className="w-3 h-3" /> Digital Asset Tracking Active
           </div>
         </CardFooter>
       </Card>
 
-      {/* CONFIRMATION DIALOG */}
       <AlertDialog open={!!fileToPurge} onOpenChange={() => !isPurging && setFileToPurge(null)}>
         <AlertDialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
           <div className="bg-white">

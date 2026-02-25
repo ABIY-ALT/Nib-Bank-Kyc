@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -27,8 +28,7 @@ import {
   ClipboardList,
   UserCog,
   ArrowRightLeft,
-  History,
-  FileArchive
+  History
 } from "lucide-react"
 
 import {
@@ -52,7 +52,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Button } from "@/components/ui/button"
-import { useAuth } from "@/lib/auth-mock"
+import { useAuth } from "@/lib/auth"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebarCounts } from "@/hooks/use-sidebar-counts"
@@ -78,7 +78,6 @@ export function AppSidebar() {
       </SidebarHeader>
       
       <SidebarContent>
-        {/* DASHBOARD GROUP */}
         {hasPermission('DASHBOARD_VIEW') && (
           <SidebarGroup>
             <SidebarMenu>
@@ -94,13 +93,10 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* KYC OPERATIONS GROUP */}
         {hasAnyInGroup('WORKFLOWS') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">KYC Operations</SidebarGroupLabel>
             <SidebarMenu>
-              
-              {/* CASE MANAGEMENT DROPDOWN */}
               <Collapsible 
                 className="group/collapsible" 
                 defaultOpen={pathname.includes('/submissions') && !['/submissions', '/submissions/branch-node', '/submissions/district-node', '/submissions/master-bundle', '/admin/storage'].includes(pathname)}
@@ -226,7 +222,6 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* MONITORING DROPDOWN */}
               <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions/branch-node') || pathname.includes('/submissions/district-node')}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -264,7 +259,6 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* INFRASTRUCTURE - KYC DOCUMENT */}
               {hasPermission('MANAGE_VAULT_STORAGE') && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === '/admin/storage'} tooltip="KYC Document">
@@ -276,7 +270,6 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               )}
 
-              {/* INFRASTRUCTURE - ARCHIVE */}
               {hasPermission('VIEW_ARCHIVED_CASE') && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === '/submissions'} tooltip="Archive">
@@ -291,7 +284,6 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* REFERENCE GROUP */}
         {hasPermission('VIEW_FQ_LIBRARY') && (
           <SidebarGroup>
             <SidebarMenu>
@@ -307,7 +299,6 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* AUDIT & REPORTING GROUP */}
         {hasAnyInGroup('REPORTING') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Audit & Reporting</SidebarGroupLabel>
@@ -396,7 +387,6 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* SYSTEM ADMINISTRATION GROUP */}
         {hasAnyInGroup('SYSTEM') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Administration</SidebarGroupLabel>
