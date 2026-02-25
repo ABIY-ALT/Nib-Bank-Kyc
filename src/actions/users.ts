@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -92,7 +93,8 @@ export async function provisionUser(data: {
           firstName: data.firstName,
           lastName: data.lastName,
           phoneNumber: data.phoneNumber,
-          branchId: data.branchId || null,
+          // USE NESTED RELATION SYNTAX - branchId scalar is missing from the Prisma schema
+          branch: data.branchId ? { connect: { id: data.branchId } } : { disconnect: true },
           status: data.status,
           // Only update password if manually provided
           password: data.password ? hashedPassword : undefined
@@ -103,14 +105,16 @@ export async function provisionUser(data: {
           firstName: data.firstName,
           lastName: data.lastName,
           phoneNumber: data.phoneNumber,
-          branchId: data.branchId || null,
+          // USE NESTED RELATION SYNTAX
+          branch: data.branchId ? { connect: { id: data.branchId } } : undefined,
           status: data.status,
           needsPasswordChange: true // Force change on first login
         }
       });
 
       // 3. Handle Branch Transfer Logging
-      if (existingUser && existingUser.branchId !== data.branchId) {
+      const currentBranchId = existingUser?.branch?.id;
+      if (existingUser && currentBranchId !== data.branchId) {
         const oldBranchName = existingUser.branch?.name || 'Institutional';
         const newBranch = data.branchId ? await tx.branch.findUnique({ where: { id: data.branchId } }) : null;
         const newBranchName = newBranch?.name || 'Institutional';

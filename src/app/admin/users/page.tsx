@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -155,7 +156,7 @@ export default function UserManagementPage() {
         phoneNumber: user.phoneNumber || '',
         role: currentRole,
         status: user.status || UserStatus.ACTIVE,
-        branchId: user.branchId || 'none'
+        branchId: user.branch?.id || 'none'
       });
     } else {
       setEditingUser(null);
@@ -411,9 +412,6 @@ export default function UserManagementPage() {
                 </div>
                 <DialogTitle className="text-2xl font-black tracking-tight text-white">Institutional Profile</DialogTitle>
               </div>
-              <button onClick={() => setIsDialogOpen(false)} className="text-white/60 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
             </div>
             <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest pl-11">
               {editingUser ? 'MANAGING JURISDICTIONAL MAPPING' : 'PROVISIONING NEW STAFF CREDENTIALS'}
@@ -490,7 +488,7 @@ export default function UserManagementPage() {
               )}
             </div>
 
-            {editingUser && isBranchSpecificRole && formData.branchId !== (editingUser.branchId || 'none') && (
+            {editingUser && isBranchSpecificRole && formData.branchId !== (editingUser.branch?.id || 'none') && (
               <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 flex gap-3 animate-in zoom-in-95">
                 <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-[10px] text-amber-800 font-bold leading-relaxed uppercase">
