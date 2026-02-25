@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
@@ -73,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               } as any);
             }
           } else {
-            // New user registration flow
+            // Standard registration fallback
             const result = await syncUserToSql({
               id: fbUser.uid,
               email: fbUser.email!,
@@ -122,7 +123,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const changePassword = async (newPass: string) => {
-    // This would typically involve firebase updatePassword, but here we just flag the profile
     if (user) {
       const updated = { ...user, needsPasswordChange: false };
       setUser(updated);

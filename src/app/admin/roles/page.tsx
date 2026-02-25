@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -192,10 +193,9 @@ export default function StaffRolesPage() {
     allPermissions.forEach(p => {
       const slug = p.slug;
       
-      // Categorize based on slug and navigation logic
-      if (slug === 'DASHBOARD_VIEW' || slug === 'DASHBOARD_VIEW_SYSTEM' || slug === 'DASHBOARD_VIEW_BRANCH') {
+      if (slug === 'DASHBOARD_VIEW' || slug === 'DASHBOARD_VIEW_SYSTEM') {
         groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard", icon: LayoutDashboard });
-      } else if (slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE') {
+      } else if (slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE' || slug === 'DASHBOARD_VIEW_BRANCH') {
         groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at authorized nodes", icon: BarChart3 });
       } else if (slug === 'CASE_SUBMIT') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit upload documents and other necessary initiation steps", icon: PlusCircle });
@@ -206,7 +206,7 @@ export default function StaffRolesPage() {
       } else if (slug === 'VIEW_AMENDMENT_QUEUE') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and process resubmitted cases from Branch Officers", icon: History });
       } else if (slug === 'CASE_VIEW_ACTION_REQUIRED') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit manage returned cases and respond to comments", icon: AlertCircle });
+        groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit view and manage returned cases requiring correction / respond to specialist comments", icon: AlertCircle });
       } else if (slug === 'VIEW_ESCALATED_CASES') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit access high-priority senior assessments", icon: ShieldAlert });
       } else if (slug === 'VIEW_GOVERNANCE_QUEUE') {
@@ -214,9 +214,9 @@ export default function StaffRolesPage() {
       } else if (slug === 'MANAGE_VAULT_STORAGE') {
         groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit management of jurisdictional vault assets", icon: HardDrive });
       } else if (slug === 'VIEW_ARCHIVED_CASE') {
-        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit access to global historical records", icon: Folders });
+        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit access to global historical case records", icon: Folders });
       } else if (slug === 'EXPORT_CASE_ZIP') {
-        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit batch export of institutional bundles", icon: FileArchive });
+        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit batch export of institutional case bundles", icon: FileArchive });
       } else if (p.group === 'REFERENCE') {
         groups['REFERENCE'].push({ ...p, desc: "Permit management of the standardized findings knowledge base", icon: BookOpen });
       } else if (p.group === 'REPORTING') {
