@@ -335,9 +335,6 @@ export default function StaffRolesPage() {
                     </DialogDescription>
                   </div>
                 </div>
-                <button onClick={() => setIsDialogOpen(false)} className="text-white/60 hover:text-white transition-colors">
-                  <X className="w-6 h-6" />
-                </button>
               </div>
             </DialogHeader>
             
