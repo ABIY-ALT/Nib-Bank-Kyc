@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/lib/auth-mock';
+import { useAuth } from '@/lib/auth';
 import { 
   Dialog, 
   DialogContent,

@@ -1,8 +1,10 @@
+
 'use client';
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { UserStatus } from "@prisma/client";
+import { updateInstitutionalPassword } from "@/actions/password";
 
 export interface UserProfile {
   id: string;
@@ -100,8 +102,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const changePassword = async (newPass: string) => {
-    if (user) {
+    if (!user) throw new Error("No active session discovered.");
+
+    const res = await updateInstitutionalPassword(user.id, newPass);
+    if (res.success) {
       setUser({ ...user, needsPasswordChange: false });
+    } else {
+      throw new Error(res.error);
     }
   };
 
