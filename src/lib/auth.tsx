@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState, useEffect, createContext, useContext } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import { UserStatus } from '@prisma/client';
+import { createContext, useContext, useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { UserStatus } from "@prisma/client";
 
 export interface UserProfile {
   id: string;
@@ -26,6 +26,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   logout: (reason?: string) => void;
+  changePassword: (newPass: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -58,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
         }
       } catch (e) {
-        console.error("Session hydration failed:", e);
+        console.error("Institutional session hydration failed:", e);
         localStorage.removeItem("nib_token");
         setUser(null);
       } finally {
@@ -70,10 +71,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, pass: string) => {
+    const normalizedEmail = email.toLowerCase();
+    if (!normalizedEmail.endsWith('@nibbank.com.et')) {
+      throw new Error('Institutional access restricted to @nibbank.com.et domain.');
+    }
+
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: pass }),
+      body: JSON.stringify({ email: normalizedEmail, password: pass }),
     });
 
     const data = await res.json();
@@ -94,8 +100,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     toast({ title: 'Logged Out', description: `Session terminated: ${reason}` });
   };
 
+  const changePassword = async (newPass: string) => {
+    // In a production app, this would call an API to update the database
+    if (user) {
+      setUser({ ...user, needsPasswordChange: false });
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, changePassword }}>
       {children}
     </AuthContext.Provider>
   );
