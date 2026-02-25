@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -35,7 +34,8 @@ import {
   Info,
   Map,
   BarChartHorizontal,
-  Monitor
+  Monitor,
+  HardDrive
 } from "lucide-react"
 
 import {
@@ -292,10 +292,9 @@ export function AppSidebar() {
                     <BookOpen className="w-4 h-4" />
                     <span>KYC F&Q Reference</span>
                   </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
         )}
 
         {/* AUDIT & REPORTING GROUP */}
@@ -442,6 +441,17 @@ export function AppSidebar() {
                             <Link href="/admin/branches">
                               <Building2 className="w-4 h-4 mr-2" />
                               <span>Hierarchy</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+
+                      {hasPermission('MANAGE_VAULT_STORAGE') && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/storage'}>
+                            <Link href="/admin/storage">
+                              <HardDrive className="w-4 h-4 mr-2 text-primary" />
+                              <span>Vault Storage</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>

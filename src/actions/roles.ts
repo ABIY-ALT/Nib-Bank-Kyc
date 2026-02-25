@@ -49,6 +49,7 @@ export async function seedInstitutionalPermissions() {
     { slug: 'MANAGE_BRANCHES', name: 'Manage Hierarchy', group: 'SYSTEM' },
     { slug: 'EDIT_SLA_POLICY', name: 'Modify System Configuration', group: 'SYSTEM' },
     { slug: 'VIEW_SYSTEM_AUDIT', name: 'View System Audit Logs', group: 'SYSTEM' },
+    { slug: 'MANAGE_VAULT_STORAGE', name: 'Manage Institutional Storage', group: 'SYSTEM' },
   ];
 
   try {
