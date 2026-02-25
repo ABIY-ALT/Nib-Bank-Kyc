@@ -161,7 +161,7 @@ async function main() {
 
   // 4. Provision Initial Admin Account
   const adminEmail = 'admin.user@nibbank.com.et';
-  // Use 10 rounds for consistency
+  // Use 10 rounds for consistency with auth logic
   const hashedPassword = await bcrypt.hash('Password123', 10);
   
   console.log(`Setting up Admin: ${adminEmail} / Password123`);
