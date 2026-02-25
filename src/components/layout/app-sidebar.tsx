@@ -450,15 +450,6 @@ export function AppSidebar() {
                         </SidebarMenuSubItem>
                       )}
 
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/admin/rbac-blueprint'}>
-                          <Link href="/admin/rbac-blueprint">
-                            <FileSearch className="w-4 h-4 mr-2 text-primary" />
-                            <span>RBAC Blueprint</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-
                       {hasPermission('MAP_USERS_TO_BRANCH') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/assignments'}>

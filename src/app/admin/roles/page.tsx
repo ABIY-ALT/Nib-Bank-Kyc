@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -18,7 +19,14 @@ import {
   RefreshCcw,
   AlertTriangle,
   UserX,
-  UserCheck
+  UserCheck,
+  Workflow,
+  Table as TableIcon,
+  ChevronRight,
+  Info,
+  Database,
+  UserCog,
+  Lock
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -35,6 +43,34 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const MATRIX_DATA = [
+  { module: "Dashboard", page: "Dashboard", officer: "R", super: "R", director: "R", admin: "R" },
+  { module: "KYC Operations", page: "Create Submission", officer: "W", super: "-", director: "-", admin: "-" },
+  { module: "KYC Operations", page: "My Submissions", officer: "R", super: "-", director: "-", admin: "-" },
+  { module: "KYC Operations", page: "Review & Action", officer: "W", super: "W", director: "-", admin: "-" },
+  { module: "KYC Operations", page: "Returned Cases", officer: "R", super: "R", director: "-", admin: "-" },
+  { module: "KYC Operations", page: "Escalated Cases", officer: "-", super: "R", director: "-", admin: "-" },
+  { module: "KYC Operations", page: "Exceptional Cases", officer: "-", super: "R", director: "W", admin: "-" },
+  { module: "KYC Operations", page: "Branch Monitoring", officer: "-", super: "R", director: "R", admin: "-" },
+  { module: "KYC Operations", page: "District Monitoring", officer: "-", super: "-", director: "R", admin: "-" },
+  { module: "KYC Operations", page: "Document Vault", officer: "R", super: "RW", director: "RW", admin: "-" },
+  { module: "KYC Operations", page: "Case Archive", officer: "-", super: "R", director: "R", admin: "-" },
+  { module: "KYC Operations", page: "KYC FAQ Reference", officer: "R", super: "R", director: "R", admin: "-" },
+  { module: "Audit & Reporting", page: "Ops Monitoring", officer: "-", super: "R", director: "R", admin: "-" },
+  { module: "Audit & Reporting", page: "Management Report", officer: "-", super: "-", director: "R", admin: "-" },
+  { module: "Audit & Reporting", page: "System-wide", officer: "-", super: "R", director: "R", admin: "-" },
+  { module: "Audit & Reporting", page: "Follow-up Audit", officer: "-", super: "R", director: "R", admin: "-" },
+  { module: "Audit & Reporting", page: "Audit Reports", officer: "-", super: "R", director: "R", admin: "-" },
+  { module: "Audit & Reporting", page: "Master Archive", officer: "-", super: "-", director: "R", admin: "-" },
+  { module: "Administration", page: "User Access", officer: "-", super: "-", director: "-", admin: "W" },
+  { module: "Administration", page: "Assign Roles", officer: "-", super: "-", director: "-", admin: "W" },
+  { module: "Administration", page: "Portfolio Mapping", officer: "-", super: "W", director: "-", admin: "-" },
+  { module: "Administration", page: "Hierarchy", officer: "-", super: "-", director: "R", admin: "W" },
+  { module: "Administration", page: "Configuration", officer: "-", super: "-", director: "-", admin: "W" },
+  { module: "Administration", page: "Audit Logs", officer: "-", super: "R", director: "-", admin: "R" },
+];
 
 export default function StaffRolesPage() {
   const { toast } = useToast();
@@ -120,11 +156,7 @@ export default function StaffRolesPage() {
         setIsDialogOpen(false);
         loadData();
       } else {
-        toast({ 
-          variant: "destructive", 
-          title: "Error", 
-          description: res.error 
-        });
+        toast({ variant: "destructive", title: "Error", description: res.error });
       }
     } finally {
       setIsSaving(false);
@@ -175,6 +207,13 @@ export default function StaffRolesPage() {
     }
   };
 
+  const getPermBadge = (val: string) => {
+    if (val === 'R') return <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center font-black text-xs">R</div>;
+    if (val === 'W') return <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 flex items-center justify-center font-black text-xs">W</div>;
+    if (val === 'RW') return <div className="w-12 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 flex items-center justify-center font-black text-xs gap-1">R/W</div>;
+    return <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-300 flex items-center justify-center font-black text-xs">-</div>;
+  };
+
   if (loading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
 
   return (
@@ -202,83 +241,262 @@ export default function StaffRolesPage() {
         </div>
       </div>
 
-      <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
-        <CardHeader className="bg-primary text-white border-b py-6">
-          <CardTitle className="text-xl font-black">Personnel Designations</CardTitle>
-          <CardDescription className="text-white/70 font-medium">Manage regional and operational authority levels.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50/80">
-                <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Role Name</TableHead>
-                <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Status</TableHead>
-                <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Capability Authority</TableHead>
-                <TableHead className="text-right font-black pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {roleDefinitions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-32 text-center">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="p-6 bg-slate-50 rounded-full"><Zap className="w-12 h-12 text-slate-200" /></div>
-                      <div className="space-y-1">
-                        <p className="font-bold text-slate-900 text-lg">No roles defined</p>
-                        <p className="text-sm text-muted-foreground">Establish authority groups to manage staff access.</p>
+      <Tabs defaultValue="management" className="space-y-8">
+        <TabsList className="bg-slate-100 p-1 border h-12 rounded-xl">
+          <TabsTrigger value="management" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8 rounded-lg">Authority Management</TabsTrigger>
+          <TabsTrigger value="blueprint" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8 rounded-lg">Institutional Blueprint</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="management" className="space-y-8 animate-in slide-in-from-left-4 duration-500">
+          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
+            <CardHeader className="bg-primary text-white border-b py-6">
+              <CardTitle className="text-xl font-black">Personnel Designations</CardTitle>
+              <CardDescription className="text-white/70 font-medium">Manage regional and operational authority levels.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80">
+                    <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Role Name</TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Status</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Capability Authority</TableHead>
+                    <TableHead className="text-right font-black pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {roleDefinitions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-32 text-center">
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="p-6 bg-slate-50 rounded-full"><Zap className="w-12 h-12 text-slate-200" /></div>
+                          <div className="space-y-1">
+                            <p className="font-bold text-slate-900 text-lg">No roles defined</p>
+                            <p className="text-sm text-muted-foreground">Establish authority groups to manage staff access.</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : roleDefinitions.map((role) => (
+                    <TableRow key={role.id} className={cn("hover:bg-slate-50 transition-colors group", !role.active && "bg-slate-50/30 opacity-80")}>
+                      <TableCell className={cn("font-black pl-8 py-6", role.active ? "text-slate-900" : "text-slate-400")}>
+                        {role.name.replace(/_/g, ' ')}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={role.active ? 'text-emerald-600 border-emerald-200 bg-emerald-50 font-black text-[9px] uppercase px-3' : 'text-slate-400 border-slate-200 bg-white font-black text-[9px] uppercase px-3'}>
+                          {role.active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <button 
+                          onClick={() => handleOpenInventory(role)}
+                          className="flex items-center justify-center gap-2 mx-auto hover:scale-105 transition-transform p-3 rounded-xl hover:bg-primary/5 group/btn"
+                        >
+                          <span className="font-black text-slate-700 group-hover/btn:text-primary text-xs">{role.permissions.length} Capabilities</span>
+                          <CheckCircle2 className="w-4 h-4 text-primary" />
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right pr-8">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-10 w-10 text-slate-400 rounded-full hover:bg-primary/5 hover:text-primary"><Settings2 className="w-4 h-4" /></Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleToggleStatus(role)} 
+                            disabled={isToggling === role.id}
+                            className={cn(
+                              "h-10 w-10 rounded-full transition-colors",
+                              role.active ? "text-destructive hover:bg-destructive/5" : "text-emerald-600 hover:bg-emerald-50"
+                            )}
+                          >
+                            {isToggling === role.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : role.active ? (
+                              <UserX className="w-4 h-4" />
+                            ) : (
+                              <UserCheck className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="blueprint" className="space-y-12 animate-in slide-in-from-right-4 duration-500">
+          <section className="space-y-6">
+            <div className="flex items-center gap-2">
+              <Workflow className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-black uppercase tracking-widest text-slate-900">Provisioning Lifecycle</h2>
+            </div>
+            
+            <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
+              <CardContent className="p-12">
+                <div className="flex flex-col lg:flex-row items-center justify-between gap-8 relative">
+                  <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-100 hidden lg:block -translate-y-1/2 z-0" />
+                  
+                  <div className="z-10 flex flex-col items-center gap-4 group">
+                    <div className="w-20 h-20 rounded-3xl bg-slate-100 border-2 border-slate-200 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-tighter">Start</div>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-black text-slate-900 leading-none">Decision</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Admin Intent</p>
+                    </div>
+                  </div>
+
+                  <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
+
+                  <div className="z-10 flex flex-col items-center gap-4 group">
+                    <div className="w-48 p-6 rounded-3xl bg-blue-500 text-white border-4 border-white shadow-xl shadow-blue-100 flex flex-col items-center text-center gap-2 group-hover:-translate-y-2 transition-transform">
+                      <Plus className="w-6 h-6" />
+                      <div>
+                        <p className="font-black text-sm">Step 1: Roles Table</p>
+                        <p className="text-[9px] font-bold text-blue-100 uppercase tracking-widest">e.g. "KYC Auditor"</p>
                       </div>
                     </div>
-                  </TableCell>
-                </TableRow>
-              ) : roleDefinitions.map((role) => (
-                <TableRow key={role.id} className={cn("hover:bg-slate-50 transition-colors group", !role.active && "bg-slate-50/30 opacity-80")}>
-                  <TableCell className={cn("font-black pl-8 py-6", role.active ? "text-slate-900" : "text-slate-400")}>
-                    {role.name.replace(/_/g, ' ')}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={role.active ? 'text-emerald-600 border-emerald-200 bg-emerald-50 font-black text-[9px] uppercase px-3' : 'text-slate-400 border-slate-200 bg-white font-black text-[9px] uppercase px-3'}>
-                      {role.active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <button 
-                      onClick={() => handleOpenInventory(role)}
-                      className="flex items-center justify-center gap-2 mx-auto hover:scale-105 transition-transform p-3 rounded-xl hover:bg-primary/5 group/btn"
-                    >
-                      <span className="font-black text-slate-700 group-hover/btn:text-primary text-xs">{role.permissions.length} Capabilities</span>
-                      <CheckCircle2 className="w-4 h-4 text-primary" />
-                    </button>
-                  </TableCell>
-                  <TableCell className="text-right pr-8">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-10 w-10 text-slate-400 rounded-full hover:bg-primary/5 hover:text-primary"><Settings2 className="w-4 h-4" /></Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => handleToggleStatus(role)} 
-                        disabled={isToggling === role.id}
-                        className={cn(
-                          "h-10 w-10 rounded-full transition-colors",
-                          role.active ? "text-destructive hover:bg-destructive/5" : "text-emerald-600 hover:bg-emerald-50"
-                        )}
-                      >
-                        {isToggling === role.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : role.active ? (
-                          <UserX className="w-4 h-4" />
-                        ) : (
-                          <UserCheck className="w-4 h-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  </div>
 
+                  <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
+
+                  <div className="z-10 flex flex-col items-center gap-4 group">
+                    <div className="w-48 p-6 rounded-3xl bg-blue-600 text-white border-4 border-white shadow-xl shadow-blue-100 flex flex-col items-center text-center gap-2 group-hover:-translate-y-2 transition-transform">
+                      <Settings2 className="w-6 h-6" />
+                      <div>
+                        <p className="font-black text-sm">Step 2: Permissions</p>
+                        <p className="text-[9px] font-bold text-blue-100 uppercase tracking-widest">Assign Read/Write</p>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-2">
+                      <Database className="w-3 h-3 text-emerald-600" />
+                      <span className="text-[9px] font-black text-emerald-700 uppercase">Updates Table</span>
+                    </div>
+                  </div>
+
+                  <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
+
+                  <div className="z-10 flex flex-col items-center gap-4 group">
+                    <div className="w-48 p-6 rounded-3xl bg-blue-700 text-white border-4 border-white shadow-xl shadow-blue-100 flex flex-col items-center text-center gap-2 group-hover:-translate-y-2 transition-transform">
+                      <UserCog className="w-6 h-6" />
+                      <div>
+                        <p className="font-black text-sm">Step 3: Assignment</p>
+                        <p className="text-[9px] font-bold text-blue-100 uppercase tracking-widest">Map Role to User</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
+
+                  <div className="z-10 flex flex-col items-center gap-4 group">
+                    <div className="w-48 p-6 rounded-3xl bg-slate-900 text-white border-4 border-white shadow-xl shadow-slate-200 flex flex-col items-center text-center gap-2 group-hover:-translate-y-2 transition-transform">
+                      <Lock className="w-6 h-6" />
+                      <div>
+                        <p className="font-black text-sm">Step 4: Enforcement</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Backend/Frontend Check</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
+
+                  <div className="z-10 flex flex-col items-center gap-4 group">
+                    <div className="w-20 h-20 rounded-full bg-emerald-500 text-white border-4 border-white shadow-xl shadow-emerald-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <CheckCircle2 className="w-8 h-8" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-black text-slate-900 leading-none">Access Granted</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Lifecycle End</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="space-y-6">
+            <div className="flex items-center gap-2">
+              <TableIcon className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-black uppercase tracking-widest text-slate-900">Institutional Access Matrix</h2>
+            </div>
+
+            <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
+              <CardHeader className="bg-slate-900 text-white p-8">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="text-2xl font-black">Role-Based Capability Matrix</CardTitle>
+                    <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Single Source of Truth for Security Audits</CardDescription>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-emerald-500" /><span className="text-[10px] font-black uppercase text-slate-400">Read Only</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-blue-500" /><span className="text-[10px] font-black uppercase text-slate-400">Write Access</span></div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        <th className="text-left py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500 w-[240px]">Module / Node</th>
+                        <th className="text-left py-6 px-6 font-black text-[11px] uppercase tracking-widest text-slate-500">System Page</th>
+                        <th className="text-center py-6 px-4 font-black text-[11px] uppercase tracking-widest text-slate-900">KYC Officer</th>
+                        <th className="text-center py-6 px-4 font-black text-[11px] uppercase tracking-widest text-slate-900">Supervisor</th>
+                        <th className="text-center py-6 px-4 font-black text-[11px] uppercase tracking-widest text-slate-900">KYC Director</th>
+                        <th className="text-center py-6 px-4 pr-10 font-black text-[11px] uppercase tracking-widest text-slate-900">System Admin</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {MATRIX_DATA.map((row, idx) => {
+                        const isNewModule = idx === 0 || MATRIX_DATA[idx - 1].module !== row.module;
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
+                            <td className="py-5 pl-10">
+                              {isNewModule ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-1.5 h-4 bg-primary rounded-full" />
+                                  <span className="font-black text-xs text-primary uppercase tracking-tighter">{row.module}</span>
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="py-5 px-6">
+                              <div className="flex items-center gap-3">
+                                <ChevronRight className="w-3 h-3 text-slate-300 group-hover:translate-x-1 transition-transform" />
+                                <span className="text-sm font-bold text-slate-700">{row.page}</span>
+                              </div>
+                            </td>
+                            <td className="text-center py-5 px-4">{getPermBadge(row.officer)}</td>
+                            <td className="text-center py-5 px-4">{getPermBadge(row.super)}</td>
+                            <td className="text-center py-5 px-4">{getPermBadge(row.director)}</td>
+                            <td className="text-center py-5 px-4 pr-10">{getPermBadge(row.admin)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+              <CardFooter className="bg-slate-50/50 border-t py-6 px-10 flex justify-between items-center">
+                <div className="flex items-center gap-6">
+                  <div className="flex gap-2 p-3 bg-white border border-slate-200 rounded-2xl">
+                    <Info className="w-4 h-4 text-primary shrink-0" />
+                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed uppercase">
+                      <strong>Validation Note:</strong> This matrix is enforced at both the UI Layer (Conditional Rendering) and the Data Layer (Firestore Rules / API Security).
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[10px] font-mono font-black text-primary/40 uppercase tracking-tighter">
+                  NIB Institutional Security Blueprint v1.0
+                </p>
+              </CardFooter>
+            </Card>
+          </section>
+        </TabsContent>
+      </Tabs>
+
+      {/* DIALOGS & MODALS */}
       <Dialog open={isInventoryOpen} onOpenChange={setIsInventoryOpen}>
         <DialogContent className="max-w-3xl rounded-3xl overflow-hidden p-0 border-none shadow-2xl">
           <DialogHeader className="p-8 bg-primary text-white border-b space-y-0">
