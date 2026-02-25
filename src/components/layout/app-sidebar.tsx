@@ -106,8 +106,8 @@ export function AppSidebar() {
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">KYC Operations</SidebarGroupLabel>
             <SidebarMenu>
               
-              {/* A. CASE MANAGEMENT */}
-              <Collapsible className="group/collapsible" defaultOpen={true}>
+              {/* CASE MANAGEMENT DROPDOWN */}
+              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions') && pathname !== '/submissions'}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Case Management">
@@ -213,8 +213,8 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* B. MONITORING */}
-              <Collapsible className="group/collapsible" defaultOpen={false}>
+              {/* MONITORING DROPDOWN */}
+              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions/branch-node') || pathname.includes('/submissions/district-node')}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Monitoring">
@@ -251,9 +251,9 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* C. ARCHIVE */}
+              {/* ARCHIVE DROPDOWN */}
               {hasPermission('VIEW_ARCHIVED_CASE') && (
-                <Collapsible className="group/collapsible" defaultOpen={false}>
+                <Collapsible className="group/collapsible" defaultOpen={pathname === '/submissions'}>
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton tooltip="Archive">
