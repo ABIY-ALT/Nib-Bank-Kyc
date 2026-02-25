@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
@@ -54,27 +53,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isMockMode) {
       const savedUser = localStorage.getItem('nib_mock_user');
       if (savedUser) {
-        // Refresh mock user from DB to ensure roles/data are current
+        // Maintain loading until DB sync is done to prevent refresh glitches
         const refreshMock = async () => {
-          const parsed = JSON.parse(savedUser);
-          const dbUser = await getUserByEmail(parsed.email);
-          if (dbUser) {
-            const mapped = {
-              ...dbUser,
-              name: `${dbUser.firstName} ${dbUser.lastName}`,
-              branchName: (dbUser as any).branch?.name || null,
-              districtName: (dbUser as any).branch?.district?.name || null,
-              assignedBranches: (dbUser as any).assignedBranches || [],
-              roles: (dbUser.roles && dbUser.roles.length > 0) 
-                ? dbUser.roles 
-                : [{ role: { name: dbUser.email.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
-            } as any;
-            setUser(mapped);
-            localStorage.setItem('nib_mock_user', JSON.stringify(mapped));
-          } else {
-            setUser(parsed);
+          try {
+            const parsed = JSON.parse(savedUser);
+            const dbUser = await getUserByEmail(parsed.email);
+            if (dbUser) {
+              const mapped = {
+                ...dbUser,
+                name: `${dbUser.firstName} ${dbUser.lastName}`,
+                branchName: (dbUser as any).branch?.name || null,
+                districtName: (dbUser as any).branch?.district?.name || null,
+                assignedBranches: (dbUser as any).assignedBranches || [],
+                roles: (dbUser.roles && dbUser.roles.length > 0) 
+                  ? dbUser.roles 
+                  : [{ role: { name: dbUser.email.includes('admin') ? 'SUPER_ADMIN' : 'BRANCH_OFFICER' } }]
+              } as any;
+              setUser(mapped);
+              localStorage.setItem('nib_mock_user', JSON.stringify(mapped));
+            } else {
+              setUser(parsed);
+            }
+          } catch (e) {
+            console.error("Mock recovery failed:", e);
+          } finally {
+            setLoading(false);
           }
-          setLoading(false);
         };
         refreshMock();
       } else {
@@ -144,8 +148,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (pass !== 'nibbank123') throw new Error('Invalid developer credential.');
       
       const existingUser = await getUserByEmail(normalizedEmail);
-      
-      // Use seeded ID if found, otherwise generate
       const userId = existingUser?.id || `mock-${normalizedEmail.split('@')[0]}`;
       
       const mockUser: any = {

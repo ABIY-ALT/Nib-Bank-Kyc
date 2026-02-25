@@ -208,7 +208,7 @@ export default function StaffRolesPage() {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit access high-priority senior assessments", icon: ShieldAlert });
       } else if (slug === 'VIEW_GOVERNANCE_QUEUE') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit process hierarchy governance flows", icon: Zap });
-      } else if (slug === 'CASE_VIEW_BRANCH') {
+      } else if (slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_BRANCH') {
         groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at the local branch node", icon: Building2 });
       } else if (slug === 'DASHBOARD_VIEW_DISTRICT_NODE' || slug === 'DASHBOARD_VIEW_DISTRICT') {
         groups['MONITORING'].push({ ...p, desc: "Permit regional oversight across the district jurisdiction", icon: Map });
