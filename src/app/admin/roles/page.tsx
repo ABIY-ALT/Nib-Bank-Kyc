@@ -24,19 +24,15 @@ import {
   BookOpen,
   FileBarChart,
   Settings,
-  Map,
   X,
-  Monitor,
-  Inbox,
+  Search,
+  History,
   AlertCircle,
   ShieldAlert,
-  Search,
-  ArrowRightLeft,
-  History,
-  FileArchive,
-  ClipboardList,
+  Inbox,
   PlusCircle,
-  BarChart3
+  BarChart3,
+  Map
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -55,7 +51,6 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { usePermissions } from '@/hooks/use-permissions';
 
-// Section grouping precisely matching the institutional sidebar
 const SIDEBAR_GROUPS = [
   { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
@@ -83,13 +78,12 @@ export default function StaffRolesPage() {
   const [roleName, setRoleName] = useState("");
   const [permissionsForm, setPermissionsForm] = useState<string[]>([]);
 
-  // Security Check: Direct URL Protection
+  // Security Gate: Direct URL Protection
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('ROLE_CREATE')) {
-      toast({ variant: "destructive", title: "Access Restricted", description: "You do not have administrative clearance for this node." });
       router.push('/');
     }
-  }, [hasPermission, permissionsLoading, router, toast]);
+  }, [hasPermission, permissionsLoading, router]);
 
   useEffect(() => {
     loadData();
@@ -198,7 +192,7 @@ export default function StaffRolesPage() {
     allPermissions.forEach(p => {
       const slug = p.slug;
       
-      if (slug === 'DASHBOARD_VIEW') {
+      if (slug.includes('DASHBOARD_VIEW')) {
         groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard", icon: LayoutDashboard });
       } else if (slug === 'CASE_SUBMIT') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit upload documents and other necessary initiation steps", icon: PlusCircle });
@@ -216,7 +210,7 @@ export default function StaffRolesPage() {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit process hierarchy governance flows", icon: Zap });
       } else if (slug === 'CASE_VIEW_BRANCH') {
         groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at the local branch node", icon: Building2 });
-      } else if (slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE') {
+      } else if (slug === 'DASHBOARD_VIEW_DISTRICT_NODE' || slug === 'DASHBOARD_VIEW_DISTRICT') {
         groups['MONITORING'].push({ ...p, desc: "Permit regional oversight across the district jurisdiction", icon: Map });
       } else if (slug === 'MANAGE_VAULT_STORAGE') {
         groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit management of jurisdictional vault storage assets", icon: HardDrive });

@@ -5,7 +5,7 @@ import { useMemo, useCallback } from "react";
 
 /**
  * Production-ready Permission Engine.
- * Optimized to prevent infinite update loops by using useCallback for helper functions.
+ * Optimized with useCallback to prevent infinite update loops in the UI Shell.
  */
 export function usePermissions() {
   const { user, loading: authLoading } = useAuth();
