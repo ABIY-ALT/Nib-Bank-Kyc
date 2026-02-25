@@ -4,8 +4,8 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import { useFirebase } from '@/firebase';
 import { 
   onAuthStateChanged, 
-  signInWithEmailAndPassword, 
   signOut, 
+  signInWithEmailAndPassword
 } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { syncUserToSql, getUserProfile } from '@/actions/auth';
@@ -47,7 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
 
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setLoading(true);
@@ -56,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const sqlUser = await getUserProfile(fbUser.uid);
           if (sqlUser) {
             if (sqlUser.status !== 'ACTIVE') {
-              toast({ variant: 'destructive', title: 'Access Denied', description: `Account ${sqlUser.status}.` });
+              toast({ variant: 'destructive', title: 'Access Denied', description: `Account is ${sqlUser.status}.` });
               await signOut(auth);
               setUser(null);
             } else {
@@ -66,30 +69,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 branchName: (sqlUser as any).branch?.name || null,
                 districtName: (sqlUser as any).branch?.district?.name || null,
                 assignedBranches: (sqlUser as any).assignedBranches || [],
-                roles: (sqlUser.roles && sqlUser.roles.length > 0)
-                  ? sqlUser.roles
-                  : [{ role: { name: 'BRANCH_OFFICER' } }]
+                roles: sqlUser.roles || []
               } as any);
             }
           } else {
-            // New user registration
+            // New user registration flow
             const result = await syncUserToSql({
               id: fbUser.uid,
               email: fbUser.email!,
               name: fbUser.displayName || fbUser.email!.split('@')[0],
             });
-            if (result.success) {
-              const u = result.user!;
+            if (result.success && result.user) {
+              const u = result.user;
               setUser({ 
                 ...u, 
                 name: `${u.firstName} ${u.lastName}`,
                 assignedBranches: [],
-                roles: [{ role: { name: 'BRANCH_OFFICER' } }]
+                roles: []
               } as any);
             }
           }
         } catch (e) {
           console.error("Institutional profile sync failed:", e);
+          setUser(null);
         }
       } else {
         setUser(null);
@@ -120,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const changePassword = async (newPass: string) => {
+    // This would typically involve firebase updatePassword, but here we just flag the profile
     if (user) {
       const updated = { ...user, needsPasswordChange: false };
       setUser(updated);
