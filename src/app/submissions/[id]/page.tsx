@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -30,12 +29,16 @@ import {
   Landmark,
   UserCheck,
   ClipboardCheck,
-  Zap
+  Zap,
+  Trash2,
+  AlertTriangle,
+  RotateCcw
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getSubmissionById, updateSubmissionStatus, updateSubmissionChecklist, processExceptionalStep } from "@/actions/submissions";
+import { deleteInstitutionalFile } from "@/actions/storage";
 import { getGlobalSettings } from "@/actions/settings";
 import { KYCStatus } from "@prisma/client";
 import { Label } from "@/components/ui/label";
@@ -51,6 +54,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { usePermissions } from "@/hooks/use-permissions";
 import { AMENDMENT_SCENARIOS } from "@/lib/kyc-data";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const KYC_CHECKLIST_ITEMS = [
   { id: 'id_verified', label: 'Identity Document Authenticity' },
@@ -82,6 +94,10 @@ export default function SubmissionDetails() {
   const [isCustomRemark, setIsCustomRemark] = useState(true);
   const [isActioning, setIsActioning] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
+
+  // Asset Purge State
+  const [fileToPurge, setFileToPurge] = useState<any | null>(null);
+  const [isPurging, setIsPurging] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -122,9 +138,9 @@ export default function SubmissionDetails() {
     return hasPermission('KYC_VERIFY_CHECKLIST') || hasPermission('KYC_APPROVE_STANDARD');
   }, [hasPermission]);
 
-  const isKYCDirector = useMemo(() => {
-    return isSuperAdmin || user?.roles?.some((ur: any) => ur.role.name === 'KYC_DIRECTOR' || ur.role.name === 'DISTRICT_DIRECTOR');
-  }, [user, isSuperAdmin]);
+  const canPurgeAsset = useMemo(() => {
+    return isSuperAdmin || hasPermission('MANAGE_VAULT_STORAGE');
+  }, [isSuperAdmin, hasPermission]);
 
   const isTerminal = submission?.status === KYCStatus.APPROVED || submission?.status === KYCStatus.REJECTED;
 
@@ -170,6 +186,24 @@ export default function SubmissionDetails() {
       toast({ variant: "destructive", title: "Transition Failed" });
     } finally {
       setIsActioning(null);
+    }
+  };
+
+  const handleConfirmPurge = async () => {
+    if (!fileToPurge) return;
+    setIsPurging(fileToPurge.id);
+    try {
+      const res = await deleteInstitutionalFile(fileToPurge.id);
+      if (res.success) {
+        toast({ title: "Asset Purged", description: "File wiped from server storage and case archive." });
+        const updated = await getSubmissionById(submission.id);
+        setSubmission(updated);
+      } else {
+        toast({ variant: "destructive", title: "Purge Failed", description: res.error });
+      }
+    } finally {
+      setIsPurging(null);
+      setFileToPurge(null);
     }
   };
 
@@ -269,10 +303,36 @@ export default function SubmissionDetails() {
             </CardHeader>
             <CardContent className="pt-6 px-6">
               <div className="grid gap-4">
-                {submission.memos?.map((doc: any) => (
+                {submission.documents?.length === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground italic bg-slate-50 rounded-2xl border-2 border-dashed">
+                    No files found in case archive.
+                  </div>
+                ) : submission.documents?.map((doc: any) => (
                   <div key={doc.id} className="flex items-center justify-between p-5 border rounded-2xl bg-white shadow-sm border-slate-100 group hover:border-primary/30 transition-all">
-                    <div className="flex items-center gap-4"><FileText className="w-6 h-6 text-slate-400 group-hover:text-primary transition-colors" /><div><p className="font-black text-slate-900">{doc.name}</p><p className="text-[10px] text-muted-foreground uppercase font-black">{doc.type}</p></div></div>
-                    <Button variant="ghost" size="icon" asChild className="rounded-full h-10 w-10 text-primary hover:bg-primary/5"><a href={doc.fileUrl} download={doc.name}><Download className="w-5 h-5" /></a></Button>
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-primary/5 transition-colors">
+                        <FileText className="w-6 h-6 text-slate-400 group-hover:text-primary transition-colors" />
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-900">{doc.name}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase font-black">{doc.type}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="icon" asChild className="rounded-full h-10 w-10 text-primary hover:bg-primary/5">
+                        <a href={doc.url} download={doc.name}><Download className="w-5 h-5" /></a>
+                      </Button>
+                      {canPurgeAsset && !isTerminal && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => setFileToPurge(doc)}
+                          className="rounded-full h-10 w-10 text-destructive hover:bg-red-50"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -329,7 +389,7 @@ export default function SubmissionDetails() {
                   <Button onClick={() => handleExceptionalStep('AWAITING_DIRECTOR', 'District Approve')} className="w-full h-12 bg-primary text-white font-black rounded-xl shadow-lg" disabled={!!isActioning}>Regional Sign-off</Button>
                 )}
 
-                {submission.exceptionalStatus === 'AWAITING_DIRECTOR' && isKYCDirector && (
+                {submission.exceptionalStatus === 'AWAITING_DIRECTOR' && isReviewer && (
                   <div className="grid gap-3">
                     <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Approve & Forward to Division')} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl flex flex-col items-center justify-center leading-none" disabled={!!isActioning}>
                       <span>Approve & Forward to Division</span>
@@ -371,6 +431,50 @@ export default function SubmissionDetails() {
           )}
         </div>
       </div>
+
+      <AlertDialog open={!!fileToPurge} onOpenChange={() => !isPurging && setFileToPurge(null)}>
+        <AlertDialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-white">
+            <AlertDialogHeader className="p-8 bg-red-50 border-b border-red-100">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white rounded-2xl shadow-sm">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+                <div className="space-y-1">
+                  <AlertDialogTitle className="text-xl font-black text-red-900 tracking-tight">
+                    Purge Institutional Asset
+                  </AlertDialogTitle>
+                  <p className="text-[10px] font-black uppercase text-red-400 tracking-widest">Digital Audit Warning</p>
+                </div>
+              </div>
+            </AlertDialogHeader>
+            <div className="p-8 space-y-6">
+              <div className="space-y-4">
+                <p className="text-sm font-bold text-slate-700 leading-relaxed">
+                  Permanently delete <span className="text-red-600">"{fileToPurge?.name}"</span> from this case record?
+                </p>
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex gap-3">
+                  <RotateCcw className="w-5 h-5 text-slate-400 shrink-0" />
+                  <p className="text-xs font-black text-slate-500 uppercase leading-normal">
+                    This file will be wiped from the server storage cluster immediately. This action is irreversible.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <AlertDialogFooter className="p-8 bg-slate-50 border-t flex flex-row items-center justify-end gap-4">
+              <AlertDialogCancel disabled={!!isPurging} className="rounded-xl font-bold h-12 px-6">Abort</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={(e) => { e.preventDefault(); handleConfirmPurge(); }}
+                disabled={!!isPurging}
+                className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl h-12 px-10 shadow-xl shadow-red-200"
+              >
+                {isPurging ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                Purge Asset
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

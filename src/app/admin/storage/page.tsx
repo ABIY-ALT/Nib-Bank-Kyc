@@ -72,14 +72,19 @@ export default function StorageVaultPage() {
   const loadInventory = async () => {
     if (!user) return;
     setLoading(true);
-    const data = await getStorageInventory({
-      userId: user.id,
-      isSuperAdmin,
-      assignedBranches: user.assignedBranches || [],
-      branchName: user.branchName || undefined
-    });
-    setInventory(data);
-    setLoading(false);
+    try {
+      const data = await getStorageInventory({
+        userId: user.id,
+        isSuperAdmin,
+        assignedBranches: user.assignedBranches || [],
+        branchName: user.branchName || undefined
+      });
+      setInventory(data || []);
+    } catch (e) {
+      console.error("Inventory fetch failed", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredFiles = useMemo(() => {
@@ -156,7 +161,7 @@ export default function StorageVaultPage() {
           <p className="text-muted-foreground text-lg font-medium">Managing signature-authorized assets across the network.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-1.5 font-black h-10 flex items-center gap-2">
+          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-1.5 font-black h-10 flex items-center gap-2 text-[10px] uppercase">
             <ShieldCheck className="w-4 h-4" /> 
             {isSuperAdmin ? 'Master Node Access' : `Branch Node: ${user?.branchName || 'Assigned'}`}
           </Badge>
