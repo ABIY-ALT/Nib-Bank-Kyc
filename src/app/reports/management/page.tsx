@@ -59,19 +59,11 @@ import {
   Loader2,
   TrendingUp,
   History,
-  Users,
   Inbox,
   CheckCircle2,
-  XCircle,
   RotateCcw,
-  Printer,
   ShieldAlert,
-  Info,
-  ChevronRight,
-  Target,
-  FileText,
-  Landmark,
-  Shield
+  Info
 } from "lucide-react";
 import { subDays, format, differenceInDays } from "date-fns";
 import { getSubmissions } from "@/actions/submissions";
@@ -162,19 +154,6 @@ export default function ManagementReportingPage() {
     return { total, approved, pending, rejected, returned, highRisk, avgTat, branchBreakdown };
   }, [filteredData]);
 
-  const executiveSummary = useMemo(() => {
-    const branches = Object.entries(stats.branchBreakdown).sort((a,b) => b[1] - a[1]);
-    const leadBranch = branches[0]?.[0] || 'HQ/Institutional';
-    const accuracyIndex = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
-    
-    return {
-      leadBranch,
-      accuracyIndex,
-      period: `${format(new Date(fromDate), 'MMM dd')} — ${format(new Date(toDate), 'MMM dd, yyyy')}`,
-      determination: accuracyIndex > 90 ? 'SATISFACTORY' : accuracyIndex > 70 ? 'STANDARD' : 'ACTION REQUIRED'
-    };
-  }, [stats, fromDate, toDate]);
-
   const chartsData = useMemo(() => {
     const statusPie = [
       { name: 'Authorized', value: stats.approved },
@@ -198,44 +177,36 @@ export default function ManagementReportingPage() {
     return { statusPie, riskBar, trendLine };
   }, [filteredData, stats]);
 
-  const handleExport = async (formatType: 'PDF' | 'EXCEL') => {
+  const handleExportExcel = async () => {
     if (!user) return;
-    const watermark = `NIB BANK | AUTH: ${user.name} | ${new Date().toISOString()}`;
     
-    if (formatType === 'EXCEL') {
-      toast({ title: "Compiling Spreadsheet", description: "Filtering active dataset for export..." });
-      const headers = ['Case ID', 'Customer Name', 'Status', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted At'];
-      const rows = filteredData.map(sub => [
-        sub.id,
-        sub.customerName,
-        sub.status,
-        sub.branchName,
-        sub.branch?.district?.name || 'N/A',
-        sub.isExceptional ? 'High' : 'Standard',
-        sub.entityType || 'Individual',
-        sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'
-      ]);
+    toast({ title: "Compiling Spreadsheet", description: "Filtering active dataset for export..." });
+    const headers = ['Case ID', 'Customer Name', 'Status', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted At'];
+    const rows = filteredData.map(sub => [
+      sub.id,
+      sub.customerName,
+      sub.status,
+      sub.branchName,
+      sub.branch?.district?.name || 'N/A',
+      sub.isExceptional ? 'High' : 'Standard',
+      sub.entityType || 'Individual',
+      sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'
+    ]);
 
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
-      ].join('\n');
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
 
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `NIB_KYC_REPORT_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } else if (formatType === 'PDF') {
-      toast({ title: "Generating Master Brief", description: "Preparing institutional management summary..." });
-      setTimeout(() => {
-        window.print();
-      }, 500);
-    }
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `NIB_KYC_REPORT_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 
     await createAuditLog({
       userId: user.id,
@@ -243,7 +214,7 @@ export default function ManagementReportingPage() {
       userName: user.name,
       action: 'MANAGEMENT_REPORT_EXPORT',
       ipAddress: '127.0.0.1',
-      details: `Official management report exported in ${formatType} format. Record count: ${filteredData.length}.`
+      details: `Official management report exported in Excel (CSV) format. Record count: ${filteredData.length}.`
     });
   };
 
@@ -263,8 +234,7 @@ export default function ManagementReportingPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      {/* INSTITUTIONAL HEADER (VISIBLE ON WEB) */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-primary text-white rounded-2xl shadow-xl">
             <FileBarChart className="w-8 h-8" />
@@ -275,62 +245,13 @@ export default function ManagementReportingPage() {
           </div>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" className="h-12 px-6 gap-2 font-bold border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-all" onClick={() => handleExport('EXCEL')}>
-            <Download className="w-4 h-4 text-emerald-600" /> Export Excel
-          </Button>
-          <Button className="h-12 px-8 gap-3 bg-slate-900 text-white font-black shadow-xl rounded-xl hover:bg-black transition-all" onClick={() => handleExport('PDF')}>
-            <Shield className="w-4 h-4 text-primary" /> Export Master PDF
+          <Button className="h-12 px-8 gap-3 bg-primary text-white font-black shadow-xl rounded-xl hover:bg-primary/90 transition-all active:scale-95" onClick={handleExportExcel}>
+            <Download className="w-5 h-5" /> Export Data (CSV)
           </Button>
         </div>
       </div>
 
-      {/* PRINT-ONLY EXECUTIVE SUMMARY BRIEF */}
-      <div className="hidden print:block space-y-12">
-        <div className="border-b-4 border-primary pb-8 mb-8 flex justify-between items-end">
-          <div className="space-y-2">
-            <h1 className="text-4xl font-black text-slate-900">KYC EXECUTIVE BRIEF</h1>
-            <p className="text-primary font-black uppercase tracking-widest text-sm">Official Institutional Determination Report</p>
-          </div>
-          <div className="text-right space-y-1">
-            <p className="text-xs font-black text-slate-400 uppercase">Analysis Period</p>
-            <p className="text-lg font-bold text-slate-900">{executiveSummary.period}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-8 mb-12">
-          <div className="p-6 bg-slate-50 rounded-2xl space-y-2 border border-slate-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Composite Accuracy</p>
-            <p className="text-4xl font-black text-primary">{executiveSummary.accuracyIndex}%</p>
-          </div>
-          <div className="p-6 bg-slate-50 rounded-2xl space-y-2 border border-slate-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Volume Leader</p>
-            <p className="text-xl font-bold text-slate-900 truncate">{executiveSummary.leadBranch}</p>
-          </div>
-          <div className="p-6 bg-slate-50 rounded-2xl space-y-2 border border-slate-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Risk Determination</p>
-            <Badge className={cn(
-              "font-black px-4 py-1",
-              executiveSummary.determination === 'SATISFACTORY' ? 'bg-emerald-600 text-white' : 'bg-primary text-white'
-            )}>
-              {executiveSummary.determination}
-            </Badge>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <h2 className="text-lg font-black uppercase tracking-widest flex items-center gap-2">
-            <Info className="w-5 h-5 text-primary" /> Management Summary
-          </h2>
-          <p className="text-sm text-slate-600 leading-relaxed font-medium bg-white p-6 rounded-2xl border border-slate-100">
-            During this analysis period, the institutional network processed a total of <strong>{stats.total}</strong> KYC submissions. 
-            The system successfully authorized <strong>{stats.approved}</strong> accounts with an average turnaround time of <strong>{stats.avgTat} days</strong>. 
-            Methodology gaps were identified in <strong>{stats.returned}</strong> cases, primarily related to identity document expiration and signature verification mismatch. 
-            The high-risk node handled <strong>{stats.highRisk}</strong> exceptional escalations requiring senior management determination.
-          </p>
-        </div>
-      </div>
-
-      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl print:hidden">
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl">
         <CardHeader className="bg-slate-50/50 border-b py-4">
           <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
             <Filter className="w-4 h-4" /> Intelligence Filters
@@ -379,7 +300,7 @@ export default function ManagementReportingPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Stages</SelectItem>
-                {Object.values(KYCStatus).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {Object.values(KYCStatus).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -391,7 +312,7 @@ export default function ManagementReportingPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 print:grid-cols-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
           { label: 'Total Cases', value: stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white' },
           { label: 'Pending Analysis', value: stats.pending, icon: Clock, color: 'text-primary', bg: 'bg-white' },
@@ -412,8 +333,8 @@ export default function ManagementReportingPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 print:grid-cols-2">
-        <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white print:shadow-none">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
           <CardHeader className="bg-slate-50/50 border-b p-6">
             <CardTitle className="text-lg font-black flex items-center gap-2">
               <History className="w-5 h-5 text-primary" /> Workflow Distribution
@@ -432,7 +353,7 @@ export default function ManagementReportingPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white print:shadow-none">
+        <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
           <CardHeader className="bg-slate-50/50 border-b p-6">
             <CardTitle className="text-lg font-black flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-primary" /> Risk Level Aggregation
@@ -451,7 +372,7 @@ export default function ManagementReportingPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white print:hidden">
+        <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
           <CardHeader className="bg-slate-50/50 border-b p-6">
             <CardTitle className="text-lg font-black flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-primary" /> Institutional KYC Trend
@@ -471,18 +392,18 @@ export default function ManagementReportingPage() {
         </Card>
       </div>
 
-      <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white print:shadow-none">
-        <CardHeader className="bg-slate-900 text-white border-b flex flex-row items-center justify-between p-6 print:bg-slate-50 print:text-slate-900">
+      <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
+        <CardHeader className="bg-slate-900 text-white border-b flex flex-row items-center justify-between p-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/20 rounded-2xl print:bg-primary/5">
+            <div className="p-3 bg-primary/20 rounded-2xl">
               <History className="w-6 h-6 text-primary" />
             </div>
             <div>
               <CardTitle className="text-2xl font-black">Lifecycle Audit Log</CardTitle>
-              <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1 print:text-slate-500">Institutional record of verified entities.</CardDescription>
+              <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Institutional record of verified entities.</CardDescription>
             </div>
           </div>
-          <div className="relative w-72 print:hidden">
+          <div className="relative w-72">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input 
               placeholder="Search archive..." 
@@ -541,25 +462,13 @@ export default function ManagementReportingPage() {
             </TableBody>
           </Table>
         </CardContent>
-        <CardFooter className="bg-slate-50/50 border-t py-4 px-8 flex justify-between items-center print:hidden">
+        <CardFooter className="bg-slate-50/50 border-t py-4 px-8 flex justify-between items-center">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Authorized Management Dataset | Viewing First 50 Records</p>
           <div className="text-[9px] font-mono font-black text-primary/40 uppercase tracking-tighter">
             Digital Watermark Active: {user?.name?.toUpperCase()}
           </div>
         </CardFooter>
       </Card>
-
-      {/* FINAL PRINT FOOTER */}
-      <div className="hidden print:flex flex-col items-center justify-center pt-12 mt-12 border-t border-slate-200 text-center gap-2">
-        <p className="text-xs font-black text-slate-900 uppercase">END OF MANAGEMENT SUMMARY BRIEF</p>
-        <p className="text-[10px] text-slate-400 font-bold max-w-md italic">
-          This document is highly confidential and intended solely for authorized management oversight. 
-          Reproduction or redistribution is strictly prohibited under institutional security protocols.
-        </p>
-        <p className="text-[9px] font-mono font-black text-primary/40 uppercase mt-4">
-          NIB INSTITUTIONAL AUTH CODE: {user?.id?.substring(0, 12).toUpperCase()}
-        </p>
-      </div>
     </div>
   );
 }
