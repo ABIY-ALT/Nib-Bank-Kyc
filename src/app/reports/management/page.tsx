@@ -176,19 +176,50 @@ export default function ManagementReportingPage() {
     return { statusPie, riskBar, trendLine };
   }, [filteredData, stats]);
 
-  const handleExport = async (format: 'PDF' | 'EXCEL') => {
+  const handleExport = async (formatType: 'PDF' | 'EXCEL') => {
     if (!user) return;
     const watermark = `NIB BANK | AUTH: ${user.name} | ${new Date().toISOString()}`;
     
-    toast({ title: `Compiling ${format} Package`, description: "Applying institutional watermark and security audit..." });
+    toast({ title: `Compiling ${formatType} Package`, description: "Applying institutional watermark and security audit..." });
     
+    if (formatType === 'EXCEL') {
+      const headers = ['Case ID', 'Customer Name', 'Status', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted At'];
+      const rows = filteredData.map(sub => [
+        sub.id,
+        sub.customerName,
+        sub.status,
+        sub.branchName,
+        sub.branch?.district?.name || 'N/A',
+        sub.isExceptional ? 'High' : 'Standard',
+        sub.entityType || 'Individual',
+        sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `NIB_MANAGEMENT_REPORT_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else if (formatType === 'PDF') {
+      window.print();
+    }
+
     await createAuditLog({
       userId: user.id,
       userEmail: user.email,
       userName: user.name,
       action: 'MANAGEMENT_REPORT_EXPORT',
       ipAddress: '127.0.0.1',
-      details: `Official management report exported in ${format} format. Record count: ${filteredData.length}. Watermark: ${watermark}`
+      details: `Official management report exported in ${formatType} format. Record count: ${filteredData.length}. Watermark: ${watermark}`
     });
 
     setTimeout(() => {
@@ -222,7 +253,7 @@ export default function ManagementReportingPage() {
             <p className="text-muted-foreground text-lg font-medium">Institutional performance analytics and risk oversight console.</p>
           </div>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 print:hidden">
           <Button variant="outline" className="h-12 px-6 gap-2 font-bold border-slate-200 shadow-sm" onClick={() => handleExport('EXCEL')}>
             <Download className="w-4 h-4 text-emerald-600" /> Export Excel
           </Button>
@@ -232,7 +263,7 @@ export default function ManagementReportingPage() {
         </div>
       </div>
 
-      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl">
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl print:hidden">
         <CardHeader className="bg-slate-50/50 border-b py-4">
           <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
             <Filter className="w-4 h-4" /> Intelligence Filters
@@ -388,7 +419,7 @@ export default function ManagementReportingPage() {
               <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Institutional record of verified entities.</CardDescription>
             </div>
           </div>
-          <div className="relative w-72">
+          <div className="relative w-72 print:hidden">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input 
               placeholder="Search archive..." 
