@@ -30,10 +30,8 @@ import {
   Inbox,
   ArrowUpRight,
   RotateCcw,
-  Scale,
   Target,
   ChevronRight,
-  MoreHorizontal,
   ChevronDown,
   MessageSquare,
   FileText,
@@ -789,7 +787,7 @@ export default function KYCOperationsMonitoringPage() {
                   </Button>
                   <Button variant="outline" className="w-full h-14 border-slate-200 font-black text-[10px] uppercase tracking-widest rounded-[1.25rem] gap-3 hover:bg-slate-50 transition-all">
                     <MessageSquare className="w-4 h-4 text-primary" /> Response Hub
-                  </Badge>
+                  </Button>
                 </>
               ) : (
                 <>
@@ -800,7 +798,7 @@ export default function KYCOperationsMonitoringPage() {
                     <FileDown className="w-5 h-5" /> Export Intelligence
                   </Button>
                   <Button variant="outline" className="w-full h-14 border-slate-200 font-black text-[10px] uppercase tracking-widest rounded-[1.25rem] gap-3 hover:bg-slate-50 transition-all" onClick={() => setActiveTab(activeTab === "queue" ? "team" : "queue")}>
-                    <Trophy className="w-4 h-4 text-primary" /> {activeTab === "queue" ? "Personnel Matrix" : "Operational Queue"}
+                    <Trophy className="w-4 h-4 text-primary" /> {activeTab === "queue" ? "Personnel Matrix" : "Operations Queue"}
                   </Button>
                 </>
               )}
