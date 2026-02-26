@@ -13,6 +13,7 @@ export async function getSubmissions(filters?: {
   status?: KYCStatus[];
   branchId?: string;
   createdById?: string;
+  assignedToId?: string;
   isResubmitted?: boolean;
   startDate?: string;
   endDate?: string;
@@ -23,6 +24,7 @@ export async function getSubmissions(filters?: {
   district?: string;
   isExceptional?: boolean;
   submittedBy?: string;
+  entityType?: string;
 }) {
   try {
     let dateFilter = undefined;
@@ -38,8 +40,10 @@ export async function getSubmissions(filters?: {
         status: filters?.status ? { in: filters.status } : undefined,
         branchId: filters?.branchId,
         createdById: filters?.createdById || filters?.submittedBy,
+        assignedToId: filters?.assignedToId,
         isResubmitted: filters?.isResubmitted,
         isExceptional: filters?.isExceptional,
+        entityType: filters?.entityType,
         branchName: filters?.branches && filters.branches.length > 0 ? {
           in: filters.branches
         } : filters?.branch ? { 
@@ -57,6 +61,7 @@ export async function getSubmissions(filters?: {
         customerName: true,
         status: true,
         createdAt: true,
+        updatedAt: true,
         submittedAt: true,
         branchName: true,
         entityType: true,
@@ -89,7 +94,7 @@ export async function getSubmissions(filters?: {
         }
       },
       orderBy: { createdAt: 'desc' },
-      take: filters?.limit || 50,
+      take: filters?.limit || 100,
       skip: filters?.offset || 0,
     });
   } catch (error) {

@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -28,7 +27,9 @@ import {
   ClipboardList,
   UserCog,
   ArrowRightLeft,
-  History
+  History,
+  Activity,
+  TrendingUp
 } from "lucide-react"
 
 import {
@@ -65,6 +66,8 @@ export function AppSidebar() {
   const { hasPermission, hasAnyInGroup, loading } = usePermissions()
 
   if (!user || loading) return null;
+
+  const isKYCOfficer = user.roles?.some(ur => ur.role.name === 'KYC_OFFICER');
 
   return (
     <Sidebar collapsible="icon">
@@ -111,6 +114,17 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
+                      {isKYCOfficer && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/my-performance'}>
+                            <Link href="/submissions/my-performance">
+                              <TrendingUp className="w-4 h-4 mr-2 text-primary" />
+                              <span>My Cases & Performance</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+
                       {hasPermission('CASE_SUBMIT') && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/new'}>
