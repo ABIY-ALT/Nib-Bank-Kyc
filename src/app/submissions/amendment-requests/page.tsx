@@ -1,10 +1,9 @@
-
 "use client"
 
 import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
 import { AlertCircle, Loader2, Search, ShieldCheck } from "lucide-react";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { getSubmissions } from "@/actions/submissions";

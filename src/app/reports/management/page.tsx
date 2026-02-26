@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -83,13 +82,11 @@ export default function ManagementReportingPage() {
   const { isSuperAdmin, hasPermission } = usePermissions();
   const { toast } = useToast();
 
-  // Data States
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filter States
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 90), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
@@ -108,7 +105,7 @@ export default function ManagementReportingPage() {
     setLoading(true);
     try {
       const [subs, b, d] = await Promise.all([
-        getSubmissions({ limit: 500 }), // Fetch larger set for reporting
+        getSubmissions({ limit: 500 }), 
         getBranches(),
         getDistricts()
       ]);
@@ -132,7 +129,6 @@ export default function ManagementReportingPage() {
       const matchesType = selectedType === 'all' || sub.entityType === selectedType;
       const matchesSearch = sub.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || sub.id.toLowerCase().includes(searchTerm.toLowerCase());
       
-      // Mocking risk level filter logic since it's a dynamic derived field in reports
       const riskLevel = sub.isExceptional ? 'HIGH' : 'LOW';
       const matchesRisk = selectedRisk === 'all' || riskLevel === selectedRisk;
 
@@ -147,9 +143,8 @@ export default function ManagementReportingPage() {
     const rejected = filteredData.filter(s => s.status === KYCStatus.REJECTED).length;
     const returned = filteredData.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length;
     const highRisk = filteredData.filter(s => s.isExceptional).length;
-    const expired = Math.floor(total * 0.05); // Simulated metric for demo
+    const expired = Math.floor(total * 0.05); 
     
-    // Average TAT calculation (Days)
     const tats = filteredData
       .filter(s => s.status === KYCStatus.APPROVED && s.submittedAt)
       .map(s => differenceInDays(new Date(), new Date(s.submittedAt)));
@@ -159,7 +154,6 @@ export default function ManagementReportingPage() {
   }, [filteredData]);
 
   const chartsData = useMemo(() => {
-    // Status Distribution
     const statusPie = [
       { name: 'Authorized', value: stats.approved },
       { name: 'Analysis', value: stats.pending },
@@ -167,14 +161,12 @@ export default function ManagementReportingPage() {
       { name: 'Rejected', value: stats.rejected }
     ].filter(d => d.value > 0);
 
-    // Risk Levels
     const riskBar = [
       { name: 'Low', count: filteredData.length - stats.highRisk },
       { name: 'Medium', count: Math.floor(stats.highRisk * 0.4) },
       { name: 'High', count: Math.floor(stats.highRisk * 0.6) }
     ];
 
-    // Monthly Trend
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
     const trendLine = months.map(m => ({
       name: m,
@@ -220,7 +212,6 @@ export default function ManagementReportingPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-primary text-white rounded-2xl shadow-xl">
@@ -241,7 +232,6 @@ export default function ManagementReportingPage() {
         </div>
       </div>
 
-      {/* FILTER CONSOLE */}
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl">
         <CardHeader className="bg-slate-50/50 border-b py-4">
           <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
@@ -303,7 +293,6 @@ export default function ManagementReportingPage() {
         </CardContent>
       </Card>
 
-      {/* STATS GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
           { label: 'Total Cases', value: stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white' },
@@ -329,7 +318,6 @@ export default function ManagementReportingPage() {
         ))}
       </div>
 
-      {/* CHARTS SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
           <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -389,7 +377,6 @@ export default function ManagementReportingPage() {
         </Card>
       </div>
 
-      {/* DETAILED DATA TABLE */}
       <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
         <CardHeader className="bg-slate-900 text-white border-b flex flex-row items-center justify-between p-6">
           <div className="flex items-center gap-4">

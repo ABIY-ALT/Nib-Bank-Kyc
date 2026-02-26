@@ -1,8 +1,7 @@
-
 "use client"
 
 import { useState, useMemo, useEffect } from "react";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { 
   Card, 
   CardContent, 
@@ -85,7 +84,7 @@ export default function OfficerReportsPage() {
     const matrix: Record<string, any> = {};
     
     submissions.forEach(sub => {
-      if (!sub.assignedToId) return; // Only count cases actioned by specialists
+      if (!sub.assignedToId) return; 
 
       const officerName = `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}`;
       const officerId = sub.assignedToId;

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -33,7 +32,7 @@ import {
   Download,
   Loader2
 } from "lucide-react";
-import { useAuth } from "@/lib/auth-mock.tsx";
+import { useAuth } from "@/lib/auth";
 import { 
   Dialog, 
   DialogContent, 
@@ -222,7 +221,7 @@ export default function NewSubmission() {
           <CardContent className="grid gap-6 md:grid-cols-2 pt-6">
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Customer Full Name</Label>
-              <Input placeholder="Full legal name" required className="h-11" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+              <input placeholder="Full legal name" required className="h-11 w-full px-3 border rounded-md" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Account Classification</Label>

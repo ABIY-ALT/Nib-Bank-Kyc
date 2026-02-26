@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
 import { ShieldAlert, Loader2, MapPin, Search, ShieldCheck } from "lucide-react";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";

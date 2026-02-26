@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { 
   Filter, 

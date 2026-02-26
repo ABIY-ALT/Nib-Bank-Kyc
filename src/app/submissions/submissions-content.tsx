@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { format } from "date-fns";
 import JSZip from 'jszip';
 import { useState } from "react";
@@ -55,13 +55,11 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       const zip = new JSZip();
       const now = new Date();
       
-      // Institutional Folder Naming: District_Branch_YYYYMMDD_HHMMSS
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
       const districtName = (sub.branch?.district?.name || "INSTITUTIONAL").replace(/\s+/g, '_');
       const branchName = (sub.branch?.name || sub.branchName || "HEADQUARTERS").replace(/\s+/g, '_');
       const bundleName = `${districtName}_${branchName}_${timestamp}`;
 
-      // Formal Manifest for Audit
       const manifest = `NIB BANK INSTITUTIONAL ARCHIVE\n` +
                        `--------------------------------------------------\n` +
                        `CASE IDENTIFIER: ${sub.id}\n` +
@@ -75,7 +73,6 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       
       zip.file("nib_institutional_manifest.txt", manifest);
 
-      // Generating the ZIP as a blob
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const link = document.body.appendChild(document.createElement('a'));
@@ -85,7 +82,6 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 100);
 
-      // Log the source information for download history & audit
       await logBundleDownload({
         submissionId: sub.id,
         performedBy: user.name,

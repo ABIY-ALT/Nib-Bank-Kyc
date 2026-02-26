@@ -1,10 +1,9 @@
-
 "use client"
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
 import { Zap, Loader2, Search, Info, Upload } from "lucide-react";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -59,14 +58,12 @@ export default function ExceptionalCasesPage() {
       const branchContext = isAdmin ? undefined : (user.branchName || "RESTRICTED_NODE");
       const branchesContext = isAdmin ? undefined : (assignedBranches.length > 0 ? assignedBranches : undefined);
 
-      // Fetch existing exceptional cases matching user's jurisdiction
       const exceptionalPromise = getSubmissions({ 
         isExceptional: true,
         branch: branchContext,
         branches: branchesContext
       });
 
-      // Fetch regular cases that COULD be promoted to exceptional
       const availablePromise = getSubmissions({ 
         isExceptional: false, 
         branch: branchContext,

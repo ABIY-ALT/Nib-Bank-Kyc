@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useMemo, useState, useEffect } from "react"
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { 
   Card, 
@@ -89,7 +89,6 @@ export default function KYCOperationsMonitoringPage() {
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  // ROLE DETECTION
   const roleContext = useMemo(() => {
     if (!user) return 'OFFICER';
     const roleName = user.roles?.[0]?.role?.name || '';
@@ -150,7 +149,6 @@ export default function KYCOperationsMonitoringPage() {
     const dailyTarget = roleContext === 'OFFICER' ? 50 : 200;
     const goalProgress = Math.min(Math.round((completed / dailyTarget) * 100), 100);
 
-    // TEAM PERFORMANCE AGGREGATION
     const teamStats: Record<string, any> = {};
     submissions.forEach(sub => {
       const officerId = sub.createdById || 'UNASSIGNED';
@@ -186,7 +184,6 @@ export default function KYCOperationsMonitoringPage() {
       const returnRate = o.total > 0 ? (o.amended / o.total) * 100 : 0;
       const qualityScore = Math.max(0, 100 - returnRate);
       
-      // Formula: 40% Productivity, 30% SLA, 20% Quality, 10% High-Risk
       const prodScore = Math.min((o.completed / 50) * 100, 100) * 0.4;
       const finalScore = Math.round(prodScore + (slaRate * 0.3) + (qualityScore * 0.2) + (Math.min(o.highRisk * 10, 100) * 0.1));
       
@@ -228,8 +225,7 @@ export default function KYCOperationsMonitoringPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      {/* HEADER SECTION */}
+    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <div className="flex items-center gap-4 mb-1">
@@ -270,7 +266,6 @@ export default function KYCOperationsMonitoringPage() {
         </div>
       </div>
 
-      {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all rounded-3xl">
           <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
@@ -334,7 +329,6 @@ export default function KYCOperationsMonitoringPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* MAIN OPERATIONS WORKSPACE */}
         <div className="lg:col-span-3 space-y-6">
           {(roleContext === 'SUPERVISOR' || roleContext === 'DIRECTOR') && (
             <div className="flex gap-2 p-1 bg-slate-100 w-fit rounded-2xl border mb-2">
@@ -559,9 +553,7 @@ export default function KYCOperationsMonitoringPage() {
           )}
         </div>
 
-        {/* SIDEBAR ANALYTICS */}
         <div className="space-y-8">
-          {/* QUICK ACTIONS */}
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="bg-primary text-white p-6 border-b">
               <CardTitle className="text-sm font-black uppercase tracking-[0.2em] flex items-center gap-2">
@@ -591,7 +583,6 @@ export default function KYCOperationsMonitoringPage() {
             </CardContent>
           </Card>
 
-          {/* DYNAMIC CHARTS */}
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="p-6 border-b bg-slate-50/50">
               <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-500">

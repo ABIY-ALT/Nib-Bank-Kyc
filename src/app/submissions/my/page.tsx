@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { SubmissionsPageContent } from "../submissions-content";
 import { KYCSubmission } from "@/lib/kyc-data";
 import { Skeleton } from "@/components/ui/skeleton";

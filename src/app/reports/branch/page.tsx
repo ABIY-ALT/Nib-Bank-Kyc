@@ -39,7 +39,7 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/lib/auth-mock";
+import { useAuth } from "@/lib/auth";
 import { getSubmissions } from "@/actions/submissions";
 import { getDistricts, getBranches } from "@/actions/hierarchy";
 import { subDays, format } from "date-fns";
@@ -58,7 +58,6 @@ export default function BranchReportsPage() {
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
 
-  // Filter States
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
