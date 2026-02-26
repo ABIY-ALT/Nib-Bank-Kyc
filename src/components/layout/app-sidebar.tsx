@@ -58,6 +58,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebarCounts } from "@/hooks/use-sidebar-counts"
 import { usePermissions } from "@/hooks/use-permissions"
+import { UserProfileDialog } from "@/components/auth/user-profile-dialog"
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -495,15 +496,19 @@ export function AppSidebar() {
 
       <SidebarFooter className="border-t p-4 bg-sidebar-background/50">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0 shadow-lg">
-            {user.name.charAt(0)}
-          </div>
-          <div className="flex-1 overflow-hidden text-left">
-            <p className="text-sm font-bold leading-tight truncate text-white">{user.name}</p>
-            <p className="text-[10px] text-white/40 truncate uppercase tracking-tighter mt-0.5 font-bold">
-              {user.roles?.[0]?.role.name.replace(/_/g, ' ') || 'UNASSIGNED'}
-            </p>
-          </div>
+          <UserProfileDialog>
+            <div className="flex items-center gap-3 flex-1 cursor-pointer group overflow-hidden">
+              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+                {user.name.charAt(0)}
+              </div>
+              <div className="flex-1 overflow-hidden text-left">
+                <p className="text-sm font-bold leading-tight truncate text-white group-hover:text-primary transition-colors">{user.name}</p>
+                <p className="text-[10px] text-white/40 truncate uppercase tracking-tighter mt-0.5 font-bold">
+                  {user.roles?.[0]?.role.name.replace(/_/g, ' ') || 'UNASSIGNED'}
+                </p>
+              </div>
+            </div>
+          </UserProfileDialog>
           <Button variant="ghost" size="icon" onClick={() => logout()} className="text-white/40 hover:text-destructive hover:bg-transparent">
             <LogOut className="w-4 h-4" />
           </Button>
