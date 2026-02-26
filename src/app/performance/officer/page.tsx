@@ -836,41 +836,6 @@ export default function KYCOperationsMonitoringPage() {
               </p>
             </CardFooter>
           </Card>
-
-          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-primary/5 ring-1 ring-primary/10">
-            <CardHeader className="p-8 border-b border-primary/10 bg-primary/[0.02]">
-              <CardTitle className="text-primary text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
-                <Target className="w-4 h-4" /> Performance Indices
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-8">
-              <div className="p-6 rounded-[1.5rem] bg-white border border-primary/10 shadow-sm space-y-5">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">First-Time-Right</p>
-                    <span className="text-3xl font-black text-emerald-600 tabular-nums">88.4%</span>
-                  </div>
-                  <div className="p-3 bg-emerald-50 rounded-2xl"><ShieldCheck className="w-5 h-5 text-emerald-600" /></div>
-                </div>
-                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: '88.4%' }} />
-                </div>
-              </div>
-
-              <div className="p-6 rounded-[1.5rem] bg-white border border-primary/10 shadow-sm space-y-5">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SLA Compliance</p>
-                    <span className="text-3xl font-black text-primary tabular-nums">{analytics.slaHealth}%</span>
-                  </div>
-                  <div className="p-3 bg-primary/5 rounded-2xl"><Clock className="w-5 h-5 text-primary" /></div>
-                </div>
-                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full" style={{ width: `${analytics.slaHealth}%` }} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
