@@ -43,7 +43,8 @@ import {
   BarChart3,
   ExternalLink,
   Building2,
-  Trophy
+  Trophy,
+  User
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -63,6 +64,13 @@ import {
   RadialBarChart,
   RadialBar
 } from 'recharts';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast"
 import { subDays, format, differenceInHours, addHours, isAfter } from "date-fns";
 import { Label } from "@/components/ui/label";
@@ -85,6 +93,9 @@ export default function KYCOperationsMonitoringPage() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [activeTab, setActiveTab] = useState<"queue" | "team">("queue");
   
+  // Filtering States
+  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedOfficer, setSelectedOfficer] = useState<string>("all");
   const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "custom">("month");
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -126,11 +137,39 @@ export default function KYCOperationsMonitoringPage() {
     }
   };
 
+  const uniqueBranches = useMemo(() => {
+    const branches = new Set<string>();
+    submissions.forEach(s => {
+      const name = s.branch?.name || s.branchName;
+      if (name) branches.add(name);
+    });
+    return Array.from(branches).sort();
+  }, [submissions]);
+
+  const uniqueOfficers = useMemo(() => {
+    const officers = new Map<string, string>();
+    submissions.forEach(s => {
+      if (s.createdBy) {
+        officers.set(s.createdById, `${s.createdBy.firstName} ${s.createdBy.lastName}`);
+      }
+    });
+    return Array.from(officers.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [submissions]);
+
+  const filteredData = useMemo(() => {
+    return submissions.filter(s => {
+      const matchesSearch = s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesBranch = selectedBranch === "all" || (s.branch?.name === selectedBranch || s.branchName === selectedBranch);
+      const matchesOfficer = selectedOfficer === "all" || s.createdById === selectedOfficer;
+      return matchesSearch && matchesBranch && matchesOfficer;
+    });
+  }, [submissions, searchTerm, selectedBranch, selectedOfficer]);
+
   const analytics = useMemo(() => {
-    const total = submissions.length;
-    const completed = submissions.filter(s => s.status === KYCStatus.APPROVED).length;
+    const total = filteredData.length;
+    const completed = filteredData.filter(s => s.status === KYCStatus.APPROVED).length;
     
-    const slaItems = submissions.map(sub => {
+    const slaItems = filteredData.map(sub => {
       const deadline = addHours(new Date(sub.submittedAt || sub.createdAt), 24);
       const now = new Date();
       const hoursLeft = differenceInHours(deadline, now);
@@ -150,7 +189,7 @@ export default function KYCOperationsMonitoringPage() {
     const goalProgress = Math.min(Math.round((completed / dailyTarget) * 100), 100);
 
     const teamStats: Record<string, any> = {};
-    submissions.forEach(sub => {
+    filteredData.forEach(sub => {
       const officerId = sub.createdById || 'UNASSIGNED';
       const officerName = sub.createdBy ? `${sub.createdBy.firstName} ${sub.createdBy.lastName}` : 'System/Unassigned';
       
@@ -191,7 +230,7 @@ export default function KYCOperationsMonitoringPage() {
     }).sort((a, b) => b.finalScore - a.finalScore);
 
     return { total, completed, slaHealth, goalProgress, slaItems, teamPerformance };
-  }, [submissions, roleContext]);
+  }, [filteredData, roleContext]);
 
   const handleExportPerformance = () => {
     if (analytics.teamPerformance.length === 0) {
@@ -246,6 +285,12 @@ export default function KYCOperationsMonitoringPage() {
     setExpandedRows(newExpanded);
   };
 
+  const resetFilters = () => {
+    setSelectedBranch("all");
+    setSelectedOfficer("all");
+    setSearchTerm("");
+  };
+
   if (permissionsLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
@@ -297,6 +342,65 @@ export default function KYCOperationsMonitoringPage() {
         </div>
       </div>
 
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl">
+        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+              <Building2 className="w-3 h-3" /> Branch Jurisdiction
+            </Label>
+            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <SelectTrigger className="h-11 rounded-xl bg-slate-50/50 border-slate-200 font-bold">
+                <SelectValue placeholder="All Branches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="font-bold">Global Network</SelectItem>
+                {uniqueBranches.map(b => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+              <User className="w-3 h-3" /> Specialist Officer
+            </Label>
+            <Select value={selectedOfficer} onValueChange={setSelectedOfficer}>
+              <SelectTrigger className="h-11 rounded-xl bg-slate-50/50 border-slate-200 font-bold">
+                <SelectValue placeholder="All Officers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="font-bold">Combined Personnel</SelectItem>
+                {uniqueOfficers.map(o => (
+                  <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+              <Search className="w-3 h-3" /> Keyword Search
+            </Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input 
+                placeholder="Case ID or Customer..." 
+                className="pl-10 h-11 border-slate-200 font-bold bg-slate-50/30 rounded-xl"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-end">
+            <Button variant="ghost" onClick={resetFilters} className="w-full h-11 gap-2 font-bold text-slate-400 hover:text-primary">
+              <RotateCcw className="w-4 h-4" /> Reset Filters
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all rounded-3xl">
           <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
@@ -308,7 +412,7 @@ export default function KYCOperationsMonitoringPage() {
           <CardContent className="pt-6">
             <div className="flex items-end justify-between">
               <div className="text-5xl font-black text-slate-900 tracking-tighter">{analytics.total}</div>
-              <Badge className="mb-1 bg-emerald-50 text-emerald-700 border-emerald-100 font-bold">+12% vs prev</Badge>
+              <Badge className="mb-1 bg-emerald-50 text-emerald-700 border-emerald-200 font-bold">+12% vs prev</Badge>
             </div>
           </CardContent>
         </Card>
@@ -389,15 +493,6 @@ export default function KYCOperationsMonitoringPage() {
                     Prioritized Technical Analysis Matrix &bull; {analytics.total} Active Nodes
                   </CardDescription>
                 </div>
-                <div className="relative w-72">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    placeholder="Search work queue..." 
-                    className="pl-11 h-11 bg-white/5 border-white/10 text-white font-bold rounded-2xl focus-visible:ring-primary/20"
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                  />
-                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -414,7 +509,7 @@ export default function KYCOperationsMonitoringPage() {
                   <TableBody>
                     {analytics.slaItems.length === 0 ? (
                       <TableRow><TableCell colSpan={6} className="py-32 text-center italic text-slate-400 bg-slate-50/30">Vault clear. No pending operations discovered.</TableCell></TableRow>
-                    ) : analytics.slaItems.filter(s => s.customerName.toLowerCase().includes(searchTerm.toLowerCase())).map((sub) => (
+                    ) : analytics.slaItems.map((sub) => (
                       <React.Fragment key={sub.id}>
                         <TableRow 
                           className={cn(
