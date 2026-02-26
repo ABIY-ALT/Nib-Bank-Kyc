@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -87,7 +86,7 @@ export async function provisionUser(data: {
       const hashedPassword = await bcrypt.hash(tempPass, 10);
 
       // 2. Upsert the User record
-      // Removed needsPasswordChange as it is reported as an 'Unknown field' in the generated client.
+      // needsPasswordChange is enabled when a new user is created or password is changed by admin
       const user = await tx.user.upsert({
         where: { email: data.email.toLowerCase() },
         update: { 
@@ -96,8 +95,9 @@ export async function provisionUser(data: {
           phoneNumber: data.phoneNumber,
           branch: data.branchId ? { connect: { id: data.branchId } } : { disconnect: true },
           status: data.status,
-          // Only update password if manually provided
-          password: data.password ? hashedPassword : undefined
+          // Only update password if manually provided, and force reset if it is changed
+          password: data.password ? hashedPassword : undefined,
+          needsPasswordChange: data.password ? true : undefined
         },
         create: { 
           email: data.email.toLowerCase(),
@@ -106,7 +106,8 @@ export async function provisionUser(data: {
           lastName: data.lastName,
           phoneNumber: data.phoneNumber,
           branch: data.branchId ? { connect: { id: data.branchId } } : undefined,
-          status: data.status
+          status: data.status,
+          needsPasswordChange: true
         }
       });
 

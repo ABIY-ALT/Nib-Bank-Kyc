@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -12,11 +11,12 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
   try {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Removed needsPasswordChange as it is reported as an 'Unknown field' in the generated client.
+    // needsPasswordChange is cleared upon successful user-initiated update
     await prisma.user.update({
       where: { id: userId },
       data: {
-        password: hashedPassword
+        password: hashedPassword,
+        needsPasswordChange: false
       }
     });
 

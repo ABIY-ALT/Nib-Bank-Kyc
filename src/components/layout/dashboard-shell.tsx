@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -31,8 +30,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Force Password Change is temporarily disabled due to schema mismatch
-  const showForceChange = false;
+  // Force Password Change logic enabled based on user state
+  const showForceChange = !!user?.needsPasswordChange;
 
   return (
     <SidebarProvider>
