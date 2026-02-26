@@ -23,71 +23,64 @@ async function main() {
     });
   }
 
-  // 2. Provision Admin Account
+  // 2. Provision Admin Account (Persistence-Aware)
   const adminEmail = 'admin.user@nibbank.com.et';
-  const hashedPassword = await bcrypt.hash('Password123', 10);
+  const defaultPassword = 'Password123';
+  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
   
-  const systemAdmin = await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: { 
-      password: hashedPassword, 
-      status: UserStatus.ACTIVE,
-      firstName: 'System',
-      lastName: 'Administrator',
-      needsPasswordChange: false
-    },
-    create: {
-      email: adminEmail,
-      password: hashedPassword,
-      firstName: 'System',
-      lastName: 'Administrator',
-      status: UserStatus.ACTIVE,
-      needsPasswordChange: false
-    }
-  });
+  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
 
-  const adminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
-  if (adminRole) {
-    await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: systemAdmin.id, roleId: adminRole.id } },
-      update: {},
-      create: { userId: systemAdmin.id, roleId: adminRole.id }
+  if (!existingAdmin) {
+    console.log(`Creating Master Admin: ${adminEmail}`);
+    const systemAdmin = await prisma.user.create({
+      data: {
+        email: adminEmail,
+        password: hashedPassword,
+        firstName: 'System',
+        lastName: 'Administrator',
+        status: UserStatus.ACTIVE,
+        needsPasswordChange: false
+      }
     });
+
+    const adminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
+    if (adminRole) {
+      await prisma.userRole.create({
+        data: { userId: systemAdmin.id, roleId: adminRole.id }
+      });
+    }
+  } else {
+    console.log('✔ Master Admin already exists. Skipping creation to preserve credentials.');
   }
 
-  // 3. Provision Branch User (With Force Password Change)
+  // 3. Provision Branch User (Persistence-Aware)
   const branchEmail = 'branch.one@nibbank.com.et';
-  console.log(`Synchronizing Branch User: ${branchEmail} / Password123`);
+  const existingBranchUser = await prisma.user.findUnique({ where: { email: branchEmail } });
 
-  const branchUser = await prisma.user.upsert({
-    where: { email: branchEmail },
-    update: {
-      password: hashedPassword,
-      status: UserStatus.ACTIVE,
-      firstName: 'Branch',
-      lastName: 'One',
-      needsPasswordChange: true // Triggers the modal on login
-    },
-    create: {
-      email: branchEmail,
-      password: hashedPassword,
-      firstName: 'Branch',
-      lastName: 'One',
-      status: UserStatus.ACTIVE,
-      needsPasswordChange: true
-    }
-  });
-
-  const officerRole = await prisma.role.findUnique({ where: { name: 'BRANCH_OFFICER' } });
-  if (officerRole) {
-    await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: branchUser.id, roleId: officerRole.id } },
-      update: {},
-      create: { userId: branchUser.id, roleId: officerRole.id }
+  if (!existingBranchUser) {
+    console.log(`Creating Branch User: ${branchEmail}`);
+    const branchUser = await prisma.user.create({
+      data: {
+        email: branchEmail,
+        password: hashedPassword,
+        firstName: 'Branch',
+        lastName: 'One',
+        status: UserStatus.ACTIVE,
+        needsPasswordChange: true // Only true for initial creation
+      }
     });
+
+    const officerRole = await prisma.role.findUnique({ where: { name: 'BRANCH_OFFICER' } });
+    if (officerRole) {
+      await prisma.userRole.create({
+        data: { userId: branchUser.id, roleId: officerRole.id }
+      });
+    }
+  } else {
+    console.log('✔ Branch User already exists. Skipping creation.');
   }
 
-  console.log('✅ Institutional Registry Synced.');
+  console.log('✅ Institutional Registry Sync Complete.');
 }
 
 main()

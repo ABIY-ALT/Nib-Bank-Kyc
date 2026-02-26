@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -17,6 +18,8 @@ export async function POST(req: Request) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    // Passwords should be trimmed to handle accidental leading/trailing spaces from copy-paste
+    const cleanPassword = password.trim();
 
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -39,14 +42,14 @@ export async function POST(req: Request) {
     });
 
     if (!user) {
-      return NextResponse.json({ message: "Institutional account not discovered." }, { status: 401 });
+      return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 401 });
     }
 
     if (user.status !== 'ACTIVE') {
       return NextResponse.json({ message: `Access restricted: Account is ${user.status}.` }, { status: 401 });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(cleanPassword, user.password);
 
     if (!isMatch) {
       return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 401 });
