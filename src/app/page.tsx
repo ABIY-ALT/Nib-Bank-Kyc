@@ -139,6 +139,10 @@ export default function Dashboard() {
     ];
   }, [recentSubmissions, dashboardContext]);
 
+  const isBranchOfficer = useMemo(() => {
+    return user?.roles?.some(ur => ur.role.name === 'BRANCH_OFFICER');
+  }, [user]);
+
   if (permissionsLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
@@ -172,9 +176,9 @@ export default function Dashboard() {
               <MapPin className="w-4 h-4" /> {user.districtName} Node
             </Badge>
           )}
-          {hasPermission('CASE_SUBMIT') && (
+          {isBranchOfficer && (
             <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-black text-lg rounded-xl transition-all active:scale-[0.98]">
-              <Link href="/submissions/new">Initialize Submission</Link>
+              <Link href="/submissions/new">Create Submission</Link>
             </Button>
           )}
         </div>
