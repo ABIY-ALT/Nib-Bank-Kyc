@@ -60,7 +60,7 @@ export default function SystemSettingsPage() {
   const loadSettings = async () => {
     setLoading(true);
     const s = await getGlobalSettings();
-    setLocalSettings(s);
+    if (s) setLocalSettings(s);
     setLoading(false);
   };
 
@@ -130,15 +130,26 @@ export default function SystemSettingsPage() {
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="space-y-8">
           <Card className="shadow-lg border-slate-200 overflow-hidden">
-            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-white" /> Workflow Automation</CardTitle></CardHeader>
+            <CardHeader className="bg-primary text-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-white" /> Workflow Automation</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-6 pt-6">
               <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4 group hover:border-primary/30 transition-all">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-1"><div className="flex items-center gap-2"><Clock className="w-4 h-4 text-orange-600" /><Label className="text-base font-bold">Auto-escalation Policy</Label></div></div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-orange-600" />
+                      <Label className="text-base font-bold">Escalation Watchdog Threshold</Label>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground font-medium uppercase px-6">Identify cases for manual supervisor escalation after threshold</p>
+                  </div>
                   <Switch checked={localSettings.autoEscalation} onCheckedChange={(val) => setLocalSettings({...localSettings, autoEscalation: val})} />
                 </div>
                 {localSettings.autoEscalation && (
-                  <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed"><Label className="text-[10px] font-black uppercase text-slate-400">Hours</Label><Input type="number" className="w-24 h-9 font-bold" value={localSettings.escalationHours} onChange={(e) => setLocalSettings({...localSettings, escalationHours: parseInt(e.target.value) || 0})} /></div>
+                  <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed">
+                    <Label className="text-[10px] font-black uppercase text-slate-400">Breach Hours</Label>
+                    <Input type="number" className="w-24 h-9 font-bold" value={localSettings.escalationHours} onChange={(e) => setLocalSettings({...localSettings, escalationHours: parseInt(e.target.value) || 0})} />
+                  </div>
                 )}
               </div>
             </CardContent>
