@@ -56,7 +56,7 @@ export async function GET(req: Request) {
         districtName: user.branch?.district?.name || null,
         assignedBranches: user.assignedBranches || [],
         roles: user.roles || [],
-        needsPasswordChange: user.needsPasswordChange || false
+        needsPasswordChange: false // Hardcoded to false until schema is updated
       }
     });
   } catch (error) {

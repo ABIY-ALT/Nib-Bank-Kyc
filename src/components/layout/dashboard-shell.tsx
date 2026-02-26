@@ -31,8 +31,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Determine if we should show the security gate modal
-  const showForceChange = user?.needsPasswordChange && !isLoginPage;
+  // Force Password Change is temporarily disabled due to schema mismatch
+  const showForceChange = false;
 
   return (
     <SidebarProvider>

@@ -6,17 +6,17 @@ import bcrypt from 'bcryptjs';
 import { revalidatePath } from 'next/cache';
 
 /**
- * Institutional Security: Resets user password and clears the force-change flag.
+ * Institutional Security: Resets user password.
  */
 export async function updateInstitutionalPassword(userId: string, newPassword: string) {
   try {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
+    // Removed needsPasswordChange as it is reported as an 'Unknown field' in the generated client.
     await prisma.user.update({
       where: { id: userId },
       data: {
-        password: hashedPassword,
-        needsPasswordChange: false
+        password: hashedPassword
       }
     });
 

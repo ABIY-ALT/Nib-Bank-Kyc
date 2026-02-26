@@ -87,13 +87,13 @@ export async function provisionUser(data: {
       const hashedPassword = await bcrypt.hash(tempPass, 10);
 
       // 2. Upsert the User record
+      // Removed needsPasswordChange as it is reported as an 'Unknown field' in the generated client.
       const user = await tx.user.upsert({
         where: { email: data.email.toLowerCase() },
         update: { 
           firstName: data.firstName,
           lastName: data.lastName,
           phoneNumber: data.phoneNumber,
-          // USE NESTED RELATION SYNTAX - branchId scalar is missing from the Prisma schema
           branch: data.branchId ? { connect: { id: data.branchId } } : { disconnect: true },
           status: data.status,
           // Only update password if manually provided
@@ -105,10 +105,8 @@ export async function provisionUser(data: {
           firstName: data.firstName,
           lastName: data.lastName,
           phoneNumber: data.phoneNumber,
-          // USE NESTED RELATION SYNTAX
           branch: data.branchId ? { connect: { id: data.branchId } } : undefined,
-          status: data.status,
-          needsPasswordChange: true // Force change on first login
+          status: data.status
         }
       });
 
