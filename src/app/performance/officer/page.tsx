@@ -75,7 +75,7 @@ import Link from "next/link";
 
 export default function KYCOperationsMonitoringPage() {
   const { user } = useAuth();
-  const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
+  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   
   const [loading, setLoading] = useState(false);
@@ -104,7 +104,7 @@ export default function KYCOperationsMonitoringPage() {
       setLastUpdated(new Date());
     }, 30000); 
     return () => clearInterval(interval);
-  }, [fromDate, toDate, roleContext]);
+  }, [fromDate, toDate, roleContext, user]);
 
   const loadData = async () => {
     setLoading(true);
@@ -192,6 +192,37 @@ export default function KYCOperationsMonitoringPage() {
 
     return { total, completed, slaHealth, goalProgress, slaItems, teamPerformance };
   }, [submissions, roleContext]);
+
+  const handleExportPerformance = () => {
+    if (analytics.teamPerformance.length === 0) {
+      toast({ variant: "destructive", title: "No Data", description: "No performance records to export." });
+      return;
+    }
+
+    const headers = ['Officer Name', 'Authorized', 'SLA Rate (%)', 'Gaps Found', 'Active Load', 'Efficiency Index (%)'];
+    const rows = analytics.teamPerformance.map(o => [
+      o.name,
+      o.completed,
+      o.slaRate,
+      o.amended,
+      o.pending,
+      o.finalScore
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `nib-team-performance-${format(new Date(), 'yyyyMMdd')}.csv`);
+    link.click();
+    
+    toast({ title: "Export Successful", description: "Team performance matrix saved to CSV." });
+  };
 
   const chartData = useMemo(() => {
     const distribution = [
@@ -545,7 +576,11 @@ export default function KYCOperationsMonitoringPage() {
                 <div className="flex gap-4">
                   <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-600" /><p className="text-[10px] font-bold text-slate-500 uppercase">Top Performer: {analytics.teamPerformance[0]?.name}</p></div>
                 </div>
-                <Button variant="ghost" className="text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5">
+                <Button 
+                  variant="ghost" 
+                  onClick={handleExportPerformance}
+                  className="text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5"
+                >
                   Full Team Export <FileDown className="w-3 h-3 ml-2" />
                 </Button>
               </CardFooter>
@@ -572,7 +607,10 @@ export default function KYCOperationsMonitoringPage() {
                 </>
               ) : (
                 <>
-                  <Button className="w-full h-14 bg-slate-900 hover:bg-black text-white font-black rounded-xl shadow-lg gap-3">
+                  <Button 
+                    onClick={handleExportPerformance}
+                    className="w-full h-14 bg-slate-900 hover:bg-black text-white font-black rounded-xl shadow-lg gap-3"
+                  >
                     <FileDown className="w-5 h-5" /> Export Intelligence
                   </Button>
                   <Button variant="outline" className="w-full h-12 border-slate-200 font-bold rounded-xl gap-2 hover:bg-slate-50" onClick={() => setActiveTab(activeTab === "queue" ? "team" : "queue")}>
