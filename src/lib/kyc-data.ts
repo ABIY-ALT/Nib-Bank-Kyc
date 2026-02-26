@@ -144,4 +144,8 @@ export const AMENDMENT_SCENARIOS = [
   "19. Other (specify)"
 ];
 
+/**
+ * INSTITUTIONAL DATA POLICY: No mock submissions are permitted in production.
+ * Real data is synchronized strictly from the primary Institutional Vault.
+ */
 export const MOCK_SUBMISSIONS: Partial<KYCSubmission>[] = [];

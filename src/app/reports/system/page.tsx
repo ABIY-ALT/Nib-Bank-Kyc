@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { 
   Card, 
   CardContent, 
@@ -33,76 +33,99 @@ import { useToast } from "@/hooks/use-toast";
 import { subDays, format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-
-const MOCK_SYSTEM_STATS = {
-  total: 1245,
-  approved: 980,
-  pending: 185,
-  accuracy: "97.2%",
-  branches: [
-    { name: "Meskel Square Branch", count: 420 },
-    { name: "Stadium Branch", count: 310 },
-    { name: "Kazanchis Branch", count: 285 },
-    { name: "Bole Branch", count: 230 },
-  ],
-  officers: [
-    { name: "Abebe Bikila", count: 340 },
-    { name: "Derartu Tulu", count: 310 },
-    { name: "Fatuma Roba", count: 290 },
-    { name: "Meseret Defar", count: 185 },
-  ]
-};
+import { getSubmissions } from "@/actions/submissions";
+import { KYCStatus } from "@prisma/client";
 
 export default function SystemWideReportsPage() {
   const { toast } = useToast();
-  const [reportData, setReportData] = useState<any | null>(null);
+  const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [reportDataActive, setReportDataActive] = useState(false);
   
   const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setReportData(MOCK_SYSTEM_STATS);
-      setLoading(false);
+    try {
+      const data = await getSubmissions({
+        startDate: fromDate,
+        endDate: toDate,
+        limit: 5000 // Large limit for global audit
+      });
+      setSubmissions(data);
+      setReportDataActive(true);
       toast({
         title: "Institutional Audit Complete",
-        description: `Analyzed 1,245 system-wide records from ${fromDate} to ${toDate}.`,
+        description: `Analyzed ${data.length} system-wide records.`,
       });
-    }, 800);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Aggregation Failed" });
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const stats = useMemo(() => {
+    if (!submissions.length) return null;
+
+    const total = submissions.length;
+    const approved = submissions.filter(s => s.status === KYCStatus.APPROVED).length;
+    const pending = submissions.filter(s => [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status)).length;
+    const accuracy = total > 0 ? ((approved / (total - pending || 1)) * 100).toFixed(1) : "0.0";
+
+    const branchMap: Record<string, number> = {};
+    const officerMap: Record<string, number> = {};
+
+    submissions.forEach(sub => {
+      const bName = sub.branchName || "Unknown Node";
+      branchMap[bName] = (branchMap[bName] || 0) + 1;
+
+      if (sub.assignedTo) {
+        const oName = `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}`;
+        officerMap[oName] = (officerMap[oName] || 0) + 1;
+      }
+    });
+
+    const branches = Object.entries(branchMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const officers = Object.entries(officerMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return { total, approved, pending, accuracy, branches, officers };
+  }, [submissions]);
+
   const handleExportCSV = () => {
-    if (!reportData) return;
+    if (!stats) return;
     
     const headers = ['Category', 'Value'];
     const dataRows = [
-      ['Total Volume', reportData.total],
-      ['Approvals', reportData.approved],
-      ['Pending', reportData.pending],
-      ['Accuracy', reportData.accuracy]
+      ['Total Volume', stats.total],
+      ['Approvals', stats.approved],
+      ['Pending', stats.pending],
+      ['Accuracy (%)', stats.accuracy]
     ];
     
-    reportData.branches.forEach((b: any) => dataRows.push([`Branch: ${b.name}`, b.count]));
-    reportData.officers.forEach((o: any) => dataRows.push([`Officer: ${o.name}`, o.count]));
+    stats.branches.forEach(b => dataRows.push([`Branch: ${b.name}`, b.count]));
+    stats.officers.forEach(o => dataRows.push([`Officer: ${o.name}`, o.count]));
     
     const csvContent = [headers.join(','), ...dataRows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-kyc-global-audit-${fromDate}-to-${toDate}.csv`);
+    link.setAttribute('download', `nib-global-audit-${fromDate}-to-${toDate}.csv`);
     link.click();
     
-    toast({
-      title: "CSV Export Successful",
-      description: "Institutional dataset has been exported for analysis.",
-    });
+    toast({ title: "CSV Export Successful" });
   };
 
   const resetFilters = () => {
-    setReportData(null);
+    setReportDataActive(false);
+    setSubmissions([]);
     setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
     setToDate(format(new Date(), 'yyyy-MM-dd'));
   };
@@ -163,7 +186,7 @@ export default function SystemWideReportsPage() {
         </CardContent>
       </Card>
 
-      {!reportData ? (
+      {!reportDataActive ? (
         <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50 shadow-inner rounded-[2.5rem]">
           <CardContent className="flex flex-col items-center justify-center py-24 text-center space-y-8">
             <div className="relative p-8 bg-white rounded-full shadow-2xl border border-slate-100">
@@ -171,14 +194,14 @@ export default function SystemWideReportsPage() {
             </div>
             <div className="max-w-md mx-auto space-y-3">
               <p className="font-extrabold text-slate-900 text-2xl tracking-tight">Network Audit Standby</p>
-              <p className="text-slate-500 leading-relaxed font-medium">Run the institutional audit to aggregate data across all network nodes from the Vault.</p>
+              <p className="text-slate-500 leading-relaxed font-medium">Run the institutional audit to aggregate real-time data across all network nodes from the Vault.</p>
             </div>
             <Button size="lg" className="px-12 h-14 font-extrabold text-lg shadow-2xl shadow-primary/20 text-white bg-primary rounded-xl" onClick={handleGenerateReport} disabled={loading}>
               {loading ? "Aggregating Intelligence..." : "Execute Global Aggregation"}
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : stats ? (
         <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
              <Card className="bg-primary text-white shadow-2xl overflow-hidden border-none rounded-2xl">
@@ -186,7 +209,7 @@ export default function SystemWideReportsPage() {
                  <CardTitle className="text-[10px] font-black uppercase tracking-widest text-white/80">Total Volume</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
-                 <span className="text-5xl font-black text-white tracking-tighter">{reportData.total}</span>
+                 <span className="text-5xl font-black text-white tracking-tighter">{stats.total}</span>
                </CardContent>
              </Card>
              <Card className="shadow-lg border-slate-200 overflow-hidden bg-white rounded-2xl">
@@ -194,7 +217,7 @@ export default function SystemWideReportsPage() {
                  <CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Total Approvals</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
-                 <span className="text-5xl font-black text-emerald-600 tracking-tighter">{reportData.approved}</span>
+                 <span className="text-5xl font-black text-emerald-600 tracking-tighter">{stats.approved}</span>
                </CardContent>
              </Card>
              <Card className="shadow-lg border-slate-200 overflow-hidden bg-white rounded-2xl">
@@ -202,7 +225,7 @@ export default function SystemWideReportsPage() {
                  <CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Review</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
-                 <span className="text-5xl font-black text-orange-600 tracking-tighter">{reportData.pending}</span>
+                 <span className="text-5xl font-black text-orange-600 tracking-tighter">{stats.pending}</span>
                </CardContent>
              </Card>
              <Card className="shadow-lg border-slate-200 overflow-hidden bg-white rounded-2xl">
@@ -210,9 +233,8 @@ export default function SystemWideReportsPage() {
                  <CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Accuracy Index</CardTitle>
                </CardHeader>
                <CardContent className="pt-4">
-                 <span className="text-5xl font-black text-primary tracking-tighter">{reportData.accuracy}</span>
+                 <span className="text-5xl font-black text-primary tracking-tighter">{stats.accuracy}%</span>
                </CardContent>
-             </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -235,7 +257,9 @@ export default function SystemWideReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {reportData.branches.map((branch: any) => (
+                    {stats.branches.length === 0 ? (
+                      <TableRow><TableCell colSpan={2} className="py-10 text-center italic text-slate-400">No branch data available.</TableCell></TableRow>
+                    ) : stats.branches.map((branch) => (
                       <TableRow key={branch.name} className="hover:bg-slate-50 transition-colors">
                         <TableCell className="font-bold text-slate-800 py-5 pl-8">{branch.name}</TableCell>
                         <TableCell className="text-right pr-8">
@@ -269,7 +293,9 @@ export default function SystemWideReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {reportData.officers.map((officer: any) => (
+                    {stats.officers.length === 0 ? (
+                      <TableRow><TableCell colSpan={2} className="py-10 text-center italic text-slate-400">No specialist data available.</TableCell></TableRow>
+                    ) : stats.officers.map((officer) => (
                       <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
                         <TableCell className="font-bold text-slate-800 py-5 pl-8">{officer.name}</TableCell>
                         <TableCell className="text-right pr-8">
@@ -284,13 +310,9 @@ export default function SystemWideReportsPage() {
               </CardContent>
             </Card>
           </div>
-
-          <div className="flex justify-center pt-8">
-            <Button size="lg" className="px-16 h-16 bg-slate-900 hover:bg-black text-white font-black text-xl gap-3 shadow-2xl rounded-2xl transition-all active:scale-[0.98]">
-              <Download className="w-6 h-6" /> Export Master PDF Bundle
-            </Button>
-          </div>
         </div>
+      ) : (
+        <div className="py-20 text-center text-muted-foreground italic">No data discovered for the selected range.</div>
       )}
     </div>
   );

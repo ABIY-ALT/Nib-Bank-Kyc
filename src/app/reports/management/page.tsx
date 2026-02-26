@@ -65,7 +65,7 @@ import {
   ShieldAlert,
   Info
 } from "lucide-react";
-import { subDays, format, differenceInDays } from "date-fns";
+import { subDays, format, differenceInDays, startOfMonth, eachMonthOfInterval, isSameMonth } from "date-fns";
 import { getSubmissions } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { createAuditLog } from "@/actions/audit";
@@ -102,7 +102,7 @@ export default function ManagementReportingPage() {
     setLoading(true);
     try {
       const [subs, b, d] = await Promise.all([
-        getSubmissions({ limit: 500 }), 
+        getSubmissions({ limit: 5000 }), 
         getBranches(),
         getDistricts()
       ]);
@@ -163,19 +163,23 @@ export default function ManagementReportingPage() {
     ].filter(d => d.value > 0);
 
     const riskBar = [
-      { name: 'Standard', count: filteredData.length - stats.highRisk },
-      { name: 'Medium', count: Math.floor(stats.highRisk * 0.4) },
-      { name: 'High Risk', count: Math.floor(stats.highRisk * 0.6) }
+      { name: 'Standard', count: filteredData.filter(s => !s.isExceptional).length },
+      { name: 'High Risk', count: filteredData.filter(s => s.isExceptional).length }
     ];
 
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-    const trendLine = months.map(m => ({
-      name: m,
-      volume: Math.floor(Math.random() * 50) + 20
-    }));
+    // Real trend line calculation
+    const start = startOfMonth(new Date(fromDate));
+    const end = new Date(toDate);
+    const months = eachMonthOfInterval({ start, end });
+    
+    const trendLine = months.map(m => {
+      const monthLabel = format(m, 'MMM yy');
+      const count = filteredData.filter(s => isSameMonth(new Date(s.submittedAt || s.createdAt), m)).length;
+      return { name: monthLabel, volume: count };
+    });
 
     return { statusPie, riskBar, trendLine };
-  }, [filteredData, stats]);
+  }, [filteredData, stats, fromDate, toDate]);
 
   const handleExportExcel = async () => {
     if (!user) return;
@@ -245,7 +249,7 @@ export default function ManagementReportingPage() {
           </div>
         </div>
         <div className="flex gap-3">
-          <Button className="h-12 px-8 gap-3 bg-primary text-white font-black shadow-xl rounded-xl hover:bg-primary/90 transition-all active:scale-95" onClick={handleExportExcel}>
+          <Button className="h-12 px-8 gap-3 bg-primary text-white font-black shadow-xl rounded-xl hover:bg-primary/90 transition-all active:scale-[0.98]" onClick={handleExportExcel}>
             <Download className="w-5 h-5" /> Export Data (CSV)
           </Button>
         </div>
@@ -287,7 +291,6 @@ export default function ManagementReportingPage() {
               <SelectContent>
                 <SelectItem value="all">All Profiles</SelectItem>
                 <SelectItem value="LOW">Standard / Low</SelectItem>
-                <SelectItem value="MEDIUM">Medium</SelectItem>
                 <SelectItem value="HIGH">High Risk</SelectItem>
               </SelectContent>
             </Select>
@@ -341,15 +344,19 @@ export default function ManagementReportingPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-8 h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={chartsData.statusPie} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value">
-                  {chartsData.statusPie.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" align="center" iconType="circle" />
-              </PieChart>
-            </ResponsiveContainer>
+            {chartsData.statusPie.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={chartsData.statusPie} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value">
+                    {chartsData.statusPie.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                  <Legend verticalAlign="bottom" align="center" iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 italic text-sm">No data available for chart.</div>
+            )}
           </CardContent>
         </Card>
 
@@ -360,15 +367,19 @@ export default function ManagementReportingPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-8 h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartsData.riskBar}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} axisLine={false} />
-                <YAxis tick={{ fontSize: 10, fontWeight: 'bold' }} axisLine={false} />
-                <Tooltip cursor={{ fill: 'rgba(184, 147, 52, 0.05)' }} />
-                <Bar dataKey="count" fill="#B89334" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {stats.total > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartsData.riskBar}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10, fontWeight: 'bold' }} axisLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(184, 147, 52, 0.05)' }} />
+                  <Bar dataKey="count" fill="#B89334" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 italic text-sm">No risk data available.</div>
+            )}
           </CardContent>
         </Card>
 
@@ -379,15 +390,19 @@ export default function ManagementReportingPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-8 h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartsData.trendLine}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} />
-                <YAxis tick={{ fontSize: 10, fontWeight: 'bold' }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="volume" stroke="#B89334" strokeWidth={3} dot={{ r: 4, fill: '#B89334' }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            {filteredData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartsData.trendLine}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                  <YAxis tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="volume" stroke="#B89334" strokeWidth={3} dot={{ r: 4, fill: '#B89334' }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 italic text-sm">No trend data available.</div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -428,42 +443,37 @@ export default function ManagementReportingPage() {
             <TableBody>
               {filteredData.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="py-24 text-center text-muted-foreground italic font-medium bg-slate-50/30">No historical records match the active criteria.</TableCell></TableRow>
-              ) : filteredData.slice(0, 50).map((sub) => {
-                const tat = sub.submittedAt ? differenceInDays(new Date(), new Date(sub.submittedAt)) : 0;
-                const isOverdue = tat > 2 && sub.status !== KYCStatus.APPROVED;
-                
-                return (
-                  <TableRow key={sub.id} className={cn("hover:bg-slate-50 transition-colors group", isOverdue && "bg-red-50/30")}>
-                    <TableCell className="font-black text-primary tabular-nums pl-8 py-6">{sub.id}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-black text-slate-900 leading-tight">{sub.customerName}</span>
-                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">{sub.entityType || 'Individual'} Account</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-bold text-slate-600 flex items-center gap-2 py-6">
-                      <Building2 className="w-3.5 h-3.5 text-slate-300" /> {sub.branchName}
-                    </TableCell>
-                    <TableCell className="text-center">{getRiskBadge(sub)}</TableCell>
-                    <TableCell>
-                      <Badge className={cn(
-                        "font-black text-[9px] uppercase px-3 py-1",
-                        sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600'
-                      )}>
-                        {sub.status?.replace(/_/g, ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right pr-8 text-xs font-bold text-slate-400 tabular-nums">
-                      {format(new Date(sub.submittedAt || sub.createdAt), 'MMM dd, yyyy')}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              ) : filteredData.slice(0, 50).map((sub) => (
+                <TableRow key={sub.id} className="hover:bg-slate-50 transition-colors group">
+                  <TableCell className="font-black text-primary tabular-nums pl-8 py-6">{sub.id}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-black text-slate-900 leading-tight">{sub.customerName}</span>
+                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">{sub.entityType || 'Individual'} Account</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-bold text-slate-600 flex items-center gap-2 py-6">
+                    <Building2 className="w-3.5 h-3.5 text-slate-300" /> {sub.branchName}
+                  </TableCell>
+                  <TableCell className="text-center">{getRiskBadge(sub)}</TableCell>
+                  <TableCell>
+                    <Badge className={cn(
+                      "font-black text-[9px] uppercase px-3 py-1",
+                      sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600'
+                    )}>
+                      {sub.status?.replace(/_/g, ' ')}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right pr-8 text-xs font-bold text-slate-400 tabular-nums">
+                    {format(new Date(sub.submittedAt || sub.createdAt), 'MMM dd, yyyy')}
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>
         <CardFooter className="bg-slate-50/50 border-t py-4 px-8 flex justify-between items-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Authorized Management Dataset | Viewing First 50 Records</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Authorized Management Dataset | Viewing {Math.min(50, filteredData.length)} Records</p>
           <div className="text-[9px] font-mono font-black text-primary/40 uppercase tracking-tighter">
             Digital Watermark Active: {user?.name?.toUpperCase()}
           </div>
