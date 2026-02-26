@@ -96,7 +96,7 @@ export default function Dashboard() {
     const cleanBranchName = rawBranchName.toLowerCase().includes('branch') ? rawBranchName : `${rawBranchName} Branch`;
     
     if (isSuperAdmin) return {
-      title: 'Institutional Command',
+      title: 'Dashboard',
       subtitle: 'Global network oversight and master control.',
       scope: 'Global',
       icon: Shield
@@ -173,7 +173,7 @@ export default function Dashboard() {
             </Badge>
           )}
           {hasPermission('CASE_SUBMIT') && (
-            <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-black text-lg rounded-xl transition-all active:scale-95">
+            <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-black text-lg rounded-xl transition-all active:scale-[0.98]">
               <Link href="/submissions/new">Initialize Submission</Link>
             </Button>
           )}

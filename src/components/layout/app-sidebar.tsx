@@ -370,7 +370,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/head-office/follow-up'}>
                             <Link href="/head-office/follow-up">
                               <Zap className="w-4 h-4 mr-2 text-primary" />
-                              <span>Follow-up Audit</span>
+                              <span>Follow up</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -381,7 +381,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/reports/follow-up'}>
                             <Link href="/reports/follow-up">
                               <ClipboardList className="w-4 h-4 mr-2 text-primary" />
-                              <span>Audit Reports</span>
+                              <span>Follow up Report</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -447,7 +447,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/assignments'}>
                             <Link href="/admin/assignments">
                               <ArrowRightLeft className="w-4 h-4 mr-2 text-primary" />
-                              <span>Portfolio Mapping</span>
+                              <span>Branch Mapping</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>

@@ -134,7 +134,7 @@ export default function FollowUpDashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `nib-audit-history-${format(new Date(), 'yyyyMMdd')}.csv`;
+    link.download = `nib-followup-history-${format(new Date(), 'yyyyMMdd')}.csv`;
     link.click();
     toast({ title: "History Exported" });
   };
@@ -147,7 +147,7 @@ export default function FollowUpDashboard() {
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Follow-up Verification</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Follow up</h1>
           </div>
           <p className="text-muted-foreground text-lg font-medium">Head Office shared pool for quality control and random audit.</p>
         </div>

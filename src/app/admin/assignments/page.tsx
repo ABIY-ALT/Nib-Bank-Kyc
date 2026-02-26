@@ -19,7 +19,8 @@ import {
   ChevronRight,
   ClipboardCheck,
   Check,
-  ChevronsUpDown
+  ChevronsUpDown,
+  ArrowRightLeft
 } from "lucide-react";
 import { 
   Popover, 
@@ -132,9 +133,9 @@ export default function StaffAssignmentsPage() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
-              <SearchCheck className="w-6 h-6" />
+              <ArrowRightLeft className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Specialist Coverage</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Branch Mapping</h1>
           </div>
           <p className="text-muted-foreground text-lg font-medium">Manage multi-branch portfolios for verification staff.</p>
         </div>
@@ -388,7 +389,7 @@ export default function StaffAssignmentsPage() {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              className="font-black border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl h-10 px-6 shadow-sm transition-all active:scale-95" 
+                              className="font-black border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl h-10 px-6 shadow-sm transition-all active:scale-[0.95]" 
                               onClick={() => handleToggleBranchAssignment(u, selectedBranch, true)}
                             >
                               <UserPlus className="w-4 h-4 mr-2" /> Add to Coverage

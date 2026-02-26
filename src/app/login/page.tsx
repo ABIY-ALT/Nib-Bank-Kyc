@@ -64,7 +64,7 @@ export default function LoginPage() {
           <div className="p-4 bg-primary/5 rounded-2xl mb-2 flex items-center justify-center">
             <ShieldCheck className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tight">Nib Bank Gateway</h1>
+          <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tight">Nib Bank KYC</h1>
           <p className="text-slate-500 text-lg font-medium">Secure institutional access portal.</p>
         </div>
 
@@ -105,12 +105,12 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-3">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Credential</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
                     type={showPassword ? "text" : "password"} 
-                    placeholder="Password123" 
+                    placeholder="••••••••" 
                     className="pl-12 pr-12 h-14 bg-white border-2 border-primary/20 focus:border-primary font-black text-slate-900 rounded-xl focus-visible:ring-primary/20 transition-all"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -132,7 +132,7 @@ export default function LoginPage() {
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : null}
-                Authenticate Session
+                Login
                 <ChevronRight className="w-6 h-6 stroke-[3px]" />
               </Button>
             </form>

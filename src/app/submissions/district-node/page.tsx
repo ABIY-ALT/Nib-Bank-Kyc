@@ -172,7 +172,7 @@ export default function DistrictMonitoringPage() {
               <Map className="w-6 h-6" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {isAdmin ? "Global Monitoring" : `${districtName} District Monitoring`}
+              {isAdmin ? "District Monitoring" : `${districtName} District Monitoring`}
             </h1>
           </div>
           <div className="flex items-center gap-2 mt-1">

@@ -133,7 +133,7 @@ export default function DistrictPerformancePage() {
           <div className="p-3 bg-primary text-white rounded-2xl shadow-xl"><BarChart3 className="w-8 h-8" /></div>
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {activeDistrict ? `${activeDistrict} Regional Command` : 'Global Network Oversight'}
+              {activeDistrict ? `${activeDistrict} Regional Command` : 'District Monitoring'}
             </h1>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-muted-foreground text-lg font-medium">Institutional health monitoring for regional branch nodes.</p>
@@ -338,14 +338,14 @@ export default function DistrictPerformancePage() {
             </CardHeader>
             <CardContent className="p-6 space-y-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Period Start</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Period Start</Label>
                 <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-11 font-bold bg-white rounded-xl border-slate-200" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Period Conclusion</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Period Conclusion</Label>
                 <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-11 font-bold bg-white rounded-xl border-slate-200" />
               </div>
-              <Button onClick={loadData} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl shadow-primary/20 mt-2 hover:bg-primary/90 transition-all active:scale-95">
+              <Button onClick={loadData} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl shadow-primary/20 mt-2 hover:bg-primary/90 transition-all active:scale-[0.95]">
                 Refresh Command Deck
               </Button>
             </CardContent>

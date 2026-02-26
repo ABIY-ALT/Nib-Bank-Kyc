@@ -91,7 +91,7 @@ export default function BranchMonitoringPage() {
   }, [user, isAdmin, fromDate, toDate]);
 
   const cleanBranchTitle = useMemo(() => {
-    const raw = isAdmin ? 'Global Monitoring' : user?.branchName || 'Branch Monitoring';
+    const raw = isAdmin ? 'Branch Monitoring' : user?.branchName || 'Branch Monitoring';
     if (isAdmin) return raw;
     return raw.toLowerCase().includes('branch') ? raw : `${raw} Branch Monitoring`;
   }, [isAdmin, user]);

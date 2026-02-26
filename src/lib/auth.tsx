@@ -1,4 +1,3 @@
-
 'use client';
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -91,7 +90,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     localStorage.setItem("nib_token", data.token);
     setUser(data.user);
-    toast({ title: "Session Authorized", description: `Welcome back, ${data.user.firstName}.` });
+    toast({ 
+      title: `Welcome back, ${data.user.firstName}.`, 
+      description: "Institutional session successfully established." 
+    });
   };
 
   const logout = (reason: string = 'User Logout') => {

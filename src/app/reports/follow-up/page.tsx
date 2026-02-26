@@ -108,7 +108,7 @@ export default function FollowUpReportsPage() {
 
     toast({
       title: "Export Successful",
-      description: "Institutional audit report has been saved to CSV.",
+      description: "Institutional follow up report has been saved to CSV.",
     });
   };
 
@@ -116,7 +116,7 @@ export default function FollowUpReportsPage() {
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Follow-up Reports</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Follow up Report</h1>
           <p className="text-muted-foreground text-lg font-medium">Head Office quality control data for regulatory verification and accuracy audits.</p>
         </div>
         <div className="flex gap-2">
