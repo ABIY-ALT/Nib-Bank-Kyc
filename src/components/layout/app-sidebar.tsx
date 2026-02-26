@@ -63,11 +63,14 @@ export function AppSidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const counts = useSidebarCounts(user)
-  const { hasPermission, hasAnyInGroup, loading } = usePermissions()
+  const { hasPermission, hasAnyInGroup, loading, isSuperAdmin } = usePermissions()
 
   if (!user || loading) return null;
 
-  const isKYCOfficer = user.roles?.some(ur => ur.role.name === 'KYC_OFFICER');
+  // Operational Logic: Show "My Performance" to specialists, supervisors, and admins
+  const canSeeMyPerformance = user.roles?.some(ur => 
+    ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST'].includes(ur.role.name)
+  ) || isSuperAdmin;
 
   return (
     <Sidebar collapsible="icon">
@@ -114,7 +117,7 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      {isKYCOfficer && (
+                      {canSeeMyPerformance && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/my-performance'}>
                             <Link href="/submissions/my-performance">
