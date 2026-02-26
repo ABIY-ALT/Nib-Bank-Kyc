@@ -5,8 +5,8 @@ import { useAuth } from '@/lib/auth';
 import { 
   Dialog, 
   DialogContent,
-  DialogHeader,
-  DialogTitle,
+  DialogHeader, 
+  DialogTitle, 
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -24,10 +24,8 @@ import {
   Eye,
   EyeOff,
   UserCircle,
-  CheckCircle2,
-  X
+  CheckCircle2
 } from "lucide-react";
-import { cn } from '@/lib/utils';
 
 export function UserProfileDialog({ children }: { children: React.ReactNode }) {
   const { user, changePassword } = useAuth();
@@ -65,12 +63,25 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const openSecurityConsole = () => {
+    setNewPassword("");
+    setConfirmPassword("");
+    setIsChangingPassword(true);
+  };
+
   if (!user) return null;
 
   const userInitial = user.firstName.charAt(0);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(val) => {
+      setOpen(val);
+      if (!val) {
+        setIsChangingPassword(false);
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    }}>
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
@@ -134,7 +145,7 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
             <Button 
               variant="outline" 
               className="w-full h-14 rounded-2xl border-slate-200 font-black text-sm gap-3 group hover:border-primary/30 transition-all shadow-sm"
-              onClick={() => setIsChangingPassword(true)}
+              onClick={openSecurityConsole}
             >
               <KeyRound className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
               Modify Security Credential
@@ -152,6 +163,8 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
                     className="pl-11 pr-12 h-14 bg-slate-50/50 border-slate-200 font-bold rounded-2xl focus-visible:ring-primary/20 transition-all"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
                     required
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -169,6 +182,8 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
                     className="pl-11 h-14 bg-slate-50/50 border-slate-200 font-bold rounded-2xl focus-visible:ring-primary/20 transition-all"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
                     required
                   />
                 </div>
