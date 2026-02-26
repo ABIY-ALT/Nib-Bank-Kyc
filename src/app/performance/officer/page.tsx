@@ -49,21 +49,6 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip as RechartsTooltip, 
-  ResponsiveContainer, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  Legend,
-  RadialBarChart,
-  RadialBar
-} from 'recharts';
-import { 
   Select, 
   SelectContent, 
   SelectItem, 
@@ -273,21 +258,6 @@ export default function KYCOperationsMonitoringPage() {
     
     toast({ title: "Export Successful", description: "Team performance matrix saved to CSV." });
   };
-
-  const chartData = useMemo(() => {
-    const distribution = [
-      { name: 'Individual', value: 400 },
-      { name: 'Corporate', value: 300 },
-      { name: 'NGO', value: 150 },
-    ];
-
-    const slaGauge = [
-      { name: 'Compliant', value: analytics.slaHealth, fill: '#10B981' },
-      { name: 'Remaining', value: 100 - analytics.slaHealth, fill: '#f1f5f9' },
-    ];
-
-    return { distribution, slaGauge };
-  }, [analytics]);
 
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows);
@@ -604,7 +574,7 @@ export default function KYCOperationsMonitoringPage() {
                               </Badge>
                               {sub.slaStatus !== 'BREACHED' && (
                                 <div className="h-1 w-16 bg-slate-100 rounded-full overflow-hidden">
-                                  <div className={cn("h-full rounded-full", sub.slaStatus === 'AT_RISK' ? 'bg-amber-500' : 'bg-emerald-500')} style={{ width: '65%' }} />
+                                  <div className={cn("h-full rounded-full", sub.slaStatus === 'AT_RISK' ? 'bg-amber-50' : 'bg-emerald-500')} style={{ width: '65%' }} />
                                 </div>
                               )}
                             </div>
@@ -803,38 +773,6 @@ export default function KYCOperationsMonitoringPage() {
                 </>
               )}
             </CardContent>
-          </Card>
-
-          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white ring-1 ring-slate-100">
-            <CardHeader className="p-8 border-b bg-slate-50/50">
-              <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 flex items-center justify-between">
-                <span>Network Trends</span>
-                <TrendingUp className="w-3.5 h-3.5" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                {roleContext === 'OFFICER' ? (
-                  <RadialBarChart cx="50%" cy="50%" innerRadius="65%" outerRadius="105%" barSize={12} data={chartData.slaGauge} startAngle={90} endAngle={-270}>
-                    <RadialBar dataKey="value" cornerRadius={10} background />
-                    <RechartsTooltip />
-                  </RadialBarChart>
-                ) : (
-                  <BarChart data={chartData.distribution}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 9, fontWeight: '900', fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9, fontWeight: '900', fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <RechartsTooltip cursor={{ fill: 'rgba(184, 147, 52, 0.05)' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
-                    <Bar dataKey="value" fill="#B89334" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                )}
-              </ResponsiveContainer>
-            </CardContent>
-            <CardFooter className="bg-slate-50/50 p-5 border-t text-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] w-full">
-                Interactive Analytical Console
-              </p>
-            </CardFooter>
           </Card>
         </div>
       </div>
