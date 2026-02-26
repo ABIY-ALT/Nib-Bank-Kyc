@@ -44,7 +44,8 @@ import {
   ExternalLink,
   Building2,
   Trophy,
-  User
+  User,
+  LayoutDashboard
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -314,292 +315,343 @@ export default function KYCOperationsMonitoringPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <div className="flex items-center gap-4 mb-1">
-            <div className="p-3 bg-primary text-white rounded-2xl shadow-xl">
-              <Zap className="w-8 h-8 fill-white" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Operations Monitoring</h1>
-              <p className="text-muted-foreground text-lg font-medium flex items-center gap-2">
-                Real-time productivity and methodology oversight &bull; 
-                <span className="text-[10px] font-mono font-bold bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
-                  <Activity className="w-3 h-3 text-emerald-500" /> LAST SYNC: {format(lastUpdated, 'HH:mm:ss')}
-                </span>
-              </p>
+    <div className="space-y-10 animate-in fade-in duration-500 pb-20 max-w-[1600px] mx-auto">
+      {/* INSTITUTIONAL HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-200 pb-8">
+        <div className="flex items-center gap-5">
+          <div className="p-4 bg-primary text-white rounded-[1.5rem] shadow-2xl shadow-primary/20 ring-4 ring-primary/10">
+            <LayoutDashboard className="w-8 h-8" />
+          </div>
+          <div>
+            <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tight">KYC Operations Monitoring</h1>
+            <div className="flex items-center gap-3 mt-1.5">
+              <p className="text-slate-500 font-medium text-lg">Institutional Intelligence Terminal</p>
+              <div className="h-4 w-px bg-slate-200" />
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 rounded-full border border-emerald-100">
+                <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Live Sync: {format(lastUpdated, 'HH:mm:ss')}</span>
+              </div>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-xl border shadow-inner">
-            {(["today", "week", "month"] as const).map((r) => (
-              <Button
-                key={r}
-                variant="ghost"
-                size="sm"
-                onClick={() => handleRangeSelection(r)}
-                className={cn(
-                  "px-4 h-9 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all",
-                  dateRange === r ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-primary"
-                )}
-              >
-                {r}
-              </Button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200">
+          {(["today", "week", "month"] as const).map((r) => (
+            <Button
+              key={r}
+              variant="ghost"
+              size="sm"
+              onClick={() => handleRangeSelection(r)}
+              className={cn(
+                "px-6 h-10 rounded-xl font-black text-[10px] uppercase tracking-[0.1em] transition-all",
+                dateRange === r ? "bg-white text-primary shadow-lg shadow-black/5" : "text-slate-500 hover:text-primary"
+              )}
+            >
+              {r}
+            </Button>
+          ))}
           <Button 
             variant="outline" 
             onClick={() => setDateRange("custom")}
             className={cn(
-              "h-11 px-6 border-slate-200 shadow-sm font-bold rounded-xl gap-2 bg-white transition-all",
-              dateRange === 'custom' && "border-primary text-primary ring-1 ring-primary/20"
+              "h-10 px-6 border-none shadow-none font-black text-[10px] uppercase tracking-[0.1em] rounded-xl gap-2 transition-all",
+              dateRange === 'custom' ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-transparent text-slate-500 hover:bg-white"
             )}
           >
-            <CalendarIcon className="w-4 h-4 text-primary" /> Custom
+            <CalendarIcon className="w-3.5 h-3.5" /> Custom
           </Button>
         </div>
       </div>
 
-      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl">
-        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
-              <Building2 className="w-3 h-3" /> Branch Jurisdiction
+      {/* INTELLIGENCE FILTERS */}
+      <Card className="border-slate-200 shadow-xl shadow-slate-200/50 bg-white rounded-[2rem] overflow-hidden">
+        <CardContent className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-3 space-y-2.5">
+            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2 px-1">
+              <Building2 className="w-3.5 h-3.5" /> Jurisdiction Node
             </Label>
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="h-11 rounded-xl bg-slate-50/50 border-slate-200 font-bold">
+              <SelectTrigger className="h-14 rounded-2xl bg-slate-50/50 border-slate-200/60 font-bold text-slate-700 focus:ring-primary/20">
                 <SelectValue placeholder="All Branches" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="font-bold">Global Network</SelectItem>
-                {uniqueBranches.map(b => (
-                  <SelectItem key={b} value={b}>{b}</SelectItem>
-                ))}
+              <SelectContent className="rounded-2xl shadow-2xl">
+                <SelectItem value="all" className="font-bold">Master Network (HQ)</SelectItem>
+                {uniqueBranches.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
-              <User className="w-3 h-3" /> Specialist Officer
+          <div className="lg:col-span-3 space-y-2.5">
+            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2 px-1">
+              <User className="w-3.5 h-3.5" /> Active Personnel
             </Label>
             <Select value={selectedOfficer} onValueChange={setSelectedOfficer}>
-              <SelectTrigger className="h-11 rounded-xl bg-slate-50/50 border-slate-200 font-bold">
+              <SelectTrigger className="h-14 rounded-2xl bg-slate-50/50 border-slate-200/60 font-bold text-slate-700 focus:ring-primary/20">
                 <SelectValue placeholder="All Officers" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="font-bold">Combined Personnel</SelectItem>
-                {uniqueOfficers.map(o => (
-                  <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-                ))}
+              <SelectContent className="rounded-2xl shadow-2xl">
+                <SelectItem value="all" className="font-bold">Combined Workforce</SelectItem>
+                {uniqueOfficers.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
-              <Search className="w-3 h-3" /> Keyword Search
+          <div className="lg:col-span-4 space-y-2.5">
+            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2 px-1">
+              <Search className="w-3.5 h-3.5" /> Archive Discovery
             </Label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input 
-                placeholder="Case ID or Customer..." 
-                className="pl-10 h-11 border-slate-200 font-bold bg-slate-50/30 rounded-xl"
+                placeholder="Case ID, Entity or Account..." 
+                className="pl-12 h-14 border-slate-200/60 font-bold bg-slate-50/50 rounded-2xl focus-visible:ring-primary/20"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
 
-          <div className="flex items-end">
-            <Button variant="ghost" onClick={resetFilters} className="w-full h-11 gap-2 font-bold text-slate-400 hover:text-primary">
+          <div className="lg:col-span-2 flex items-end">
+            <Button variant="ghost" onClick={resetFilters} className="w-full h-14 gap-2 font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-primary hover:bg-primary/5 rounded-2xl">
               <RotateCcw className="w-4 h-4" /> Reset Filters
             </Button>
           </div>
 
-          {/* Date Picker Fields (Shown for Context) */}
-          <div className="md:col-span-2 space-y-2">
-            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Start Date</Label>
-            <Input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setDateRange('custom'); }} className="h-11 font-bold" />
-          </div>
-          <div className="md:col-span-2 space-y-2">
-            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Conclusion Date</Label>
-            <Input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setDateRange('custom'); }} className="h-11 font-bold" />
-          </div>
+          {dateRange === 'custom' && (
+            <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-top-4 duration-300">
+              <div className="space-y-2.5">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Audit Start Date</Label>
+                <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-14 rounded-2xl border-slate-200 font-bold bg-slate-50/50" />
+              </div>
+              <div className="space-y-2.5">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Audit Conclusion Date</Label>
+                <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-14 rounded-2xl border-slate-200 font-bold bg-slate-50/50" />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all rounded-3xl">
-          <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-              {roleContext === 'DIRECTOR' ? 'Global Queue' : (roleContext === 'SUPERVISOR' ? 'Team Queue' : 'My Queue')}
+      {/* CORE KPI METRICS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white group hover:scale-[1.02] transition-all duration-500">
+          <CardHeader className="p-6 pb-2 border-b bg-slate-50/50 flex flex-row items-center justify-between">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">
+              {roleContext === 'DIRECTOR' ? 'Network Load' : (roleContext === 'SUPERVISOR' ? 'Branch Load' : 'Assigned Load')}
             </span>
-            <Inbox className="w-3.5 h-3.5 text-primary" />
+            <Inbox className="w-4 h-4 text-primary" />
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="flex items-end justify-between">
-              <div className="text-5xl font-black text-slate-900 tracking-tighter">{analytics.total}</div>
-              <Badge className="mb-1 bg-emerald-50 text-emerald-700 border-emerald-200 font-bold">+12% vs prev</Badge>
+          <CardContent className="p-8">
+            <div className="flex items-baseline gap-2">
+              <div className="text-6xl font-black text-slate-900 tracking-tighter">{analytics.total}</div>
+              <div className="text-slate-400 font-bold text-sm uppercase">Units</div>
+            </div>
+            <div className="mt-6 flex items-center gap-2 text-emerald-600">
+              <TrendingUp className="w-4 h-4" />
+              <span className="text-[10px] font-black uppercase tracking-widest">+12% vs Benchmark</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg border-slate-200 overflow-hidden rounded-3xl">
-          <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">SLA Health Index</span>
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+        <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white group hover:scale-[1.02] transition-all duration-500 border-l-8 border-l-emerald-500">
+          <CardHeader className="p-6 pb-2 border-b bg-emerald-50/30 flex flex-row items-center justify-between">
+            <span className="text-[10px] font-black uppercase text-emerald-600 tracking-[0.2em]">Compliance Health</span>
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="text-5xl font-black text-emerald-600 tracking-tighter">{analytics.slaHealth}%</div>
-            <div className="mt-4 space-y-1">
-              <div className="flex justify-between text-[9px] font-black uppercase text-slate-400">
-                <span>Compliance Target</span>
-                <span>95%</span>
+          <CardContent className="p-8">
+            <div className="text-6xl font-black text-emerald-600 tracking-tighter">{analytics.slaHealth}%</div>
+            <div className="mt-6 space-y-2">
+              <div className="flex justify-between text-[10px] font-black uppercase text-slate-400 tracking-tighter">
+                <span>Threshold Analysis</span>
+                <span>95% TARGET</span>
               </div>
-              <Progress value={analytics.slaHealth} className="h-1.5 bg-slate-100" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg border-slate-200 overflow-hidden rounded-3xl">
-          <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-primary tracking-widest">Goal Progress</span>
-            <Goal className="w-3.5 h-3.5 text-primary" />
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="text-5xl font-black text-primary tracking-tighter">{analytics.goalProgress}%</div>
-            <div className="mt-4 space-y-1">
-              <div className="flex justify-between text-[9px] font-black uppercase text-slate-400">
-                <span>Resolved: {analytics.completed}</span>
-                <span>Target: {roleContext === 'OFFICER' ? '50' : '200'}</span>
+              <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${analytics.slaHealth}%` }} />
               </div>
-              <Progress value={analytics.goalProgress} className="h-1.5 bg-slate-100" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg border-slate-200 overflow-hidden rounded-3xl">
-          <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-orange-600 tracking-widest">Avg Processing</span>
-            <Clock className="w-3.5 h-3.5 text-orange-600" />
+        <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white group hover:scale-[1.02] transition-all duration-500 border-l-8 border-l-primary">
+          <CardHeader className="p-6 pb-2 border-b bg-primary/5 flex flex-row items-center justify-between">
+            <span className="text-[10px] font-black uppercase text-primary tracking-[0.2em]">Velocity Goal</span>
+            <Goal className="w-4 h-4 text-primary" />
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="text-5xl font-black text-slate-900 tracking-tighter">1.2<span className="text-lg text-slate-400 ml-1">hrs</span></div>
-            <Badge variant="outline" className="mt-4 text-[9px] border-orange-200 bg-orange-50 text-orange-700 font-black">-15m improvement</Badge>
+          <CardContent className="p-8">
+            <div className="text-6xl font-black text-primary tracking-tighter">{analytics.goalProgress}%</div>
+            <div className="mt-6 space-y-2">
+              <div className="flex justify-between text-[10px] font-black uppercase text-slate-400 tracking-tighter">
+                <span>Authorized: {analytics.completed}</span>
+                <span>QUOTA: {roleContext === 'OFFICER' ? '50' : '200'}</span>
+              </div>
+              <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full" style={{ width: `${analytics.goalProgress}%` }} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white group hover:scale-[1.02] transition-all duration-500 border-l-8 border-l-orange-500">
+          <CardHeader className="p-6 pb-2 border-b bg-orange-50/30 flex flex-row items-center justify-between">
+            <span className="text-[10px] font-black uppercase text-orange-600 tracking-[0.2em]">Efficiency TAT</span>
+            <Clock className="w-4 h-4 text-orange-600" />
+          </CardHeader>
+          <CardContent className="p-8">
+            <div className="flex items-baseline gap-2">
+              <div className="text-6xl font-black text-slate-900 tracking-tighter">1.2</div>
+              <div className="text-slate-400 font-black text-2xl uppercase">HRS</div>
+            </div>
+            <div className="mt-6 flex items-center gap-2 text-orange-600">
+              <TrendingUp className="w-4 h-4 rotate-180" />
+              <span className="text-[10px] font-black uppercase tracking-widest">-15m Reduction</span>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div className="lg:col-span-3 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        {/* MAIN WORKSPACE TABS */}
+        <div className="lg:col-span-9 space-y-8">
           {(roleContext === 'SUPERVISOR' || roleContext === 'DIRECTOR') && (
-            <div className="flex gap-2 p-1 bg-slate-100 w-fit rounded-2xl border mb-2">
+            <div className="flex gap-2 p-2 bg-slate-100/80 w-fit rounded-[1.5rem] border border-slate-200 backdrop-blur-md">
               <Button 
-                variant={activeTab === "queue" ? "default" : "ghost"} 
+                variant="ghost" 
                 onClick={() => setActiveTab("queue")}
-                className={cn("rounded-xl font-bold px-6 h-10", activeTab === "queue" ? "bg-white text-primary shadow-sm" : "text-slate-500")}
+                className={cn(
+                  "rounded-xl font-black text-[10px] uppercase tracking-widest px-8 h-12 transition-all",
+                  activeTab === "queue" ? "bg-white text-primary shadow-xl shadow-black/5 scale-[1.02]" : "text-slate-500"
+                )}
               >
-                <Inbox className="w-4 h-4 mr-2" /> Operations Queue
+                <Inbox className="w-4 h-4 mr-3" /> Operations Queue
               </Button>
               <Button 
-                variant={activeTab === "team" ? "default" : "ghost"} 
+                variant="ghost" 
                 onClick={() => setActiveTab("team")}
-                className={cn("rounded-xl font-bold px-6 h-10", activeTab === "team" ? "bg-white text-primary shadow-sm" : "text-slate-500")}
+                className={cn(
+                  "rounded-xl font-black text-[10px] uppercase tracking-widest px-8 h-12 transition-all",
+                  activeTab === "team" ? "bg-white text-primary shadow-xl shadow-black/5 scale-[1.02]" : "text-slate-500"
+                )}
               >
-                <Users className="w-4 h-4 mr-2" /> Team Efficiency Matrix
+                <Users className="w-4 h-4 mr-3" /> Specialist Matrix
               </Button>
             </div>
           )}
 
           {activeTab === "queue" ? (
-            <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
-              <CardHeader className="bg-slate-900 text-white p-8 flex flex-row items-center justify-between">
+            <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[3rem] bg-white ring-1 ring-slate-100">
+              <CardHeader className="bg-slate-900 text-white p-10 flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-2xl font-black tracking-tight">Active Operations Queue</CardTitle>
-                  <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">
-                    Prioritized Technical Analysis Matrix &bull; {analytics.total} Active Nodes
+                  <CardTitle className="text-3xl font-black tracking-tight">Technical Operations Queue</CardTitle>
+                  <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
+                    Prioritized Technical Analysis Stream &bull; {analytics.total} Active Nodes Engaged
                   </CardDescription>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex -space-x-3">
+                    {[1,2,3].map(i => <div key={i} className="w-10 h-10 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-400">S{i}</div>)}
+                  </div>
+                  <Badge variant="outline" className="border-primary/30 text-primary font-black px-6 py-2 rounded-full h-10 text-[10px] tracking-widest">
+                    {analytics.total} UNITS DISCOVERED
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
-                  <TableHeader className="bg-slate-50/80">
+                  <TableHeader className="bg-slate-50/80 border-b">
                     <TableRow>
-                      <TableHead className="w-[140px] font-black py-5 pl-8 text-[11px] uppercase text-slate-500 tracking-widest">Case ID</TableHead>
+                      <TableHead className="w-[160px] font-black py-6 pl-10 text-[11px] uppercase text-slate-500 tracking-widest">Case Identifier</TableHead>
                       <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Customer Entity</TableHead>
                       <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Deadline</TableHead>
-                      <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">SLA Status</TableHead>
-                      <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Assigned</TableHead>
-                      <TableHead className="text-right pr-8 font-black text-[11px] uppercase text-slate-500 tracking-widest">Actions</TableHead>
+                      <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">SLA Lifecycle</TableHead>
+                      <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Origin</TableHead>
+                      <TableHead className="text-right pr-10 font-black text-[11px] uppercase text-slate-500 tracking-widest">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {analytics.slaItems.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="py-32 text-center italic text-slate-400 bg-slate-50/30">Vault clear. No pending operations discovered.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6} className="py-48 text-center italic text-slate-400 bg-slate-50/30">Vault synchronization complete. No pending operations discovered in this analysis window.</TableCell></TableRow>
                     ) : analytics.slaItems.map((sub) => (
                       <React.Fragment key={sub.id}>
                         <TableRow 
                           className={cn(
-                            "group transition-all cursor-pointer",
-                            sub.slaStatus === 'BREACHED' ? "bg-red-50/30 border-l-4 border-l-red-600" : (sub.slaStatus === 'AT_RISK' ? "bg-amber-50/30 border-l-4 border-l-amber-500" : "hover:bg-slate-50")
+                            "group transition-all cursor-pointer border-b border-slate-100",
+                            sub.slaStatus === 'BREACHED' ? "bg-red-50/40" : (sub.slaStatus === 'AT_RISK' ? "bg-amber-50/40" : "hover:bg-slate-50/80")
                           )}
                           onClick={() => toggleRow(sub.id)}
                         >
-                          <TableCell className="py-6 pl-8 font-black text-primary tabular-nums">{sub.id}</TableCell>
-                          <TableCell>
+                          <TableCell className="py-8 pl-10">
                             <div className="flex flex-col">
-                              <span className="font-black text-slate-900 leading-tight">{sub.customerName}</span>
-                              <Badge variant="outline" className="w-fit text-[8px] h-4 font-black uppercase mt-1 px-1.5">{sub.entityType || 'Individual'}</Badge>
+                              <span className="font-black text-primary tabular-nums text-sm">{sub.id}</span>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase mt-1">Ref ID</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1.5">
+                              <span className="font-black text-slate-900 leading-tight text-base group-hover:text-primary transition-colors">{sub.customerName}</span>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[9px] h-4.5 font-black uppercase px-2 bg-white border-slate-200">{sub.entityType || 'Individual'}</Badge>
+                                {sub.isExceptional && <Badge className="bg-orange-100 text-orange-700 border-none text-[8px] font-black h-4 px-1.5 uppercase">Escalated</Badge>}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="font-mono text-[11px] font-bold text-slate-500">
                             {format(sub.deadline, 'MMM dd, HH:mm')}
                           </TableCell>
                           <TableCell>
-                            <Badge className={cn(
-                              "font-black text-[9px] uppercase px-3",
-                              sub.slaStatus === 'BREACHED' ? 'bg-red-600 text-white' : (sub.slaStatus === 'AT_RISK' ? 'bg-amber-500 text-white' : 'bg-emerald-50 text-emerald-700 border-emerald-200')
-                            )}>
-                              {sub.slaStatus.replace('_', ' ')}
-                            </Badge>
+                            <div className="space-y-2">
+                              <Badge className={cn(
+                                "font-black text-[9px] uppercase px-4 py-1 rounded-full border-none shadow-sm",
+                                sub.slaStatus === 'BREACHED' ? 'bg-red-600 text-white' : (sub.slaStatus === 'AT_RISK' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white')
+                              )}>
+                                {sub.slaStatus.replace('_', ' ')}
+                              </Badge>
+                              {sub.slaStatus !== 'BREACHED' && (
+                                <div className="h-1 w-16 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={cn("h-full rounded-full", sub.slaStatus === 'AT_RISK' ? 'bg-amber-500' : 'bg-emerald-500')} style={{ width: '65%' }} />
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
-                          <TableCell className="text-[11px] font-bold text-slate-600">
-                            {sub.createdBy?.firstName || 'System'}
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="text-[11px] font-black text-slate-700">{sub.branchName}</span>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{sub.createdBy?.firstName || 'System'}</span>
+                            </div>
                           </TableCell>
-                          <TableCell className="text-right pr-8">
-                            <div className="flex justify-end gap-2">
-                              <Button size="sm" asChild className="h-8 bg-primary hover:bg-primary/90 text-white font-black text-[10px] rounded-lg">
+                          <TableCell className="text-right pr-10">
+                            <div className="flex justify-end gap-3">
+                              <Button size="sm" asChild className="h-10 bg-slate-900 hover:bg-black text-white font-black text-[10px] uppercase tracking-widest px-6 rounded-xl shadow-xl transition-all active:scale-95">
                                 <Link href={`/submissions/${sub.id}`}>Open Case</Link>
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400">
-                                {expandedRows.has(sub.id) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-400 hover:bg-primary/5 hover:text-primary">
+                                {expandedRows.has(sub.id) ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                               </Button>
                             </div>
                           </TableCell>
                         </TableRow>
                         {expandedRows.has(sub.id) && (
                           <TableRow className="bg-slate-50/50 border-b border-slate-100 animate-in slide-in-from-top-2">
-                            <TableCell colSpan={6} className="p-8">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                <div className="space-y-3">
-                                  <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><MessageSquare className="w-3 h-3" /> Recent Activity</Label>
-                                  <p className="text-xs text-slate-600 leading-relaxed italic border-l-2 border-primary/20 pl-4">
-                                    "Standard identity verification completed. Awaiting core banking (T24) data synchronization for final methodology sign-off."
-                                  </p>
+                            <TableCell colSpan={6} className="p-10">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+                                <div className="space-y-4">
+                                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary" /> Log Entry</Label>
+                                  <div className="relative p-5 bg-white rounded-[1.5rem] border border-slate-200/60 shadow-sm">
+                                    <div className="absolute top-4 right-4"><Zap className="w-3 h-3 text-slate-200" /></div>
+                                    <p className="text-xs text-slate-600 leading-relaxed font-medium italic">
+                                      "Technical analysis initiated. Reviewing jurisdictional AML compliance parameters and customer identity bundle authenticity."
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="space-y-3">
-                                  <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><FileText className="w-3 h-3" /> Asset Inventory</Label>
-                                  <div className="flex flex-wrap gap-2">
-                                    <Badge variant="outline" className="bg-white border-slate-200 text-[10px] font-bold">National_ID.pdf</Badge>
-                                    <Badge variant="outline" className="bg-white border-slate-200 text-[10px] font-bold">Utility_Bill.jpg</Badge>
+                                <div className="space-y-4">
+                                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Signature Assets</Label>
+                                  <div className="flex flex-wrap gap-2.5">
+                                    {['National_ID.pdf', 'Memo_Authorized.jpg', 'Utility_Proof.png'].map(f => (
+                                      <Badge key={f} variant="outline" className="bg-white border-slate-200 text-[10px] font-black py-1.5 px-3 rounded-lg text-slate-500 hover:border-primary/30 transition-colors cursor-default">{f}</Badge>
+                                    ))}
                                   </div>
                                 </div>
                                 <div className="flex items-end justify-end">
-                                  <Button variant="ghost" className="text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5">
-                                    View Audit Trail <ExternalLink className="w-3 h-3 ml-2" />
+                                  <Button variant="ghost" className="h-12 px-6 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] text-primary hover:bg-primary/5 border border-primary/10">
+                                    Full Audit Trail <ExternalLink className="w-4 h-4 ml-3" />
                                   </Button>
                                 </div>
                               </div>
@@ -611,84 +663,93 @@ export default function KYCOperationsMonitoringPage() {
                   </TableBody>
                 </Table>
               </CardContent>
-              <CardFooter className="bg-slate-50/50 border-t py-4 px-8 flex justify-between items-center">
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-600" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">SLA Breached</span></div>
-                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">At Risk (&lt;4h)</span></div>
-                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500" /><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">On Track</span></div>
+              <CardFooter className="bg-slate-50/80 border-t py-6 px-10 flex justify-between items-center">
+                <div className="flex items-center gap-8">
+                  <div className="flex items-center gap-2.5"><div className="w-3 h-3 rounded-full bg-red-600 shadow-sm" /><span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">SLA Breached</span></div>
+                  <div className="flex items-center gap-2.5"><div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm" /><span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">High Risk (&lt;4h)</span></div>
+                  <div className="flex items-center gap-2.5"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm" /><span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Standard Lifecycle</span></div>
                 </div>
-                <p className="text-[9px] font-mono font-black text-primary/40 uppercase tracking-tighter">
-                  Institutional Ops Console Locked to: {user?.name?.toUpperCase()}
-                </p>
+                <div className="text-[10px] font-mono font-black text-primary/40 uppercase tracking-widest bg-white px-4 py-1.5 rounded-full border border-slate-100">
+                  Terminal ID: {user?.id?.substring(0, 8).toUpperCase()} &bull; ACCESS: {user?.name?.toUpperCase()}
+                </div>
               </CardFooter>
             </Card>
           ) : (
-            <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white animate-in slide-in-from-right-4 duration-500">
-              <CardHeader className="bg-slate-900 text-white p-8 flex flex-row items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary/20 rounded-2xl">
-                    <Trophy className="w-6 h-6 text-primary" />
+            <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[3rem] bg-white animate-in slide-in-from-right-4 duration-500 ring-1 ring-slate-100">
+              <CardHeader className="bg-slate-900 text-white p-10 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-6">
+                  <div className="p-4 bg-primary/20 rounded-[1.5rem] shadow-2xl ring-2 ring-primary/10">
+                    <Trophy className="w-8 h-8 text-primary" />
                   </div>
                   <div>
-                    <CardTitle className="text-2xl font-black tracking-tight">Team Efficiency Matrix</CardTitle>
-                    <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">
-                      Individual Methodology & Throughput Scoring &bull; 40/30/20/10 Formula
+                    <CardTitle className="text-3xl font-black tracking-tight">Efficiency & Accuracy Matrix</CardTitle>
+                    <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
+                      Weighted Personnel Performance Metrics &bull; Audit Score Formula 40/30/20/10
                     </CardDescription>
                   </div>
                 </div>
+                <Button 
+                  onClick={handleExportPerformance}
+                  variant="outline"
+                  className="bg-white/10 border-white/20 text-white font-black text-[10px] uppercase tracking-[0.2em] h-12 px-8 rounded-2xl hover:bg-white/20"
+                >
+                  <FileDown className="w-4 h-4 mr-3" /> Master Export
+                </Button>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
-                  <TableHeader className="bg-slate-50/80">
+                  <TableHeader className="bg-slate-50/80 border-b">
                     <TableRow>
-                      <TableHead className="font-black py-5 pl-8 text-[11px] uppercase text-slate-500 tracking-widest">Specialist Official</TableHead>
+                      <TableHead className="font-black py-6 pl-10 text-[11px] uppercase text-slate-500 tracking-widest">Specialist Official</TableHead>
                       <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">Authorized</TableHead>
                       <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">SLA Compliance</TableHead>
-                      <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">Gaps Found</TableHead>
-                      <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">Active Load</TableHead>
-                      <TableHead className="text-right pr-8 font-black text-[11px] uppercase text-slate-500 tracking-widest">Efficiency Index</TableHead>
+                      <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">Methodology Gaps</TableHead>
+                      <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">Jurisdiction Load</TableHead>
+                      <TableHead className="text-right pr-10 font-black text-[11px] uppercase text-slate-500 tracking-widest">Efficiency Index</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {analytics.teamPerformance.map((officer) => (
-                      <TableRow key={officer.id} className="hover:bg-slate-50 transition-colors group">
-                        <TableCell className="py-6 pl-8">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-primary/5 text-primary flex items-center justify-center font-black text-xs">
+                      <TableRow key={officer.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-100 group">
+                        <TableCell className="py-8 pl-10">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-base shadow-sm ring-4 ring-primary/5">
                               {officer.name.charAt(0)}
                             </div>
                             <div className="flex flex-col">
-                              <span className="font-black text-slate-900 leading-tight">{officer.name}</span>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase">Specialist Analysis Node</span>
+                              <span className="font-black text-slate-900 leading-tight text-base group-hover:text-primary transition-colors">{officer.name}</span>
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Verification Node</span>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-center font-black text-slate-700">{officer.completed}</TableCell>
+                        <TableCell className="text-center font-black text-slate-700 text-lg">{officer.completed}</TableCell>
                         <TableCell className="text-center">
-                          <div className="flex flex-col items-center gap-1">
+                          <div className="flex flex-col items-center gap-2">
                             <span className={cn(
                               "text-xs font-black",
                               officer.slaRate >= 90 ? "text-emerald-600" : officer.slaRate >= 75 ? "text-primary" : "text-red-600"
                             )}>{officer.slaRate}%</span>
-                            <Progress value={officer.slaRate} className="w-16 h-1 bg-slate-100" />
+                            <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className={cn("h-full rounded-full", officer.slaRate >= 90 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${officer.slaRate}%` }} />
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 font-bold">{officer.amended}</Badge>
+                          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 font-black text-[10px] px-4 py-1.5 rounded-full">{officer.amended}</Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge className="bg-blue-50 text-blue-700 border-blue-100 font-black">{officer.pending}</Badge>
+                          <Badge className="bg-blue-50 text-blue-700 border-none font-black text-[10px] px-4 py-1.5 rounded-full">{officer.pending}</Badge>
                         </TableCell>
-                        <TableCell className="text-right pr-8">
-                          <div className="flex items-center justify-end gap-3">
+                        <TableCell className="text-right pr-10">
+                          <div className="flex items-center justify-end gap-5">
                             <div className="flex flex-col items-end">
-                              <span className="text-lg font-black text-slate-900 leading-none">{officer.finalScore}%</span>
-                              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Weighted Composite</span>
+                              <span className="text-2xl font-black text-slate-900 tracking-tighter">{officer.finalScore}%</span>
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Composite Rating</span>
                             </div>
                             <div className={cn(
-                              "w-2 h-10 rounded-full",
-                              officer.finalScore >= 80 ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" : 
-                              officer.finalScore >= 60 ? "bg-primary" : "bg-orange-500"
+                              "w-2.5 h-12 rounded-full shadow-lg",
+                              officer.finalScore >= 80 ? "bg-emerald-500 shadow-emerald-200" : 
+                              officer.finalScore >= 60 ? "bg-primary shadow-primary/20" : "bg-orange-500 shadow-orange-200"
                             )} />
                           </div>
                         </TableCell>
@@ -697,106 +758,118 @@ export default function KYCOperationsMonitoringPage() {
                   </TableBody>
                 </Table>
               </CardContent>
-              <CardFooter className="bg-slate-50/50 border-t py-6 px-8 flex justify-between items-center">
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-600" /><p className="text-[10px] font-bold text-slate-500 uppercase">Top Performer: {analytics.teamPerformance[0]?.name}</p></div>
+              <CardFooter className="bg-slate-50/80 border-t py-8 px-10 flex justify-between items-center">
+                <div className="flex gap-6">
+                  <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                    <Trophy className="w-4 h-4 text-primary" />
+                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Branch MVP: <span className="text-primary font-black ml-1">{analytics.teamPerformance[0]?.name}</span></p>
+                  </div>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  onClick={handleExportPerformance}
-                  className="text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5"
-                >
-                  Full Team Export <FileDown className="w-3 h-3 ml-2" />
-                </Button>
+                <div className="flex items-center gap-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Institutional Audit Engine v2.0</p>
+                </div>
               </CardFooter>
             </Card>
           )}
         </div>
 
-        <div className="space-y-8">
-          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
-            <CardHeader className="bg-primary text-white p-6 border-b">
-              <CardTitle className="text-sm font-black uppercase tracking-[0.2em] flex items-center gap-2">
+        {/* SIDEBAR ANALYTICS */}
+        <div className="lg:col-span-3 space-y-10">
+          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white ring-1 ring-slate-100">
+            <CardHeader className="bg-primary text-white p-8 border-b">
+              <CardTitle className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 text-white/90">
                 <Zap className="w-4 h-4 fill-white" /> Quick Actions
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6 space-y-4">
+            <CardContent className="p-8 space-y-4">
               {roleContext === 'OFFICER' ? (
                 <>
-                  <Button className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg gap-3">
-                    <Play className="w-5 h-5 fill-white" /> Start Next Case
+                  <Button className="w-full h-16 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base rounded-[1.25rem] shadow-xl shadow-emerald-200 gap-4 transition-all active:scale-[0.98]">
+                    <Play className="w-5 h-5 fill-white" /> Resume Analysis
                   </Button>
-                  <Button variant="outline" className="w-full h-12 border-slate-200 font-bold rounded-xl gap-2 hover:bg-slate-50">
-                    <MessageSquare className="w-4 h-4 text-primary" /> Pending Responses
-                  </Button>
+                  <Button variant="outline" className="w-full h-14 border-slate-200 font-black text-[10px] uppercase tracking-widest rounded-[1.25rem] gap-3 hover:bg-slate-50 transition-all">
+                    <MessageSquare className="w-4 h-4 text-primary" /> Response Hub
+                  </Badge>
                 </>
               ) : (
                 <>
                   <Button 
                     onClick={handleExportPerformance}
-                    className="w-full h-14 bg-slate-900 hover:bg-black text-white font-black rounded-xl shadow-lg gap-3"
+                    className="w-full h-16 bg-slate-900 hover:bg-black text-white font-black text-base rounded-[1.25rem] shadow-xl shadow-slate-200 gap-4 transition-all active:scale-[0.98]"
                   >
                     <FileDown className="w-5 h-5" /> Export Intelligence
                   </Button>
-                  <Button variant="outline" className="w-full h-12 border-slate-200 font-bold rounded-xl gap-2 hover:bg-slate-50" onClick={() => setActiveTab(activeTab === "queue" ? "team" : "queue")}>
-                    <Trophy className="w-4 h-4 text-primary" /> {activeTab === "queue" ? "View Leaderboard" : "Back to Queue"}
+                  <Button variant="outline" className="w-full h-14 border-slate-200 font-black text-[10px] uppercase tracking-widest rounded-[1.25rem] gap-3 hover:bg-slate-50 transition-all" onClick={() => setActiveTab(activeTab === "queue" ? "team" : "queue")}>
+                    <Trophy className="w-4 h-4 text-primary" /> {activeTab === "queue" ? "Personnel Matrix" : "Operational Queue"}
                   </Button>
                 </>
               )}
             </CardContent>
           </Card>
 
-          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
-            <CardHeader className="p-6 border-b bg-slate-50/50">
-              <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-500">
-                {roleContext === 'OFFICER' ? 'My SLA Gauge' : 'Institutional Trend'}
+          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white ring-1 ring-slate-100">
+            <CardHeader className="p-8 border-b bg-slate-50/50">
+              <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 flex items-center justify-between">
+                <span>Network Trends</span>
+                <TrendingUp className="w-3.5 h-3.5" />
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-8 h-[240px]">
+            <CardContent className="p-8 h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 {roleContext === 'OFFICER' ? (
-                  <RadialBarChart cx="50%" cy="50%" innerRadius="60%" outerRadius="100%" barSize={10} data={chartData.slaGauge} startAngle={90} endAngle={-270}>
+                  <RadialBarChart cx="50%" cy="50%" innerRadius="65%" outerRadius="105%" barSize={12} data={chartData.slaGauge} startAngle={90} endAngle={-270}>
                     <RadialBar dataKey="value" cornerRadius={10} background />
                     <RechartsTooltip />
                   </RadialBarChart>
                 ) : (
                   <BarChart data={chartData.distribution}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 9, fontWeight: 'bold' }} />
-                    <YAxis tick={{ fontSize: 9, fontWeight: 'bold' }} />
-                    <RechartsTooltip cursor={{ fill: 'rgba(184, 147, 52, 0.05)' }} />
-                    <Bar dataKey="value" fill="#B89334" radius={[4, 4, 0, 0]} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" tick={{ fontSize: 9, fontWeight: '900', fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 9, fontWeight: '900', fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <RechartsTooltip cursor={{ fill: 'rgba(184, 147, 52, 0.05)' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
+                    <Bar dataKey="value" fill="#B89334" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 )}
               </ResponsiveContainer>
             </CardContent>
-            <CardFooter className="bg-slate-50/30 p-4 border-t text-center">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest w-full">
-                Interactive Analytics Deck
+            <CardFooter className="bg-slate-50/50 p-5 border-t text-center">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] w-full">
+                Interactive Analytical Console
               </p>
             </CardFooter>
           </Card>
 
-          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-primary/5">
-            <CardHeader className="p-6 border-b border-primary/10">
-              <CardTitle className="text-primary text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                <Target className="w-4 h-4" /> Efficiency Index
+          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-primary/5 ring-1 ring-primary/10">
+            <CardHeader className="p-8 border-b border-primary/10 bg-primary/[0.02]">
+              <CardTitle className="text-primary text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
+                <Target className="w-4 h-4" /> Performance Indices
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="p-5 rounded-2xl bg-white border border-primary/10 shadow-sm space-y-4">
+            <CardContent className="p-8 space-y-8">
+              <div className="p-6 rounded-[1.5rem] bg-white border border-primary/10 shadow-sm space-y-5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">First-Time-Right</span>
-                  <span className="text-lg font-black text-emerald-600">88.4%</span>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">First-Time-Right</p>
+                    <span className="text-3xl font-black text-emerald-600 tabular-nums">88.4%</span>
+                  </div>
+                  <div className="p-3 bg-emerald-50 rounded-2xl"><ShieldCheck className="w-5 h-5 text-emerald-600" /></div>
                 </div>
-                <Progress value={88.4} className="h-1.5 [&>div]:bg-emerald-500" />
+                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: '88.4%' }} />
+                </div>
               </div>
-              <div className="p-5 rounded-2xl bg-white border border-primary/10 shadow-sm space-y-4">
+
+              <div className="p-6 rounded-[1.5rem] bg-white border border-primary/10 shadow-sm space-y-5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SLA Compliance</span>
-                  <span className="text-lg font-black text-primary">{analytics.slaHealth}%</span>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SLA Compliance</p>
+                    <span className="text-3xl font-black text-primary tabular-nums">{analytics.slaHealth}%</span>
+                  </div>
+                  <div className="p-3 bg-primary/5 rounded-2xl"><Clock className="w-5 h-5 text-primary" /></div>
                 </div>
-                <Progress value={analytics.slaHealth} className="h-1.5" />
+                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-primary rounded-full" style={{ width: `${analytics.slaHealth}%` }} />
+                </div>
               </div>
             </CardContent>
           </Card>
