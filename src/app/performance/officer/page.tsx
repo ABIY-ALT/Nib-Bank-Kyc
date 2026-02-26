@@ -506,7 +506,7 @@ export default function KYCOperationsMonitoringPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         {/* MAIN WORKSPACE TABS */}
-        <div className="lg:col-span-12 space-y-8">
+        <div className="lg:col-span-9 space-y-8">
           {(roleContext === 'SUPERVISOR' || roleContext === 'DIRECTOR') && (
             <div className="flex gap-2 p-2 bg-slate-100/80 w-fit rounded-[1.5rem] border border-slate-200 backdrop-blur-md">
               <Button 
@@ -784,17 +784,17 @@ export default function KYCOperationsMonitoringPage() {
         <div className="lg:col-span-3 space-y-10">
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white ring-1 ring-slate-100">
             <CardHeader className="bg-primary text-white p-8 border-b">
-              <CardTitle className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 text-white/90">
-                <Zap className="w-4 h-4 fill-white" /> Quick Actions
+              <CardTitle className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 text-white">
+                <Zap className="w-4 h-4 fill-white" /> QUICK ACTIONS
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-8 space-y-4">
+            <CardContent className="p-8 space-y-6">
               {roleContext === 'OFFICER' ? (
                 <>
-                  <Button className="w-full h-16 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base rounded-[1.25rem] shadow-xl shadow-emerald-200 gap-4 transition-all active:scale-[0.98]">
+                  <Button className="w-full h-16 bg-slate-900 hover:bg-black text-white font-black text-base rounded-full shadow-xl gap-4 transition-all active:scale-[0.98]">
                     <Play className="w-5 h-5 fill-white" /> Resume Analysis
                   </Button>
-                  <Button variant="outline" className="w-full h-14 border-slate-200 font-black text-[10px] uppercase tracking-widest rounded-[1.25rem] gap-3 hover:bg-slate-50 transition-all">
+                  <Button variant="outline" className="w-full h-14 border-slate-200 font-bold text-[10px] uppercase tracking-widest rounded-full gap-3 hover:bg-slate-50 transition-all">
                     <MessageSquare className="w-4 h-4 text-primary" /> Response Hub
                   </Button>
                 </>
@@ -802,11 +802,15 @@ export default function KYCOperationsMonitoringPage() {
                 <>
                   <Button 
                     onClick={handleExportPerformance}
-                    className="w-full h-16 bg-slate-900 hover:bg-black text-white font-black text-base rounded-[1.25rem] shadow-xl shadow-slate-200 gap-4 transition-all active:scale-[0.98]"
+                    className="w-full h-16 bg-slate-900 hover:bg-black text-white font-black text-base rounded-[1.5rem] shadow-xl gap-4 transition-all active:scale-[0.98]"
                   >
                     <FileDown className="w-5 h-5" /> Export Intelligence
                   </Button>
-                  <Button variant="outline" className="w-full h-14 border-slate-200 font-black text-[10px] uppercase tracking-widest rounded-[1.25rem] gap-3 hover:bg-slate-50 transition-all" onClick={() => setActiveTab(activeTab === "queue" ? "team" : "queue")}>
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-14 border-slate-200 font-bold text-[10px] uppercase tracking-widest rounded-[1.5rem] gap-3 hover:bg-slate-50 transition-all text-slate-600" 
+                    onClick={() => setActiveTab(activeTab === "queue" ? "team" : "queue")}
+                  >
                     <Trophy className="w-4 h-4 text-primary" /> {activeTab === "queue" ? "Personnel Matrix" : "Operations Queue"}
                   </Button>
                 </>
