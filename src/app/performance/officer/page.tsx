@@ -72,7 +72,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast"
-import { subDays, format, differenceInHours, addHours, isAfter } from "date-fns";
+import { subDays, format, differenceInHours, addHours, isAfter, startOfDay } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
@@ -135,6 +135,18 @@ export default function KYCOperationsMonitoringPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRangeSelection = (range: "today" | "week" | "month") => {
+    setDateRange(range);
+    const now = new Date();
+    let start;
+    if (range === 'today') start = startOfDay(now);
+    else if (range === 'week') start = subDays(now, 7);
+    else start = subDays(now, 30);
+    
+    setFromDate(format(start, 'yyyy-MM-dd'));
+    setToDate(format(now, 'yyyy-MM-dd'));
   };
 
   const uniqueBranches = useMemo(() => {
@@ -289,6 +301,7 @@ export default function KYCOperationsMonitoringPage() {
     setSelectedBranch("all");
     setSelectedOfficer("all");
     setSearchTerm("");
+    handleRangeSelection("month");
   };
 
   if (permissionsLoading) {
@@ -326,7 +339,7 @@ export default function KYCOperationsMonitoringPage() {
                 key={r}
                 variant="ghost"
                 size="sm"
-                onClick={() => setDateRange(r)}
+                onClick={() => handleRangeSelection(r)}
                 className={cn(
                   "px-4 h-9 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all",
                   dateRange === r ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-primary"
@@ -336,7 +349,14 @@ export default function KYCOperationsMonitoringPage() {
               </Button>
             ))}
           </div>
-          <Button variant="outline" className="h-11 px-6 border-slate-200 shadow-sm font-bold rounded-xl gap-2 bg-white">
+          <Button 
+            variant="outline" 
+            onClick={() => setDateRange("custom")}
+            className={cn(
+              "h-11 px-6 border-slate-200 shadow-sm font-bold rounded-xl gap-2 bg-white transition-all",
+              dateRange === 'custom' && "border-primary text-primary ring-1 ring-primary/20"
+            )}
+          >
             <CalendarIcon className="w-4 h-4 text-primary" /> Custom
           </Button>
         </div>
@@ -397,6 +417,16 @@ export default function KYCOperationsMonitoringPage() {
             <Button variant="ghost" onClick={resetFilters} className="w-full h-11 gap-2 font-bold text-slate-400 hover:text-primary">
               <RotateCcw className="w-4 h-4" /> Reset Filters
             </Button>
+          </div>
+
+          {/* Date Picker Fields (Shown for Context) */}
+          <div className="md:col-span-2 space-y-2">
+            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Start Date</Label>
+            <Input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setDateRange('custom'); }} className="h-11 font-bold" />
+          </div>
+          <div className="md:col-span-2 space-y-2">
+            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Conclusion Date</Label>
+            <Input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setDateRange('custom'); }} className="h-11 font-bold" />
           </div>
         </CardContent>
       </Card>
