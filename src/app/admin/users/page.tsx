@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -186,6 +185,7 @@ export default function UserManagementPage() {
     try {
       const res = await provisionUser({ 
         ...formData, 
+        id: editingUser?.id, // ID must be included to prevent password reset on updates
         branchId: finalBranchId,
         authorizingAdminId: currentUser?.id 
       });

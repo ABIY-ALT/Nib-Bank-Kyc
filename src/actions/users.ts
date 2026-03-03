@@ -69,9 +69,13 @@ export async function provisionUser(data: {
   authorizingAdminId?: string;
 }) {
   try {
-    // Generate a secure temporary password if none provided
-    const tempPass = data.password || Math.random().toString(36).slice(-8);
     const isNewUser = !data.id;
+    let tempPass = data.password;
+    
+    // Generate a temporary password ONLY for new users if one wasn't provided
+    if (isNewUser && !tempPass) {
+      tempPass = Math.random().toString(36).slice(-8);
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Fetch current state for audit comparison
@@ -83,10 +87,13 @@ export async function provisionUser(data: {
         }
       });
 
-      const hashedPassword = await bcrypt.hash(tempPass, 10);
+      // Only hash a password if it's new or being updated
+      let hashedPassword = undefined;
+      if (tempPass) {
+        hashedPassword = await bcrypt.hash(tempPass, 10);
+      }
 
       // 2. Upsert the User record
-      // needsPasswordChange is enabled when a new user is created or password is changed by admin
       const user = await tx.user.upsert({
         where: { email: data.email.toLowerCase() },
         update: { 
@@ -95,13 +102,13 @@ export async function provisionUser(data: {
           phoneNumber: data.phoneNumber,
           branch: data.branchId ? { connect: { id: data.branchId } } : { disconnect: true },
           status: data.status,
-          // Only update password if manually provided, and force reset if it is changed
-          password: data.password ? hashedPassword : undefined,
-          needsPasswordChange: data.password ? true : undefined
+          // Only update password and force change if a value was provided
+          password: hashedPassword,
+          needsPasswordChange: hashedPassword ? true : undefined
         },
         create: { 
           email: data.email.toLowerCase(),
-          password: hashedPassword,
+          password: hashedPassword!, // must exist for create
           firstName: data.firstName,
           lastName: data.lastName,
           phoneNumber: data.phoneNumber,
