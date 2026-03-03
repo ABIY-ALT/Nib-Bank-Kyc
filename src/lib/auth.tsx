@@ -1,4 +1,3 @@
-
 'use client';
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -41,10 +40,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const hydrateSession = async () => {
       try {
         const res = await fetch("/api/auth/me");
-
-        if (res.ok) {
+        
+        // Defensive check: ensure we have a body and it is JSON
+        const contentType = res.headers.get("content-type");
+        if (res.ok && contentType && contentType.includes("application/json")) {
           const data = await res.json();
-          setUser(data.user);
+          setUser(data.user || null);
         } else {
           setUser(null);
         }
@@ -70,6 +71,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: normalizedEmail, password: pass }),
     });
+
+    const contentType = res.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("Institutional gateway returned an invalid response. Please try again.");
+    }
 
     const data = await res.json();
 

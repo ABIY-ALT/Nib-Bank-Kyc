@@ -121,12 +121,15 @@ export default function SubmissionDetails() {
   useEffect(() => {
     if (submission?.checklistState) {
       let state = submission.checklistState;
-      if (typeof state === 'string') {
+      // Defensive parsing for checklistState
+      if (typeof state === 'string' && state.trim().length > 0) {
         try {
           state = JSON.parse(state);
         } catch {
           state = {};
         }
+      } else if (typeof state !== 'object') {
+        state = {};
       }
       setChecklist(state as Record<string, boolean>);
     } else {

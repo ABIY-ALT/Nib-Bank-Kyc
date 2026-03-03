@@ -22,7 +22,6 @@ import {
   BookOpen,
   Zap,
   Map,
-  Monitor,
   HardDrive,
   ClipboardList,
   UserCog,
@@ -69,13 +68,12 @@ export function AppSidebar() {
 
   if (!user || loading) return null;
 
-  // Operational Logic: Show "My Performance" to specialists, supervisors, and admins
   const canSeeMyPerformance = user.roles?.some(ur => 
     ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST'].includes(ur.role.name)
   ) || isSuperAdmin;
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className="border-r-0 shadow-2xl">
       <SidebarHeader className="border-b h-16 flex items-center px-4 bg-sidebar-background">
         <div className="flex items-center gap-3 font-bold">
           <div className="p-1.5 rounded-lg shadow-sm shrink-0 flex items-center justify-center bg-primary">

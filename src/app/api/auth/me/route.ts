@@ -1,14 +1,15 @@
-
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
 /**
  * Session Verification Endpoint.
  * Validates the HTTP-Only cookie and returns the active user profile.
  */
-export async function GET(req: Request) {
-  const token = (req as any).cookies?.get("token")?.value;
+export async function GET() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
 
   if (!token) {
     return NextResponse.json({ message: "No active session." }, { status: 401 });

@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { Separator } from '@/components/ui/separator';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -11,8 +11,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { ForcePasswordChangeModal } from '@/components/auth/force-password-change-modal';
 
 /**
- * A shell component that conditionally renders the sidebar and header
- * based on the current route and authentication status.
+ * Institutional Shell Component.
+ * Optimized for high-density banking workflows with full-height fluid layout.
  */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,39 +20,45 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const isLoginPage = pathname === '/login';
 
-  // If we're on the login page, render a clean layout without the sidebar/header
+  // Render clean layout for the gateway entry point
   if (isLoginPage) {
     return (
-      <div className="min-h-screen w-full bg-[#FCFAF7]">
+      <div className="min-h-screen w-full bg-[#FCFAF7] overflow-x-hidden">
         {children}
         <Toaster />
       </div>
     );
   }
 
-  // Force Password Change logic enabled based on user state
   const showForceChange = !!user?.needsPasswordChange;
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background relative">
+    <SidebarProvider defaultOpen={true}>
+      <div className="flex h-screen w-full overflow-hidden bg-background">
         <AppSidebar />
-        <main className="flex-1 flex flex-col min-w-0">
-          <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background/50 backdrop-blur-sm sticky top-0 z-10">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mr-2 h-4" />
+        
+        <SidebarInset className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background">
+          {/* STICKY INSTITUTIONAL HEADER */}
+          <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-6 bg-background/80 backdrop-blur-md sticky top-0 z-30">
+            <div className="flex items-center gap-4">
+              <SidebarTrigger className="-ml-2 h-9 w-9" />
+              <Separator orientation="vertical" className="h-4" />
+              <div className="hidden md:flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Nib Bank KYC</span>
+              </div>
             </div>
             <ModeToggle />
           </header>
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-4 md:p-8 max-w-7xl mx-auto">
+
+          {/* FLUID WORKSPACE AREA */}
+          <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
+            <div className="p-6 w-full animate-in fade-in duration-500">
               {children}
             </div>
-          </div>
-        </main>
+          </main>
+        </SidebarInset>
 
-        {/* Force Password Change Security Gate Overlay */}
+        {/* SECURITY GATE OVERLAY */}
         {showForceChange && <ForcePasswordChangeModal />}
       </div>
       <Toaster />
