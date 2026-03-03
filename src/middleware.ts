@@ -4,21 +4,21 @@ import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
 /**
- * Institutional Security Middleware.
- * Enforces JWT verification and Role-Based Access Control (RBAC) at the Edge.
+ * Institutional Security Matrix.
+ * Defines authorized path prefixes for each personnel designation.
  */
-
-const PROTECTED_ROUTES = {
-  ADMIN: ['/admin', '/dashboard', '/submissions', '/reports', '/performance', '/kyc'],
-  OFFICER: ['/dashboard', '/submissions', '/kyc'],
-  VIEWER: ['/dashboard'],
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+  SUPER_ADMIN: ['*'],
+  KYC_OFFICER: ['/', '/submissions', '/reports', '/performance', '/kyc-fq-reference', '/head-office'],
+  BRANCH_OFFICER: ['/', '/submissions', '/reports', '/performance', '/kyc-fq-reference'],
+  VIEWER: ['/'],
 };
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get('token')?.value;
 
-  // 1. Allow public assets and Auth API routes
+  // 1. Allow Public Assets and Auth APIs
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth') ||
@@ -29,7 +29,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Redirect unauthenticated users to login
+  // 2. Redirect Unauthenticated Personnel
   if (!token) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
@@ -37,41 +37,42 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
-    // 3. Verify JWT using jose (required for Edge runtime)
+    // 3. Verify JWT Identity
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
-    
-    const userRole = (payload.role as string) || 'VIEWER';
 
-    // 4. Handle authenticated users visiting login page
+    const userRole = (payload.role as string) || 'VIEWER';
+    
+    // 4. Handle Authenticated Login Access
     if (pathname === '/login') {
       const url = req.nextUrl.clone();
       url.pathname = '/';
       return NextResponse.redirect(url);
     }
 
-    // 5. Enforce RBAC Matrix
-    // Note: We check if the pathname starts with any of the restricted directories
-    const isAccessingAdmin = pathname.startsWith('/admin');
-    const isAccessingKyc = pathname.startsWith('/submissions') || pathname.startsWith('/kyc');
-    const isAccessingDashboard = pathname === '/' || pathname.startsWith('/dashboard');
+    // 5. Enforce Path Authorization Matrix
+    const allowedRoutes = ROLE_PERMISSIONS[userRole];
 
-    if (userRole === 'SUPER_ADMIN') {
+    // Block unknown roles
+    if (!allowedRoutes) {
+      const url = req.nextUrl.clone();
+      url.pathname = '/unauthorized';
+      return NextResponse.redirect(url);
+    }
+
+    // SUPER_ADMIN Bypass
+    if (allowedRoutes.includes('*')) {
       return NextResponse.next();
     }
 
-    if (userRole === 'KYC_OFFICER' || userRole === 'BRANCH_OFFICER') {
-      // Officers cannot access /admin
-      if (isAccessingAdmin) {
-        const url = req.nextUrl.clone();
-        url.pathname = '/unauthorized';
-        return NextResponse.redirect(url);
-      }
-      return NextResponse.next();
-    }
+    // Dynamic Prefix Check
+    // We allow root '/' for all, and then check specific module prefixes
+    const isRoot = pathname === '/';
+    const isAllowed = isRoot || allowedRoutes.some(route => 
+      route !== '/' && pathname.startsWith(route)
+    );
 
-    // Default: VIEWER or others
-    if (isAccessingAdmin || isAccessingKyc) {
+    if (!isAllowed) {
       const url = req.nextUrl.clone();
       url.pathname = '/unauthorized';
       return NextResponse.redirect(url);
@@ -79,7 +80,7 @@ export async function middleware(req: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
-    // 6. Handle expired or tampered tokens
+    // 6. Sanitize Failed Sessions
     const url = req.nextUrl.clone();
     url.pathname = '/login';
     const response = NextResponse.redirect(url);

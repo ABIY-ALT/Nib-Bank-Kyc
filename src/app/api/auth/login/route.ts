@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const { email, password } = body;
 
     if (!email || !password) {
-      return NextResponse.json({ message: "Identity and credential required." }, { status: 400 });
+      return NextResponse.json({ message: "Identity and password required." }, { status: 400 });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -62,12 +62,13 @@ export async function POST(req: Request) {
 
     const roleName = user.roles?.[0]?.role?.name || 'VIEWER';
 
-    // Sign JWT with payload including the role for middleware check
+    // Sign JWT with payload including role and security flags for middleware enforcement
     const token = jwt.sign(
       { 
         id: user.id, 
         email: user.email,
-        role: roleName 
+        role: roleName,
+        needsPasswordChange: user.needsPasswordChange
       },
       secret,
       { expiresIn: "1d" }
