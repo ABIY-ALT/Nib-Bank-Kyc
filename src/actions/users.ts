@@ -6,6 +6,61 @@ import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
 
 /**
+ * Administrative Credential Reset.
+ * Generates a temporary password and forces a rotation upon next login.
+ */
+export async function resetUserPassword(email: string, authorizerId: string) {
+  try {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ 
+      where: { email: normalizedEmail } 
+    });
+
+    if (!user) {
+      throw new Error("Personnel record not discovered in the Institutional Vault.");
+    }
+
+    // Generate random 8-character temporary password
+    const tempPass = Math.random().toString(36).slice(-8);
+    const hashedPassword = await bcrypt.hash(tempPass, 10);
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Update User Credential and Security Flag
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          needsPasswordChange: true
+        }
+      });
+
+      // 2. Log Security Event
+      await tx.auditLog.create({
+        data: {
+          userId: authorizerId,
+          action: 'PASSWORD_RESET_ADMIN',
+          details: `Administrative credential reset for ${user.firstName} ${user.lastName}. Jurisdictional security gate engaged.`,
+          timestamp: new Date(),
+          metadata: {
+            targetUserId: user.id,
+            targetEmail: normalizedEmail
+          }
+        }
+      });
+    });
+
+    return { 
+      success: true, 
+      tempPassword: tempPass, 
+      userName: `${user.firstName} ${user.lastName}` 
+    };
+  } catch (error: any) {
+    console.error('[Vault Security] Reset Failure:', error);
+    return { success: false, error: error.message || 'Institutional database fault during reset.' };
+  }
+}
+
+/**
  * Retrieves all personnel from the institutional registry, sorted alphabetically.
  */
 export async function getAllUsers() {

@@ -29,7 +29,8 @@ import {
   ArrowRightLeft,
   History,
   Activity,
-  TrendingUp
+  TrendingUp,
+  KeyRound
 } from "lucide-react"
 
 import {
@@ -437,6 +438,17 @@ export function AppSidebar() {
                             <Link href="/admin/roles">
                               <UserCog className="w-4 h-4 mr-2 text-primary" />
                               <span>Assign Roles</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+
+                      {hasPermission('ROLE_CREATE') && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={pathname === '/admin/password-reset'}>
+                            <Link href="/admin/password-reset">
+                              <KeyRound className="w-4 h-4 mr-2 text-primary" />
+                              <span>Reset User Password</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
