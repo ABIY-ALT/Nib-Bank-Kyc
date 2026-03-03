@@ -54,7 +54,7 @@ export default function Dashboard() {
         const isDirector = user.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
         const isSpecialist = user.roles?.some(ur => ['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST_OFFICER'].includes(ur.role.name));
         
-        let filters: any = { limit: 10 };
+        let filters: any = { limit: 100 }; // Fetch a larger sample for stats, even if only 10 are shown in the stream
 
         if (!isSuperAdmin) {
           if (isDirector && user.districtName) {
@@ -130,12 +130,18 @@ export default function Dashboard() {
 
     const authorizedCount = recentSubmissions.filter(s => s.status === KYCStatus.APPROVED).length;
     const actionCount = recentSubmissions.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length;
+    const totalCount = recentSubmissions.length;
+
+    // Methodology Index Calculation: % of cases not requiring amendments
+    const methodologyScore = totalCount > 0 
+      ? Math.round(((totalCount - actionCount) / totalCount) * 100) 
+      : 100;
 
     return [
-      { label: `${scopeLabel} Active`, value: recentSubmissions.length.toString(), icon: Inbox, color: 'text-blue-600' },
+      { label: `${scopeLabel} Active`, value: totalCount.toString(), icon: Inbox, color: 'text-blue-600' },
       { label: 'Authorized Recently', value: authorizedCount.toString(), icon: ShieldCheck, color: 'text-emerald-600' },
       { label: 'Action Required', value: actionCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
-      { label: 'Methodology Index', value: '98.4%', icon: TrendingUp, color: 'text-primary' },
+      { label: 'Methodology Index', value: `${methodologyScore}%`, icon: TrendingUp, color: 'text-primary' },
     ];
   }, [recentSubmissions, dashboardContext]);
 
@@ -221,7 +227,7 @@ export default function Dashboard() {
                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Querying Vault...</p>
                 </div>
               ) : recentSubmissions && recentSubmissions.length > 0 ? (
-                recentSubmissions.map((sub) => (
+                recentSubmissions.slice(0, 10).map((sub) => (
                   <div key={sub.id} className="flex items-center justify-between p-5 hover:bg-slate-50 transition-all group">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
