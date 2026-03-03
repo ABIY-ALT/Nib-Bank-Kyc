@@ -1,26 +1,26 @@
+
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 
+/**
+ * Session Verification Endpoint.
+ * Validates the HTTP-Only cookie and returns the active user profile.
+ */
 export async function GET(req: Request) {
-  const authHeader = req.headers.get("authorization");
+  const token = (req as any).cookies?.get("token")?.value;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return NextResponse.json({ message: "Institutional session expired or invalid." }, { status: 401 });
+  if (!token) {
+    return NextResponse.json({ message: "No active session." }, { status: 401 });
   }
 
-  const token = authHeader.split(" ")[1];
-  const secret = process.env.JWT_SECRET;
-
-  if (!secret) {
-    return NextResponse.json({ message: "Configuration fault: Missing JWT Secret." }, { status: 500 });
-  }
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 
   try {
-    const decoded: any = jwt.verify(token, secret);
+    const { payload }: any = await jwtVerify(token, secret);
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
+      where: { id: payload.id },
       include: {
         branch: {
           include: { district: true }
@@ -59,7 +59,7 @@ export async function GET(req: Request) {
       }
     });
   } catch (error) {
-    console.error("[Auth ME] Verification failed:", error);
+    console.error("[Auth ME] Session invalid:", error);
     return NextResponse.json({ message: "Session verification failed." }, { status: 401 });
   }
 }

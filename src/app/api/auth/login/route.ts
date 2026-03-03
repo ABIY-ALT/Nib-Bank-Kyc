@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 
 /**
  * Institutional Authentication Gateway.
- * Authenticates @nibbank.com.et credentials and issues a secure JWT.
+ * Authenticates @nibbank.com.et credentials and issues a secure HTTP-Only cookie.
  */
 export async function POST(req: Request) {
   try {
@@ -18,7 +18,6 @@ export async function POST(req: Request) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    // Passwords should be trimmed to handle accidental leading/trailing spaces from copy-paste
     const cleanPassword = password.trim();
 
     const user = await prisma.user.findUnique({
@@ -61,14 +60,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "System security fault: JWT_SECRET not configured." }, { status: 500 });
     }
 
+    const roleName = user.roles?.[0]?.role?.name || 'VIEWER';
+
+    // Sign JWT with payload including the role for middleware check
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      { 
+        id: user.id, 
+        email: user.email,
+        role: roleName 
+      },
       secret,
       { expiresIn: "1d" }
     );
 
-    return NextResponse.json({
-      token,
+    const response = NextResponse.json({
+      success: true,
       user: {
         id: user.id,
         firstName: user.firstName,
@@ -83,6 +89,17 @@ export async function POST(req: Request) {
         needsPasswordChange: user.needsPasswordChange
       }
     });
+
+    // Set HTTP-Only Cookie for banking-level security
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24, // 1 day
+      path: '/',
+    });
+
+    return response;
   } catch (error: any) {
     console.error("[Auth API] Login Error:", error);
     return NextResponse.json({ message: "Internal security service error." }, { status: 500 });

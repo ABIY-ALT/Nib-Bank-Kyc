@@ -1,3 +1,4 @@
+
 'use client';
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -38,29 +39,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const hydrateSession = async () => {
-      const token = localStorage.getItem("nib_token");
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
       try {
-        const res = await fetch("/api/auth/me", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const res = await fetch("/api/auth/me");
 
         if (res.ok) {
           const data = await res.json();
           setUser(data.user);
         } else {
-          localStorage.removeItem("nib_token");
           setUser(null);
         }
       } catch (e) {
         console.error("Institutional session hydration failed:", e);
-        localStorage.removeItem("nib_token");
         setUser(null);
       } finally {
         setLoading(false);
@@ -88,7 +77,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(data.message || "Institutional authentication failed.");
     }
 
-    localStorage.setItem("nib_token", data.token);
     setUser(data.user);
     toast({ 
       title: `Welcome back, ${data.user.firstName}.`, 
@@ -96,8 +84,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const logout = (reason: string = 'User Logout') => {
-    localStorage.removeItem("nib_token");
+  const logout = async (reason: string = 'User Logout') => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (e) {
+      console.error("Logout error:", e);
+    }
     setUser(null);
     window.location.href = '/login';
     toast({ title: 'Logged Out', description: `Session terminated: ${reason}` });
