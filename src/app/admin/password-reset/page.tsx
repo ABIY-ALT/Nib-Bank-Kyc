@@ -17,6 +17,7 @@ import {
   UserCheck
 } from "lucide-react";
 import { resetUserPassword } from '@/actions/users';
+import { tempPasswordRegistry } from '@/lib/temp-password-registry';
 
 export default function AdminPasswordResetPage() {
   const { user: currentUser } = useAuth();
@@ -35,6 +36,10 @@ export default function AdminPasswordResetPage() {
       const res = await resetUserPassword(email, currentUser.id);
       if (res.success) {
         setResult({ tempPass: res.tempPassword!, name: res.userName! });
+        
+        // Persist to session registry for hover view in User Directory
+        tempPasswordRegistry.add(email, res.tempPassword!);
+        
         toast({ title: "Security Reset Complete", description: `Credential rotated for ${res.userName}.` });
       } else {
         toast({ variant: "destructive", title: "Reset Denied", description: res.error });
@@ -53,7 +58,7 @@ export default function AdminPasswordResetPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-0 animate-in fade-in duration-500 pb-20 pt-10">
-      {/* INSTITUTIONAL HEADER - MATCHING SCREENSHOT */}
+      {/* INSTITUTIONAL HEADER */}
       <div className="rounded-t-[2.5rem] bg-[#3E2B1E] p-12 shadow-2xl flex items-center gap-8 border-b border-white/5">
         <div className="p-5 bg-white/5 rounded-full shadow-inner ring-1 ring-white/10 shrink-0">
           <KeyRound className="w-12 h-12 text-[#B89334]" />
@@ -64,7 +69,7 @@ export default function AdminPasswordResetPage() {
         </div>
       </div>
 
-      {/* ACTION CARD - MATCHING SCREENSHOT */}
+      {/* ACTION CARD */}
       <Card className="border-none shadow-2xl shadow-black/10 bg-white rounded-b-[2.5rem] overflow-hidden -mt-8 mx-4 md:mx-0">
         <CardContent className="p-12 space-y-10">
           <form onSubmit={handleReset} className="space-y-6">

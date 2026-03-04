@@ -57,12 +57,13 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
+import { getAllUsers, updateUserStatus, provisionUser, resetUserPassword } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
 import { UserStatus } from '@prisma/client';
 import { usePermissions } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
+import { tempPasswordRegistry } from '@/lib/temp-password-registry';
 
 export default function UserManagementPage() {
   const router = useRouter();
@@ -78,8 +79,9 @@ export default function UserManagementPage() {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  // Track temporary passwords generated during this session
-  const [sessionTempPasswords, setSessionTempPasswords] = useState<Record<string, string>>({});
+  // Local state to force Tooltip refresh when registry updates
+  const [registryVersion, setRegistryVersion] = useState(0);
+  const [isResetting, setIsResetting] = useState<string | null>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,6 +119,8 @@ export default function UserManagementPage() {
       setUsers(u);
       setBranches(b);
       setRoleDefinitions(r);
+      // Bump version to refresh tooltips reading from singleton registry
+      setRegistryVersion(v => v + 1);
     } catch (error) {
       toast({ variant: "destructive", title: "Institutional sync failed" });
     } finally {
@@ -185,14 +189,15 @@ export default function UserManagementPage() {
     try {
       const res = await provisionUser({ 
         ...formData, 
-        id: editingUser?.id, // ID must be included to prevent password reset on updates
+        id: editingUser?.id, 
         branchId: finalBranchId,
         authorizingAdminId: currentUser?.id 
       });
       
       if (res.success) {
         if (res.tempPassword) {
-          setSessionTempPasswords(prev => ({ ...prev, [formData.email.toLowerCase()]: res.tempPassword! }));
+          tempPasswordRegistry.add(formData.email, res.tempPassword);
+          setRegistryVersion(v => v + 1);
         }
         
         toast({ 
@@ -210,6 +215,25 @@ export default function UserManagementPage() {
       toast({ variant: "destructive", title: "Provisioning Error", description: error.message });
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleQuickReset = async (email: string) => {
+    if (!currentUser) return;
+    setIsResetting(email);
+    try {
+      const res = await resetUserPassword(email, currentUser.id);
+      if (res.success && res.tempPassword) {
+        tempPasswordRegistry.add(email, res.tempPassword);
+        setRegistryVersion(v => v + 1);
+        toast({ title: "Credential Rotated", description: `Temporary password issued for ${res.userName}.` });
+      } else {
+        toast({ variant: "destructive", title: "Reset Denied", description: res.error });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "System Fault" });
+    } finally {
+      setIsResetting(null);
     }
   };
 
@@ -292,7 +316,7 @@ export default function UserManagementPage() {
                 </TableCell>
               </TableRow>
             ) : paginatedUsers.map((user) => {
-              const tempPass = sessionTempPasswords[user.email.toLowerCase()];
+              const tempPass = tempPasswordRegistry.get(user.email);
               return (
                 <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors group">
                   <TableCell className="pl-8 py-6">
@@ -304,26 +328,32 @@ export default function UserManagementPage() {
                         <TooltipProvider>
                           <Tooltip delayDuration={0}>
                             <TooltipTrigger asChild>
-                              <span className={cn("font-black text-slate-900 leading-tight cursor-default", tempPass && "underline decoration-dotted decoration-primary/40 underline-offset-4")}>
+                              <span className={cn(
+                                "font-black text-slate-900 leading-tight cursor-default", 
+                                tempPass && "underline decoration-dotted decoration-primary/60 underline-offset-4 cursor-help"
+                              )}>
                                 {user.firstName} {user.lastName}
                               </span>
                             </TooltipTrigger>
                             {tempPass && (
-                              <TooltipContent className="bg-slate-900 text-white border-none p-4 rounded-2xl shadow-2xl">
-                                <div className="space-y-3">
+                              <TooltipContent className="bg-slate-900 text-white border-none p-5 rounded-2xl shadow-2xl w-72 animate-in zoom-in-95">
+                                <div className="space-y-4">
                                   <div className="flex items-center gap-2">
-                                    <KeyRound className="w-3.5 h-3.5 text-primary" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Temporary Credential</span>
+                                    <KeyRound className="w-4 h-4 text-primary" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Temporary Credential Issued</span>
                                   </div>
-                                  <div className="flex items-center gap-3 bg-white/5 p-2 rounded-xl border border-white/10">
-                                    <code className="text-lg font-mono font-black text-primary">{tempPass}</code>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-white/10 text-white" onClick={() => handleCopyPassword(tempPass)}>
+                                  <div className="flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/10 group">
+                                    <code className="text-xl font-mono font-black text-primary flex-1 text-center tracking-wider">{tempPass}</code>
+                                    <Button size="icon" variant="ghost" className="h-9 w-9 hover:bg-white/10 text-white" onClick={() => handleCopyPassword(tempPass)}>
                                       <Copy className="w-4 h-4" />
                                     </Button>
                                   </div>
-                                  <p className="text-[9px] font-bold text-slate-500 leading-relaxed max-w-[180px]">
-                                    Provide this to the staff member. They will be forced to change it upon first login.
-                                  </p>
+                                  <div className="flex gap-2">
+                                    <AlertCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                    <p className="text-[9px] font-bold text-slate-500 leading-relaxed uppercase">
+                                      The staff member must change this password upon first login.
+                                    </p>
+                                  </div>
                                 </div>
                               </TooltipContent>
                             )}
@@ -352,6 +382,23 @@ export default function UserManagementPage() {
                   </TableCell>
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleQuickReset(user.email)} 
+                              disabled={isResetting === user.email}
+                              className="text-primary rounded-full h-9 w-9 hover:bg-primary/5 transition-colors"
+                            >
+                              {isResetting === user.email ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p className="font-bold text-[10px] uppercase">Rotate Credential</p></TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
                       <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-slate-400 rounded-full h-9 w-9 hover:bg-primary/5 hover:text-primary transition-colors">
                         <Settings2 className="w-4 h-4" />
                       </Button>
