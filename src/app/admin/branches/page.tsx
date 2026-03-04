@@ -1,8 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
-import { Building2, Plus, MapPin, Trash2, Loader2, Globe, Edit2 } from "lucide-react";
+import { 
+  Building2, 
+  Plus, 
+  MapPin, 
+  Trash2, 
+  Loader2, 
+  Globe, 
+  Edit2, 
+  Search, 
+  ChevronRight,
+  FilterX,
+  X
+} from "lucide-react";
 import { 
   Dialog, 
   DialogContent, 
@@ -23,6 +35,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getBranches, getDistricts, createBranch, updateBranch, createDistrict, updateDistrict, deleteNode } from '@/actions/hierarchy';
+import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function BranchesDistrictsPage() {
   const { toast } = useToast();
@@ -30,6 +44,10 @@ export default function BranchesDistrictsPage() {
   const [districts, setDistricts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Selection & Filtering State
+  const [activeDistrictId, setActiveDistrictId] = useState<string | null>(null);
+  const [branchSearchQuery, setBranchSearchQuery] = useState("");
   
   const [isBranchDialogOpen, setIsBranchDialogOpen] = useState(false);
   const [isDistrictDialogOpen, setIsDistrictDialogOpen] = useState(false);
@@ -55,6 +73,19 @@ export default function BranchesDistrictsPage() {
     }
   };
 
+  const activeDistrict = useMemo(() => 
+    districts.find(d => d.id === activeDistrictId), 
+  [districts, activeDistrictId]);
+
+  const filteredBranches = useMemo(() => {
+    return branches.filter(branch => {
+      const matchesDistrict = !activeDistrictId || branch.districtId === activeDistrictId;
+      const matchesSearch = branch.name.toLowerCase().includes(branchSearchQuery.toLowerCase()) || 
+                           (branch.code && branch.code.toLowerCase().includes(branchSearchQuery.toLowerCase()));
+      return matchesDistrict && matchesSearch;
+    });
+  }, [branches, activeDistrictId, branchSearchQuery]);
+
   const handleOpenBranchDialog = (branch?: any) => {
     if (branch) {
       setEditingNode({ type: 'branch', id: branch.id });
@@ -65,7 +96,12 @@ export default function BranchesDistrictsPage() {
       });
     } else {
       setEditingNode(null);
-      setBranchForm({ name: '', districtName: districts[0]?.name || '', code: '' });
+      // Default to selected district if one is active
+      setBranchForm({ 
+        name: '', 
+        districtName: activeDistrict?.name || districts[0]?.name || '', 
+        code: '' 
+      });
     }
     setIsBranchDialogOpen(true);
   };
@@ -131,6 +167,7 @@ export default function BranchesDistrictsPage() {
     try {
       await deleteNode(type, id);
       toast({ title: "Successful" });
+      if (type === 'district' && activeDistrictId === id) setActiveDistrictId(null);
       loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Delete Denied", description: "Node may contain active records." });
@@ -138,106 +175,241 @@ export default function BranchesDistrictsPage() {
   };
 
   if (loading) {
-    return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-48 gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Scanning Institutional Hierarchy...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
-      <div className="flex justify-between items-center">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Add District and Branch</h1>
-          <p className="text-muted-foreground text-lg">Manage regional nodes and districts.</p>
+          <p className="text-muted-foreground text-lg font-medium">Manage regional districts and local branch nodes.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => handleOpenDistrictDialog()} className="gap-2 h-11 px-6 border-primary/20 text-primary font-bold">
+        <div className="flex gap-2 w-full md:w-auto">
+          <Button variant="outline" onClick={() => handleOpenDistrictDialog()} className="flex-1 md:flex-none gap-2 h-12 px-6 border-primary/20 text-primary font-black rounded-xl hover:bg-primary/5 transition-all">
             <Globe className="w-4 h-4" /> Add District
           </Button>
-          <Button onClick={() => handleOpenBranchDialog()} className="gap-2 h-11 px-8 shadow-lg bg-primary hover:bg-primary/90 font-bold" disabled={districts.length === 0}>
+          <Button onClick={() => handleOpenBranchDialog()} className="flex-1 md:flex-none gap-2 h-12 px-8 shadow-xl bg-primary hover:bg-primary/90 font-black rounded-xl text-white transition-all active:scale-[0.98]" disabled={districts.length === 0}>
             <Plus className="w-4 h-4" /> Add Branch
           </Button>
         </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-12">
-        <Card className="lg:col-span-4 shadow-md h-fit border-slate-200 rounded-2xl overflow-hidden">
-          <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><MapPin className="w-5 h-5 text-white" /> Districts</CardTitle></CardHeader>
-          <CardContent className="pt-6 space-y-3">
-            {districts.length === 0 ? (
-              <p className="text-center py-10 text-muted-foreground italic">No districts defined.</p>
-            ) : districts.map(dist => (
-              <div key={dist.id} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all group">
-                <span className="font-bold text-slate-700">{dist.name}</span>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="icon" onClick={() => handleOpenDistrictDialog(dist)} className="h-8 w-8 text-primary hover:bg-primary/5"><Edit2 className="w-3.5 h-3.5" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete('district', dist.id)} className="h-8 w-8 text-destructive hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-8 shadow-xl overflow-hidden border-slate-200 rounded-3xl">
-          <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-white" /> Branch List</CardTitle></CardHeader>
-          <CardContent className="pt-6">
-            {branches.length === 0 ? (
-              <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <p className="font-bold text-slate-900">No Branch Discovered</p>
-                <p className="text-sm text-muted-foreground mt-1">Register branch nodes under an established district.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {branches.map(branch => (
-                  <div key={branch.id} className="flex flex-col p-5 border rounded-2xl bg-white shadow-sm hover:border-primary/30 transition-all group relative">
-                    <h3 className="font-bold text-slate-900 text-lg leading-tight">{branch.name}</h3>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 text-[10px] font-black uppercase">
-                        {branch.district?.name || 'Manual'} District
-                      </Badge>
-                      {branch.code && <Badge variant="outline" className="text-[10px] font-mono font-bold text-slate-400 border-slate-200">{branch.code}</Badge>}
+        {/* DISTRICT PANEL */}
+        <Card className="lg:col-span-4 shadow-xl border-slate-200 rounded-[2rem] overflow-hidden flex flex-col h-[700px]">
+          <CardHeader className="bg-primary text-white border-b py-6 px-8">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xl flex items-center gap-3 font-black">
+                <MapPin className="w-5 h-5 text-white" /> 
+                Districts
+              </CardTitle>
+              <Badge className="bg-white/20 border-white/20 text-white font-black">{districts.length}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0 flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="p-4 space-y-2">
+                <div 
+                  onClick={() => setActiveDistrictId(null)}
+                  className={cn(
+                    "flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border group",
+                    activeDistrictId === null 
+                      ? "bg-primary text-white border-primary shadow-lg" 
+                      : "bg-white border-slate-100 hover:border-primary/20 text-slate-600"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn("p-2 rounded-lg", activeDistrictId === null ? "bg-white/20" : "bg-slate-50")}>
+                      <Globe className="w-4 h-4" />
                     </div>
-                    <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenBranchDialog(branch)} className="h-9 w-9 text-primary hover:bg-primary/5"><Edit2 className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete('branch', branch.id)} className="h-9 w-9 text-destructive hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
+                    <span className="font-black text-sm uppercase tracking-wider">All Regions (Global)</span>
+                  </div>
+                  {activeDistrictId === null && <ChevronRight className="w-4 h-4" />}
+                </div>
+
+                {districts.length === 0 ? (
+                  <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No districts defined.</p>
+                  </div>
+                ) : districts.map(dist => (
+                  <div 
+                    key={dist.id} 
+                    onClick={() => setActiveDistrictId(dist.id)}
+                    className={cn(
+                      "flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border group",
+                      activeDistrictId === dist.id 
+                        ? "bg-primary text-white border-primary shadow-lg" 
+                        : "bg-white border-slate-100 hover:border-primary/20 text-slate-600"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-lg", activeDistrictId === dist.id ? "bg-white/20" : "bg-slate-50")}>
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <span className="font-black text-sm uppercase tracking-wider">{dist.name}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-1">
+                      {activeDistrictId === dist.id ? (
+                        <ChevronRight className="w-4 h-4" />
+                      ) : (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={(e) => { e.stopPropagation(); handleOpenDistrictDialog(dist); }} 
+                            className="h-8 w-8 text-primary hover:bg-primary/5"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={(e) => { e.stopPropagation(); handleDelete('district', dist.id); }} 
+                            className="h-8 w-8 text-destructive hover:bg-red-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
-            )}
+            </ScrollArea>
           </CardContent>
+        </Card>
+
+        {/* BRANCH PANEL */}
+        <Card className="lg:col-span-8 shadow-2xl overflow-hidden border-slate-200 rounded-[2.5rem] bg-white flex flex-col h-[700px]">
+          <CardHeader className="bg-slate-900 text-white border-b py-8 px-10">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-1">
+                <CardTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
+                  <Building2 className="w-6 h-6 text-primary" /> 
+                  {activeDistrict ? `${activeDistrict.name} Branches` : 'Global Branch List'}
+                </CardTitle>
+                <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
+                  {filteredBranches.length} Nodes Discovered in Current Filter
+                </CardDescription>
+              </div>
+              
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input 
+                  placeholder="Search branch or code..." 
+                  className="pl-11 h-12 bg-white/5 border-white/10 text-white font-bold rounded-2xl focus-visible:ring-primary/20 transition-all shadow-inner"
+                  value={branchSearchQuery}
+                  onChange={(e) => setBranchSearchQuery(e.target.value)}
+                />
+                {branchSearchQuery && (
+                  <button 
+                    onClick={() => setBranchSearchQuery("")}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          
+          <CardContent className="p-0 flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="p-8">
+                {filteredBranches.length === 0 ? (
+                  <div className="text-center py-32 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                    <div className="p-6 bg-white rounded-full w-fit mx-auto mb-6 shadow-sm">
+                      <FilterX className="w-12 h-12 text-slate-200" />
+                    </div>
+                    <p className="font-black text-slate-900 text-xl tracking-tight">No Branch Discovered</p>
+                    <p className="text-sm text-muted-foreground mt-2 font-medium">
+                      {activeDistrict 
+                        ? `Register new branch nodes under the ${activeDistrict.name} district.` 
+                        : "Adjust your search parameters or select a district to view registered branches."}
+                    </p>
+                    {activeDistrict && (
+                      <Button onClick={() => handleOpenBranchDialog()} className="mt-8 bg-primary text-white font-black px-8 h-12 rounded-xl shadow-xl shadow-primary/20">
+                        <Plus className="w-4 h-4 mr-2" /> Register First Node
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {filteredBranches.map(branch => (
+                      <div key={branch.id} className="flex flex-col p-6 border rounded-3xl bg-white shadow-sm hover:border-primary/30 hover:shadow-xl transition-all group relative border-slate-100">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="space-y-1">
+                            <h3 className="font-black text-slate-900 text-lg leading-none tracking-tight group-hover:text-primary transition-colors">{branch.name}</h3>
+                            <div className="flex items-center gap-2 pt-1">
+                              <Badge variant="outline" className="text-[9px] font-mono font-black text-slate-400 border-slate-200 bg-slate-50/50 uppercase">
+                                CODE: {branch.code || 'N/A'}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenBranchDialog(branch)} className="h-10 w-10 text-primary hover:bg-primary/5 rounded-full"><Edit2 className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete('branch', branch.id)} className="h-10 w-10 text-destructive hover:bg-red-50 rounded-full"><Trash2 className="w-4 h-4" /></Button>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-auto pt-4 border-t border-slate-50 flex items-center gap-2">
+                          <MapPin className="w-3 h-3 text-slate-300" />
+                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                            {branch.district?.name || 'Institutional'} Region
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </CardContent>
+          <CardFooter className="bg-slate-50/80 border-t py-4 px-10">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+              Authorized Master Registry &bull; {filteredBranches.length} Verified Entries
+            </p>
+          </CardFooter>
         </Card>
       </div>
 
       <Dialog open={isBranchDialogOpen} onOpenChange={setIsBranchDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
           <DialogHeader className="p-8 bg-primary text-white">
-            <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+            <DialogTitle className="text-2xl font-black flex items-center gap-3 tracking-tight">
               <div className="p-2 bg-white/20 rounded-xl"><Building2 className="w-6 h-6 text-white" /></div>
-              {editingNode ? 'Modify Branch' : 'Branch Configuration'}
+              {editingNode ? 'Modify Branch' : 'Register Branch'}
             </DialogTitle>
           </DialogHeader>
           <div className="p-8 space-y-6">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Regional District</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">Regional District</Label>
               <Select value={branchForm.districtName} onValueChange={val => setBranchForm({...branchForm, districtName: val})}>
-                <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select Parent District" /></SelectTrigger>
-                <SelectContent>{districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="h-14 rounded-2xl bg-slate-50 border-slate-200 font-bold"><SelectValue placeholder="Select Parent District" /></SelectTrigger>
+                <SelectContent className="rounded-2xl">{districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Branch Name</Label>
-              <Input placeholder="e.g. Merkato Branch" value={branchForm.name} onChange={e => setBranchForm({...branchForm, name: e.target.value})} className="h-12 rounded-xl font-bold" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">Branch Name</Label>
+              <Input placeholder="e.g. Merkato Branch" value={branchForm.name} onChange={e => setBranchForm({...branchForm, name: e.target.value})} className="h-14 rounded-2xl font-black bg-slate-50 border-slate-200 px-5 text-lg" />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Office Code</Label>
-              <Input placeholder="e.g. BR-001" value={branchForm.code} onChange={e => setBranchForm({...branchForm, code: e.target.value})} className="h-12 rounded-xl font-mono" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">Office Code</Label>
+              <Input placeholder="e.g. BR-001" value={branchForm.code} onChange={e => setBranchForm({...branchForm, code: e.target.value})} className="h-14 rounded-2xl font-mono bg-slate-50 border-slate-200 px-5 text-lg" />
             </div>
           </div>
-          <DialogFooter className="p-8 bg-slate-50 border-t">
-            <Button variant="ghost" onClick={() => setIsBranchDialogOpen(false)} disabled={isSaving} className="font-bold text-slate-500">Cancel</Button>
-            <Button onClick={handleSaveBranch} disabled={isSaving} className="shadow-xl bg-primary px-10 font-black h-12 rounded-xl">
+          <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row items-center justify-end gap-4">
+            <button onClick={() => setIsBranchDialogOpen(false)} disabled={isSaving} className="text-sm font-bold text-slate-400 hover:text-slate-800">Discard</button>
+            <Button onClick={handleSaveBranch} disabled={isSaving} className="shadow-2xl bg-primary px-10 font-black h-14 rounded-2xl text-white hover:bg-primary/90 transition-all active:scale-[0.95]">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              {editingNode ? 'Commit Changes' : 'Register Branch'}
+              {editingNode ? 'Commit Changes' : 'Confirm Registration'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -246,22 +418,22 @@ export default function BranchesDistrictsPage() {
       <Dialog open={isDistrictDialogOpen} onOpenChange={setIsDistrictDialogOpen}>
         <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
           <DialogHeader className="p-8 bg-primary text-white">
-            <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+            <DialogTitle className="text-2xl font-black flex items-center gap-3 tracking-tight">
               <div className="p-2 bg-white/20 rounded-xl"><Globe className="w-6 h-6 text-white" /></div>
-              {editingNode ? 'Update Region' : 'Regional Entity'}
+              {editingNode ? 'Update Region' : 'Establish District'}
             </DialogTitle>
           </DialogHeader>
           <div className="p-8 space-y-4">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">District Name</Label>
-              <Input placeholder="e.g. Central Addis" value={districtForm.name} onChange={e => setDistrictForm({...districtForm, name: e.target.value})} className="h-12 rounded-xl font-bold" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">District Name</Label>
+              <Input placeholder="e.g. Central Addis" value={districtForm.name} onChange={e => setDistrictForm({...districtForm, name: e.target.value})} className="h-14 rounded-2xl font-black bg-slate-50 border-slate-200 px-5 text-lg" />
             </div>
           </div>
-          <DialogFooter className="p-8 bg-slate-50 border-t">
-            <Button variant="ghost" onClick={() => setIsDistrictDialogOpen(false)} disabled={isSaving} className="font-bold text-slate-500">Cancel</Button>
-            <Button onClick={handleSaveDistrict} disabled={isSaving} className="font-black bg-primary px-8 h-12 shadow-lg rounded-xl text-white">
+          <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row items-center justify-end gap-4">
+            <button onClick={() => setIsDistrictDialogOpen(false)} disabled={isSaving} className="text-sm font-bold text-slate-400 hover:text-slate-800">Discard</button>
+            <Button onClick={handleSaveDistrict} disabled={isSaving} className="font-black bg-primary px-8 h-14 shadow-2xl rounded-2xl text-white hover:bg-primary/90 transition-all active:scale-[0.95]">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              {editingNode ? 'Save Changes' : 'Establish Region'}
+              {editingNode ? 'Save Changes' : 'Confirm Establishment'}
             </Button>
           </DialogFooter>
         </DialogContent>
