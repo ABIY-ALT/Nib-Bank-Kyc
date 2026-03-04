@@ -81,7 +81,7 @@ export default function StaffAssignmentsPage() {
 
     try {
       await updateUserPortfolio(user.id, updatedBranches);
-      toast({ title: isAdding ? "Coverage Assigned" : "Coverage Revoked" });
+      toast({ title: "Successful" });
       loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Update Failed", description: e.message });
@@ -144,7 +144,7 @@ export default function StaffAssignmentsPage() {
       <div className="grid gap-8 lg:grid-cols-12">
         <Card className="lg:col-span-4 shadow-lg border-slate-200 h-fit sticky top-24">
           <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-primary" /> Jurisdiction Node</CardTitle>
+            <CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-primary" /> Jurisdiction Branch</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
@@ -197,7 +197,7 @@ export default function StaffAssignmentsPage() {
                         ))}
                         {filteredBranches.length === 0 && (
                           <div className="py-6 text-center text-sm text-muted-foreground font-bold">
-                            No matching nodes discovered.
+                            No matching discovered.
                           </div>
                         )}
                       </div>
@@ -210,7 +210,7 @@ export default function StaffAssignmentsPage() {
                 <div className="flex gap-3 text-amber-800">
                   <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
                   <p className="text-xs font-bold leading-relaxed">
-                    <strong>SLA Protocol:</strong> Specialist portfolio expansion grants visibility into shared regional queues. All assignments are logged in the Institutional Vault.
+                    <strong>Protocol:</strong> Specialist portfolio expansion grants visibility into shared regional queues. All assignments are logged.
                   </p>
                 </div>
               </div>
@@ -241,7 +241,7 @@ export default function StaffAssignmentsPage() {
                     <TableHeader className="bg-slate-50/80">
                       <TableRow>
                         <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Specialist Officer</TableHead>
-                        <TableHead className="font-black py-5 text-[11px] uppercase tracking-widest text-slate-500">Jurisdiction Nodes</TableHead>
+                        <TableHead className="font-black py-5 text-[11px] uppercase tracking-widest text-slate-500">Jurisdiction Branch</TableHead>
                         <TableHead className="font-black py-5 text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Portfolio</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -266,7 +266,7 @@ export default function StaffAssignmentsPage() {
                               </div>
                               <div className="flex flex-col">
                                 <span className="font-black text-slate-900 leading-tight">{u.firstName} {u.lastName}</span>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">KYC Verification Staff</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Verification Staff</span>
                               </div>
                             </div>
                           </TableCell>
@@ -281,7 +281,7 @@ export default function StaffAssignmentsPage() {
                           </TableCell>
                           <TableCell className="text-right pr-8">
                             <Badge className="bg-primary text-white font-black px-3 py-1 shadow-sm">
-                              {u.assignedBranches.length} Branches
+                              {u.assignedBranches.length} Branch
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -308,7 +308,7 @@ export default function StaffAssignmentsPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xl flex items-center gap-3 font-black text-slate-900">
                       <div className="p-2 bg-primary/10 rounded-xl text-primary"><Users className="w-5 h-5" /></div>
-                      Mapped KYC Specialists
+                      Mapped Specialists
                     </CardTitle>
                     <Badge className="bg-primary text-white font-black">{selectedBranch}</Badge>
                   </div>
@@ -319,7 +319,7 @@ export default function StaffAssignmentsPage() {
                       {assignedUsers.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground italic text-sm gap-3">
                           <Users className="w-8 h-8 opacity-20" />
-                          <p className="font-bold uppercase tracking-widest text-[10px]">No specialists mapped to this node.</p>
+                          <p className="font-bold uppercase tracking-widest text-[10px]">No specialists mapped to this branch.</p>
                         </div>
                       ) : assignedUsers.map(u => {
                         const fullName = `${u.firstName} ${u.lastName}`;
@@ -332,7 +332,7 @@ export default function StaffAssignmentsPage() {
                               <div className="flex flex-col">
                                 <span className="text-sm font-black text-slate-900">{fullName}</span>
                                 <Badge variant="outline" className="text-[8px] h-4.5 px-2 bg-white border-primary/30 text-primary font-black uppercase mt-1">
-                                  {u.assignedBranches?.length || 0} Nodes Covered
+                                  {u.assignedBranches?.length || 0} Branch Covered
                                 </Badge>
                               </div>
                             </div>
@@ -350,8 +350,8 @@ export default function StaffAssignmentsPage() {
               <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
                 <CardHeader className="bg-slate-50/50 border-b flex flex-col md:flex-row justify-between items-start md:items-center p-6 gap-4">
                   <div>
-                    <CardTitle className="text-xl font-black">Network Specialist Registry</CardTitle>
-                    <CardDescription className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Discover available personnel for coverage</CardDescription>
+                    <CardTitle className="text-xl font-black">Specialist Registry</CardTitle>
+                    <CardDescription className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Discover personnel for coverage</CardDescription>
                   </div>
                   <div className="relative w-full md:w-72">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

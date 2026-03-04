@@ -99,7 +99,7 @@ export default function BranchPerformancePage() {
   }, [branchMetrics]);
 
   const handleExportCSV = () => {
-    toast({ title: "Performance Dataset Exported", description: "Audit trail compiled for selected nodes." });
+    toast({ title: "Successful", description: "Audit trail compiled for selected branch." });
   };
 
   if (loading || permissionsLoading) {
@@ -121,13 +121,13 @@ export default function BranchPerformancePage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Branch Performance</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Relational network efficiency and methodology throughput monitoring.</p>
+          <p className="text-muted-foreground text-lg font-medium">Relational network efficiency and methodology monitoring.</p>
         </div>
         <div className="flex gap-3">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2 font-bold h-12 px-6 border-slate-200 bg-white rounded-xl shadow-sm">
-                <Filter className="w-4 h-4 text-primary" /> Filter Nodes
+                <Filter className="w-4 h-4 text-primary" /> Filter Branch
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64 rounded-xl shadow-2xl">
@@ -156,28 +156,34 @@ export default function BranchPerformancePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all bg-white overflow-hidden rounded-2xl">
-          <CardHeader className="pb-2 text-[10px] font-black uppercase text-slate-400 bg-slate-50/50">Node Volume</CardHeader>
+          <CardHeader className="pb-2 text-[10px] font-black uppercase text-slate-400 bg-slate-50/50">Volume</CardHeader>
           <CardContent className="pt-4 flex items-end justify-between">
             <span className="text-5xl font-black text-slate-900 tracking-tighter">{aggregateStats.total}</span>
             <div className="p-2 bg-slate-100 rounded-lg"><Inbox className="w-4 h-4 text-slate-400" /></div>
           </CardContent>
         </Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 bg-white overflow-hidden rounded-2xl">
-          <CardHeader className="pb-2 text-[10px] font-black uppercase text-emerald-600 bg-slate-50/50">Successfully Authorized</CardHeader>
+          <CardHeader className="pb-2 text-[10px] font-black uppercase text-emerald-600 bg-slate-50/50">
+            Successfully Authorized
+          </CardHeader>
           <CardContent className="pt-4 flex items-end justify-between">
             <span className="text-5xl font-black text-emerald-600 tracking-tighter">{aggregateStats.approved}</span>
             <div className="p-2 bg-emerald-50 rounded-lg"><ShieldCheck className="w-4 h-4 text-emerald-600" /></div>
           </CardContent>
         </Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500 bg-white overflow-hidden rounded-2xl">
-          <CardHeader className="pb-2 text-[10px] font-black uppercase text-orange-600 bg-slate-50/50">Methodology Gaps</CardHeader>
+          <CardHeader className="pb-2 text-[10px] font-black uppercase text-orange-600 bg-slate-50/50">
+            Methodology Gaps
+          </CardHeader>
           <CardContent className="pt-4 flex items-end justify-between">
             <span className="text-5xl font-black text-orange-600 tracking-tighter">{aggregateStats.amended}</span>
             <div className="p-2 bg-orange-50 rounded-lg"><ShieldAlert className="w-4 h-4 text-orange-600" /></div>
           </CardContent>
         </Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary bg-white overflow-hidden rounded-2xl">
-          <CardHeader className="pb-2 text-[10px] font-black uppercase text-primary bg-slate-50/50">Efficiency Index</CardHeader>
+          <CardHeader className="pb-2 text-[10px] font-black uppercase text-primary bg-slate-50/50">
+            Efficiency Index
+          </CardHeader>
           <CardContent className="pt-4 flex items-end justify-between">
             <span className="text-5xl font-black text-primary tracking-tighter">{aggregateStats.accuracy}%</span>
             <div className="p-2 bg-primary/5 rounded-lg"><Activity className="w-4 h-4 text-primary" /></div>

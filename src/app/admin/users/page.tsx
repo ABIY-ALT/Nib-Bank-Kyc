@@ -99,7 +99,7 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('USER_CREATE')) {
-      toast({ variant: "destructive", title: "Access Restricted", description: "You do not have administrative clearance for this node." });
+      toast({ variant: "destructive", title: "Access Restricted", description: "You do not have administrative clearance for this branch." });
       router.push('/');
     }
   }, [hasPermission, permissionsLoading, router, toast]);
@@ -121,7 +121,7 @@ export default function UserManagementPage() {
       setRoleDefinitions(r);
       setRegistryVersion(v => v + 1);
     } catch (error) {
-      toast({ variant: "destructive", title: "Institutional sync failed" });
+      toast({ variant: "destructive", title: "Sync failed" });
     } finally {
       setLoading(false);
     }
@@ -177,7 +177,7 @@ export default function UserManagementPage() {
 
   const handleSave = async () => {
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.role) {
-      toast({ variant: "destructive", title: "Identity Required", description: "First Name, Last Name, Email, and Role are mandatory." });
+      toast({ variant: "destructive", title: "Information Required", description: "First Name, Last Name, Email, and Role are mandatory." });
       return;
     }
 
@@ -200,10 +200,10 @@ export default function UserManagementPage() {
         }
         
         toast({ 
-          title: editingUser ? "Profile Updated" : "Staff Provisioned", 
+          title: "Successful", 
           description: res.tempPassword 
-            ? `Personnel records updated. Temporary password generated.` 
-            : "Personnel records and jurisdictional mappings have been updated." 
+            ? `New user added. Temporary password generated.` 
+            : "User records and branch mappings have been updated." 
         });
         setIsDialogOpen(false);
         loadData();
@@ -211,7 +211,7 @@ export default function UserManagementPage() {
         throw new Error(res.error);
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Provisioning Error", description: error.message });
+      toast({ variant: "destructive", title: "Action Error", description: error.message });
     } finally {
       setIsSyncing(false);
     }
@@ -221,7 +221,7 @@ export default function UserManagementPage() {
     const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.INACTIVE : UserStatus.ACTIVE;
     try {
       await updateUserStatus(user.id, newStatus);
-      toast({ title: "Access Status Updated", description: `Account is now ${newStatus}.` });
+      toast({ title: "Successful", description: `Account is now ${newStatus}.` });
       loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Action Failed" });
@@ -230,7 +230,7 @@ export default function UserManagementPage() {
 
   const handleCopyPassword = (pass: string) => {
     navigator.clipboard.writeText(pass);
-    toast({ title: "Credential Copied", description: "Temporary password saved to clipboard." });
+    toast({ title: "Successful", description: "Temporary password saved to clipboard." });
   };
 
   const isBranchSpecificRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
@@ -247,7 +247,7 @@ export default function UserManagementPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Personnel Directory</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Manage staff identities and jurisdictional assignments.</p>
+          <p className="text-muted-foreground text-lg font-medium">Manage staff identities and branch assignments.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
@@ -270,7 +270,7 @@ export default function UserManagementPage() {
           </Button>
           <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90 rounded-xl">
             <UserPlus className="w-4 h-4" />
-            Provision User
+            Add User
           </Button>
         </div>
       </div>
@@ -280,8 +280,8 @@ export default function UserManagementPage() {
           <TableHeader className="bg-slate-50/50">
             <TableRow>
               <TableHead className="font-bold py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Identity</TableHead>
-              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Institutional Role</TableHead>
-              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Home Node</TableHead>
+              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Role</TableHead>
+              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead>
               <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
               <TableHead className="text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
             </TableRow>
@@ -358,7 +358,7 @@ export default function UserManagementPage() {
                   </TableCell>
                   <TableCell>
                     <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-slate-400" /> {user.branch?.name || "Institutional Node"}
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" /> {user.branch?.name || "HQ / Central"}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -426,11 +426,11 @@ export default function UserManagementPage() {
                 <div className="p-2 bg-white/20 rounded-xl">
                   <ShieldCheck className="w-6 h-6 text-white" />
                 </div>
-                <DialogTitle className="text-2xl font-black tracking-tight text-white">Institutional Profile</DialogTitle>
+                <DialogTitle className="text-2xl font-black tracking-tight text-white">User Profile</DialogTitle>
               </div>
             </div>
             <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest pl-11">
-              {editingUser ? 'MANAGING JURISDICTIONAL MAPPING' : 'PROVISIONING NEW STAFF CREDENTIALS'}
+              {editingUser ? 'MANAGING BRANCH MAPPING' : 'ADDING NEW STAFF'}
             </DialogDescription>
           </DialogHeader>
           
@@ -467,7 +467,7 @@ export default function UserManagementPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-primary tracking-widest">AUTHORITY ROLE</Label>
+                <Label className="text-[10px] font-black uppercase text-primary tracking-widest">ROLE</Label>
                 <Select value={formData.role} onValueChange={val => setFormData({...formData, role: val})}>
                   <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Select Role" /></SelectTrigger>
                   <SelectContent>
@@ -481,34 +481,34 @@ export default function UserManagementPage() {
               {isBranchSpecificRole ? (
                 <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
                   <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-1.5">
-                    <ArrowRightLeft className="w-3 h-3" /> HOME BRANCH
+                    <ArrowRightLeft className="w-3 h-3" /> BRANCH
                   </Label>
                   <Select value={formData.branchId || "none"} onValueChange={val => setFormData({...formData, branchId: val})}>
                     <SelectTrigger className="h-11 rounded-xl font-black text-primary border-primary/20 bg-primary/5">
-                      <SelectValue placeholder="Map to Node..." />
+                      <SelectValue placeholder="Map to node..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Institutional / HQ</SelectItem>
+                      <SelectItem value="none">HQ / Central</SelectItem>
                       {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               ) : (
                 <div className="space-y-2 opacity-60">
-                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">HOME BRANCH</Label>
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">BRANCH</Label>
                   <div className="h-11 rounded-xl border border-slate-100 bg-slate-50 flex items-center px-3 gap-2">
                     <ShieldAlert className="w-3.5 h-3.5 text-slate-300" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase">Institutional Level</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase">HQ / Central Level</span>
                   </div>
                 </div>
               )}
             </div>
 
             {editingUser && isBranchSpecificRole && formData.branchId !== (editingUser.branch?.id || 'none') && (
-              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 flex gap-3 animate-in zoom-in-95">
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex gap-3 animate-in zoom-in-95">
                 <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-[10px] text-amber-800 font-bold leading-relaxed uppercase">
-                  <strong>Branch Transfer:</strong> Moving this staff member will re-route future jurisdictional tasks. Historical records remain under their previous node for audit integrity.
+                  <strong>Branch Transfer:</strong> Moving this staff member will re-route future tasks. Historical records remain under their previous node for audit integrity.
                 </p>
               </div>
             )}
@@ -527,7 +527,7 @@ export default function UserManagementPage() {
               className="bg-primary hover:bg-primary/90 text-white font-black rounded-xl px-10 shadow-xl shadow-primary/20 h-12"
             >
               {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              {editingUser ? 'Commit Profile Changes' : 'Initialize Staff Profile'}
+              {editingUser ? 'Update User' : 'Add User'}
             </Button>
           </DialogFooter>
         </DialogContent>

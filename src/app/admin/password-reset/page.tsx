@@ -42,7 +42,7 @@ export default function AdminPasswordResetPage() {
         // Persist to session registry for hover view in User Directory
         tempPasswordRegistry.add(email, res.tempPassword!);
         
-        toast({ title: "Security Reset Complete", description: `Credential rotated for ${res.userName}.` });
+        toast({ title: "Successful", description: `Credential rotated for ${res.userName}.` });
       } else {
         toast({ variant: "destructive", title: "Reset Denied", description: res.error });
       }
@@ -55,7 +55,7 @@ export default function AdminPasswordResetPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({ title: "Copied", description: "Credential saved to clipboard." });
+    toast({ title: "Successful", description: "Credential saved to clipboard." });
   };
 
   return (
@@ -120,7 +120,7 @@ export default function AdminPasswordResetPage() {
                   <UserCheck className="w-8 h-8" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-black uppercase text-emerald-600 tracking-widest leading-none">Security Discovery Successful</p>
+                  <p className="text-[11px] font-black uppercase text-emerald-600 tracking-widest leading-none">Discovery Successful</p>
                   <p className="text-2xl font-black text-slate-900 mt-1">{result.name}</p>
                 </div>
               </div>
@@ -143,7 +143,7 @@ export default function AdminPasswordResetPage() {
                 <div className="bg-white p-6 rounded-2xl border border-emerald-100 flex gap-5 shadow-sm">
                   <AlertCircle className="w-6 h-6 text-emerald-500 shrink-0" />
                   <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                    This password is valid for one-time use. The system will force a rotation upon the next login attempt at the Nib Bank Gateway.
+                    This password is valid for one-time use. The system will force a rotation upon the next login attempt at the Gateway.
                   </p>
                 </div>
               </div>
@@ -158,7 +158,7 @@ export default function AdminPasswordResetPage() {
           <ShieldCheck className="w-6 h-6 text-[#B89334]" />
         </div>
         <p className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.1em] leading-relaxed">
-          Institutional Protocol: All administrative credential rotations are cryptographically logged in the master audit vault for regulatory compliance and identity preservation.
+          Protocol: All administrative rotations are cryptographically logged in the master audit vault for compliance and identity preservation.
         </p>
       </div>
     </div>

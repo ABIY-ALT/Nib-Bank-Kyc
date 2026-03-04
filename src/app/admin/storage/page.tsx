@@ -128,7 +128,7 @@ export default function StorageVaultPage() {
     try {
       const res = await deleteInstitutionalFile(fileToPurge.id);
       if (res.success) {
-        toast({ title: "Asset Purged", description: "File permanently removed from Vault storage." });
+        toast({ title: "Successful", description: "File permanently removed from storage." });
         setInventory(prev => prev.filter(f => f.id !== fileToPurge.id));
       } else {
         toast({ variant: "destructive", title: "Purge Denied", description: res.error });
@@ -143,7 +143,7 @@ export default function StorageVaultPage() {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Scanning Institutional Storage...</p>
+        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Scanning Storage...</p>
       </div>
     );
   }
@@ -163,7 +163,7 @@ export default function StorageVaultPage() {
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-1.5 font-black h-10 flex items-center gap-2 text-[10px] uppercase">
             <ShieldCheck className="w-4 h-4" /> 
-            {isSuperAdmin ? 'Master Node Access' : `Branch Node: ${user?.branchName || 'Assigned'}`}
+            {isSuperAdmin ? 'Master Access' : `Branch: ${user?.branchName || 'Assigned'}`}
           </Badge>
         </div>
       </div>
@@ -183,13 +183,13 @@ export default function StorageVaultPage() {
             </div>
           </div>
           <div className="md:col-span-4 space-y-2">
-            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Jurisdiction Filter</Label>
+            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Branch Filter</Label>
             <select 
               className="w-full h-11 px-4 border border-slate-200 rounded-xl bg-slate-50/30 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
               value={branchFilter}
               onChange={(e) => setBranchFilter(e.target.value)}
             >
-              <option value="all">All Authorized Nodes</option>
+              <option value="all">All Authorized Branch</option>
               {branches.map(b => (
                 <option key={b} value={b}>{b}</option>
               ))}
@@ -208,9 +208,9 @@ export default function StorageVaultPage() {
           <Info className="w-5 h-5 text-amber-700" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-black text-amber-900 uppercase">Institutional Policy: Zero-Loss Protocol</p>
+          <p className="text-sm font-black text-amber-900 uppercase">Policy: Zero-Loss Protocol</p>
           <p className="text-xs text-amber-800 font-medium leading-relaxed">
-            Assets can only be purged from the Vault after a local backup has been initiated. This ensures regulatory compliance and prevents accidental data loss during technical audits.
+            Assets can only be purged from the Vault after a local backup has been initiated. This ensures compliance and prevents accidental data loss during technical audits.
           </p>
         </div>
       </div>
@@ -261,7 +261,7 @@ export default function StorageVaultPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Building2 className="w-3.5 h-3.5 text-slate-300" />
-                      <span className="text-xs font-bold text-slate-600">{file.kyc?.branchName || 'Institutional'}</span>
+                      <span className="text-xs font-bold text-slate-600">{file.kyc?.branchName || 'Central'}</span>
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
@@ -322,7 +322,7 @@ export default function StorageVaultPage() {
                   <AlertDialogTitle className="text-xl font-black text-red-900 tracking-tight">
                     Confirm Permanent Purge
                   </AlertDialogTitle>
-                  <p className="text-[10px] font-black uppercase text-red-400 tracking-widest">Institutional Warning</p>
+                  <p className="text-[10px] font-black uppercase text-red-400 tracking-widest">Warning</p>
                 </div>
               </div>
             </AlertDialogHeader>

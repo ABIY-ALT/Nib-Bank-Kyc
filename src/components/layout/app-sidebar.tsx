@@ -458,7 +458,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
                             <Link href="/admin/branches">
                               <Building2 className="w-4 h-4 mr-2" />
-                              <span>Hierarchy</span>
+                              <span>Add District and Branch</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>

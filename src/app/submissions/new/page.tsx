@@ -183,7 +183,7 @@ export default function NewSubmission() {
       const result = await createSubmission(formData);
       
       if (result.success) {
-        toast({ title: "Submission Created", description: `Case ${submissionId} dispatched for review.` });
+        toast({ title: "Successful", description: `Case ${submissionId} dispatched for review.` });
         router.push('/submissions/my');
       } else {
         throw new Error(result.error);
@@ -201,7 +201,7 @@ export default function NewSubmission() {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-bold text-muted-foreground">Initializing institutional submission portal...</p>
+        <p className="font-bold text-muted-foreground">Initializing submission portal...</p>
       </div>
     );
   }
@@ -321,7 +321,7 @@ export default function NewSubmission() {
                   {previewFile?.file.name}
                 </DialogTitle>
                 <DialogDescription className="text-white/70 text-[10px] uppercase font-black tracking-widest mt-0.5">
-                  Institutional Document Inspection
+                  Document Inspection
                 </DialogDescription>
               </div>
             </div>

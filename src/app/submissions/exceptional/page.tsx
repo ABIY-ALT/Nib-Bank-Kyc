@@ -55,7 +55,7 @@ export default function ExceptionalCasesPage() {
     setLoading(true);
     try {
       const assignedBranches = user.assignedBranches || [];
-      const branchContext = isAdmin ? undefined : (user.branchName || "RESTRICTED_NODE");
+      const branchContext = isAdmin ? undefined : (user.branchName || "RESTRICTED_BRANCH");
       const branchesContext = isAdmin ? undefined : (assignedBranches.length > 0 ? assignedBranches : undefined);
 
       const exceptionalPromise = getSubmissions({ 
@@ -74,7 +74,7 @@ export default function ExceptionalCasesPage() {
       setSubmissions(exceptional || []);
       setAvailableCases(all || []);
     } catch (error) {
-      console.error("[Vault] Discovery Failure:", error);
+      console.error("Discovery Failure:", error);
     } finally {
       setLoading(false);
     }
@@ -112,7 +112,7 @@ export default function ExceptionalCasesPage() {
         memoData: { name: memoFile.name }
       });
       
-      toast({ title: "Exception Initiated", description: "Case dispatched to Governance nodes." });
+      toast({ title: "Successful", description: "Case dispatched to Governance branches." });
       setIsAddDialogOpen(false);
       resetForm();
       await loadData();
@@ -168,14 +168,14 @@ export default function ExceptionalCasesPage() {
       <Alert className="bg-amber-50 border-amber-200 text-amber-900 shadow-sm border-l-4 border-l-yellow-600">
         <Info className="h-4 w-4 text-yellow-600" />
         <AlertDescription className="text-xs font-bold text-amber-800 uppercase tracking-tight">
-          Institutional Protocol: Exceptional cases require sequential sign-off from District, Director, and Supervisor nodes.
+          Standard Protocol: Exceptional cases require sequential sign-off from District, Director, and Supervisor nodes.
         </AlertDescription>
       </Alert>
 
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="font-medium">Synchronizing jurisdictional exceptions...</p>
+          <p className="font-medium">Synchronizing exceptions...</p>
         </div>
       ) : filteredSubmissions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl gap-6 text-center">
@@ -184,7 +184,7 @@ export default function ExceptionalCasesPage() {
           </div>
           <div className="space-y-2">
             <p className="font-bold text-slate-900 text-xl">Exception Queue Empty</p>
-            <p className="text-sm text-slate-500 max-w-xs mx-auto">No high-risk cases currently require hierarchy oversight in your node.</p>
+            <p className="text-sm text-slate-500 max-w-xs mx-auto">No high-risk cases currently require hierarchy oversight in your branch.</p>
           </div>
         </div>
       ) : (
@@ -211,7 +211,7 @@ export default function ExceptionalCasesPage() {
                   <SelectTrigger className="h-12 border-slate-200 rounded-xl font-bold"><SelectValue placeholder="Select ID..." /></SelectTrigger>
                   <SelectContent>
                     {availableCases.length === 0 ? (
-                      <SelectItem value="none" disabled>No cases discovered in node</SelectItem>
+                      <SelectItem value="none" disabled>No cases discovered in branch</SelectItem>
                     ) : availableCases.map(c => <SelectItem key={c.id} value={c.id}>{c.id}</SelectItem>)}
                   </SelectContent>
                 </Select>

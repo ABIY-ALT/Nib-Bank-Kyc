@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -69,7 +68,7 @@ export default function SystemSettingsPage() {
       ...localSettings,
       updatedBy: currentUser?.name
     });
-    toast({ title: "Configuration Saved", description: "Institutional policies updated." });
+    toast({ title: "Successful", description: "System configuration updated." });
   };
 
   const handleAddDocType = () => {
@@ -107,7 +106,7 @@ export default function SystemSettingsPage() {
     const updated = [...(localSettings.guidelines || []), { ...newGuideline, id }];
     setLocalSettings({ ...localSettings, guidelines: updated });
     setNewGuideline({ title: "", description: "", type: 'info' });
-    toast({ title: "Guideline Staged", description: "Click 'Save Institutional Settings' to publish." });
+    toast({ title: "Guideline Staged", description: "Click 'Save Settings' to publish." });
   };
 
   const handleRemoveGuideline = (id: string) => {
@@ -124,7 +123,7 @@ export default function SystemSettingsPage() {
           <Settings className="w-8 h-8 text-primary" />
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">System Configuration</h1>
         </div>
-        <p className="text-muted-foreground font-medium">Global governance and institutional policy management.</p>
+        <p className="text-muted-foreground font-medium">Global governance and policy management.</p>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
@@ -139,7 +138,7 @@ export default function SystemSettingsPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-orange-600" />
-                      <Label className="text-base font-bold">Escalation Watchdog Threshold</Label>
+                      <Label className="text-base font-bold">Escalation Threshold</Label>
                     </div>
                     <p className="text-[10px] text-muted-foreground font-medium uppercase px-6">Identify cases for manual supervisor escalation after threshold</p>
                   </div>
@@ -228,7 +227,7 @@ export default function SystemSettingsPage() {
           <Card className="shadow-lg border-slate-200 overflow-hidden">
             <CardHeader className="bg-primary text-white border-b">
               <CardTitle className="text-xl flex items-center gap-2 text-white">
-                <Megaphone className="w-5 h-5 text-white" /> Institutional Guidelines
+                <Megaphone className="w-5 h-5 text-white" /> Global Guidelines
               </CardTitle>
               <CardDescription className="text-white/70">Publish critical policy updates to the user dashboard.</CardDescription>
             </CardHeader>
@@ -303,7 +302,7 @@ export default function SystemSettingsPage() {
         </div>
       </div>
 
-      <div className="pt-4 border-t flex items-center justify-end"><Button onClick={handleSavePolicies} className="px-10 h-12 font-bold shadow-lg bg-primary text-white">Save Institutional Settings</Button></div>
+      <div className="pt-4 border-t flex items-center justify-end"><Button onClick={handleSavePolicies} className="px-10 h-12 font-bold shadow-lg bg-primary text-white">Save Settings</Button></div>
     </div>
   );
 }

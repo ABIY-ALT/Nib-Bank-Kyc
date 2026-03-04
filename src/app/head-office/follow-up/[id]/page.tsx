@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useParams, useRouter } from "next/navigation";
@@ -75,7 +74,7 @@ export default function FollowUpVerificationDetail() {
     });
 
     if (res.success) {
-      toast({ title: "Audit Logged" });
+      toast({ title: "Successful" });
       router.push('/head-office/follow-up');
     } else {
       toast({ variant: "destructive", title: "Action Failed" });
@@ -121,7 +120,7 @@ export default function FollowUpVerificationDetail() {
           </Card>
 
           <Card className="shadow-xl border-primary/20 bg-white overflow-hidden">
-            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 text-white"><ShieldCheck className="w-5 h-5 text-white" /> Institutional Determination</CardTitle></CardHeader>
+            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 text-white"><ShieldCheck className="w-5 h-5 text-white" /> Determination</CardTitle></CardHeader>
             <CardContent className="pt-6 space-y-6">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Remarks & Feedback</Label>
@@ -141,7 +140,7 @@ export default function FollowUpVerificationDetail() {
             <CardContent className="pt-8 space-y-8">
               <div className="space-y-6">
                 <div className="flex gap-4"><div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><User className="w-5 h-5" /></div><div><p className="text-[10px] font-black text-slate-400 uppercase">Customer</p><p className="font-bold text-slate-900">{submission.customerName}</p></div></div>
-                <div className="flex gap-4"><div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><Building2 className="w-5 h-5" /></div><div><p className="text-[10px] font-black text-slate-400 uppercase">Originating Node</p><p className="font-bold text-slate-900">{submission.branchName}</p></div></div>
+                <div className="flex gap-4"><div className="p-2 bg-slate-100 rounded-lg h-fit text-slate-500"><Building2 className="w-5 h-5" /></div><div><p className="text-[10px] font-black text-slate-400 uppercase">Branch</p><p className="font-bold text-slate-900">{submission.branchName}</p></div></div>
               </div>
               <div className="pt-6 border-t space-y-4"><p className="text-xs text-slate-500 leading-relaxed font-medium bg-slate-50 p-4 rounded-xl italic">Findings here impact branch performance metrics in reporting.</p></div>
             </CardContent>

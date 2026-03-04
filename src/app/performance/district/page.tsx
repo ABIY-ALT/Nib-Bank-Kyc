@@ -88,7 +88,7 @@ export default function DistrictPerformancePage() {
       setSubmissions(subs);
       setDistricts(dists);
     } catch (e) {
-      toast({ variant: "destructive", title: "Sync Failed", description: "Institutional database connection lost." });
+      toast({ variant: "destructive", title: "Sync Failed", description: "Database connection lost." });
     } finally {
       setLoading(false);
     }
@@ -136,9 +136,9 @@ export default function DistrictPerformancePage() {
               {activeDistrict ? `${activeDistrict} Regional Command` : 'District Monitoring'}
             </h1>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-muted-foreground text-lg font-medium">Institutional health monitoring for regional branch nodes.</p>
+              <p className="text-muted-foreground text-lg font-medium">Monitoring for regional branch.</p>
               <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-black px-3 py-1">
-                {branchCount} Authorized Nodes
+                {branchCount} Authorized Branch
               </Badge>
             </div>
           </div>
@@ -158,7 +158,7 @@ export default function DistrictPerformancePage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button className="gap-2 h-12 px-8 bg-slate-900 text-white font-black shadow-xl rounded-xl" onClick={() => toast({ title: "Compiling Master Deck..." })}>
+          <Button className="gap-2 h-12 px-8 bg-slate-900 text-white font-black shadow-xl rounded-xl" onClick={() => toast({ title: "Compiling..." })}>
             <FileDown className="w-5 h-5" /> Export Command Deck
           </Button>
         </div>
@@ -168,7 +168,7 @@ export default function DistrictPerformancePage() {
         <Alert className="bg-primary/5 border-primary/20 text-primary-foreground shadow-lg rounded-2xl border-l-4 border-l-primary animate-in slide-in-from-left duration-500">
           <ShieldCheck className="h-5 w-5 text-primary" />
           <AlertDescription className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-3">
-            Authorized Jurisdiction: <Badge className="bg-primary text-white font-black px-4">{activeDistrict}</Badge> Command Node Engaged
+            Authorized Jurisdiction: <Badge className="bg-primary text-white font-black px-4">{activeDistrict}</Badge> Command engaged
           </AlertDescription>
         </Alert>
       )}
@@ -219,14 +219,14 @@ export default function DistrictPerformancePage() {
               <CardTitle className="text-xl flex items-center gap-3 font-headline text-slate-900">
                 <LayoutGrid className="w-5 h-5 text-primary" /> Branch Throughput Matrix
               </CardTitle>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Comparative efficiency metrics across regional nodes.</CardDescription>
+              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Comparative efficiency metrics across regional branch.</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader className="bg-slate-50/80">
                 <TableRow>
-                  <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Branch Node</TableHead>
+                  <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead>
                   <TableHead className="font-black text-center text-[11px] uppercase tracking-widest text-slate-500">Case Volume</TableHead>
                   <TableHead className="font-black text-center text-emerald-600 text-[11px] uppercase tracking-widest">Authorized</TableHead>
                   <TableHead className="font-black text-right pr-8 text-[11px] uppercase tracking-widest w-[180px] text-slate-500">Efficiency Index</TableHead>
@@ -236,7 +236,7 @@ export default function DistrictPerformancePage() {
                 {branchCount === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="py-24 text-center italic text-slate-400 bg-slate-50/30">
-                      No jurisdictional node data discovered for this analysis period.
+                      No branch data discovered for this analysis period.
                     </TableCell>
                   </TableRow>
                 ) : Object.entries(analytics.byBranch).map(([name, data]) => {
@@ -303,12 +303,12 @@ export default function DistrictPerformancePage() {
               </div>
 
               <div className="space-y-4">
-                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Jurisdictional Alert Console</Label>
+                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Alert Console</Label>
                 {analytics.amended > 5 ? (
                   <div className="p-4 rounded-xl bg-orange-50 border border-orange-100 flex gap-3 animate-pulse">
                     <ShieldAlert className="w-5 h-5 text-orange-600 shrink-0" />
                     <p className="text-[10px] text-orange-800 font-bold leading-relaxed uppercase">
-                      High Methodology Gaps detected in the region. specialist intervention recommended for local node training.
+                      High Methodology Gaps detected in the region. Specialist intervention recommended for local branch training.
                     </p>
                   </div>
                 ) : branchCount > 0 ? (
@@ -322,7 +322,7 @@ export default function DistrictPerformancePage() {
                   <div className="p-4 rounded-xl bg-blue-50 border border-blue-100 flex gap-3">
                     <Zap className="w-5 h-5 text-blue-600 shrink-0" />
                     <p className="text-[10px] text-blue-800 font-bold leading-relaxed uppercase">
-                      System standby. Waiting for regional data aggregation to initiate intelligence console.
+                      Standby. Waiting for regional data aggregation.
                     </p>
                   </div>
                 )}
@@ -333,7 +333,7 @@ export default function DistrictPerformancePage() {
           <Card className="shadow-xl border-slate-200 overflow-hidden bg-primary/5 rounded-3xl">
             <CardHeader className="p-6 border-b border-primary/10">
               <CardTitle className="text-primary text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                <Clock className="w-4 h-4" /> Command Filters
+                <Clock className="w-4 h-4" /> Filters
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4">

@@ -91,10 +91,10 @@ export default function BranchesDistrictsPage() {
     try {
       if (editingNode?.type === 'branch') {
         await updateBranch(editingNode.id, branchForm);
-        toast({ title: "Branch Updated" });
+        toast({ title: "Successful" });
       } else {
         await createBranch(branchForm);
-        toast({ title: "Branch Registered" });
+        toast({ title: "Successful" });
       }
       setIsBranchDialogOpen(false);
       loadData();
@@ -112,10 +112,10 @@ export default function BranchesDistrictsPage() {
     try {
       if (editingNode?.type === 'district') {
         await updateDistrict(editingNode.id, districtForm.name);
-        toast({ title: "District Updated" });
+        toast({ title: "Successful" });
       } else {
         await createDistrict(districtForm.name);
-        toast({ title: "District Established" });
+        toast({ title: "Successful" });
       }
       setIsDistrictDialogOpen(false);
       loadData();
@@ -130,7 +130,7 @@ export default function BranchesDistrictsPage() {
     if (!confirm(`Permanently remove this ${type}? This action cannot be undone.`)) return;
     try {
       await deleteNode(type, id);
-      toast({ title: "Node Removed" });
+      toast({ title: "Successful" });
       loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Delete Denied", description: "Node may contain active records." });
@@ -145,7 +145,7 @@ export default function BranchesDistrictsPage() {
     <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Hierarchy</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Add District and Branch</h1>
           <p className="text-muted-foreground text-lg">Manage regional nodes and districts.</p>
         </div>
         <div className="flex gap-2">
@@ -177,13 +177,13 @@ export default function BranchesDistrictsPage() {
         </Card>
 
         <Card className="lg:col-span-8 shadow-xl overflow-hidden border-slate-200 rounded-3xl">
-          <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-white" /> Branch Directory</CardTitle></CardHeader>
+          <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-white" /> Branch List</CardTitle></CardHeader>
           <CardContent className="pt-6">
             {branches.length === 0 ? (
               <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
                 <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <p className="font-bold text-slate-900">No Branches Discovered</p>
-                <p className="text-sm text-muted-foreground mt-1">Register branches under an established district.</p>
+                <p className="font-bold text-slate-900">No Branch Discovered</p>
+                <p className="text-sm text-muted-foreground mt-1">Register branch nodes under an established district.</p>
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
@@ -213,7 +213,7 @@ export default function BranchesDistrictsPage() {
           <DialogHeader className="p-8 bg-primary text-white">
             <DialogTitle className="text-2xl font-bold flex items-center gap-3">
               <div className="p-2 bg-white/20 rounded-xl"><Building2 className="w-6 h-6 text-white" /></div>
-              {editingNode ? 'Modify Node' : 'Branch Configuration'}
+              {editingNode ? 'Modify Branch' : 'Branch Configuration'}
             </DialogTitle>
           </DialogHeader>
           <div className="p-8 space-y-6">
@@ -237,7 +237,7 @@ export default function BranchesDistrictsPage() {
             <Button variant="ghost" onClick={() => setIsBranchDialogOpen(false)} disabled={isSaving} className="font-bold text-slate-500">Cancel</Button>
             <Button onClick={handleSaveBranch} disabled={isSaving} className="shadow-xl bg-primary px-10 font-black h-12 rounded-xl">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              {editingNode ? 'Commit Changes' : 'Register Node'}
+              {editingNode ? 'Commit Changes' : 'Register Branch'}
             </Button>
           </DialogFooter>
         </DialogContent>

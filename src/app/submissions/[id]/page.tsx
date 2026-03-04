@@ -121,7 +121,6 @@ export default function SubmissionDetails() {
   useEffect(() => {
     if (submission?.checklistState) {
       let state = submission.checklistState;
-      // Defensive parsing for checklistState
       if (typeof state === 'string' && state.trim().length > 0) {
         try {
           state = JSON.parse(state);
@@ -164,7 +163,7 @@ export default function SubmissionDetails() {
     setIsActioning(action);
     try {
       await updateSubmissionStatus(submission.id, action, user.id, remarks);
-      toast({ title: "Workflow Updated", description: `Case moved to ${action.replace(/_/g, ' ')}.` });
+      toast({ title: "Successful", description: `Case moved to ${action.replace(/_/g, ' ')}.` });
       const updated = await getSubmissionById(submission.id);
       setSubmission(updated);
       setRemarks("");
@@ -181,7 +180,7 @@ export default function SubmissionDetails() {
     setIsActioning(nextStatus);
     try {
       await processExceptionalStep(submission.id, nextStatus, user.id, remarks, actionLabel);
-      toast({ title: "Governance Decision Recorded", description: `Case transitioned: ${actionLabel}` });
+      toast({ title: "Successful", description: `Governance decision recorded: ${actionLabel}` });
       const updated = await getSubmissionById(submission.id);
       setSubmission(updated);
       setRemarks("");
@@ -198,7 +197,7 @@ export default function SubmissionDetails() {
     try {
       const res = await deleteInstitutionalFile(fileToPurge.id);
       if (res.success) {
-        toast({ title: "Asset Purged", description: "File wiped from server storage and case archive." });
+        toast({ title: "Successful", description: "File wiped from server storage and case archive." });
         const updated = await getSubmissionById(submission.id);
         setSubmission(updated);
       } else {
@@ -232,7 +231,7 @@ export default function SubmissionDetails() {
         { id: 'sub', label: 'Submitted', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
         { id: 'dist', label: 'District Director', desc: 'Regional Oversight', state: excStatus === 'AWAITING_DISTRICT' ? 'active' : (['None', 'AWAITING_DISTRICT'].includes(excStatus) ? 'pending' : 'completed'), icon: Landmark },
         { id: 'kycdir', label: 'KYC Director', desc: 'Strategic Risk Review', state: excStatus === 'AWAITING_DIRECTOR' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Shield },
-        { id: 'chief', label: 'Chief Retail & SME', desc: 'Optional: High-Risk Node', state: excStatus === 'AWAITING_CHIEF' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: Zap },
+        { id: 'chief', label: 'Chief Retail & SME', desc: 'Optional: High-Risk', state: excStatus === 'AWAITING_CHIEF' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: Zap },
         { id: 'div', label: 'Division Manager', desc: 'Resource Allocation', state: excStatus === 'AWAITING_DIVISION' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF', 'AWAITING_DIVISION'].includes(excStatus) ? 'pending' : 'completed'), icon: Scale },
         { id: 'super', label: 'Supervisor', desc: 'Operational Audit', state: excStatus === 'AWAITING_SUPERVISOR' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF', 'AWAITING_DIVISION', 'AWAITING_SUPERVISOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Gavel },
         { id: 'kyco', label: 'KYC Officer', desc: 'Lifecycle Conclusion', state: excStatus === 'COMPLETED' ? 'completed' : 'pending', icon: UserCheck }
@@ -242,7 +241,7 @@ export default function SubmissionDetails() {
     return [
       { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
       { id: 'review', label: 'Specialist Analysis', desc: 'Technical Review', state: status === KYCStatus.SUBMITTED ? 'active' : 'completed', icon: Search },
-      { id: 'verdict', label: 'Institutional Verdict', desc: 'Final Assessment', state: status === KYCStatus.IN_REVIEW ? 'active' : (isTerminal ? 'completed' : 'pending'), icon: ShieldCheck },
+      { id: 'verdict', label: 'Verdict', desc: 'Final Assessment', state: status === KYCStatus.IN_REVIEW ? 'active' : (isTerminal ? 'completed' : 'pending'), icon: ShieldCheck },
       { id: 'closed', label: 'Case Closed', desc: 'Lifecycle Conclusion', state: isTerminal ? 'completed' : 'pending', icon: Activity }
     ];
   }, [submission, isTerminal]);
@@ -445,7 +444,7 @@ export default function SubmissionDetails() {
                 </div>
                 <div className="space-y-1">
                   <AlertDialogTitle className="text-xl font-black text-red-900 tracking-tight">
-                    Purge Institutional Asset
+                    Purge Asset
                   </AlertDialogTitle>
                   <p className="text-[10px] font-black uppercase text-red-400 tracking-widest">Digital Audit Warning</p>
                 </div>

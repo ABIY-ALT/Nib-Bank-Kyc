@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -97,7 +96,7 @@ export default function StaffRolesPage() {
       setRoleDefinitions(r || []);
       setAllPermissions(p || []);
     } catch (e) {
-      toast({ variant: "destructive", title: "Institutional Sync Failed" });
+      toast({ variant: "destructive", title: "Sync Failed" });
     } finally {
       setLoading(false);
     }
@@ -108,7 +107,7 @@ export default function StaffRolesPage() {
     try {
       const res = await seedInstitutionalPermissions();
       if (res.success) {
-        toast({ title: "Registry Synced", description: "Standard institutional capabilities have been provisioned." });
+        toast({ title: "Successful", description: "Standard capabilities have been provisioned." });
         await loadData();
       }
     } finally {
@@ -146,7 +145,7 @@ export default function StaffRolesPage() {
       });
       
       if (res.success) {
-        toast({ title: "Authority Configuration Saved" });
+        toast({ title: "Successful" });
         setIsDialogOpen(false);
         loadData();
       } else {
@@ -163,8 +162,8 @@ export default function StaffRolesPage() {
       const res = await toggleRoleStatus(role.id, role.active);
       if (res.success) {
         toast({ 
-          title: role.active ? "Role Deactivated" : "Role Restored", 
-          description: `Designated as ${role.active ? 'Inactive' : 'Active'} in the Vault.`
+          title: "Successful", 
+          description: `Role is now ${role.active ? 'Inactive' : 'Active'} in the Vault.`
         });
         await loadData();
       }
@@ -196,7 +195,7 @@ export default function StaffRolesPage() {
       if (slug === 'DASHBOARD_VIEW' || slug === 'DASHBOARD_VIEW_SYSTEM') {
         groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard", icon: LayoutDashboard });
       } else if (slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE' || slug === 'DASHBOARD_VIEW_BRANCH') {
-        groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at authorized nodes", icon: BarChart3 });
+        groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at authorized branch", icon: BarChart3 });
       } else if (slug === 'CASE_SUBMIT') {
         groups['CASE_MANAGEMENT'].push({ ...p, desc: "Permit upload documents and other necessary initiation steps", icon: PlusCircle });
       } else if (slug === 'CASE_VIEW_OWN') {
@@ -216,11 +215,11 @@ export default function StaffRolesPage() {
       } else if (slug === 'VIEW_ARCHIVED_CASE') {
         groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit access to global historical case records", icon: Folders });
       } else if (slug === 'EXPORT_CASE_ZIP') {
-        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit batch export of institutional case bundles", icon: FileArchive });
+        groups['INFRASTRUCTURE'].push({ ...p, desc: "Permit batch export of case bundles", icon: FileArchive });
       } else if (p.group === 'REFERENCE') {
         groups['REFERENCE'].push({ ...p, desc: "Permit management of the standardized findings knowledge base", icon: BookOpen });
       } else if (p.group === 'REPORTING') {
-        groups['REPORTING'].push({ ...p, desc: "Permit generation of institutional reports", icon: FileBarChart });
+        groups['REPORTING'].push({ ...p, desc: "Permit generation of reports", icon: FileBarChart });
       } else if (p.group === 'SYSTEM') {
         groups['SYSTEM'].push({ ...p, desc: "Permit administration of personnel and configuration", icon: Settings });
       }
@@ -251,7 +250,7 @@ export default function StaffRolesPage() {
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Institutional Roles</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Roles</h1>
           </div>
           <p className="text-muted-foreground text-lg font-medium">Define authorities precisely aligned with operational requirements.</p>
         </div>
@@ -275,7 +274,7 @@ export default function StaffRolesPage() {
             <TableHeader>
               <TableRow className="bg-slate-50/80">
                 <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Role Name</TableHead>
-                <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Status</TableHead>
+                <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
                 <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Capability Authority</TableHead>
                 <TableHead className="text-right font-black pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
               </TableRow>
@@ -328,7 +327,7 @@ export default function StaffRolesPage() {
                       {selectedRole ? 'Update Role Rights' : 'Define New Role'}
                     </DialogTitle>
                     <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-0.5">
-                      Institutional Mapping: Aligning rights to operational nodes
+                      Aligning rights to operational nodes
                     </DialogDescription>
                   </div>
                 </div>

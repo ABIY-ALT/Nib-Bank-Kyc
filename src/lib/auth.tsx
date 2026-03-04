@@ -1,4 +1,3 @@
-
 'use client';
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -50,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
         }
       } catch (e) {
-        console.error("Institutional session hydration failed:", e);
+        console.error("Session hydration failed:", e);
         setUser(null);
       } finally {
         setLoading(false);
@@ -63,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, pass: string) => {
     const normalizedEmail = email.toLowerCase().trim();
     if (!normalizedEmail.endsWith('@nibbank.com.et')) {
-      throw new Error('Institutional access restricted to @nibbank.com.et domain.');
+      throw new Error('Access restricted to @nibbank.com.et domain.');
     }
 
     const res = await fetch("/api/auth/login", {
@@ -74,19 +73,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const contentType = res.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
-      throw new Error("Institutional gateway returned an invalid response. Please try again.");
+      throw new Error("Invalid gateway response. Please try again.");
     }
 
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.message || "Institutional authentication failed.");
+      throw new Error(data.message || "Authentication failed.");
     }
 
     setUser(data.user);
     toast({ 
-      title: `Welcome back, ${data.user.firstName}.`, 
-      description: "Institutional session successfully established." 
+      title: `Successful`, 
+      description: `Welcome back, ${data.user.firstName}. Session established.` 
     });
   };
 
