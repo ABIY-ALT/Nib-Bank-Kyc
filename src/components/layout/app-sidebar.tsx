@@ -29,7 +29,8 @@ import {
   History,
   Activity,
   TrendingUp,
-  KeyRound
+  KeyRound,
+  Monitor
 } from "lucide-react"
 
 import {
@@ -69,7 +70,7 @@ export function AppSidebar() {
   if (!user || loading) return null;
 
   const canSeeMyPerformance = user.roles?.some(ur => 
-    ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST'].includes(ur.role.name)
+    ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER'].includes(ur.role.name)
   ) || isSuperAdmin;
 
   return (
