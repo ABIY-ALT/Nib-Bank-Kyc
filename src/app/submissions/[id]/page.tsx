@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -151,8 +152,6 @@ export default function SubmissionDetails() {
 
   const isTerminal = submission?.status === KYCStatus.APPROVED || submission?.status === KYCStatus.REJECTED;
 
-  // Protocol Checklist Visibility Logic: 
-  // Hidden during Governance steps, visible for standard flow and final specialists.
   const showChecklist = useMemo(() => {
     if (!submission) return false;
     if (!submission.isExceptional) return true;
@@ -349,24 +348,17 @@ export default function SubmissionDetails() {
                         <p className="font-black text-slate-900">{doc.name}</p>
                         <div className="flex items-center gap-2">
                           <p className="text-[10px] text-muted-foreground uppercase font-black">{doc.type}</p>
-                          {doc.type === 'GOVERNANCE_MEMO' && <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[8px] font-black h-4 px-1.5 uppercase">Authorized Memo</Badge>}
+                          {doc.type === 'GOVERNANCE_MEMO' && <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] font-black h-4 px-1.5 uppercase">Authorized Memo</Badge>}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="icon" asChild className="rounded-full h-10 w-10 text-slate-400 hover:text-primary hover:bg-primary/5 transition-colors">
+                        <a href={doc.url} target="_blank" rel="noopener noreferrer"><Eye className="w-5 h-5" /></a>
+                      </Button>
                       <Button variant="ghost" size="icon" asChild className="rounded-full h-10 w-10 text-primary hover:bg-primary/5">
                         <a href={doc.url} download={doc.name}><Download className="w-5 h-5" /></a>
                       </Button>
-                      {canPurgeAsset && !isTerminal && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => setFileToPurge(doc)}
-                          className="rounded-full h-10 w-10 text-destructive hover:bg-red-50"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </Button>
-                      )}
                     </div>
                   </div>
                 ))}
