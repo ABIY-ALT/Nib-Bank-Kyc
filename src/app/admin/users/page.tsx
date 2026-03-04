@@ -58,13 +58,14 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { getAllUsers, updateUserStatus, provisionUser, resetUserPassword } from '@/actions/users';
+import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
 import { UserStatus } from '@prisma/client';
 import { usePermissions } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
 import { tempPasswordRegistry } from '@/lib/temp-password-registry';
+import Link from 'next/link';
 
 export default function UserManagementPage() {
   const router = useRouter();
@@ -80,9 +81,7 @@ export default function UserManagementPage() {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  // Local state to force Tooltip refresh when registry updates
   const [registryVersion, setRegistryVersion] = useState(0);
-  const [isResetting, setIsResetting] = useState<string | null>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -120,7 +119,6 @@ export default function UserManagementPage() {
       setUsers(u);
       setBranches(b);
       setRoleDefinitions(r);
-      // Bump version to refresh tooltips reading from singleton registry
       setRegistryVersion(v => v + 1);
     } catch (error) {
       toast({ variant: "destructive", title: "Institutional sync failed" });
@@ -219,25 +217,6 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleQuickReset = async (email: string) => {
-    if (!currentUser) return;
-    setIsResetting(email);
-    try {
-      const res = await resetUserPassword(email, currentUser.id);
-      if (res.success && res.tempPassword) {
-        tempPasswordRegistry.add(email, res.tempPassword);
-        setRegistryVersion(v => v + 1);
-        toast({ title: "Credential Rotated", description: `Temporary password issued for ${res.userName}.` });
-      } else {
-        toast({ variant: "destructive", title: "Reset Denied", description: res.error });
-      }
-    } catch (e) {
-      toast({ variant: "destructive", title: "System Fault" });
-    } finally {
-      setIsResetting(null);
-    }
-  };
-
   const handleToggleStatus = async (user: any) => {
     const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.INACTIVE : UserStatus.ACTIVE;
     try {
@@ -283,6 +262,12 @@ export default function UserManagementPage() {
               className="pl-10 h-11 bg-white border-slate-200 rounded-xl font-medium"
             />
           </div>
+          <Button asChild variant="outline" className="h-11 px-4 border-primary/30 text-primary hover:bg-primary/5 rounded-xl shadow-sm gap-2">
+            <Link href="/admin/password-reset">
+              <KeyRound className="w-4 h-4" />
+              <span className="hidden md:inline">Reset Credential</span>
+            </Link>
+          </Button>
           <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90 rounded-xl">
             <UserPlus className="w-4 h-4" />
             Provision User
@@ -298,7 +283,7 @@ export default function UserManagementPage() {
               <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Institutional Role</TableHead>
               <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Home Node</TableHead>
               <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
-              <TableHead className="text-right font-bold pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
+              <TableHead className="text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -383,23 +368,6 @@ export default function UserManagementPage() {
                   </TableCell>
                   <TableCell className="text-right pr-8">
                     <div className="flex justify-end gap-2">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => handleQuickReset(user.email)} 
-                              disabled={isResetting === user.email}
-                              className="text-primary rounded-full h-9 w-9 hover:bg-primary/5 transition-colors"
-                            >
-                              {isResetting === user.email ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent><p className="font-bold text-[10px] uppercase">Rotate Credential</p></TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-
                       <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-slate-400 rounded-full h-9 w-9 hover:bg-primary/5 hover:text-primary transition-colors">
                         <Settings2 className="w-4 h-4" />
                       </Button>
