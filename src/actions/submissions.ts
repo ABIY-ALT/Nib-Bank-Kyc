@@ -216,7 +216,14 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
   return kyc;
 }
 
-export async function processExceptionalStep(id: string, nextStatus: string, reviewerId: string, remarks: string, actionLabel: string) {
+export async function processExceptionalStep(formData: FormData) {
+  const id = formData.get('id') as string;
+  const nextStatus = formData.get('nextStatus') as string;
+  const reviewerId = formData.get('reviewerId') as string;
+  const remarks = formData.get('remarks') as string;
+  const actionLabel = formData.get('actionLabel') as string;
+  const memoFile = formData.get('memo') as File | null;
+
   const now = new Date();
   const current = await prisma.kYC.findUnique({ where: { id } });
   if (!current) throw new Error("KYC record not found");
@@ -227,21 +234,42 @@ export async function processExceptionalStep(id: string, nextStatus: string, rev
     include: { roles: { include: { role: true } } }
   });
 
+  // Handle Memo Upload if present
+  let memoData = undefined;
+  if (memoFile) {
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
+    
+    const timestamp = Date.now();
+    const storedFileName = `gov_${timestamp}_${memoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const filePath = path.join(uploadDir, storedFileName);
+    const buffer = Buffer.from(await memoFile.arrayBuffer());
+    await fs.writeFile(filePath, buffer);
+    
+    memoData = {
+      name: memoFile.name,
+      type: 'GOVERNANCE_MEMO',
+      fileUrl: `/uploads/${storedFileName}`,
+      uploadedById: reviewerId
+    };
+  }
+
   const newEntry = {
     role: reviewer?.roles?.[0]?.role?.name || 'GOVERNANCE',
     performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
     timestamp: now.toISOString(),
     comment: remarks || actionLabel,
-    action: actionLabel
+    action: actionLabel,
+    memoAttached: !!memoFile
   };
 
   const data: any = {
     exceptionalStatus: nextStatus,
     updatedAt: now,
-    commentHistory: [...history, newEntry]
+    commentHistory: [...history, newEntry],
+    memos: memoData ? { create: memoData } : undefined
   };
 
-  // If completing the flow
   if (nextStatus === 'COMPLETED') {
     data.status = KYCStatus.APPROVED;
   }
@@ -256,8 +284,8 @@ export async function processExceptionalStep(id: string, nextStatus: string, rev
       userId: reviewerId,
       kycId: id,
       action: AuditAction.STATUS_CHANGE,
-      details: `Exceptional flow transition: ${actionLabel}`,
-      metadata: { nextStatus, remarks }
+      details: `Exceptional flow transition: ${actionLabel}${memoFile ? ' (Memo Attached)' : ''}`,
+      metadata: { nextStatus, remarks, hasMemo: !!memoFile }
     }
   });
 

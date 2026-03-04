@@ -32,10 +32,11 @@ import {
   Zap,
   Trash2,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Upload
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getSubmissionById, updateSubmissionStatus, updateSubmissionChecklist, processExceptionalStep } from "@/actions/submissions";
 import { deleteInstitutionalFile } from "@/actions/storage";
@@ -94,6 +95,10 @@ export default function SubmissionDetails() {
   const [isCustomRemark, setIsCustomRemark] = useState(true);
   const [isActioning, setIsActioning] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
+
+  // Governance Memo State
+  const [govMemo, setGovMemo] = useState<File | null>(null);
+  const govFileInputRef = useRef<HTMLInputElement>(null);
 
   // Asset Purge State
   const [fileToPurge, setFileToPurge] = useState<any | null>(null);
@@ -176,14 +181,29 @@ export default function SubmissionDetails() {
 
   const handleExceptionalStep = async (nextStatus: string, actionLabel: string) => {
     if (!submission || !user || isActioning) return;
+
+    const needsMemo = ['AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(submission.exceptionalStatus);
+    if (needsMemo && !govMemo) {
+      toast({ variant: "destructive", title: "Memo Required", description: "This governance action requires a signature-authorized memo." });
+      return;
+    }
     
     setIsActioning(nextStatus);
     try {
-      await processExceptionalStep(submission.id, nextStatus, user.id, remarks, actionLabel);
+      const formData = new FormData();
+      formData.append('id', submission.id);
+      formData.append('nextStatus', nextStatus);
+      formData.append('reviewerId', user.id);
+      formData.append('remarks', remarks);
+      formData.append('actionLabel', actionLabel);
+      if (govMemo) formData.append('memo', govMemo);
+
+      await processExceptionalStep(formData);
       toast({ title: "Successful", description: `Governance decision recorded: ${actionLabel}` });
       const updated = await getSubmissionById(submission.id);
       setSubmission(updated);
       setRemarks("");
+      setGovMemo(null);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Transition Failed" });
     } finally {
@@ -245,6 +265,8 @@ export default function SubmissionDetails() {
       { id: 'closed', label: 'Case Closed', desc: 'Lifecycle Conclusion', state: isTerminal ? 'completed' : 'pending', icon: Activity }
     ];
   }, [submission, isTerminal]);
+
+  const needsGovMemo = submission?.isExceptional && ['AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(submission.exceptionalStatus);
 
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
@@ -350,7 +372,13 @@ export default function SubmissionDetails() {
                   <div key={idx} className="relative flex gap-6">
                     <div className="z-10 w-10 h-10 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5 text-slate-400" /></div>
                     <div className="flex-1 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
-                      <div className="flex justify-between mb-2"><span className="text-xs font-black text-slate-900 uppercase">{entry.performedBy} <span className="text-primary">[{entry.role}]</span></span><span className="text-[10px] font-bold text-slate-400">{new Date(entry.timestamp).toLocaleString()}</span></div>
+                      <div className="flex justify-between mb-2">
+                        <span className="text-xs font-black text-slate-900 uppercase">{entry.performedBy} <span className="text-primary">[{entry.role}]</span></span>
+                        <div className="flex items-center gap-2">
+                          {entry.memoAttached && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] h-4 font-black">MEMO ATTACHED</Badge>}
+                          <span className="text-[10px] font-bold text-slate-400">{new Date(entry.timestamp).toLocaleString()}</span>
+                        </div>
+                      </div>
                       <p className="text-sm text-slate-700 font-medium">{entry.comment}</p>
                     </div>
                   </div>
@@ -387,17 +415,37 @@ export default function SubmissionDetails() {
                   <Textarea placeholder="Provide justification for governance sign-off..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[100px] bg-white rounded-xl" />
                 </div>
 
+                {needsGovMemo && (
+                  <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Authorized Memo (Required)</Label>
+                    <div 
+                      onClick={() => govFileInputRef.current?.click()} 
+                      className={cn(
+                        "border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all bg-white group",
+                        govMemo ? "border-emerald-200 bg-emerald-50/30" : "border-primary/20 hover:bg-primary/5"
+                      )}
+                    >
+                      <Upload className={cn("w-6 h-6 mx-auto mb-2", govMemo ? "text-emerald-600" : "text-primary")} />
+                      <p className="text-xs font-black text-slate-900 truncate max-w-full">
+                        {govMemo ? govMemo.name : "Select Signature-Authorized PDF"}
+                      </p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Regulatory Format</p>
+                    </div>
+                    <input type="file" ref={govFileInputRef} className="hidden" accept="application/pdf" onChange={(e) => setGovMemo(e.target.files?.[0] || null)} />
+                  </div>
+                )}
+
                 {submission.exceptionalStatus === 'AWAITING_DISTRICT' && hasPermission('REPORT_VIEW_DISTRICT') && (
-                  <Button onClick={() => handleExceptionalStep('AWAITING_DIRECTOR', 'District Approve')} className="w-full h-12 bg-primary text-white font-black rounded-xl shadow-lg" disabled={!!isActioning}>Regional Sign-off</Button>
+                  <Button onClick={() => handleExceptionalStep('AWAITING_DIRECTOR', 'District Approve')} className="w-full h-12 bg-primary text-white font-black rounded-xl shadow-lg" disabled={!!isActioning || !govMemo}>Regional Sign-off</Button>
                 )}
 
                 {submission.exceptionalStatus === 'AWAITING_DIRECTOR' && isReviewer && (
                   <div className="grid gap-3">
-                    <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Approve & Forward to Division')} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl flex flex-col items-center justify-center leading-none" disabled={!!isActioning}>
+                    <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Approve & Forward to Division')} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl flex flex-col items-center justify-center leading-none" disabled={!!isActioning || !govMemo}>
                       <span>Approve & Forward to Division</span>
                       <span className="text-[9px] text-white/60 mt-1 uppercase font-bold tracking-widest">Standard Sequential Path</span>
                     </Button>
-                    <Button variant="outline" onClick={() => handleExceptionalStep('AWAITING_CHIEF', 'Forward to Chief for High-Risk Review')} className="w-full h-14 border-primary text-primary font-black rounded-xl shadow-md flex flex-col items-center justify-center leading-none hover:bg-primary/5" disabled={!!isActioning}>
+                    <Button variant="outline" onClick={() => handleExceptionalStep('AWAITING_CHIEF', 'Forward to Chief for High-Risk Review')} className="w-full h-14 border-primary text-primary font-black rounded-xl shadow-md flex flex-col items-center justify-center leading-none hover:bg-primary/5" disabled={!!isActioning || !govMemo}>
                       <span>Forward to Chief for High-Risk Review</span>
                       <span className="text-[9px] text-primary/60 mt-1 uppercase font-bold tracking-widest">Optional Strategic Path</span>
                     </Button>
@@ -405,7 +453,7 @@ export default function SubmissionDetails() {
                 )}
 
                 {submission.exceptionalStatus === 'AWAITING_CHIEF' && isSuperAdmin && (
-                  <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Chief Authorize')} className="w-full h-12 bg-slate-900 text-white font-black rounded-xl shadow-lg" disabled={!!isActioning}>Executive Authorization</Button>
+                  <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Chief Authorize')} className="w-full h-12 bg-slate-900 text-white font-black rounded-xl shadow-lg" disabled={!!isActioning || !govMemo}>Executive Authorization</Button>
                 )}
 
                 {submission.exceptionalStatus === 'AWAITING_DIVISION' && isSuperAdmin && (
