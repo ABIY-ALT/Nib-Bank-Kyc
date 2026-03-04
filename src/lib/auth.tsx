@@ -1,3 +1,4 @@
+
 'use client';
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -41,7 +42,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await fetch("/api/auth/me");
         
-        // Defensive check: ensure we have a body and it is JSON
         const contentType = res.headers.get("content-type");
         if (res.ok && contentType && contentType.includes("application/json")) {
           const data = await res.json();
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, pass: string) => {
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = email.toLowerCase().trim();
     if (!normalizedEmail.endsWith('@nibbank.com.et')) {
       throw new Error('Institutional access restricted to @nibbank.com.et domain.');
     }

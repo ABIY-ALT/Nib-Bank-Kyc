@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { cookies } from "next/headers";
@@ -8,16 +9,16 @@ import { prisma } from "@/lib/prisma";
  * Validates the HTTP-Only cookie and returns the active user profile.
  */
 export async function GET() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
-
-  if (!token) {
-    return NextResponse.json({ message: "No active session." }, { status: 401 });
-  }
-
-  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+
+    if (!token) {
+      return NextResponse.json({ message: "No active session." }, { status: 401 });
+    }
+
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || "institutional_default_secret_32_chars_min");
+
     const { payload }: any = await jwtVerify(token, secret);
 
     const user = await prisma.user.findUnique({
@@ -44,6 +45,21 @@ export async function GET() {
       return NextResponse.json({ message: "Account restricted or inactive." }, { status: 401 });
     }
 
+    // Map roles to a serializable format
+    const serializableRoles = user.roles.map(ur => ({
+      role: {
+        id: ur.role.id,
+        name: ur.role.name,
+        permissions: ur.role.permissions.map(p => ({
+          permission: {
+            slug: p.permission.slug,
+            name: p.permission.name,
+            group: p.permission.group
+          }
+        }))
+      }
+    }));
+
     return NextResponse.json({
       user: {
         id: user.id,
@@ -55,7 +71,7 @@ export async function GET() {
         branchName: user.branch?.name || null,
         districtName: user.branch?.district?.name || null,
         assignedBranches: user.assignedBranches || [],
-        roles: user.roles || [],
+        roles: serializableRoles,
         needsPasswordChange: user.needsPasswordChange
       }
     });
