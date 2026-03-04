@@ -12,17 +12,13 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { 
-  History, 
   ShieldCheck, 
   UserCog, 
-  Building2, 
   FileDown, 
-  Globe, 
   Loader2, 
   Monitor,
   Activity,
   LogOut,
-  ShieldAlert,
   Search,
   UserCheck
 } from "lucide-react"
@@ -48,16 +44,32 @@ export default function GlobalAuditLogPage() {
     setLoading(false);
   };
 
-  const filteredLogs = logs.filter(log => 
-    log.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.details?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredLogs = logs.filter(log => {
+    const term = searchTerm.toLowerCase();
+    const userEmail = (log.userEmail || "").toLowerCase();
+    const action = (log.action || "").toLowerCase();
+    const details = (log.details || "").toLowerCase();
+    const userName = (log.userName || "").toLowerCase();
+
+    return userEmail.includes(term) || 
+           action.includes(term) || 
+           details.includes(term) || 
+           userName.includes(term);
+  });
 
   const handleExportCSV = () => {
     if (logs.length === 0) return;
     const headers = ['ID', 'User', 'Email', 'Action', 'IP Address', 'Timestamp', 'Details'];
-    const csvContent = [headers.join(','), ...logs.map(log => [log.id, log.userName || 'N/A', log.userEmail, log.action, log.ipAddress, log.timestamp, log.details || ''].join(','))].join('\n');
+    const csvContent = [headers.join(','), ...logs.map(log => [
+      log.id, 
+      log.userName || 'N/A', 
+      log.userEmail || 'N/A', 
+      log.action, 
+      log.ipAddress || 'N/A', 
+      log.timestamp, 
+      (log.details || '').replace(/,/g, ';')
+    ].join(','))].join('\n');
+    
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -68,7 +80,7 @@ export default function GlobalAuditLogPage() {
   };
 
   const getActionIcon = (action: string) => {
-    const act = action.toLowerCase();
+    const act = (action || "").toLowerCase();
     if (act.includes('login')) return UserCheck;
     if (act.includes('logout')) return LogOut;
     if (act.includes('user')) return UserCog;
@@ -86,7 +98,15 @@ export default function GlobalAuditLogPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <div className="relative w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Search trail..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 h-11" /></div>
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input 
+              placeholder="Search trail..." 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)} 
+              className="pl-9 h-11" 
+            />
+          </div>
           <Button onClick={handleExportCSV} className="gap-2 shadow-lg font-bold h-11 px-6 bg-primary text-white">
             <FileDown className="w-4 h-4" /> Export Trail
           </Button>
@@ -106,21 +126,58 @@ export default function GlobalAuditLogPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={5} className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={5} className="py-32 text-center">
+                  <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
+                </TableCell>
+              </TableRow>
+            ) : filteredLogs.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">
+                  No audit logs discovered matching the criteria.
+                </TableCell>
+              </TableRow>
             ) : filteredLogs.map((log) => {
               const ActionIcon = getActionIcon(log.action);
               return (
                 <TableRow key={log.id} className="hover:bg-slate-50 transition-colors">
                   <TableCell className="py-4 pl-6">
                     <div className="flex flex-col">
-                      <span className="font-black text-slate-900">{log.userName || 'Institutional User'}</span>
-                      <span className="text-[10px] text-muted-foreground font-bold">{log.userEmail}</span>
+                      <span className="font-black text-slate-900">{log.userName || 'Institutional System'}</span>
+                      <span className="text-[10px] text-muted-foreground font-bold">{log.userEmail || 'system@internal'}</span>
                     </div>
                   </TableCell>
-                  <TableCell><div className="flex items-center gap-2"><div className="p-1.5 bg-primary/5 rounded-md"><ActionIcon className="w-3.5 h-3.5 text-primary" /></div><Badge variant="secondary" className="text-[10px] uppercase font-bold">{log.action}</Badge></div></TableCell>
-                  <TableCell><p className="text-sm font-medium text-slate-600 line-clamp-1 max-w-[300px]">{log.details}</p></TableCell>
-                  <TableCell><div className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit"><Monitor className="w-3 h-3 inline mr-1" />{log.ipAddress}</div></TableCell>
-                  <TableCell className="pr-6 text-right"><div className="flex flex-col"><span className="text-xs font-bold text-slate-900">{format(new Date(log.timestamp), 'MMM dd, yyyy')}</span><span className="text-[10px] text-muted-foreground font-bold">{format(new Date(log.timestamp), 'HH:mm:ss')}</span></div></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-primary/5 rounded-md">
+                        <ActionIcon className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      <Badge variant="secondary" className="text-[10px] uppercase font-bold">
+                        {log.action}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <p className="text-sm font-medium text-slate-600 line-clamp-1 max-w-[300px]">
+                      {log.details}
+                    </p>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit">
+                      <Monitor className="w-3 h-3 inline mr-1" />
+                      {log.ipAddress || 'Internal'}
+                    </div>
+                  </TableCell>
+                  <TableCell className="pr-6 text-right">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-900">
+                        {log.timestamp ? format(new Date(log.timestamp), 'MMM dd, yyyy') : 'N/A'}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-bold">
+                        {log.timestamp ? format(new Date(log.timestamp), 'HH:mm:ss') : ''}
+                      </span>
+                    </div>
+                  </TableCell>
                 </TableRow>
               );
             })}
