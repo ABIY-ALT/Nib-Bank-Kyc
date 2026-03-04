@@ -30,7 +30,8 @@ import {
   Users,
   X,
   Copy,
-  KeyRound
+  KeyRound,
+  AlertCircle
 } from "lucide-react";
 import { 
   Dialog, 
