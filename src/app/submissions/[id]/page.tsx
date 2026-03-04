@@ -473,7 +473,7 @@ export default function SubmissionDetails() {
 
                 {submission.exceptionalStatus === 'AWAITING_DIRECTOR' && isReviewer && (
                   <div className="grid gap-3">
-                    <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Approve & Forward to Division')} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl flex flex-col items-center justify-center leading-none" disabled={!!isActioning || !govMemo}>
+                    <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Approve & Forward to Division')} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl flex flex-col items-center justify-center leading-none" disabled={!!isActioning}>
                       <span>Approve & Forward to Division</span>
                       <span className="text-[9px] text-white/60 mt-1 uppercase font-bold tracking-widest">Standard Sequential Path</span>
                     </Button>
@@ -485,7 +485,7 @@ export default function SubmissionDetails() {
                 )}
 
                 {submission.exceptionalStatus === 'AWAITING_CHIEF' && isSuperAdmin && (
-                  <Button onClick={() => handleExceptionalStep('AWAITING_DIVISION', 'Chief Authorize')} className="w-full h-12 bg-slate-900 text-white font-black rounded-xl shadow-lg" disabled={!!isActioning || !govMemo}>Executive Authorization</Button>
+                  <Button onClick={() => handleExceptionalStep('AWAITING_DIRECTOR', 'Chief Review Complete - Return to Director')} className="w-full h-12 bg-slate-900 text-white font-black rounded-xl shadow-lg" disabled={!!isActioning || !govMemo}>Return to KYC Director</Button>
                 )}
 
                 {submission.exceptionalStatus === 'AWAITING_DIVISION' && isSuperAdmin && (
