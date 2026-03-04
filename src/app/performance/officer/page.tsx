@@ -110,8 +110,9 @@ export default function KYCOperationsMonitoringPage() {
     try {
       let filters: any = { startDate: fromDate, endDate: toDate, limit: 1000 };
       
+      // If a specialist is viewing, show their assigned cases
       if (roleContext === 'OFFICER') {
-        filters.createdById = user?.id;
+        filters.assignedToId = user?.id;
       } else if (roleContext === 'SUPERVISOR' && user?.branchName) {
         filters.branch = user.branchName;
       }
@@ -167,8 +168,9 @@ export default function KYCOperationsMonitoringPage() {
   const uniqueOfficers = useMemo(() => {
     const officers = new Map<string, string>();
     submissions.forEach(s => {
-      if (s.createdBy) {
-        officers.set(s.createdById, `${s.createdBy.firstName} ${s.createdBy.lastName}`);
+      // Group by the Reviewer (assignedTo), not the submitter (createdBy)
+      if (s.assignedTo) {
+        officers.set(s.assignedToId, `${s.assignedTo.firstName} ${s.assignedTo.lastName}`);
       }
     });
     return Array.from(officers.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
@@ -178,7 +180,8 @@ export default function KYCOperationsMonitoringPage() {
     return submissions.filter(s => {
       const matchesSearch = s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesBranch = selectedBranch === "all" || (s.branch?.name === selectedBranch || s.branchName === selectedBranch);
-      const matchesOfficer = selectedOfficer === "all" || s.createdById === selectedOfficer;
+      // Filter by the Reviewer (assignedToId)
+      const matchesOfficer = selectedOfficer === "all" || s.assignedToId === selectedOfficer;
       return matchesSearch && matchesBranch && matchesOfficer;
     });
   }, [submissions, searchTerm, selectedBranch, selectedOfficer]);
@@ -214,8 +217,11 @@ export default function KYCOperationsMonitoringPage() {
 
     const teamStats: Record<string, any> = {};
     filteredData.forEach(sub => {
-      const officerId = sub.createdById || 'UNASSIGNED';
-      const officerName = sub.createdBy ? `${sub.createdBy.firstName} ${sub.createdBy.lastName}` : 'System/Unassigned';
+      // We only care about personnel who have been assigned to cases
+      if (!sub.assignedToId) return;
+
+      const officerId = sub.assignedToId;
+      const officerName = sub.assignedTo ? `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}` : 'System/Unassigned';
       
       if (!teamStats[officerId]) {
         teamStats[officerId] = {
@@ -281,10 +287,10 @@ export default function KYCOperationsMonitoringPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-team-performance-${format(new Date(), 'yyyyMMdd')}.csv`);
+    link.setAttribute('download', `nib-specialist-performance-${format(new Date(), 'yyyyMMdd')}.csv`);
     link.click();
     
-    toast({ title: "Export Successful", description: "Team performance matrix saved to CSV." });
+    toast({ title: "Successful", description: "Specialist performance matrix saved." });
   };
 
   const toggleRow = (id: string) => {
@@ -382,7 +388,7 @@ export default function KYCOperationsMonitoringPage() {
             </Label>
             <Select value={selectedOfficer} onValueChange={setSelectedOfficer}>
               <SelectTrigger className="h-14 rounded-2xl bg-slate-50/50 border-slate-200/60 font-bold text-slate-700 focus:ring-primary/20">
-                <SelectValue placeholder="All Officers" />
+                <SelectValue placeholder="All Reviewers" />
               </SelectTrigger>
               <SelectContent className="rounded-2xl shadow-2xl">
                 <SelectItem value="all" className="font-bold">Combined Workforce</SelectItem>
