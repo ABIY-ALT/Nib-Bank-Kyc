@@ -14,10 +14,12 @@ import {
   Copy, 
   Mail,
   AlertCircle,
-  UserCheck
+  UserCheck,
+  ArrowLeft
 } from "lucide-react";
 import { resetUserPassword } from '@/actions/users';
 import { tempPasswordRegistry } from '@/lib/temp-password-registry';
+import Link from 'next/link';
 
 export default function AdminPasswordResetPage() {
   const { user: currentUser } = useAuth();
@@ -57,7 +59,17 @@ export default function AdminPasswordResetPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-0 animate-in fade-in duration-500 pb-20 pt-10">
+    <div className="max-w-5xl mx-auto space-y-0 animate-in fade-in duration-500 pb-20 pt-10 px-4 md:px-0">
+      {/* NAVIGATION HEADER */}
+      <div className="mb-8">
+        <Button asChild variant="ghost" className="h-10 px-4 -ml-4 text-slate-400 hover:text-primary font-bold gap-2 group transition-all">
+          <Link href="/admin/users">
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+            Back to Personnel Directory
+          </Link>
+        </Button>
+      </div>
+
       {/* INSTITUTIONAL HEADER */}
       <div className="rounded-t-[2.5rem] bg-[#3E2B1E] p-12 shadow-2xl flex items-center gap-8 border-b border-white/5">
         <div className="p-5 bg-white/5 rounded-full shadow-inner ring-1 ring-white/10 shrink-0">
@@ -70,7 +82,7 @@ export default function AdminPasswordResetPage() {
       </div>
 
       {/* ACTION CARD */}
-      <Card className="border-none shadow-2xl shadow-black/10 bg-white rounded-b-[2.5rem] overflow-hidden -mt-8 mx-4 md:mx-0">
+      <Card className="border-none shadow-2xl shadow-black/10 bg-white rounded-b-[2.5rem] overflow-hidden -mt-8">
         <CardContent className="p-12 space-y-10">
           <form onSubmit={handleReset} className="space-y-6">
             <div className="space-y-4">
