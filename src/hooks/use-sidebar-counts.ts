@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -8,6 +9,7 @@ import { usePermissions } from './use-permissions';
 /**
  * Optimized Sidebar Hook.
  * Calls a specialized SQL-level count action to avoid fetching full data payloads.
+ * Interval set to 5s for high-velocity institutional responsiveness.
  */
 export function useSidebarCounts(user: UserProfile | null) {
   const { isSuperAdmin } = usePermissions();
@@ -40,7 +42,8 @@ export function useSidebarCounts(user: UserProfile | null) {
     };
 
     fetchCounts();
-    const interval = setInterval(fetchCounts, 60000);
+    // 5-second heartbeat for real-time operational accuracy
+    const interval = setInterval(fetchCounts, 5000);
     return () => clearInterval(interval);
   }, [user, isSuperAdmin]);
 

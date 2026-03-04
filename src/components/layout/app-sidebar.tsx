@@ -69,7 +69,7 @@ export function AppSidebar() {
 
   if (!user || loading) return null;
 
-  const canSeeMyPerformance = user.roles?.some(ur => 
+  const canSeeMyPerformance = user.roles?.some((ur: any) => 
     ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER'].includes(ur.role.name)
   ) || isSuperAdmin;
 
@@ -149,7 +149,7 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                           {counts.mySubmissions > 0 && (
-                            <SidebarMenuBadge className="bg-white/10 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                            <SidebarMenuBadge className="bg-primary text-white font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center p-1 top-1/2 -translate-y-1/2 right-2 border border-sidebar-background shadow-lg">
                               {counts.mySubmissions}
                             </SidebarMenuBadge>
                           )}
@@ -165,7 +165,7 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                           {counts.reviewQueue > 0 && (
-                            <SidebarMenuBadge className="bg-primary text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                            <SidebarMenuBadge className="bg-primary text-white font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center p-1 top-1/2 -translate-y-1/2 right-2 border border-sidebar-background shadow-lg">
                               {counts.reviewQueue}
                             </SidebarMenuBadge>
                           )}
@@ -181,7 +181,7 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                           {counts.resubmitted > 0 && (
-                            <SidebarMenuBadge className="bg-indigo-600 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                            <SidebarMenuBadge className="bg-indigo-600 text-white font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center p-1 top-1/2 -translate-y-1/2 right-2 border border-sidebar-background shadow-lg">
                               {counts.resubmitted}
                             </SidebarMenuBadge>
                           )}
@@ -197,7 +197,7 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                           {counts.actionRequired > 0 && (
-                            <SidebarMenuBadge className="bg-orange-600 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2 animate-pulse">
+                            <SidebarMenuBadge className="bg-orange-600 text-white font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center p-1 top-1/2 -translate-y-1/2 right-2 border border-sidebar-background shadow-lg animate-pulse">
                               {counts.actionRequired}
                             </SidebarMenuBadge>
                           )}
@@ -213,7 +213,7 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                           {counts.escalated > 0 && (
-                            <SidebarMenuBadge className="bg-destructive text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                            <SidebarMenuBadge className="bg-destructive text-white font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center p-1 top-1/2 -translate-y-1/2 right-2 border border-sidebar-background shadow-lg">
                               {counts.escalated}
                             </SidebarMenuBadge>
                           )}
@@ -229,7 +229,7 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                           {counts.exceptional > 0 && (
-                            <SidebarMenuBadge className="bg-yellow-600 text-white font-bold rounded-full w-5 h-5 flex items-center justify-center p-0 top-1/2 -translate-y-1/2 right-2">
+                            <SidebarMenuBadge className="bg-yellow-600 text-white font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center p-1 top-1/2 -translate-y-1/2 right-2 border border-sidebar-background shadow-lg">
                               {counts.exceptional}
                             </SidebarMenuBadge>
                           )}
