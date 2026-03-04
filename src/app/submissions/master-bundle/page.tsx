@@ -33,13 +33,12 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import JSZip from 'jszip';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from "@/lib/utils";
-import { getSubmissions } from "@/actions/submissions";
+import { getSubmissions, getSubmissionById } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYCStatus } from "@prisma/client";
 
@@ -68,6 +67,7 @@ export default function MasterBundleDownloadPage() {
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [currentActionLabel, setCurrentActionLabel] = useState("");
 
   useEffect(() => {
     loadInitialData();
@@ -77,7 +77,7 @@ export default function MasterBundleDownloadPage() {
     setLoading(true);
     try {
       const [subs, b, d] = await Promise.all([
-        getSubmissions(),
+        getSubmissions({ limit: 5000 }),
         getBranches(),
         getDistricts()
       ]);
@@ -98,11 +98,11 @@ export default function MasterBundleDownloadPage() {
     const end = endOfDay(new Date(toDate));
 
     return allSubmissions.filter(sub => {
-      const subDate = new Date(sub.submittedAt);
+      const subDate = new Date(sub.submittedAt || sub.createdAt);
       const matchesDate = subDate >= start && subDate <= end;
       const matchesStatus = selectedStatuses.length === 0 || 
                            (selectedStatuses.includes(KYCStatus.SUBMITTED) ? [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
-      const matchesDistrict = selectedDistrict === 'all' || sub.districtName === selectedDistrict;
+      const matchesDistrict = selectedDistrict === 'all' || sub.branch?.district?.name === selectedDistrict;
       const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
 
       return matchesDate && matchesStatus && matchesDistrict && matchesBranch;
@@ -124,19 +124,45 @@ export default function MasterBundleDownloadPage() {
       const zip = new JSZip();
       const now = new Date();
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      const bundleName = `NIB_BANK_MASTER_KYC_EXPORT_${timestamp}`;
+      const bundleName = `NIB_BANK_MASTER_EXPORT_${timestamp}`;
 
-      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nDATE RANGE: ${fromDate} to ${toDate}\nTOTAL CASES: ${filteredSubmissions.length}\n--------------------------------------------------\n\nINVENTORY:\n`;
+      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nDATE RANGE: ${fromDate} to ${toDate}\nTOTAL CASES: ${filteredSubmissions.length}\n--------------------------------------------------\n\nSTRUCTURE: District / Branch / CaseID_CustomerName / Assets\n\nINVENTORY:\n`;
       
-      let caseList = "";
+      let manifestBody = "";
+
       for (let i = 0; i < filteredSubmissions.length; i++) {
         const sub = filteredSubmissions[i];
-        caseList += `- [${sub.status}] ${sub.id} | ${sub.customerName} | ${sub.branchName}\n`;
+        const distName = sub.branch?.district?.name || "Uncategorized";
+        const branchName = sub.branchName || "Main";
+        const folderSafeName = `${sub.id}_${sub.customerName.replace(/[^a-z0-9]/gi, '_')}`;
+        
+        setCurrentActionLabel(`Packaging: ${sub.id}`);
+        
+        // Create hierarchical folder structure
+        const caseFolder = zip.folder(`${distName}/${branchName}/${folderSafeName}`);
+        
+        // Fetch full submission to get files
+        const fullSub = await getSubmissionById(sub.id);
+        
+        if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
+          for (const doc of fullSub.documents) {
+            try {
+              const fileRes = await fetch(doc.url);
+              const blob = await fileRes.blob();
+              caseFolder?.file(doc.name, blob);
+            } catch (err) {
+              console.error(`Failed to fetch asset: ${doc.name}`);
+            }
+          }
+        }
+
+        manifestBody += `- [${sub.status}] ${distName} > ${branchName} > ${sub.id} (${sub.customerName})\n`;
         setProgress(Math.round(((i + 1) / filteredSubmissions.length) * 100));
       }
 
-      zip.file("nib_bank_manifest.txt", manifestHeader + caseList);
+      zip.file("nib_bank_manifest.txt", manifestHeader + manifestBody);
 
+      setCurrentActionLabel("Compressing Archive...");
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const link = document.createElement('a');
@@ -146,12 +172,13 @@ export default function MasterBundleDownloadPage() {
       link.click();
       document.body.removeChild(link);
 
-      toast({ title: "Master Bundle Complete", description: `Exported ${filteredSubmissions.length} cases.` });
+      toast({ title: "Successful", description: `Master Archive with folders and files is ready.` });
     } catch (error) {
       toast({ variant: "destructive", title: "Export Failure" });
     } finally {
       setIsProcessing(false);
       setProgress(0);
+      setCurrentActionLabel("");
     }
   };
 
@@ -165,7 +192,7 @@ export default function MasterBundleDownloadPage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Master Case Bundle</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Global institutional export for compliance archiving.</p>
+          <p className="text-muted-foreground text-lg font-medium">Bulk institutional export with structured regional folders.</p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-4 py-1.5 font-bold h-10 flex items-center gap-2">
@@ -181,11 +208,11 @@ export default function MasterBundleDownloadPage() {
               <Filter className="w-5 h-5 text-primary" />
               Export Control
             </CardTitle>
-            <CardDescription>Define criteria for bulk archiving.</CardDescription>
+            <CardDescription>Organize bulk archiving by region or status.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6 space-y-8">
             <div className="space-y-4">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Workflow Queues</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target Queues</Label>
               <div className="grid gap-3">
                 {STATUS_OPTIONS.map(status => (
                   <div key={status.id} className="flex items-center space-x-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
@@ -210,14 +237,14 @@ export default function MasterBundleDownloadPage() {
                     <SelectValue placeholder="All Regions" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Regions (Global)</SelectItem>
+                    <SelectItem value="all">Global (All Regions)</SelectItem>
                     {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Institutional Node</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Branch Office</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={selectedDistrict === 'all'}>
                   <SelectTrigger className="h-11 bg-white">
                     <SelectValue placeholder="All Branches" />
@@ -235,14 +262,14 @@ export default function MasterBundleDownloadPage() {
             <div className="space-y-4 pt-4 border-t">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Start</Label>
                   <div className="relative">
                     <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="pl-9 h-10 font-bold" />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">To Date</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Conclusion</Label>
                   <div className="relative">
                     <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="pl-9 h-10 font-bold" />
@@ -257,49 +284,70 @@ export default function MasterBundleDownloadPage() {
               onClick={handleDownloadMasterBundle}
               disabled={isProcessing || filteredSubmissions.length === 0}
             >
-              {isProcessing ? <><Loader2 className="w-6 h-6 animate-spin" /> {progress}%</> : <><FileArchive className="w-6 h-6" /> Export {filteredSubmissions.length} Cases</>}
+              {isProcessing ? (
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>{progress}% Complete</span>
+                  </div>
+                  <span className="text-[9px] font-bold uppercase mt-1 opacity-70 truncate max-w-[200px]">{currentActionLabel}</span>
+                </div>
+              ) : (
+                <><FileArchive className="w-6 h-6" /> Export {filteredSubmissions.length} Cases</>
+              )}
             </Button>
           </CardFooter>
         </Card>
 
         <div className="lg:col-span-8 space-y-6">
-          <Card className="shadow-2xl border-slate-200 overflow-hidden min-h-[500px]">
-            <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between">
-              <div><CardTitle className="text-xl">Export Discovery Queue</CardTitle></div>
-              <Badge className="bg-slate-900 text-white font-black px-4 py-1">{filteredSubmissions.length} Matches</Badge>
+          <Card className="shadow-2xl border-slate-200 overflow-hidden min-h-[500px] bg-white">
+            <CardHeader className="bg-slate-900 text-white border-b flex flex-row items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-white/10 rounded-lg"><FileArchive className="w-5 h-5 text-emerald-400" /></div>
+                <div><CardTitle className="text-xl">Export Discovery Queue</CardTitle></div>
+              </div>
+              <Badge className="bg-emerald-600 text-white font-black px-4 py-1">{filteredSubmissions.length} Records</Badge>
             </CardHeader>
             <CardContent className="p-0">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-40 gap-4">
                   <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                  <p className="font-black uppercase tracking-widest text-xs">Querying database...</p>
+                  <p className="font-black uppercase tracking-widest text-xs">Synchronizing Archive Registry...</p>
                 </div>
               ) : filteredSubmissions.length > 0 ? (
-                <div className="divide-y">
+                <div className="divide-y divide-slate-100">
                   {filteredSubmissions.map(sub => (
-                    <div key={sub.id} className="p-5 hover:bg-slate-50/50 transition-colors group">
+                    <div key={sub.id} className="p-5 hover:bg-slate-50 transition-colors group">
                       <div className="flex items-center justify-between">
                         <div className="flex items-start gap-4">
                           <div className={cn("p-2 rounded-lg", sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/5 text-primary')}>
                             {sub.status === KYCStatus.APPROVED ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                           </div>
                           <div className="space-y-1">
-                            <div className="flex items-center gap-2"><span className="font-black text-slate-900">{sub.customerName}</span></div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-slate-900">{sub.customerName}</span>
+                              <Badge variant="outline" className="text-[8px] font-black uppercase px-1.5 h-4">{sub.entityType || 'Individual'}</Badge>
+                            </div>
                             <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                               <span className="text-primary font-black">{sub.id}</span>
                               <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {sub.branchName} Node</span>
                             </div>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="bg-white border font-bold text-[10px]">{sub.status}</Badge>
+                        <Badge variant="secondary" className="bg-white border font-bold text-[10px] uppercase text-slate-500">{sub.status}</Badge>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-48 text-center space-y-6">
-                  <Search className="w-16 h-16 text-slate-200" />
-                  <p className="font-black text-slate-900 text-xl">Discovery Exhausted</p>
+                  <div className="p-8 bg-slate-50 rounded-full">
+                    <Search className="w-16 h-16 text-slate-200" />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="font-black text-slate-900 text-xl">Archive Discovery Standby</p>
+                    <p className="text-sm text-slate-400 font-medium">Adjust filters to populate the master export queue.</p>
+                  </div>
                 </div>
               )}
             </CardContent>

@@ -39,7 +39,7 @@ import { useAuth } from "@/lib/auth";
 import { format } from "date-fns";
 import JSZip from 'jszip';
 import { useState } from "react";
-import { logBundleDownload } from "@/actions/submissions";
+import { logBundleDownload, getSubmissionById } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
 
 export function SubmissionsPageContent({ submissions }: { submissions: any[] }) {
@@ -58,8 +58,11 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
       const districtName = (sub.branch?.district?.name || "INSTITUTIONAL").replace(/\s+/g, '_');
       const branchName = (sub.branch?.name || sub.branchName || "HEADQUARTERS").replace(/\s+/g, '_');
-      const bundleName = `${districtName}_${branchName}_${timestamp}`;
+      const bundleName = `${sub.id}_${timestamp}`;
 
+      // 1. Fetch full case details to get document URLs
+      const fullSub = await getSubmissionById(sub.id);
+      
       const manifest = `NIB BANK INSTITUTIONAL ARCHIVE\n` +
                        `--------------------------------------------------\n` +
                        `CASE IDENTIFIER: ${sub.id}\n` +
@@ -69,9 +72,28 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
                        `EXPORTED BY:     ${user.name}\n` +
                        `TIMESTAMP:       ${now.toLocaleString()}\n` +
                        `--------------------------------------------------\n\n` +
-                       `This bundle contains all signature-authorized assets for the specified identity verification lifecycle.`;
+                       `INVENTORY:\n`;
       
-      zip.file("nib_institutional_manifest.txt", manifest);
+      let manifestBody = "";
+      
+      // 2. Add files to the ZIP
+      if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
+        const docFolder = zip.folder("Documents");
+        for (const doc of fullSub.documents) {
+          try {
+            const response = await fetch(doc.url);
+            const blob = await response.blob();
+            docFolder?.file(doc.name, blob);
+            manifestBody += `- [FILE] ${doc.name} (${doc.type})\n`;
+          } catch (err) {
+            manifestBody += `- [ERROR] Failed to extract asset: ${doc.name}\n`;
+          }
+        }
+      } else {
+        manifestBody += "No digital assets discovered for this case.\n";
+      }
+
+      zip.file("nib_institutional_manifest.txt", manifest + manifestBody);
 
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
@@ -91,8 +113,8 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       });
 
       toast({ 
-        title: "Bundle Compiled", 
-        description: `Source: ${branchName.replace(/_/g, ' ')} node. Vault record updated.` 
+        title: "Successful", 
+        description: `Case assets extracted into folder-style bundle.` 
       });
     } catch (error) {
       toast({ variant: "destructive", title: "Archiving Error", description: "Could not compile institutional bundle." });
@@ -151,7 +173,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
           <TableRow>
             <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest py-5 pl-8">Case ID</TableHead>
             <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Customer Entity</TableHead>
-            <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Authorized Node</TableHead>
+            <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Authorized Branch</TableHead>
             <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Workflow Status</TableHead>
             <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Dispatch Date</TableHead>
             <TableHead className="text-right font-black text-slate-500 text-[11px] uppercase tracking-widest pr-8">Actions</TableHead>
