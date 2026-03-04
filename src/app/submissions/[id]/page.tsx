@@ -34,7 +34,8 @@ import {
   Trash2,
   AlertTriangle,
   RotateCcw,
-  Upload
+  Upload,
+  ShieldAlert
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -255,7 +256,7 @@ export default function SubmissionDetails() {
     
     if (submission.isExceptional) {
       return [
-        { id: 'sub', label: 'Submitted', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
+        { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
         { id: 'dist', label: 'District Director', desc: 'Regional Oversight', state: excStatus === 'AWAITING_DISTRICT' ? 'active' : (['None', 'AWAITING_DISTRICT'].includes(excStatus) ? 'pending' : 'completed'), icon: Landmark },
         { id: 'kycdir', label: 'KYC Director', desc: 'Strategic Risk Review', state: excStatus === 'AWAITING_DIRECTOR' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Shield },
         { id: 'chief', label: 'Chief Retail & SME', desc: 'Optional: High-Risk', state: excStatus === 'AWAITING_CHIEF' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: Zap },
@@ -265,12 +266,38 @@ export default function SubmissionDetails() {
       ];
     }
 
-    return [
+    const steps = [
       { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
       { id: 'review', label: 'Specialist Analysis', desc: 'Technical Review', state: status === KYCStatus.SUBMITTED ? 'active' : 'completed', icon: Search },
-      { id: 'verdict', label: 'Verdict', desc: 'Final Assessment', state: status === KYCStatus.IN_REVIEW ? 'active' : (isTerminal ? 'completed' : 'pending'), icon: ShieldCheck },
-      { id: 'closed', label: 'Case Closed', desc: 'Lifecycle Conclusion', state: isTerminal ? 'completed' : 'pending', icon: Activity }
     ];
+
+    if (status === KYCStatus.ESCALATED) {
+      steps.push({
+        id: 'escalated',
+        label: 'Senior Assessment',
+        desc: 'Technical Escalation',
+        state: 'active',
+        icon: ShieldAlert
+      });
+    }
+
+    steps.push({ 
+      id: 'verdict', 
+      label: 'Institutional Verdict', 
+      desc: 'Final Assessment', 
+      state: status === KYCStatus.IN_REVIEW ? 'active' : (isTerminal ? 'completed' : 'pending'), 
+      icon: ShieldCheck 
+    });
+
+    steps.push({ 
+      id: 'closed', 
+      label: 'Case Closed', 
+      desc: 'Lifecycle Conclusion', 
+      state: isTerminal ? 'completed' : 'pending', 
+      icon: Activity 
+    });
+
+    return steps;
   }, [submission, isTerminal]);
 
   const needsGovMemo = submission?.isExceptional && ['AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(submission.exceptionalStatus);
