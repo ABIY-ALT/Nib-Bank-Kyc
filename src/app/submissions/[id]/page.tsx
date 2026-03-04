@@ -151,6 +151,14 @@ export default function SubmissionDetails() {
 
   const isTerminal = submission?.status === KYCStatus.APPROVED || submission?.status === KYCStatus.REJECTED;
 
+  // Protocol Checklist Visibility Logic: 
+  // Hidden during Governance steps, visible for standard flow and final specialists.
+  const showChecklist = useMemo(() => {
+    if (!submission) return false;
+    if (!submission.isExceptional) return true;
+    return submission.exceptionalStatus === 'COMPLETED' || submission.status === KYCStatus.APPROVED;
+  }, [submission]);
+
   const verifiedCount = useMemo(() => {
     return Object.values(checklist).filter(Boolean).length;
   }, [checklist]);
@@ -339,7 +347,10 @@ export default function SubmissionDetails() {
                       </div>
                       <div>
                         <p className="font-black text-slate-900">{doc.name}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase font-black">{doc.type}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-[10px] text-muted-foreground uppercase font-black">{doc.type}</p>
+                          {doc.type === 'GOVERNANCE_MEMO' && <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[8px] font-black h-4 px-1.5 uppercase">Authorized Memo</Badge>}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -389,20 +400,22 @@ export default function SubmissionDetails() {
         </div>
 
         <div className="space-y-8">
-          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
-            <CardHeader className="bg-primary p-5 border-b text-white">
-              <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><ClipboardCheck className="w-5 h-5" /><CardTitle className="text-lg font-black uppercase">Protocol</CardTitle></div><span className="text-[10px] font-black">{verifiedCount}/12</span></div>
-              <Progress value={progressPercentage} className="h-1.5 bg-white/20" />
-            </CardHeader>
-            <CardContent className="p-6 space-y-3">
-              {KYC_CHECKLIST_ITEMS.map((item) => (
-                <div key={item.id} className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", checklist[item.id] ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-100")}>
-                  <div className="flex items-center space-x-3"><Checkbox id={item.id} checked={checklist[item.id] || false} onCheckedChange={() => handleChecklistToggle(item.id)} disabled={!isReviewer || isTerminal} /><label htmlFor={item.id} className="text-[11px] font-bold uppercase tracking-tight">{item.label}</label></div>
-                  {checklist[item.id] && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] h-4 uppercase font-black">Verified</Badge>}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          {showChecklist && (
+            <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl animate-in zoom-in-95 duration-500">
+              <CardHeader className="bg-primary p-5 border-b text-white">
+                <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><ClipboardCheck className="w-5 h-5" /><CardTitle className="text-lg font-black uppercase">Protocol</CardTitle></div><span className="text-[10px] font-black">{verifiedCount}/12</span></div>
+                <Progress value={progressPercentage} className="h-1.5 bg-white/20" />
+              </CardHeader>
+              <CardContent className="p-6 space-y-3">
+                {KYC_CHECKLIST_ITEMS.map((item) => (
+                  <div key={item.id} className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", checklist[item.id] ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-100")}>
+                    <div className="flex items-center space-x-3"><Checkbox id={item.id} checked={checklist[item.id] || false} onCheckedChange={() => handleChecklistToggle(item.id)} disabled={!isReviewer || isTerminal} /><label htmlFor={item.id} className="text-[11px] font-bold uppercase tracking-tight">{item.label}</label></div>
+                    {checklist[item.id] && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] h-4 uppercase font-black">Verified</Badge>}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {submission.isExceptional && !isTerminal && (
             <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden bg-primary/5">

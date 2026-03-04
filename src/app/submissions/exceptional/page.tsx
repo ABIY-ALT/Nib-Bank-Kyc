@@ -104,18 +104,25 @@ export default function ExceptionalCasesPage() {
     }
 
     try {
-      await initiateExceptionalWorkflow(selectedCaseId, {
-        reason: exceptionReason,
-        justification: riskJustification,
-        remarks,
-        initiatedBy: user.name,
-        memoData: { name: memoFile.name }
-      });
+      const formData = new FormData();
+      formData.append('id', selectedCaseId);
+      formData.append('reason', exceptionReason);
+      formData.append('justification', riskJustification);
+      formData.append('remarks', remarks);
+      formData.append('initiatedBy', user.name);
+      formData.append('userId', user.id);
+      formData.append('memo', memoFile);
+
+      const res = await initiateExceptionalWorkflow(formData);
       
-      toast({ title: "Successful", description: "Case dispatched to Governance branches." });
-      setIsAddDialogOpen(false);
-      resetForm();
-      await loadData();
+      if (res.success) {
+        toast({ title: "Successful", description: "Case dispatched to Governance branches." });
+        setIsAddDialogOpen(false);
+        resetForm();
+        await loadData();
+      } else {
+        throw new Error(res.error);
+      }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Action Failed", description: error.message });
     }

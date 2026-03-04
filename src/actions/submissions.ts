@@ -414,21 +414,61 @@ export async function logBundleDownload(data: {
   }
 }
 
-export async function initiateExceptionalWorkflow(kycId: string, data: any) {
+export async function initiateExceptionalWorkflow(formData: FormData) {
   try {
+    const kycId = formData.get('id') as string;
+    const reason = formData.get('reason') as string;
+    const justification = formData.get('justification') as string;
+    const remarks = formData.get('remarks') as string;
+    const initiatedBy = formData.get('initiatedBy') as string;
+    const userId = formData.get('userId') as string;
+    const memoFile = formData.get('memo') as File;
+
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
+    
+    const timestamp = Date.now();
+    const storedFileName = `init_gov_${timestamp}_${memoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const filePath = path.join(uploadDir, storedFileName);
+    const buffer = Buffer.from(await memoFile.arrayBuffer());
+    await fs.writeFile(filePath, buffer);
+
+    const now = new Date();
+    const current = await prisma.kYC.findUnique({ where: { id: kycId } });
+    if (!current) throw new Error("Case not found");
+
+    const history = (current.commentHistory as any[]) || [];
+
     const kyc = await prisma.kYC.update({
       where: { id: kycId },
       data: {
         isExceptional: true,
         exceptionalStatus: 'AWAITING_DISTRICT',
-        updatedAt: new Date()
+        updatedAt: now,
+        commentHistory: [...history, {
+          role: 'BRANCH_MANAGER',
+          performedBy: initiatedBy,
+          timestamp: now.toISOString(),
+          comment: `Exception Initiated: ${reason}. Justification: ${justification}. ${remarks}`,
+          action: 'INITIATE_EXCEPTION',
+          memoAttached: true
+        }],
+        memos: {
+          create: {
+            name: memoFile.name,
+            type: 'GOVERNANCE_MEMO',
+            fileUrl: `/uploads/${storedFileName}`,
+            uploadedById: userId
+          }
+        }
       }
     });
+
     revalidatePath('/submissions/exceptional');
     revalidatePath(`/submissions/${kycId}`);
-    return kyc;
-  } catch (e) {
-    throw e;
+    return { success: true, kyc };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 }
 
