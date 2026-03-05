@@ -133,9 +133,10 @@ export async function provisionUser(data: {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Fetch current state for audit comparison
-      const existingUser = await tx.user.findUnique({
-        where: { email: data.email.toLowerCase() },
+      // 1. Fetch current state for audit comparison and existence check
+      // Prefer ID for lookup if provided to allow email updates safely
+      const existingUser = await tx.user.findFirst({
+        where: data.id ? { id: data.id } : { email: data.email.toLowerCase() },
         include: { 
           branch: true,
           roles: { include: { role: true } }
@@ -148,30 +149,46 @@ export async function provisionUser(data: {
         hashedPassword = await bcrypt.hash(tempPass, 10);
       }
 
-      // 2. Upsert the User record
-      const user = await tx.user.upsert({
-        where: { email: data.email.toLowerCase() },
-        update: { 
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phoneNumber: data.phoneNumber,
-          branch: data.branchId ? { connect: { id: data.branchId } } : { disconnect: true },
-          status: data.status,
-          // Only update password and force change if a value was provided
-          password: hashedPassword,
-          needsPasswordChange: hashedPassword ? true : undefined
-        },
-        create: { 
-          email: data.email.toLowerCase(),
-          password: hashedPassword!, // must exist for create
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phoneNumber: data.phoneNumber,
-          branch: data.branchId ? { connect: { id: data.branchId } } : undefined,
-          status: data.status,
-          needsPasswordChange: true
+      // 2. Process the User record using separate Update/Create calls to satisfy Prisma constraints
+      let user;
+      if (existingUser) {
+        // UPDATE existing personnel
+        user = await tx.user.update({
+          where: { id: existingUser.id },
+          data: { 
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email.toLowerCase(),
+            phoneNumber: data.phoneNumber,
+            branch: data.branchId ? { connect: { id: data.branchId } } : { disconnect: true },
+            status: data.status,
+            // Only update password and force change if a value was provided
+            password: hashedPassword,
+            needsPasswordChange: hashedPassword ? true : undefined
+          }
+        });
+      } else {
+        // CREATE new personnel
+        // Ensure a password exists for creation (should have been generated above if missing)
+        if (!hashedPassword) {
+          const generated = Math.random().toString(36).slice(-8);
+          tempPass = generated;
+          hashedPassword = await bcrypt.hash(generated, 10);
         }
-      });
+
+        user = await tx.user.create({
+          data: { 
+            email: data.email.toLowerCase(),
+            password: hashedPassword,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            phoneNumber: data.phoneNumber,
+            branch: data.branchId ? { connect: { id: data.branchId } } : undefined,
+            status: data.status,
+            needsPasswordChange: true
+          }
+        });
+      }
 
       // 3. Handle Branch Transfer Logging
       const currentBranchId = existingUser?.branch?.id;
