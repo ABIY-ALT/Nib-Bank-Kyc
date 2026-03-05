@@ -141,7 +141,7 @@ export default function UserManagementPage() {
       });
   }, [users, searchTerm]);
 
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredUsers.slice(start, start + itemsPerPage);
@@ -257,7 +257,7 @@ export default function UserManagementPage() {
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
-                setCurrentPage(1);
+                setCurrentPage(1); // Reset to page 1 on new search intent
               }}
               className="pl-10 h-11 bg-white border-slate-200 rounded-xl font-medium"
             />
@@ -275,7 +275,7 @@ export default function UserManagementPage() {
         </div>
       </div>
 
-      <div className="border rounded-2xl bg-card shadow-xl overflow-hidden border-slate-200">
+      <div className="border rounded-2xl bg-card shadow-xl overflow-hidden border-slate-200 bg-white">
         <Table>
           <TableHeader className="bg-slate-50/50">
             <TableRow>
@@ -287,7 +287,7 @@ export default function UserManagementPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredUsers.length === 0 ? (
+            {paginatedUsers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="py-32 text-center">
                   <div className="flex flex-col items-center gap-4">
@@ -382,40 +382,40 @@ export default function UserManagementPage() {
           </TableBody>
         </Table>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Displaying {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} Staff
+        {/* INSTITUTIONAL PAGINATION CONTROLS */}
+        <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+              Page {currentPage} of {totalPages}
             </p>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
-                  disabled={currentPage === 1} 
-                  className="h-9 w-9 p-0 rounded-xl border-slate-200 hover:bg-white hover:text-primary"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <div className="flex items-center gap-2 px-4 h-9 bg-white border border-slate-200 rounded-xl shadow-sm">
-                  <span className="text-sm font-black text-primary">{currentPage}</span>
-                  <span className="text-xs font-bold text-slate-300">/</span>
-                  <span className="text-sm font-bold text-slate-500">{totalPages}</span>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
-                  disabled={currentPage === totalPages} 
-                  className="h-9 w-9 p-0 rounded-xl border-slate-200 hover:bg-white hover:text-primary"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
+            <p className="text-[9px] font-bold text-primary uppercase">
+              Displaying {Math.min(filteredUsers.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} Staff Records
+            </p>
           </div>
-        )}
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary transition-all shadow-sm active:scale-95"
+            >
+              <ChevronLeft className="w-4 h-4 mr-2" /> Previous
+            </Button>
+            <div className="h-9 min-w-[36px] px-3 flex items-center justify-center bg-white border border-primary/20 rounded-xl font-black text-sm text-primary shadow-sm">
+              {currentPage}
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary transition-all shadow-sm active:scale-95"
+            >
+              Next <ChevronRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
