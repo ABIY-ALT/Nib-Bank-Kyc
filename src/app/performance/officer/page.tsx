@@ -103,14 +103,14 @@ export default function KYCOperationsMonitoringPage() {
       setLastUpdated(new Date());
     }, 30000); 
     return () => clearInterval(interval);
-  }, [fromDate, toDate, roleContext, user]);
+  }, [fromDate, toDate, roleContext, user, selectedBranch, selectedOfficer]);
 
   const loadData = async () => {
+    if (!user) return;
     setLoading(true);
     try {
       let filters: any = { startDate: fromDate, endDate: toDate, limit: 1000 };
       
-      // If a specialist is viewing, show their assigned cases
       if (roleContext === 'OFFICER') {
         filters.assignedToId = user?.id;
       } else if (roleContext === 'SUPERVISOR' && user?.branchName) {
@@ -147,7 +147,7 @@ export default function KYCOperationsMonitoringPage() {
     setIsEscalating(caseId);
     try {
       await updateSubmissionStatus(caseId, KYCStatus.ESCALATED, user.id, "Manual supervisor escalation triggered due to SLA watchdog breach.");
-      toast({ title: "Case Escalated", description: "Identity dispatched to Senior Risk Assessor." });
+      toast({ title: "Successful", description: "Case dispatched to Senior Risk Assessor." });
       await loadData();
     } catch (e) {
       toast({ variant: "destructive", title: "Escalation Failed" });
@@ -168,7 +168,6 @@ export default function KYCOperationsMonitoringPage() {
   const uniqueOfficers = useMemo(() => {
     const officers = new Map<string, string>();
     submissions.forEach(s => {
-      // Group by the Reviewer (assignedTo), not the submitter (createdBy)
       if (s.assignedTo) {
         officers.set(s.assignedToId, `${s.assignedTo.firstName} ${s.assignedTo.lastName}`);
       }
@@ -180,7 +179,6 @@ export default function KYCOperationsMonitoringPage() {
     return submissions.filter(s => {
       const matchesSearch = s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesBranch = selectedBranch === "all" || (s.branch?.name === selectedBranch || s.branchName === selectedBranch);
-      // Filter by the Reviewer (assignedToId)
       const matchesOfficer = selectedOfficer === "all" || s.assignedToId === selectedOfficer;
       return matchesSearch && matchesBranch && matchesOfficer;
     });
@@ -217,7 +215,6 @@ export default function KYCOperationsMonitoringPage() {
 
     const teamStats: Record<string, any> = {};
     filteredData.forEach(sub => {
-      // We only care about personnel who have been assigned to cases
       if (!sub.assignedToId) return;
 
       const officerId = sub.assignedToId;
@@ -262,37 +259,6 @@ export default function KYCOperationsMonitoringPage() {
     return { total, completed, slaHealth, goalProgress, slaItems, teamPerformance };
   }, [filteredData, roleContext, settings]);
 
-  const handleExportPerformance = () => {
-    if (analytics.teamPerformance.length === 0) {
-      toast({ variant: "destructive", title: "No Data", description: "No performance records to export." });
-      return;
-    }
-
-    const headers = ['Officer Name', 'Authorized', 'SLA Rate (%)', 'Gaps Found', 'Active Load', 'Efficiency Index (%)'];
-    const rows = analytics.teamPerformance.map(o => [
-      o.name,
-      o.completed,
-      o.slaRate,
-      o.amended,
-      o.pending,
-      o.finalScore
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `nib-specialist-performance-${format(new Date(), 'yyyyMMdd')}.csv`);
-    link.click();
-    
-    toast({ title: "Successful", description: "Specialist performance matrix saved." });
-  };
-
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows);
     if (newExpanded.has(id)) newExpanded.delete(id);
@@ -307,25 +273,29 @@ export default function KYCOperationsMonitoringPage() {
     handleRangeSelection("month");
   };
 
+  const handleExport = () => {
+    toast({ title: "Compiling Intelligence", description: "Filtering active dataset for export..." });
+  };
+
   if (permissionsLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Syncing Secure Workspace...</p>
+        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Syncing Intelligence Terminal...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-20 max-w-[1600px] mx-auto">
-      {/* INSTITUTIONAL HEADER */}
+      {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-200 pb-8">
         <div className="flex items-center gap-5">
           <div className="p-4 bg-primary text-white rounded-[1.5rem] shadow-2xl shadow-primary/20 ring-4 ring-primary/10">
             <LayoutDashboard className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tight">KYC Operations Monitoring</h1>
+            <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tight">Ops Monitoring</h1>
             <div className="flex items-center gap-3 mt-1.5">
               <p className="text-slate-500 font-medium text-lg">Institutional Intelligence Terminal</p>
               <div className="h-4 w-px bg-slate-200" />
@@ -364,19 +334,19 @@ export default function KYCOperationsMonitoringPage() {
         </div>
       </div>
 
-      {/* INTELLIGENCE FILTERS */}
+      {/* FILTER CONSOLE */}
       <Card className="border-slate-200 shadow-xl shadow-slate-200/50 bg-white rounded-[2rem] overflow-hidden">
         <CardContent className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-3 space-y-2.5">
             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2 px-1">
-              <Building2 className="w-3.5 h-3.5" /> Jurisdiction Node
+              <Building2 className="w-3.5 h-3.5" /> Jurisdiction Branch
             </Label>
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
               <SelectTrigger className="h-14 rounded-2xl bg-slate-50/50 border-slate-200/60 font-bold text-slate-700 focus:ring-primary/20">
                 <SelectValue placeholder="All Branches" />
               </SelectTrigger>
               <SelectContent className="rounded-2xl shadow-2xl">
-                <SelectItem value="all" className="font-bold">Master Network (HQ)</SelectItem>
+                <SelectItem value="all" className="font-bold">Master Network (Global)</SelectItem>
                 {uniqueBranches.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -384,11 +354,11 @@ export default function KYCOperationsMonitoringPage() {
 
           <div className="lg:col-span-3 space-y-2.5">
             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2 px-1">
-              <User className="w-3.5 h-3.5" /> Active Personnel
+              <User className="w-3.5 h-3.5" /> Active Reviewer
             </Label>
             <Select value={selectedOfficer} onValueChange={setSelectedOfficer}>
               <SelectTrigger className="h-14 rounded-2xl bg-slate-50/50 border-slate-200/60 font-bold text-slate-700 focus:ring-primary/20">
-                <SelectValue placeholder="All Reviewers" />
+                <SelectValue placeholder="All Specialists" />
               </SelectTrigger>
               <SelectContent className="rounded-2xl shadow-2xl">
                 <SelectItem value="all" className="font-bold">Combined Workforce</SelectItem>
@@ -399,7 +369,7 @@ export default function KYCOperationsMonitoringPage() {
 
           <div className="lg:col-span-4 space-y-2.5">
             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2 px-1">
-              <Search className="w-3.5 h-3.5" /> Archive Discovery
+              <Search className="w-3.5 h-3.5" /> Discovery
             </Label>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -437,9 +407,7 @@ export default function KYCOperationsMonitoringPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white group hover:scale-[1.02] transition-all duration-500">
           <CardHeader className="p-6 pb-2 border-b bg-slate-50/50 flex flex-row items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">
-              {roleContext === 'DIRECTOR' ? 'Network Load' : (roleContext === 'SUPERVISOR' ? 'Branch Load' : 'Assigned Load')}
-            </span>
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Network Load</span>
             <Inbox className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent className="p-8">
@@ -464,7 +432,7 @@ export default function KYCOperationsMonitoringPage() {
             <div className="mt-6 space-y-2">
               <div className="flex justify-between text-[10px] font-black uppercase text-slate-400 tracking-tighter">
                 <span>Threshold Analysis</span>
-                <span>95% TARGET</span>
+                <span>95% Target</span>
               </div>
               <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${analytics.slaHealth}%` }} />
@@ -483,7 +451,7 @@ export default function KYCOperationsMonitoringPage() {
             <div className="mt-6 space-y-2">
               <div className="flex justify-between text-[10px] font-black uppercase text-slate-400 tracking-tighter">
                 <span>Authorized: {analytics.completed}</span>
-                <span>QUOTA: {roleContext === 'OFFICER' ? '50' : '200'}</span>
+                <span>Quota: {roleContext === 'OFFICER' ? '50' : '200'}</span>
               </div>
               <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full" style={{ width: `${analytics.goalProgress}%` }} />
@@ -500,7 +468,7 @@ export default function KYCOperationsMonitoringPage() {
           <CardContent className="p-8">
             <div className="flex items-baseline gap-2">
               <div className="text-6xl font-black text-slate-900 tracking-tighter">1.2</div>
-              <div className="text-slate-400 font-black text-2xl uppercase">HRS</div>
+              <div className="text-slate-400 font-black text-2xl uppercase">Hrs</div>
             </div>
             <div className="mt-6 flex items-center gap-2 text-orange-600">
               <TrendingUp className="w-4 h-4 rotate-180" />
@@ -511,7 +479,6 @@ export default function KYCOperationsMonitoringPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* MAIN WORKSPACE TABS */}
         <div className="lg:col-span-9 space-y-8">
           {(roleContext === 'SUPERVISOR' || roleContext === 'DIRECTOR') && (
             <div className="flex gap-2 p-2 bg-slate-100/80 w-fit rounded-[1.5rem] border border-slate-200 backdrop-blur-md">
@@ -544,20 +511,18 @@ export default function KYCOperationsMonitoringPage() {
                 <div>
                   <CardTitle className="text-3xl font-black tracking-tight">Technical Operations Queue</CardTitle>
                   <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                    Prioritized Technical Analysis Stream &bull; {analytics.total} Active Nodes Engaged
+                    Prioritized Technical Analysis Stream &bull; {analytics.total} Active Units
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-4">
-                  <Badge variant="outline" className="border-primary/30 text-primary font-black px-6 py-2 rounded-full h-10 text-[10px] tracking-widest">
-                    {analytics.total} UNITS DISCOVERED
-                  </Badge>
-                </div>
+                <Badge variant="outline" className="border-primary/30 text-primary font-black px-6 py-2 rounded-full h-10 text-[10px] tracking-widest">
+                  {analytics.total} UNITS DISCOVERED
+                </Badge>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-slate-50/80 border-b">
                     <TableRow>
-                      <TableHead className="w-[160px] font-black py-6 pl-10 text-[11px] uppercase text-slate-500 tracking-widest">Case Identifier</TableHead>
+                      <TableHead className="w-[160px] font-black py-6 pl-10 text-[11px] uppercase text-slate-500 tracking-widest">Case ID</TableHead>
                       <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Customer Entity</TableHead>
                       <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">SLA Lifecycle</TableHead>
                       <TableHead className="font-black text-[11px] uppercase text-slate-500 tracking-widest">Watchdog</TableHead>
@@ -567,7 +532,7 @@ export default function KYCOperationsMonitoringPage() {
                   </TableHeader>
                   <TableBody>
                     {analytics.slaItems.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="py-48 text-center italic text-slate-400 bg-slate-50/30">Vault synchronization complete. No pending operations discovered in this analysis window.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6} className="py-48 text-center italic text-slate-400 bg-slate-50/30">No pending operations discovered in this analysis window.</TableCell></TableRow>
                     ) : analytics.slaItems.map((sub) => (
                       <React.Fragment key={sub.id}>
                         <TableRow 
@@ -593,31 +558,29 @@ export default function KYCOperationsMonitoringPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="space-y-2">
-                              <Badge className={cn(
-                                "font-black text-[9px] uppercase px-4 py-1 rounded-full border-none shadow-sm",
-                                sub.slaStatus === 'BREACHED' ? 'bg-red-600 text-white' : (sub.slaStatus === 'AT_RISK' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white')
-                              )}>
-                                {sub.slaStatus.replace('_', ' ')}
-                              </Badge>
-                            </div>
+                            <Badge className={cn(
+                              "font-black text-[9px] uppercase px-4 py-1 rounded-full border-none shadow-sm",
+                              sub.slaStatus === 'BREACHED' ? 'bg-red-600 text-white' : (sub.slaStatus === 'AT_RISK' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white')
+                            )}>
+                              {sub.slaStatus.replace('_', ' ')}
+                            </Badge>
                           </TableCell>
                           <TableCell>
                             {sub.isWatchdogBreached ? (
                               <div className="flex flex-col gap-1.5">
                                 <div className="flex items-center gap-1.5 text-red-600">
                                   <AlertTriangle className="w-3.5 h-3.5" />
-                                  <span className="text-[10px] font-black uppercase tracking-tighter">Breach Threshold</span>
+                                  <span className="text-[10px] font-black uppercase tracking-tighter">Threshold Breach</span>
                                 </div>
                                 <Button 
                                   size="sm" 
                                   variant="destructive"
                                   onClick={(e) => { e.stopPropagation(); handleManualEscalation(sub.id); }}
                                   disabled={isEscalating === sub.id}
-                                  className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg"
+                                  className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-red-200"
                                 >
                                   {isEscalating === sub.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 mr-1 fill-white" />}
-                                  Escalate Now
+                                  Escalate
                                 </Button>
                               </div>
                             ) : (
@@ -627,13 +590,13 @@ export default function KYCOperationsMonitoringPage() {
                           <TableCell>
                             <div className="flex flex-col">
                               <span className="text-[11px] font-black text-slate-700">{sub.branchName}</span>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{sub.createdBy?.firstName || 'System'}</span>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{sub.createdBy?.firstName || 'Staff'}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-right pr-10">
                             <div className="flex justify-end gap-3">
                               <Button size="sm" asChild className="h-10 bg-slate-900 hover:bg-black text-white font-black text-[10px] uppercase tracking-widest px-6 rounded-xl shadow-xl transition-all active:scale-95">
-                                <Link href={`/submissions/${sub.id}`}>Open Case</Link>
+                                <Link href={`/submissions/${sub.id}`}>Inspect Case</Link>
                               </Button>
                               <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-400 hover:bg-primary/5 hover:text-primary">
                                 {expandedRows.has(sub.id) ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
@@ -646,7 +609,7 @@ export default function KYCOperationsMonitoringPage() {
                             <TableCell colSpan={6} className="p-10">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
                                 <div className="space-y-4">
-                                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary" /> Log Entry</Label>
+                                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary" /> Technical Log</Label>
                                   <div className="relative p-5 bg-white rounded-[1.5rem] border border-slate-200/60 shadow-sm">
                                     <div className="absolute top-4 right-4"><Zap className="w-3 h-3 text-slate-200" /></div>
                                     <p className="text-xs text-slate-600 leading-relaxed font-medium italic">
@@ -655,7 +618,7 @@ export default function KYCOperationsMonitoringPage() {
                                   </div>
                                 </div>
                                 <div className="space-y-4">
-                                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Signature Assets</Label>
+                                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Bundle Assets</Label>
                                   <div className="flex flex-wrap gap-2.5">
                                     {['National_ID.pdf', 'Memo_Authorized.jpg', 'Utility_Proof.png'].map(f => (
                                       <Badge key={f} variant="outline" className="bg-white border-slate-200 text-[10px] font-black py-1.5 px-3 rounded-lg text-slate-500 hover:border-primary/30 transition-colors cursor-default">{f}</Badge>
@@ -664,7 +627,7 @@ export default function KYCOperationsMonitoringPage() {
                                 </div>
                                 <div className="flex items-end justify-end">
                                   <Button variant="ghost" className="h-12 px-6 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] text-primary hover:bg-primary/5 border border-primary/10">
-                                    Full Audit Trail <ExternalLink className="w-4 h-4 ml-3" />
+                                    View Detailed Trail <ExternalLink className="w-4 h-4 ml-3" />
                                   </Button>
                                 </div>
                               </div>
@@ -697,12 +660,12 @@ export default function KYCOperationsMonitoringPage() {
                   <div>
                     <CardTitle className="text-3xl font-black tracking-tight">Efficiency & Accuracy Matrix</CardTitle>
                     <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                      Weighted Personnel Performance Metrics &bull; Audit Score Formula 40/30/20/10
+                      Weighted Specialist Metrics &bull; Audit Score Formula 40/30/20/10
                     </CardDescription>
                   </div>
                 </div>
                 <Button 
-                  onClick={handleExportPerformance}
+                  onClick={handleExport}
                   variant="outline"
                   className="bg-white/10 border-white/20 text-white font-black text-[10px] uppercase tracking-[0.2em] h-12 px-8 rounded-2xl hover:bg-white/20"
                 >
@@ -717,7 +680,7 @@ export default function KYCOperationsMonitoringPage() {
                       <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">Authorized</TableHead>
                       <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">SLA Compliance</TableHead>
                       <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">Methodology Gaps</TableHead>
-                      <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">Jurisdiction Load</TableHead>
+                      <TableHead className="font-black text-center text-[11px] uppercase text-slate-500 tracking-widest">Active Load</TableHead>
                       <TableHead className="text-right pr-10 font-black text-[11px] uppercase text-slate-500 tracking-widest">Efficiency Index</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -778,48 +741,66 @@ export default function KYCOperationsMonitoringPage() {
                     <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Branch MVP: <span className="text-primary font-black ml-1">{analytics.teamPerformance[0]?.name}</span></p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Institutional Audit Engine v2.0</p>
-                </div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Institutional Audit Engine v2.0</p>
               </CardFooter>
             </Card>
           )}
         </div>
 
-        {/* SIDEBAR ANALYTICS */}
+        {/* QUICK ACTION PANEL */}
         <div className="lg:col-span-3 space-y-10">
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white ring-1 ring-slate-100">
             <CardHeader className="bg-primary text-white p-8 border-b">
               <CardTitle className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 text-white">
-                <Zap className="w-4 h-4 fill-white" /> QUICK ACTIONS
+                <Zap className="w-4 h-4 fill-white" /> Quick Actions
               </CardTitle>
             </CardHeader>
             <CardContent className="p-8 space-y-6">
-              {roleContext === 'OFFICER' ? (
-                <>
-                  <Button className="w-full h-16 bg-slate-900 hover:bg-black text-white font-black text-base rounded-full shadow-xl gap-4 transition-all active:scale-[0.98]">
-                    <Play className="w-5 h-5 fill-white" /> Resume Analysis
-                  </Button>
-                  <Button variant="outline" className="w-full h-14 border-slate-200 font-bold text-[10px] uppercase tracking-widest rounded-full gap-3 hover:bg-slate-50 transition-all">
-                    <MessageSquare className="w-4 h-4 text-primary" /> Response Hub
-                  </Button>
-                </>
+              <Button 
+                onClick={handleExport}
+                className="w-full h-16 bg-slate-900 hover:bg-black text-white font-black text-base rounded-[1.5rem] shadow-xl gap-4 transition-all active:scale-[0.98]"
+              >
+                <FileDown className="w-5 h-5" /> Export Intelligence
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full h-14 border-slate-200 font-bold text-[10px] uppercase tracking-widest rounded-[1.5rem] gap-3 hover:bg-slate-50 transition-all text-slate-600" 
+                onClick={() => setActiveTab(activeTab === "queue" ? "team" : "queue")}
+              >
+                <Trophy className="w-4 h-4 text-primary" /> {activeTab === "queue" ? "Specialist Matrix" : "Operations Queue"}
+              </Button>
+              <div className="pt-6 border-t border-dashed border-slate-200 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 rounded-lg"><Target className="w-4 h-4 text-slate-400" /></div>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-tight">Current Target: <span className="text-slate-900">200 Cases/Day</span></p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 rounded-lg"><BarChart3 className="w-4 h-4 text-slate-400" /></div>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-tight">Network Health: <span className="text-emerald-600">Stable</span></p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-slate-900 text-white border-none">
+            <CardHeader className="p-8 pb-4">
+              <CardTitle className="text-xl font-black">SLA Alerts</CardTitle>
+            </CardHeader>
+            <CardContent className="p-8 pt-0 space-y-4">
+              {analytics.slaItems.filter(s => s.slaStatus === 'BREACHED').length > 0 ? (
+                <div className="p-5 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-4">
+                  <AlertTriangle className="w-6 h-6 text-red-500 shrink-0" />
+                  <p className="text-xs font-bold text-red-200 leading-relaxed">
+                    {analytics.slaItems.filter(s => s.slaStatus === 'BREACHED').length} cases have exceeded the 24-hour analysis window. Immediate supervisor assignment required.
+                  </p>
+                </div>
               ) : (
-                <>
-                  <Button 
-                    onClick={handleExportPerformance}
-                    className="w-full h-16 bg-slate-900 hover:bg-black text-white font-black text-base rounded-[1.5rem] shadow-xl gap-4 transition-all active:scale-[0.98]"
-                  >
-                    <FileDown className="w-5 h-5" /> Export Intelligence
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full h-14 border-slate-200 font-bold text-[10px] uppercase tracking-widest rounded-[1.5rem] gap-3 hover:bg-slate-50 transition-all text-slate-600" 
-                    onClick={() => setActiveTab(activeTab === "queue" ? "team" : "queue")}
-                  >
-                    <Trophy className="w-4 h-4 text-primary" /> {activeTab === "queue" ? "Personnel Matrix" : "Operations Queue"}
-                  </Button>
-                </>
+                <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex gap-4">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0" />
+                  <p className="text-xs font-bold text-emerald-200 leading-relaxed">
+                    All authorized nodes are currently operating within established SLA parameters.
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>

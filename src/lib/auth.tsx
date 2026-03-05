@@ -42,9 +42,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch("/api/auth/me");
         
         const contentType = res.headers.get("content-type");
-        if (res.ok && contentType && contentType.includes("application/json")) {
-          const data = await res.json();
-          setUser(data.user || null);
+        const text = await res.text();
+        
+        if (res.ok && contentType && contentType.includes("application/json") && text) {
+          try {
+            const data = JSON.parse(text);
+            setUser(data.user || null);
+          } catch (e) {
+            console.error("Session parsing failed:", e);
+            setUser(null);
+          }
         } else {
           setUser(null);
         }
@@ -72,14 +79,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const contentType = res.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      throw new Error("Invalid gateway response. Please try again.");
+    const text = await res.text();
+    let data: any = null;
+
+    if (text && contentType && contentType.includes("application/json")) {
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        // Fallback
+      }
     }
 
-    const data = await res.json();
-
     if (!res.ok) {
-      throw new Error(data.message || "Authentication failed.");
+      throw new Error(data?.message || "Authentication failed. Invalid institutional credentials.");
+    }
+
+    if (!data || !data.user) {
+      throw new Error("Invalid institutional response. Please try again.");
     }
 
     setUser(data.user);

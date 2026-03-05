@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useParams, useRouter } from "next/navigation";
@@ -98,11 +97,9 @@ export default function SubmissionDetails() {
   const [isActioning, setIsActioning] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
 
-  // Governance Memo State
   const [govMemo, setGovMemo] = useState<File | null>(null);
   const govFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Asset Purge State
   const [fileToPurge, setFileToPurge] = useState<any | null>(null);
   const [isPurging, setIsPurging] = useState<string | null>(null);
 
@@ -126,21 +123,24 @@ export default function SubmissionDetails() {
   }, [params.id]);
 
   useEffect(() => {
+    let state: any = {};
     if (submission?.checklistState) {
-      let state = submission.checklistState;
-      if (typeof state === 'string' && state.trim().length > 0) {
+      const raw = submission.checklistState;
+      if (typeof raw === 'string' && raw.trim().length > 0) {
         try {
-          state = JSON.parse(state);
+          state = JSON.parse(raw);
         } catch {
           state = {};
         }
-      } else if (typeof state !== 'object') {
-        state = {};
+      } else if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+        state = raw;
       }
-      setChecklist(state as Record<string, boolean>);
-    } else {
-      setChecklist({});
     }
+    
+    if (!state || typeof state !== 'object' || Array.isArray(state)) {
+      state = {};
+    }
+    setChecklist(state);
   }, [submission]);
 
   const isReviewer = useMemo(() => {
@@ -155,11 +155,14 @@ export default function SubmissionDetails() {
 
   const showChecklist = useMemo(() => {
     if (!submission) return false;
-    if (!submission.isExceptional) return true;
-    return submission.exceptionalStatus === 'COMPLETED' || submission.status === KYCStatus.APPROVED;
+    if (submission.isExceptional) {
+      return submission.exceptionalStatus === 'COMPLETED' || submission.status === KYCStatus.APPROVED;
+    }
+    return true;
   }, [submission]);
 
   const verifiedCount = useMemo(() => {
+    if (!checklist || typeof checklist !== 'object' || Array.isArray(checklist)) return 0;
     return Object.values(checklist).filter(Boolean).length;
   }, [checklist]);
 
@@ -225,7 +228,7 @@ export default function SubmissionDetails() {
     try {
       const res = await deleteInstitutionalFile(fileToPurge.id);
       if (res.success) {
-        toast({ title: "Successful", description: "File wiped from server storage and case archive." });
+        toast({ title: "Successful", description: "File wiped from case archive." });
         const updated = await getSubmissionById(submission.id);
         setSubmission(updated);
       } else {
@@ -259,7 +262,7 @@ export default function SubmissionDetails() {
         { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
         { id: 'dist', label: 'District Director', desc: 'Regional Oversight', state: excStatus === 'AWAITING_DISTRICT' ? 'active' : (['None', 'AWAITING_DISTRICT'].includes(excStatus) ? 'pending' : 'completed'), icon: Landmark },
         { id: 'kycdir', label: 'KYC Director', desc: 'Strategic Risk Review', state: excStatus === 'AWAITING_DIRECTOR' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Shield },
-        { id: 'chief', label: 'Chief Retail & SME', desc: 'Optional: High-Risk', state: excStatus === 'AWAITING_CHIEF' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: Zap },
+        { id: 'chief', label: 'Chief Retail & SME', desc: 'Strategic Path', state: excStatus === 'AWAITING_CHIEF' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: Zap },
         { id: 'div', label: 'Division Manager', desc: 'Resource Allocation', state: excStatus === 'AWAITING_DIVISION' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF', 'AWAITING_DIVISION'].includes(excStatus) ? 'pending' : 'completed'), icon: Scale },
         { id: 'super', label: 'Supervisor', desc: 'Operational Audit', state: excStatus === 'AWAITING_SUPERVISOR' ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF', 'AWAITING_DIVISION', 'AWAITING_SUPERVISOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Gavel },
         { id: 'kyco', label: 'KYC Officer', desc: 'Lifecycle Conclusion', state: excStatus === 'COMPLETED' ? 'completed' : 'pending', icon: UserCheck }
@@ -355,7 +358,7 @@ export default function SubmissionDetails() {
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-8">
-          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl">
+          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="bg-primary p-6 border-b flex flex-row items-center justify-between">
               <div className="flex items-center gap-3"><FileText className="w-5 h-5 text-white" /><CardTitle className="text-xl font-black text-white">Documentation</CardTitle></div>
             </CardHeader>
@@ -393,7 +396,7 @@ export default function SubmissionDetails() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl">
+          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="bg-primary p-6 border-b"><CardTitle className="text-xl font-black text-white">Verdict History</CardTitle></CardHeader>
             <CardContent className="pt-8 px-8 pb-10">
               <div className="relative space-y-8">
@@ -420,9 +423,9 @@ export default function SubmissionDetails() {
 
         <div className="space-y-8">
           {showChecklist && (
-            <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl animate-in zoom-in-95 duration-500">
+            <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl animate-in zoom-in-95 duration-500 bg-white">
               <CardHeader className="bg-primary p-5 border-b text-white">
-                <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><ClipboardCheck className="w-5 h-5" /><CardTitle className="text-lg font-black uppercase">Protocol</CardTitle></div><span className="text-[10px] font-black">{verifiedCount}/12</span></div>
+                <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><ClipboardCheck className="w-5 h-5" /><CardTitle className="text-lg font-black uppercase">Protocol</CardTitle></div><span className="text-[10px] font-black">{verifiedCount}/{KYC_CHECKLIST_ITEMS.length}</span></div>
                 <Progress value={progressPercentage} className="h-1.5 bg-white/20" />
               </CardHeader>
               <CardContent className="p-6 space-y-3">
@@ -502,12 +505,16 @@ export default function SubmissionDetails() {
           )}
 
           {!submission.isExceptional && !isTerminal && isReviewer && (
-            <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden">
+            <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden bg-white">
               <CardHeader className="bg-primary text-white border-b py-5"><CardTitle className="text-lg font-black text-white">Verdict</CardTitle></CardHeader>
               <CardContent className="space-y-6 pt-6 px-6 pb-8">
                 <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Methodology</Label><Select onValueChange={(v) => { setIsCustomRemark(v.includes("other")); setRemarks(v.includes("other") ? "" : v); }}><SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Scenario..." /></SelectTrigger><SelectContent>{AMENDMENT_SCENARIOS.map((s, i) => <SelectItem key={i} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remarks</Label><Textarea placeholder="Justification..." value={remarks} onChange={(e) => setRemarks(e.target.value)} readOnly={!isCustomRemark} className="min-h-[140px] rounded-2xl bg-slate-50/50" /></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3"><Button onClick={() => handleAction(KYCStatus.APPROVED)} className="bg-emerald-600 text-white font-black h-12 rounded-xl" disabled={!!isActioning}>Authorize</Button><Button onClick={() => handleAction(KYCStatus.ACTION_REQUIRED)} variant="outline" className="text-orange-600 font-black h-12 rounded-xl" disabled={!!isActioning}>Amend</Button><Button onClick={() => handleAction(KYCStatus.ESCALATED)} className="bg-purple-600 text-white font-black h-12 rounded-xl" disabled={!!isActioning}>Senior Assess</Button></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Button onClick={() => handleAction(KYCStatus.APPROVED)} className="bg-emerald-600 text-white font-black h-12 rounded-xl" disabled={!!isActioning}>Authorize</Button>
+                  <Button onClick={() => handleAction(KYCStatus.ACTION_REQUIRED)} variant="outline" className="text-orange-600 font-black h-12 rounded-xl" disabled={!!isActioning}>Amend</Button>
+                  <Button onClick={() => handleAction(KYCStatus.ESCALATED)} className="bg-purple-600 text-white font-black h-12 rounded-xl" disabled={!!isActioning}>Senior Assess</Button>
+                </div>
               </CardContent>
             </Card>
           )}
