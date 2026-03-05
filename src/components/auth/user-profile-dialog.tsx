@@ -52,7 +52,7 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       await changePassword(newPassword);
-      toast({ title: "Security Profile Updated", description: "Your new institutional credential has been established." });
+      toast({ title: "Successful", description: "Your new institutional credential has been established." });
       setIsChangingPassword(false);
       setNewPassword("");
       setConfirmPassword("");
@@ -148,7 +148,7 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
               onClick={openSecurityConsole}
             >
               <KeyRound className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
-              Modify Security Credential
+              Change Password
             </Button>
           ) : (
             <form onSubmit={handlePasswordUpdate} className="space-y-6 animate-in slide-in-from-top-4 duration-300">
