@@ -652,7 +652,7 @@ export default function KYCOperationsMonitoringPage() {
                   <div>
                     <CardTitle className="text-3xl font-black tracking-tight">Efficiency & Accuracy Matrix</CardTitle>
                     <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                      Weighted Specialist Metrics &bull; Audit Score Formula 40/30/20/10
+                      Weighted Specialist Metrics & bull; Audit Score Formula 40/30/20/10
                     </CardDescription>
                   </div>
                 </div>
