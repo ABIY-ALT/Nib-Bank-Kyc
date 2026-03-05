@@ -41,17 +41,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await fetch("/api/auth/me");
         
+        if (!res.ok) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
         const contentType = res.headers.get("content-type");
-        const text = await res.text();
-        
-        if (res.ok && contentType && contentType.includes("application/json") && text) {
-          try {
-            const data = JSON.parse(text);
-            setUser(data.user || null);
-          } catch (e) {
-            console.error("Session parsing failed:", e);
-            setUser(null);
-          }
+        if (!contentType || !contentType.includes("application/json")) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        const data = await res.json().catch(() => null);
+        if (data && data.user) {
+          setUser(data.user);
         } else {
           setUser(null);
         }
@@ -86,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         data = JSON.parse(text);
       } catch (e) {
-        // Fallback if JSON is malformed despite header
+        // Fallback if JSON is malformed
       }
     }
 

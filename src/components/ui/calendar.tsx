@@ -23,9 +23,8 @@ function Calendar({
   showOutsideDays = true,
   ...props
 }: CalendarProps) {
-  // Define ranges for the dropdowns
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
+  const years = Array.from({ length: 31 }, (_, i) => currentYear - 15 + i);
   const months = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
@@ -53,14 +52,14 @@ function Calendar({
         weekdays: "flex w-full mb-4",
         weekday: "text-slate-400 rounded-md w-10 font-bold text-[10px] uppercase tracking-wider text-center",
         week: "flex w-full mt-2",
-        day: "h-10 w-10 p-0 font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center cursor-pointer",
-        selected: "bg-[#a36224] text-white hover:bg-[#8a521e] focus:bg-[#a36224] focus:text-white rounded-xl shadow-lg font-bold",
+        day: "h-10 w-10 p-0 font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center cursor-pointer shadow-sm border border-transparent",
+        selected: "bg-[#a36224] text-white hover:bg-[#8a521e] focus:bg-[#a36224] focus:text-white rounded-xl shadow-lg font-bold border-transparent",
         today: "bg-slate-100 text-slate-900",
         outside: "text-slate-300 opacity-50",
         disabled: "text-slate-300 opacity-50",
         range_start: "range-start rounded-r-none",
         range_end: "range-end rounded-l-none",
-        range_middle: "bg-slate-50 text-[#a36224] font-bold rounded-none",
+        range_middle: "bg-slate-50 text-[#a36224] font-bold rounded-none shadow-none border-y border-slate-100",
         hidden: "invisible",
         ...classNames,
       }}
