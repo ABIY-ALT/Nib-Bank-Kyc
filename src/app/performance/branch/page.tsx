@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
@@ -16,7 +17,8 @@ import {
   Activity,
   ArrowUpRight,
   ShieldAlert,
-  Clock
+  Clock,
+  RotateCcw
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
@@ -37,6 +39,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 export default function BranchPerformancePage() {
   const { user } = useAuth();
@@ -46,22 +50,25 @@ export default function BranchPerformancePage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
 
   const isDistDir = hasPermission('REPORT_VIEW_DISTRICT');
   const isAdmin = isSuperAdmin;
 
   useEffect(() => {
     loadData();
-  }, [fromDate, toDate, isAdmin, isDistDir, user]);
+  }, [dateRange, isAdmin, isDistDir, user]);
 
   const loadData = async () => {
-    if (!user) return;
+    if (!user || !dateRange?.from || !dateRange?.to) return;
     setLoading(true);
     const data = await getSubmissions({
-      startDate: fromDate,
-      endDate: toDate,
+      startDate: format(dateRange.from, 'yyyy-MM-dd'),
+      endDate: format(dateRange.to, 'yyyy-MM-dd'),
       district: isDistDir && !isAdmin ? user.districtName || undefined : undefined
     });
     setSubmissions(data);
@@ -100,6 +107,11 @@ export default function BranchPerformancePage() {
 
   const handleExportCSV = () => {
     toast({ title: "Successful", description: "Audit trail compiled for selected branch." });
+  };
+
+  const resetFilters = () => {
+    setSelectedBranches([]);
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   if (loading || permissionsLoading) {
@@ -192,20 +204,18 @@ export default function BranchPerformancePage() {
       </div>
 
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl">
-        <CardContent className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Analysis Start</Label>
-            <div className="relative">
-              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="pl-10 h-11 border-slate-200 font-bold bg-slate-50/30" />
-            </div>
+        <CardContent className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+          <div className="md:col-span-10">
+            <DatePickerWithRange 
+              date={dateRange} 
+              onDateChange={setDateRange} 
+              label="Performance Analysis Timeline" 
+            />
           </div>
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Analysis Conclusion</Label>
-            <div className="relative">
-              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="pl-10 h-11 border-slate-200 font-bold bg-slate-50/30" />
-            </div>
+          <div className="md:col-span-2">
+            <Button variant="ghost" onClick={resetFilters} className="w-full h-12 gap-2 font-bold text-slate-400 hover:text-primary rounded-xl">
+              <RotateCcw className="w-4 h-4" /> Reset
+            </Button>
           </div>
         </CardContent>
       </Card>

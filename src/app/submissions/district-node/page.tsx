@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
@@ -41,6 +42,8 @@ import { type ChartConfig, ChartContainer, ChartTooltipContent } from "@/compone
 import { SubmissionsPageContent } from "../submissions-content";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 const STATUS_COLORS = {
   APPROVED: "#10B981",
@@ -67,21 +70,23 @@ export default function DistrictMonitoringPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
 
   const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
   const districtName = user?.districtName || "Central";
 
   useEffect(() => {
     async function loadData() {
-      if (!user) return;
+      if (!user || !dateRange?.from || !dateRange?.to) return;
       setLoading(true);
       try {
         const data = await getSubmissions({
           district: isAdmin ? undefined : districtName,
-          startDate: fromDate,
-          endDate: toDate
+          startDate: format(dateRange.from, 'yyyy-MM-dd'),
+          endDate: format(dateRange.to, 'yyyy-MM-dd')
         });
         setSubmissions(data);
       } catch (error) {
@@ -91,7 +96,7 @@ export default function DistrictMonitoringPage() {
       }
     }
     loadData();
-  }, [user, isAdmin, fromDate, toDate, districtName]);
+  }, [user, isAdmin, dateRange, districtName]);
 
   const analytics = useMemo(() => {
     if (!submissions || submissions.length === 0) return null;
@@ -190,21 +195,12 @@ export default function DistrictMonitoringPage() {
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6">
           <div className="flex flex-col md:flex-row items-end gap-6">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Period Start</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="pl-10 h-12 rounded-xl border-slate-200 font-bold shadow-sm bg-slate-50/30" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Period End</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="pl-10 h-12 rounded-xl border-slate-200 font-bold shadow-sm bg-slate-50/30" />
-                </div>
-              </div>
+            <div className="flex-1">
+              <DatePickerWithRange 
+                date={dateRange} 
+                onDateChange={setDateRange} 
+                label="Regional Analysis Window" 
+              />
             </div>
             <div className="relative w-full md:w-80">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from "react"
@@ -25,7 +26,8 @@ import {
   ArrowUpRight,
   ShieldAlert,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  RotateCcw
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -46,6 +48,8 @@ import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { usePermissions } from "@/hooks/use-permissions"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 export default function DistrictPerformancePage() {
   const { user } = useAuth();
@@ -55,9 +59,12 @@ export default function DistrictPerformancePage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
 
   const isAdmin = isSuperAdmin;
   const isDistDir = hasPermission('REPORT_VIEW_DISTRICT');
@@ -72,15 +79,16 @@ export default function DistrictPerformancePage() {
       await loadData();
     }
     loadInitial();
-  }, [user, isAdmin, isDistDir, fromDate, toDate, selectedDistrict]);
+  }, [user, isAdmin, isDistDir, dateRange, selectedDistrict]);
 
   const loadData = async () => {
+    if (!dateRange?.from || !dateRange?.to) return;
     setLoading(true);
     try {
       const [subs, dists] = await Promise.all([
         getSubmissions({
-          startDate: fromDate,
-          endDate: toDate,
+          startDate: format(dateRange.from, 'yyyy-MM-dd'),
+          endDate: format(dateRange.to, 'yyyy-MM-dd'),
           district: activeDistrict || undefined
         }),
         isAdmin ? getDistricts() : Promise.resolve([])
@@ -116,6 +124,11 @@ export default function DistrictPerformancePage() {
   }, [submissions]);
 
   const branchCount = Object.keys(analytics.byBranch).length;
+
+  const resetFilters = () => {
+    setSelectedDistrict(isDistDir ? user?.districtName || "all" : "all");
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
+  };
 
   if ((loading || permissionsLoading) && submissions.length === 0) {
     return (
@@ -290,7 +303,7 @@ export default function DistrictPerformancePage() {
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black text-slate-400 uppercase">Analysis Period</span>
                   <Badge variant="outline" className="font-bold text-[9px] bg-white border-slate-200">
-                    {format(new Date(fromDate), 'MMM dd')} - {format(new Date(toDate), 'MMM dd')}
+                    {dateRange?.from ? format(dateRange.from, 'MMM dd') : '...'} - {dateRange?.to ? format(dateRange.to, 'MMM dd') : '...'}
                   </Badge>
                 </div>
                 <div className="space-y-2">
@@ -333,20 +346,20 @@ export default function DistrictPerformancePage() {
           <Card className="shadow-xl border-slate-200 overflow-hidden bg-primary/5 rounded-3xl">
             <CardHeader className="p-6 border-b border-primary/10">
               <CardTitle className="text-primary text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                <Clock className="w-4 h-4" /> Filters
+                <Clock className="w-4 h-4" /> Regional Timeline
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Period Start</Label>
-                <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-11 font-bold bg-white rounded-xl border-slate-200" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Period Conclusion</Label>
-                <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-11 font-bold bg-white rounded-xl border-slate-200" />
-              </div>
+              <DatePickerWithRange 
+                date={dateRange} 
+                onDateChange={setDateRange} 
+                className="bg-white rounded-xl shadow-sm"
+              />
               <Button onClick={loadData} className="w-full h-14 bg-primary text-white font-black rounded-xl shadow-xl shadow-primary/20 mt-2 hover:bg-primary/90 transition-all active:scale-[0.95]">
                 Refresh Command Deck
+              </Button>
+              <Button variant="ghost" onClick={resetFilters} className="w-full h-10 gap-2 font-bold text-slate-400 hover:text-primary">
+                <RotateCcw className="w-4 h-4" /> Reset Filters
               </Button>
             </CardContent>
           </Card>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from "react";
@@ -27,7 +28,8 @@ import {
   Users,
   Calendar as CalendarIcon,
   FileDown,
-  Loader2
+  Loader2,
+  RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { subDays, format } from "date-fns";
@@ -35,6 +37,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 export default function SystemWideReportsPage() {
   const { toast } = useToast();
@@ -42,15 +46,21 @@ export default function SystemWideReportsPage() {
   const [loading, setLoading] = useState(false);
   const [reportDataActive, setReportDataActive] = useState(false);
   
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
 
   const handleGenerateReport = async () => {
+    if (!dateRange?.from || !dateRange?.to) {
+      toast({ variant: "destructive", title: "Range Required" });
+      return;
+    }
     setLoading(true);
     try {
       const data = await getSubmissions({
-        startDate: fromDate,
-        endDate: toDate,
+        startDate: format(dateRange.from, 'yyyy-MM-dd'),
+        endDate: format(dateRange.to, 'yyyy-MM-dd'),
         limit: 5000 // Large limit for global audit
       });
       setSubmissions(data);
@@ -117,7 +127,7 @@ export default function SystemWideReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-global-audit-${fromDate}-to-${toDate}.csv`);
+    link.setAttribute('download', `nib-global-audit-export.csv`);
     link.click();
     
     toast({ title: "CSV Export Successful" });
@@ -126,8 +136,7 @@ export default function SystemWideReportsPage() {
   const resetFilters = () => {
     setReportDataActive(false);
     setSubmissions([]);
-    setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-    setToDate(format(new Date(), 'yyyy-MM-dd'));
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   return (
@@ -143,10 +152,10 @@ export default function SystemWideReportsPage() {
           <p className="text-muted-foreground text-lg font-medium">Master institutional oversight of all branches and specialized staff.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 font-bold h-11 px-6 border-slate-200 bg-white" onClick={resetFilters}>
-            <History className="w-4 h-4" /> Reset
+          <Button variant="outline" className="gap-2 h-11 px-6 border-slate-200 bg-white" onClick={resetFilters}>
+            <RotateCcw className="w-4 h-4" /> Reset
           </Button>
-          <Button className="gap-2 bg-primary shadow-xl font-bold h-11 px-6 text-white" onClick={handleGenerateReport} disabled={loading}>
+          <Button className="gap-2 bg-primary shadow-xl font-bold h-11 px-6 text-white rounded-xl" onClick={handleGenerateReport} disabled={loading}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
             Compile Master Audit
           </Button>
@@ -156,31 +165,12 @@ export default function SystemWideReportsPage() {
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6">
           <div className="flex flex-col md:flex-row items-end gap-6">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    type="date" 
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold shadow-sm"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    type="date" 
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 focus-visible:ring-primary font-bold shadow-sm"
-                  />
-                </div>
-              </div>
+            <div className="flex-1 w-full">
+              <DatePickerWithRange 
+                date={dateRange} 
+                onDateChange={setDateRange} 
+                label="Global Network Timeline" 
+              />
             </div>
           </div>
         </CardContent>

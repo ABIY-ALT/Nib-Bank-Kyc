@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -33,22 +34,28 @@ import {
   AlertTriangle,
   Loader2,
   ShieldCheck,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getFollowUpVerifications } from "@/actions/follow-up";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 export default function FollowUpReportsPage() {
   const { toast } = useToast();
   
   const [allVerifications, setAllVerifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedResult, setSelectedResult] = useState<string>("all");
+  
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
 
   useEffect(() => {
     loadData();
@@ -67,10 +74,10 @@ export default function FollowUpReportsPage() {
   };
 
   const filteredData = useMemo(() => {
-    if (!allVerifications) return [];
+    if (!allVerifications || !dateRange?.from || !dateRange?.to) return [];
     
-    const start = startOfDay(new Date(fromDate));
-    const end = endOfDay(new Date(toDate));
+    const start = startOfDay(dateRange.from);
+    const end = endOfDay(dateRange.to);
 
     return allVerifications.filter(v => {
       if (v.status !== 'COMPLETED') return false;
@@ -81,7 +88,7 @@ export default function FollowUpReportsPage() {
       
       return matchesDate && matchesResult;
     });
-  }, [allVerifications, fromDate, toDate, selectedResult]);
+  }, [allVerifications, dateRange, selectedResult]);
 
   const handleExportCSV = () => {
     if (filteredData.length === 0) return;
@@ -103,13 +110,18 @@ export default function FollowUpReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-followup-compliance-report-${format(new Date(), 'yyyyMMdd')}.csv`);
+    link.setAttribute('download', `nib-followup-compliance-report.csv`);
     link.click();
 
     toast({
       title: "Export Successful",
       description: "Institutional follow up report has been saved to CSV.",
     });
+  };
+
+  const resetFilters = () => {
+    setSelectedResult("all");
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   return (
@@ -120,8 +132,8 @@ export default function FollowUpReportsPage() {
           <p className="text-muted-foreground text-lg font-medium">Head Office quality control data for regulatory verification and accuracy audits.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 h-11 px-6 font-bold border-slate-200 bg-white" onClick={() => { setSelectedResult("all"); setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd')); setToDate(format(new Date(), 'yyyy-MM-dd')); }}>
-            <History className="w-4 h-4" /> Reset
+          <Button variant="outline" className="gap-2 h-11 px-6 font-bold border-slate-200 bg-white" onClick={resetFilters}>
+            <RotateCcw className="w-4 h-4" /> Reset
           </Button>
           <Button 
             className="gap-2 bg-primary hover:bg-primary/90 h-11 px-6 font-bold shadow-lg" 
@@ -135,33 +147,24 @@ export default function FollowUpReportsPage() {
 
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6">
-          <div className="flex flex-col md:flex-row items-end gap-6">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">To Date</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Finding</Label>
-                <Select value={selectedResult} onValueChange={setSelectedResult}>
-                  <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="All Results" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Results</SelectItem>
-                    <SelectItem value="Correct" className="text-emerald-600 font-bold">Correct (Compliant)</SelectItem>
-                    <SelectItem value="Discrepancy" className="text-orange-600 font-bold">Discrepancy (Errors)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+            <div className="md:col-span-8">
+              <DatePickerWithRange 
+                date={dateRange} 
+                onDateChange={setDateRange} 
+                label="Audit Timeline" 
+              />
+            </div>
+            <div className="md:col-span-4 space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Finding</Label>
+              <Select value={selectedResult} onValueChange={setSelectedResult}>
+                <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="All Results" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Results</SelectItem>
+                  <SelectItem value="Correct" className="text-emerald-600 font-bold">Correct (Compliant)</SelectItem>
+                  <SelectItem value="Discrepancy" className="text-orange-600 font-bold">Discrepancy (Errors)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
@@ -181,7 +184,7 @@ export default function FollowUpReportsPage() {
                   <ClipboardCheck className="w-6 h-6 text-primary" />
                   Quality Control Log
                 </CardTitle>
-                <p className="text-slate-400 text-sm font-medium">Head Office audits from {fromDate} to {toDate}</p>
+                <p className="text-slate-400 text-sm font-medium">Verified Historical Records Dashboard</p>
               </div>
               <Badge variant="outline" className="bg-primary/20 text-white border-primary/40 font-black px-4 h-8">
                 {filteredData.length} Validated Records
@@ -197,7 +200,7 @@ export default function FollowUpReportsPage() {
                     <TableHead className="font-black py-4 text-[11px] uppercase tracking-widest text-slate-500">Customer / Case</TableHead>
                     <TableHead className="font-black py-4 text-[11px] uppercase tracking-widest text-slate-500 text-center">Result</TableHead>
                     <TableHead className="font-black py-4 text-[11px] uppercase tracking-widest text-slate-500">Verified By</TableHead>
-                    <TableHead className="font-black py-4 text-[11px] uppercase tracking-widest text-slate-500 text-right pr-8">Audit Date</TableHead>
+                    <TableHead className="font-black py-4 text-[11px] uppercase tracking-widest text-right pr-8">Audit Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

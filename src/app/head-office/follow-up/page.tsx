@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -25,14 +26,14 @@ import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { subDays, startOfDay, endOfDay, format } from "date-fns";
-import { Input } from "@/components/ui/input";
+import { subDays, format } from "date-fns";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { getFollowUpVerifications, seedFollowUpPool } from "@/actions/follow-up";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 export default function FollowUpDashboard() {
   const { user } = useAuth();
@@ -43,8 +44,10 @@ export default function FollowUpDashboard() {
   const [loading, setLoading] = useState(true);
   const [isSampling, setIsSampling] = useState(false);
   
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
 
   useEffect(() => {
     loadData();
@@ -62,12 +65,17 @@ export default function FollowUpDashboard() {
   [verifications]);
 
   const handleSampleCases = async () => {
+    if (!dateRange?.from || !dateRange?.to) {
+      toast({ variant: "destructive", title: "Range Required" });
+      return;
+    }
+
     setIsSampling(true);
     try {
       const approved = await getSubmissions({
         status: [KYCStatus.APPROVED],
-        startDate: fromDate,
-        endDate: toDate
+        startDate: format(dateRange.from, 'yyyy-MM-dd'),
+        endDate: format(dateRange.to, 'yyyy-MM-dd')
       });
 
       const existingIds = new Set(verifications.map(v => v.submissionId));
@@ -77,7 +85,7 @@ export default function FollowUpDashboard() {
         toast({ 
           variant: "destructive", 
           title: "Sampling Pool Empty", 
-          description: `No new un-audited cases discovered between ${fromDate} and ${toDate}.` 
+          description: "No new un-audited cases discovered in this window." 
         });
         return;
       }
@@ -170,17 +178,14 @@ export default function FollowUpDashboard() {
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6">
           <div className="flex flex-col md:flex-row items-end gap-6">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
-                <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-11 font-bold" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
-                <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-11 font-bold" />
-              </div>
+            <div className="flex-1 w-full">
+              <DatePickerWithRange 
+                date={dateRange} 
+                onDateChange={setDateRange} 
+                label="Sampling Date Range" 
+              />
             </div>
-            <Button onClick={handleSampleCases} disabled={isSampling} className="bg-primary text-white font-black h-11 px-8 gap-3 shadow-xl min-w-[240px]">
+            <Button onClick={handleSampleCases} disabled={isSampling} className="bg-primary text-white font-black h-12 px-8 gap-3 shadow-xl min-w-[240px] rounded-xl">
               {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
               Seed Shared Audit Pool
             </Button>
@@ -265,7 +270,7 @@ export default function FollowUpDashboard() {
               </div>
             ) : (
               <div className="py-24 text-center space-y-4">
-                <div className="p-6 bg-slate-50 rounded-full w-fit mx-auto"><Dices className="w-12 h-12 text-slate-300" /></div>
+                <div className="p-6 bg-slate-50 rounded-full w-fit mx-auto"><Zap className="w-12 h-12 text-slate-300" /></div>
                 <p className="font-bold text-slate-900">Pool Exhausted</p>
               </div>
             )}

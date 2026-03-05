@@ -4,10 +4,17 @@
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { DayPicker, CaptionLabelProps } from "react-day-picker"
-import { format, isValid } from "date-fns"
+import { format, isValid, setMonth, setYear } from "date-fns"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
@@ -17,6 +24,14 @@ function Calendar({
   showOutsideDays = true,
   ...props
 }: CalendarProps) {
+  // Define ranges for the dropdowns
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 15 }, (_, i) => currentYear - 10 + i);
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
@@ -58,19 +73,49 @@ function Calendar({
           <ChevronRight className={cn("h-5 w-5", className)} {...props} />
         ),
         CaptionLabel: ({ displayMonth }: CaptionLabelProps) => {
-          // Robust check to prevent RangeError: Invalid time value
           if (!displayMonth || !isValid(displayMonth)) {
-            return <div className="h-8" />; // Placeholder to maintain layout
+            return <div className="h-8" />;
           }
           
           return (
             <div className="flex gap-2">
-              <span className="font-bold text-slate-800 border border-slate-200 px-4 py-1.5 rounded-lg bg-white shadow-sm text-[11px] uppercase tracking-widest">
-                {format(displayMonth, "MMMM")}
-              </span>
-              <span className="font-bold text-slate-800 border border-slate-200 px-4 py-1.5 rounded-lg bg-white shadow-sm text-[11px] tracking-widest">
-                {format(displayMonth, "yyyy")}
-              </span>
+              <Select
+                value={displayMonth.getMonth().toString()}
+                onValueChange={(val) => {
+                  const newDate = setMonth(displayMonth, parseInt(val));
+                  props.onMonthChange?.(newDate);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[110px] font-bold text-slate-800 border-slate-200 bg-white shadow-sm text-[11px] uppercase tracking-widest rounded-lg focus:ring-0">
+                  <SelectValue>{months[displayMonth.getMonth()]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((month, idx) => (
+                    <SelectItem key={month} value={idx.toString()} className="text-[11px] font-bold uppercase">
+                      {month}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={displayMonth.getFullYear().toString()}
+                onValueChange={(val) => {
+                  const newDate = setYear(displayMonth, parseInt(val));
+                  props.onMonthChange?.(newDate);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[80px] font-bold text-slate-800 border-slate-200 bg-white shadow-sm text-[11px] tracking-widest rounded-lg focus:ring-0">
+                  <SelectValue>{displayMonth.getFullYear()}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()} className="text-[11px] font-bold">
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           );
         },

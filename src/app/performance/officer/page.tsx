@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useEffect } from "react"
@@ -385,7 +386,7 @@ export default function KYCOperationsMonitoringPage() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
                 <Clock className="w-3.5 h-3.5 text-primary" />
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Window: {dateRange?.from ? format(dateRange.from, 'MMM dd, yyyy') : '...'} - {dateRange?.to ? format(dateRange.to, 'MMM dd, yyyy') : '...'}</span>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Analysis Window: {dateRange?.from ? format(dateRange.from, 'MMM dd, yyyy') : '...'} - {dateRange?.to ? format(dateRange.to, 'MMM dd, yyyy') : '...'}</span>
               </div>
             </div>
             <Button variant="ghost" onClick={resetFilters} className="h-12 gap-2 font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-primary hover:bg-primary/5 rounded-xl">
@@ -581,7 +582,7 @@ export default function KYCOperationsMonitoringPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col">
-                              <span className="text-[11px] font-black text-slate-700">{sub.branchName}</span>
+                              <span className="text-11px font-black text-slate-700">{sub.branchName}</span>
                               <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{sub.createdBy?.firstName || 'Staff'}</span>
                             </div>
                           </TableCell>

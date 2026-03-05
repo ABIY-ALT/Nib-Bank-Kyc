@@ -21,7 +21,8 @@ import {
   Archive,
   Clock,
   Calendar as CalendarIcon,
-  Loader2
+  Loader2,
+  RotateCcw
 } from "lucide-react";
 import { 
   DropdownMenu,
@@ -37,11 +38,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { subDays, startOfDay, endOfDay, format } from "date-fns";
+import { subDays, format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 const STATUS_OPTIONS = [
   { id: KYCStatus.APPROVED, label: 'Approved' },
@@ -60,19 +63,22 @@ export default function CaseArchivePage() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
 
   useEffect(() => {
     loadArchive();
-  }, [fromDate, toDate]);
+  }, [dateRange]);
 
   const loadArchive = async () => {
+    if (!dateRange?.from || !dateRange?.to) return;
     setLoading(true);
     try {
       const data = await getSubmissions({
-        startDate: fromDate,
-        endDate: toDate
+        startDate: format(dateRange.from, 'yyyy-MM-dd'),
+        endDate: format(dateRange.to, 'yyyy-MM-dd')
       });
       setSubmissions(data);
     } catch (error) {
@@ -121,7 +127,7 @@ export default function CaseArchivePage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-kyc-archive-${fromDate}-to-${toDate}.csv`);
+    link.setAttribute('download', `nib-kyc-archive-export.csv`);
     link.click();
     
     toast({
@@ -146,8 +152,7 @@ export default function CaseArchivePage() {
     setSelectedStatuses([]);
     setSelectedBranches([]);
     setSearchTerm("");
-    setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-    setToDate(format(new Date(), 'yyyy-MM-dd'));
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   const getStatusBadge = (sub: any) => {
@@ -255,43 +260,21 @@ export default function CaseArchivePage() {
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6">
           <div className="flex flex-col md:flex-row items-end gap-6">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">From Date</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    type="date" 
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Upto Date</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    type="date" 
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className="pl-10 h-12 rounded-xl border-slate-200 focus-visible:ring-primary font-bold shadow-sm bg-slate-50/30"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2 lg:col-span-1">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Keyword Search</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input 
-                    placeholder="Search archive..." 
-                    className="pl-10 h-12 rounded-xl border-slate-200 bg-white" 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-              </div>
+            <div className="flex-1 w-full">
+              <DatePickerWithRange 
+                date={dateRange} 
+                onDateChange={setDateRange} 
+                label="Archive Analysis window" 
+              />
+            </div>
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input 
+                placeholder="Search archive..." 
+                className="pl-11 h-12 rounded-xl border-slate-200 bg-white" 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
           </div>
         </CardContent>

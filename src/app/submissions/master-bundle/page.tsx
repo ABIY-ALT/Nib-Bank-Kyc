@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -22,7 +23,8 @@ import {
   FileArchive,
   CheckCircle2,
   Clock,
-  Search
+  Search,
+  RotateCcw
 } from "lucide-react";
 import { 
   Select, 
@@ -41,6 +43,8 @@ import { cn } from "@/lib/utils";
 import { getSubmissions, getSubmissionById } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYCStatus } from "@prisma/client";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 const STATUS_OPTIONS = [
   { id: KYCStatus.APPROVED, label: 'Approved' },
@@ -54,8 +58,10 @@ export default function MasterBundleDownloadPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
@@ -92,10 +98,10 @@ export default function MasterBundleDownloadPage() {
   };
 
   const filteredSubmissions = useMemo(() => {
-    if (!allSubmissions) return [];
+    if (!allSubmissions || !dateRange?.from || !dateRange?.to) return [];
     
-    const start = startOfDay(new Date(fromDate));
-    const end = endOfDay(new Date(toDate));
+    const start = startOfDay(dateRange.from);
+    const end = endOfDay(dateRange.to);
 
     return allSubmissions.filter(sub => {
       const subDate = new Date(sub.submittedAt || sub.createdAt);
@@ -107,7 +113,7 @@ export default function MasterBundleDownloadPage() {
 
       return matchesDate && matchesStatus && matchesDistrict && matchesBranch;
     });
-  }, [allSubmissions, fromDate, toDate, selectedStatuses, selectedDistrict, selectedBranch]);
+  }, [allSubmissions, dateRange, selectedStatuses, selectedDistrict, selectedBranch]);
 
   const handleToggleStatus = (statusId: string) => {
     setSelectedStatuses(prev => 
@@ -116,7 +122,7 @@ export default function MasterBundleDownloadPage() {
   };
 
   const handleDownloadMasterBundle = async () => {
-    if (!user || filteredSubmissions.length === 0) return;
+    if (!user || filteredSubmissions.length === 0 || !dateRange?.from || !dateRange?.to) return;
     setIsProcessing(true);
     setProgress(0);
 
@@ -126,7 +132,7 @@ export default function MasterBundleDownloadPage() {
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
       const bundleName = `NIB_BANK_MASTER_EXPORT_${timestamp}`;
 
-      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nDATE RANGE: ${fromDate} to ${toDate}\nTOTAL CASES: ${filteredSubmissions.length}\n--------------------------------------------------\n\nSTRUCTURE: District / Branch / CaseID_CustomerName / Assets\n\nINVENTORY:\n`;
+      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nDATE RANGE: ${format(dateRange.from, 'yyyy-MM-dd')} to ${format(dateRange.to, 'yyyy-MM-dd')}\nTOTAL CASES: ${filteredSubmissions.length}\n--------------------------------------------------\n\nSTRUCTURE: District / Branch / CaseID_CustomerName / Assets\n\nINVENTORY:\n`;
       
       let manifestBody = "";
 
@@ -138,10 +144,7 @@ export default function MasterBundleDownloadPage() {
         
         setCurrentActionLabel(`Packaging: ${sub.id}`);
         
-        // Create hierarchical folder structure
         const caseFolder = zip.folder(`${distName}/${branchName}/${folderSafeName}`);
-        
-        // Fetch full submission to get files
         const fullSub = await getSubmissionById(sub.id);
         
         if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
@@ -180,6 +183,13 @@ export default function MasterBundleDownloadPage() {
       setProgress(0);
       setCurrentActionLabel("");
     }
+  };
+
+  const resetFilters = () => {
+    setSelectedStatuses([]);
+    setSelectedDistrict("all");
+    setSelectedBranch("all");
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   return (
@@ -232,7 +242,7 @@ export default function MasterBundleDownloadPage() {
             <div className="space-y-4 pt-4 border-t">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Regional District</Label>
-                <Select value={selectedDistrict} onValueChange={setSelectedDistrict}>
+                <Select value={selectedDistrict} onValueChange={(val) => { setSelectedDistrict(val); setSelectedBranch("all"); }}>
                   <SelectTrigger className="h-11 bg-white">
                     <SelectValue placeholder="All Regions" />
                   </SelectTrigger>
@@ -251,7 +261,7 @@ export default function MasterBundleDownloadPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Branches in {selectedDistrict}</SelectItem>
-                    {branches?.filter(b => selectedDistrict === 'all' || b.districtName === selectedDistrict).map(b => (
+                    {branches?.filter(b => selectedDistrict === 'all' || b.district?.name === selectedDistrict).map(b => (
                       <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -260,23 +270,16 @@ export default function MasterBundleDownloadPage() {
             </div>
 
             <div className="space-y-4 pt-4 border-t">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Start</Label>
-                  <div className="relative">
-                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="pl-9 h-10 font-bold" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analysis Conclusion</Label>
-                  <div className="relative">
-                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="pl-9 h-10 font-bold" />
-                  </div>
-                </div>
-              </div>
+              <DatePickerWithRange 
+                date={dateRange} 
+                onDateChange={setDateRange} 
+                label="Analysis Window" 
+              />
             </div>
+
+            <Button variant="ghost" onClick={resetFilters} className="w-full gap-2 font-bold text-slate-400 hover:text-primary">
+              <RotateCcw className="w-4 h-4" /> Reset Workspace
+            </Button>
           </CardContent>
           <CardFooter className="bg-slate-50 border-t p-6">
             <Button 
