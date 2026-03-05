@@ -52,11 +52,20 @@ import {
   LayoutGrid
 } from "lucide-react";
 import { getSubmissions } from '@/actions/submissions';
+import { getGlobalSettings } from '@/actions/settings';
 import { KYCStatus } from '@prisma/client';
 import { format, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
+
+const DEFAULT_ENTITY_TYPES = [
+  { id: "individual", label: "Individual" },
+  { id: "company", label: "Company" },
+  { id: "association", label: "Association" },
+  { id: "foreign_ngo", label: "Foreign NGO" },
+  { id: "foreign_employment_agency", label: "Foreign Employment Agency" },
+];
 
 export default function MyCasesPerformancePage() {
   const { user } = useAuth();
@@ -65,6 +74,7 @@ export default function MyCasesPerformancePage() {
   const router = useRouter();
 
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
@@ -81,6 +91,7 @@ export default function MyCasesPerformancePage() {
 
   useEffect(() => {
     loadMyCases();
+    loadConfiguration();
   }, [user]);
 
   const loadMyCases = async () => {
@@ -98,6 +109,19 @@ export default function MyCasesPerformancePage() {
       setLoading(false);
     }
   };
+
+  const loadConfiguration = async () => {
+    try {
+      const s = await getGlobalSettings();
+      setSettings(s);
+    } catch (e) {
+      console.error("Failed to load global config");
+    }
+  };
+
+  const entityClassifications = useMemo(() => {
+    return settings?.entityTypes?.length > 0 ? settings.entityTypes : DEFAULT_ENTITY_TYPES;
+  }, [settings]);
 
   const assignedBranches = useMemo(() => {
     if (!user) return [];
@@ -261,9 +285,9 @@ export default function MyCasesPerformancePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="individual">Individual</SelectItem>
-                  <SelectItem value="company">Company</SelectItem>
-                  <SelectItem value="association">Association</SelectItem>
+                  {entityClassifications.map((type: any) => (
+                    <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
