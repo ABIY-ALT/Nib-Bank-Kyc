@@ -1,7 +1,8 @@
+
 "use client"
 
 import * as React from "react"
-import { format } from "date-fns"
+import { format, isValid } from "date-fns"
 import { Calendar as CalendarIcon, ChevronDown } from "lucide-react"
 import { DateRange } from "react-day-picker"
 
@@ -26,6 +27,12 @@ export function DatePickerWithRange({
   onDateChange,
   label
 }: DatePickerWithRangeProps) {
+  // Ensure we have a valid month to display initially
+  const defaultMonth = React.useMemo(() => {
+    if (date?.from && isValid(date.from)) return date.from;
+    return new Date();
+  }, [date?.from]);
+
   return (
     <div className={cn("grid gap-2", className)}>
       {label && (
@@ -45,8 +52,8 @@ export function DatePickerWithRange({
           >
             <div className="flex items-center">
               <CalendarIcon className="mr-3 h-4 w-4 text-primary" />
-              {date?.from ? (
-                date.to ? (
+              {date?.from && isValid(date.from) ? (
+                date.to && isValid(date.to) ? (
                   <span className="text-slate-900">
                     {format(date.from, "LLL dd")} - {format(date.to, "LLL dd, y")}
                   </span>
@@ -64,7 +71,7 @@ export function DatePickerWithRange({
           <Calendar
             initialFocus
             mode="range"
-            defaultMonth={date?.from}
+            defaultMonth={defaultMonth}
             selected={date}
             onSelect={onDateChange}
             numberOfMonths={2}
