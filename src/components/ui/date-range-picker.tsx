@@ -60,7 +60,7 @@ export function DatePickerWithRange({
             <ChevronDown className="h-4 w-4 text-slate-400" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl overflow-hidden" align="start">
+        <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-[2.5rem] overflow-hidden" align="start">
           <Calendar
             initialFocus
             mode="range"
@@ -68,7 +68,6 @@ export function DatePickerWithRange({
             selected={date}
             onSelect={onDateChange}
             numberOfMonths={2}
-            captionLayout="dropdown"
           />
         </PopoverContent>
       </Popover>
