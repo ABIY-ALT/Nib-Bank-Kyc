@@ -20,7 +20,8 @@ import {
   Activity,
   LogOut,
   Search,
-  UserCheck
+  UserCheck,
+  Globe
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns";
@@ -50,11 +51,13 @@ export default function GlobalAuditLogPage() {
     const action = (log.action || "").toLowerCase();
     const details = (log.details || "").toLowerCase();
     const userName = (log.userName || "").toLowerCase();
+    const ip = (log.ipAddress || "").toLowerCase();
 
     return userEmail.includes(term) || 
            action.includes(term) || 
            details.includes(term) || 
-           userName.includes(term);
+           userName.includes(term) ||
+           ip.includes(term);
   });
 
   const handleExportCSV = () => {
@@ -74,7 +77,7 @@ export default function GlobalAuditLogPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `audit-trail-${new Date().toISOString()}.csv`;
+    link.download = `nib-audit-trail-${format(new Date(), 'yyyyMMdd_HHmm')}.csv`;
     link.click();
     toast({ title: "Export Successful" });
   };
@@ -83,45 +86,45 @@ export default function GlobalAuditLogPage() {
     const act = (action || "").toLowerCase();
     if (act.includes('login')) return UserCheck;
     if (act.includes('logout')) return LogOut;
-    if (act.includes('user')) return UserCog;
+    if (act.includes('user') || act.includes('provision')) return UserCog;
     return Activity;
   };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary text-white rounded-lg shadow-lg"><ShieldCheck className="w-6 h-6" /></div>
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Security Audit Log</h1>
-            <p className="text-muted-foreground text-lg">Master institutional security record.</p>
+            <p className="text-muted-foreground text-lg">Master institutional security record with real-time network origin tracking.</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <div className="relative w-64">
+        <div className="flex gap-2 w-full md:w-auto">
+          <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input 
-              placeholder="Search trail..." 
+              placeholder="Search trail or IP..." 
               value={searchTerm} 
               onChange={(e) => setSearchTerm(e.target.value)} 
-              className="pl-9 h-11" 
+              className="pl-9 h-11 bg-white border-slate-200" 
             />
           </div>
-          <Button onClick={handleExportCSV} className="gap-2 shadow-lg font-bold h-11 px-6 bg-primary text-white">
+          <Button onClick={handleExportCSV} className="gap-2 shadow-lg font-bold h-11 px-6 bg-slate-900 text-white">
             <FileDown className="w-4 h-4" /> Export Trail
           </Button>
         </div>
       </div>
 
-      <div className="border rounded-xl bg-card shadow-xl overflow-hidden border-slate-200">
+      <div className="border rounded-2xl bg-card shadow-xl overflow-hidden border-slate-200 bg-white">
         <Table>
-          <TableHeader className="bg-primary text-white">
+          <TableHeader className="bg-primary/5">
             <TableRow>
-              <TableHead className="font-bold py-4 pl-6 text-white">Performed By</TableHead>
-              <TableHead className="font-bold text-white">Action Taken</TableHead>
-              <TableHead className="font-bold text-white">Details</TableHead>
-              <TableHead className="font-bold text-white">Network Origin</TableHead>
-              <TableHead className="font-bold pr-6 text-white text-right">Timestamp</TableHead>
+              <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Performed By</TableHead>
+              <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Action Taken</TableHead>
+              <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Details</TableHead>
+              <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Network Origin</TableHead>
+              <TableHead className="font-black pr-8 text-[11px] uppercase tracking-widest text-slate-500 text-right">Timestamp</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -129,51 +132,60 @@ export default function GlobalAuditLogPage() {
               <TableRow>
                 <TableCell colSpan={5} className="py-32 text-center">
                   <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
+                  <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Decrypting Audit Vault...</p>
                 </TableCell>
               </TableRow>
             ) : filteredLogs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">
-                  No audit logs discovered matching the criteria.
+                <TableCell colSpan={5} className="py-32 text-center">
+                  <div className="max-w-xs mx-auto space-y-3">
+                    <div className="p-4 bg-slate-50 rounded-full w-fit mx-auto">
+                      <Search className="w-8 h-8 text-slate-200" />
+                    </div>
+                    <p className="font-bold text-slate-900">No logs discovered</p>
+                    <p className="text-sm text-muted-foreground">Adjust filters or check connection.</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : filteredLogs.map((log) => {
               const ActionIcon = getActionIcon(log.action);
               return (
-                <TableRow key={log.id} className="hover:bg-slate-50 transition-colors">
-                  <TableCell className="py-4 pl-6">
+                <TableRow key={log.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <TableCell className="py-6 pl-8">
                     <div className="flex flex-col">
-                      <span className="font-black text-slate-900">{log.userName || 'Institutional System'}</span>
-                      <span className="text-[10px] text-muted-foreground font-bold">{log.userEmail || 'system@internal'}</span>
+                      <span className="font-black text-slate-900 group-hover:text-primary transition-colors">{log.userName || 'Institutional System'}</span>
+                      <span className="text-[10px] text-muted-foreground font-bold uppercase">{log.userEmail || 'system@internal'}</span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-primary/5 rounded-md">
+                      <div className="p-1.5 bg-primary/10 rounded-md">
                         <ActionIcon className="w-3.5 h-3.5 text-primary" />
                       </div>
-                      <Badge variant="secondary" className="text-[10px] uppercase font-bold">
-                        {log.action}
+                      <Badge variant="outline" className="text-[10px] uppercase font-black border-primary/20 bg-primary/5 text-primary tracking-tighter">
+                        {log.action?.replace(/_/g, ' ')}
                       </Badge>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <p className="text-sm font-medium text-slate-600 line-clamp-1 max-w-[300px]">
+                    <p className="text-sm font-medium text-slate-600 line-clamp-1 max-w-[300px]" title={log.details}>
                       {log.details}
                     </p>
                   </TableCell>
                   <TableCell>
-                    <div className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit">
-                      <Monitor className="w-3 h-3 inline mr-1" />
-                      {log.ipAddress || 'Internal'}
+                    <div className="flex items-center gap-2">
+                      <div className="text-[11px] font-mono font-black text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 tabular-nums">
+                        <Globe className="w-3 h-3 text-primary/60" />
+                        {log.ipAddress || '127.0.0.1'}
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell className="pr-6 text-right">
+                  <TableCell className="pr-8 text-right">
                     <div className="flex flex-col">
-                      <span className="text-xs font-bold text-slate-900">
+                      <span className="text-xs font-black text-slate-900">
                         {log.timestamp ? format(new Date(log.timestamp), 'MMM dd, yyyy') : 'N/A'}
                       </span>
-                      <span className="text-[10px] text-muted-foreground font-bold">
+                      <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
                         {log.timestamp ? format(new Date(log.timestamp), 'HH:mm:ss') : ''}
                       </span>
                     </div>

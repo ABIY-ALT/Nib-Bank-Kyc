@@ -1,8 +1,8 @@
-
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { headers } from "next/headers";
 
 /**
  * Institutional Authentication Gateway.
@@ -54,6 +54,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 401 });
     }
 
+    // Capture Network Origin
+    const headerList = await headers();
+    const ip = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
+
+    // Log Security Event
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        userEmail: normalizedEmail,
+        userName: `${user.firstName} ${user.lastName}`,
+        action: 'LOGIN',
+        ipAddress: ip,
+        details: 'Institutional session initialized via Secure Gateway.',
+        timestamp: new Date()
+      }
+    });
+
     const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
     
     // Map roles to a serializable format to avoid circular references
@@ -101,11 +118,11 @@ export async function POST(req: Request) {
       }
     });
 
-    // Set HTTP-Only Cookie with cross-network compatibility
+    // Set HTTP-Only Cookie
     response.cookies.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax', // Lax provides better compatibility across network redirects than Strict
+      sameSite: 'lax',
       maxAge: 60 * 60 * 24, // 1 day
       path: '/',
     });

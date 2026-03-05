@@ -3,8 +3,21 @@
 import { prisma } from '@/lib/prisma';
 import { KYCStatus, AuditAction } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import fs from 'fs/promises';
 import path from 'path';
+
+/**
+ * Resolves the client IP address from request headers.
+ */
+async function getClientIp() {
+  try {
+    const h = await headers();
+    return h.get('x-forwarded-for')?.split(',')[0] || h.get('x-real-ip') || '127.0.0.1';
+  } catch {
+    return '127.0.0.1';
+  }
+}
 
 /**
  * Optimized Submission Fetcher.
@@ -172,6 +185,7 @@ export async function getSubmissionById(id: string) {
 
 export async function updateSubmissionStatus(id: string, status: KYCStatus, reviewerId: string, remarks?: string) {
   const now = new Date();
+  const ipAddress = await getClientIp();
   const current = await prisma.kYC.findUnique({ where: { id } });
   if (!current) throw new Error("KYC record not found");
 
@@ -206,6 +220,7 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
       userId: reviewerId,
       kycId: id,
       action: AuditAction.STATUS_CHANGE,
+      ipAddress,
       details: `Status changed from ${current.status} to ${status}`,
       metadata: { remarks }
     }
@@ -225,6 +240,7 @@ export async function processExceptionalStep(formData: FormData) {
   const memoFile = formData.get('memo') as File | null;
 
   const now = new Date();
+  const ipAddress = await getClientIp();
   const current = await prisma.kYC.findUnique({ where: { id } });
   if (!current) throw new Error("KYC record not found");
 
@@ -284,6 +300,7 @@ export async function processExceptionalStep(formData: FormData) {
       userId: reviewerId,
       kycId: id,
       action: AuditAction.STATUS_CHANGE,
+      ipAddress,
       details: `Exceptional flow transition: ${actionLabel}${memoFile ? ' (Memo Attached)' : ''}`,
       metadata: { nextStatus, remarks, hasMemo: !!memoFile }
     }
@@ -318,6 +335,8 @@ export async function createSubmission(formData: FormData) {
     const remarks = formData.get('remarks') as string;
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
+
+    const ipAddress = await getClientIp();
 
     const district = await prisma.district.upsert({
       where: { name: districtName },
@@ -375,7 +394,13 @@ export async function createSubmission(formData: FormData) {
     });
 
     await prisma.auditLog.create({
-      data: { userId: createdById, kycId: kyc.id, action: AuditAction.CREATE, details: `Initial submission for ${customerName}` }
+      data: { 
+        userId: createdById, 
+        kycId: kyc.id, 
+        action: AuditAction.CREATE, 
+        ipAddress,
+        details: `Initial submission for ${customerName}` 
+      }
     });
 
     revalidatePath('/');
@@ -393,11 +418,13 @@ export async function logBundleDownload(data: {
   sourceBranch: string;
 }) {
   try {
+    const ipAddress = await getClientIp();
     await prisma.auditLog.create({
       data: {
         userId: null, // SYSTEM log
         kycId: data.submissionId,
         action: 'BUNDLE_DOWNLOAD',
+        ipAddress,
         details: `Case bundle exported by ${data.performedBy}. Source Node: ${data.sourceDistrict} / ${data.sourceBranch}. Bundle: ${data.bundleName}`,
         metadata: {
           bundleName: data.bundleName,
@@ -423,6 +450,8 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     const initiatedBy = formData.get('initiatedBy') as string;
     const userId = formData.get('userId') as string;
     const memoFile = formData.get('memo') as File;
+
+    const ipAddress = await getClientIp();
 
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
     try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
@@ -464,6 +493,17 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       }
     });
 
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        kycId,
+        action: 'INITIATE_EXCEPTION',
+        ipAddress,
+        details: `Governance exception initiated for ${kyc.customerName}.`,
+        timestamp: new Date()
+      }
+    });
+
     revalidatePath('/submissions/exceptional');
     revalidatePath(`/submissions/${kycId}`);
     return { success: true, kyc };
@@ -479,6 +519,8 @@ export async function resubmitSubmission(formData: FormData) {
     const remarks = formData.get('remarks') as string;
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
+
+    const ipAddress = await getClientIp();
 
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
@@ -514,6 +556,17 @@ export async function resubmitSubmission(formData: FormData) {
           action: 'RESUBMIT'
         }],
         memos: { create: memoData }
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        kycId: id,
+        action: 'RESUBMIT',
+        ipAddress,
+        details: `Case resubmitted after amendment request.`,
+        timestamp: new Date()
       }
     });
 
