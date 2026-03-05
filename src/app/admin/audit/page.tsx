@@ -16,12 +16,13 @@ import {
   UserCog, 
   FileDown, 
   Loader2, 
-  Monitor,
   Activity,
   LogOut,
   Search,
   UserCheck,
-  Globe
+  Globe,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns";
@@ -31,39 +32,48 @@ import { getGlobalAuditLogs } from "@/actions/audit";
 export default function GlobalAuditLogPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [logs, setLogs] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const limit = 10;
 
+  // Search Debounce Engine
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1); // Reset to page 1 on new discovery intent
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Data Fetching Sync
   useEffect(() => {
     loadLogs();
-  }, []);
+  }, [page, debouncedSearch]);
 
   const loadLogs = async () => {
     setLoading(true);
-    const data = await getGlobalAuditLogs();
-    setLogs(data);
+    const result = await getGlobalAuditLogs({ 
+      page, 
+      limit, 
+      search: debouncedSearch 
+    });
+    setLogs(result.logs);
+    setTotal(result.total);
     setLoading(false);
   };
 
-  const filteredLogs = logs.filter(log => {
-    const term = searchTerm.toLowerCase();
-    const userEmail = (log.userEmail || "").toLowerCase();
-    const action = (log.action || "").toLowerCase();
-    const details = (log.details || "").toLowerCase();
-    const userName = (log.userName || "").toLowerCase();
-    const ip = (log.ipAddress || "").toLowerCase();
+  const handleExportCSV = async () => {
+    if (total === 0) return;
+    
+    toast({ title: "Compiling Export", description: "Fetching full history for CSV compilation..." });
+    const fullResult = await getGlobalAuditLogs({ page: 1, limit: 1000, search: debouncedSearch });
+    const exportLogs = fullResult.logs;
 
-    return userEmail.includes(term) || 
-           action.includes(term) || 
-           details.includes(term) || 
-           userName.includes(term) ||
-           ip.includes(term);
-  });
-
-  const handleExportCSV = () => {
-    if (logs.length === 0) return;
     const headers = ['ID', 'User', 'Email', 'Action', 'IP Address', 'Timestamp', 'Details'];
-    const csvContent = [headers.join(','), ...logs.map(log => [
+    const csvContent = [headers.join(','), ...exportLogs.map(log => [
       log.id, 
       log.userName || 'N/A', 
       log.userEmail || 'N/A', 
@@ -90,6 +100,8 @@ export default function GlobalAuditLogPage() {
     return Activity;
   };
 
+  const totalPages = Math.ceil(total / limit) || 1;
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -107,10 +119,10 @@ export default function GlobalAuditLogPage() {
               placeholder="Search trail or IP..." 
               value={searchTerm} 
               onChange={(e) => setSearchTerm(e.target.value)} 
-              className="pl-9 h-11 bg-white border-slate-200" 
+              className="pl-9 h-11 bg-white border-slate-200 rounded-xl font-medium" 
             />
           </div>
-          <Button onClick={handleExportCSV} className="gap-2 shadow-lg font-bold h-11 px-6 bg-slate-900 text-white">
+          <Button onClick={handleExportCSV} className="gap-2 shadow-xl font-bold h-11 px-6 bg-slate-900 text-white rounded-xl hover:bg-black transition-all">
             <FileDown className="w-4 h-4" /> Export Trail
           </Button>
         </div>
@@ -132,10 +144,10 @@ export default function GlobalAuditLogPage() {
               <TableRow>
                 <TableCell colSpan={5} className="py-32 text-center">
                   <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
-                  <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Decrypting Audit Vault...</p>
+                  <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Querying Audit Vault...</p>
                 </TableCell>
               </TableRow>
-            ) : filteredLogs.length === 0 ? (
+            ) : logs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="py-32 text-center">
                   <div className="max-w-xs mx-auto space-y-3">
@@ -143,11 +155,11 @@ export default function GlobalAuditLogPage() {
                       <Search className="w-8 h-8 text-slate-200" />
                     </div>
                     <p className="font-bold text-slate-900">No logs discovered</p>
-                    <p className="text-sm text-muted-foreground">Adjust filters or check connection.</p>
+                    <p className="text-sm text-muted-foreground">Adjust filters or check network connectivity.</p>
                   </div>
                 </TableCell>
               </TableRow>
-            ) : filteredLogs.map((log) => {
+            ) : logs.map((log) => {
               const ActionIcon = getActionIcon(log.action);
               return (
                 <TableRow key={log.id} className="hover:bg-slate-50/50 transition-colors group">
@@ -195,6 +207,41 @@ export default function GlobalAuditLogPage() {
             })}
           </TableBody>
         </Table>
+
+        {/* INSTITUTIONAL PAGINATION CONTROLS */}
+        <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+              Page {page} of {totalPages}
+            </p>
+            <p className="text-[9px] font-bold text-primary uppercase">
+              {total} Total Security Events Discovered
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+              className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary transition-all shadow-sm active:scale-95"
+            >
+              <ChevronLeft className="w-4 h-4 mr-2" /> Previous
+            </Button>
+            <div className="h-9 min-w-[36px] px-3 flex items-center justify-center bg-white border border-primary/20 rounded-xl font-black text-sm text-primary shadow-sm">
+              {page}
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setPage(p => p + 1)}
+              disabled={page >= totalPages || loading}
+              className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary transition-all shadow-sm active:scale-95"
+            >
+              Next <ChevronRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

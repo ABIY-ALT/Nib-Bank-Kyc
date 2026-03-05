@@ -19,14 +19,42 @@ async function getClientIp() {
   }
 }
 
-export async function getGlobalAuditLogs() {
+/**
+ * Retrieves audit logs with server-side pagination and filtering.
+ */
+export async function getGlobalAuditLogs(params: { 
+  page?: number; 
+  limit?: number; 
+  search?: string 
+} = {}) {
+  const { page = 1, limit = 10, search = "" } = params;
+  const skip = (page - 1) * limit;
+
+  const where = search ? {
+    OR: [
+      { userEmail: { contains: search, mode: 'insensitive' as const } },
+      { action: { contains: search, mode: 'insensitive' as const } },
+      { details: { contains: search, mode: 'insensitive' as const } },
+      { userName: { contains: search, mode: 'insensitive' as const } },
+      { ipAddress: { contains: search, mode: 'insensitive' as const } },
+    ]
+  } : {};
+
   try {
-    return await prisma.auditLog.findMany({
-      orderBy: { timestamp: 'desc' },
-      take: 200 // Increased limit for better oversight
-    });
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { timestamp: 'desc' },
+        take: limit,
+        skip: skip,
+      }),
+      prisma.auditLog.count({ where })
+    ]);
+
+    return { logs, total };
   } catch (error) {
-    return [];
+    console.error('[Audit Action] Fetch Error:', error);
+    return { logs: [], total: 0 };
   }
 }
 
