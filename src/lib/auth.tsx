@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         data = JSON.parse(text);
       } catch (e) {
-        // Fallback
+        // Fallback if JSON is malformed despite header
       }
     }
 
@@ -100,8 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setUser(data.user);
     toast({ 
-      title: `Successful`, 
-      description: `Welcome back, ${data.user.firstName}. Session established.` 
+      title: "Login Successful", 
+      description: `Welcome back, ${data.user.firstName}!` 
     });
   };
 
