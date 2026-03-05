@@ -3,7 +3,7 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { DayPicker, CaptionLabelProps } from "react-day-picker"
+import { DayPicker, CaptionLabelProps, useDayPicker } from "react-day-picker"
 import { format, isValid, setMonth, setYear } from "date-fns"
 
 import { cn } from "@/lib/utils"
@@ -26,7 +26,7 @@ function Calendar({
 }: CalendarProps) {
   // Define ranges for the dropdowns
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 15 }, (_, i) => currentYear - 10 + i);
+  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
   const months = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
@@ -40,7 +40,7 @@ function Calendar({
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-0 sm:space-y-0 divide-x divide-slate-100",
         month: "space-y-6 p-6 w-[320px]",
         month_caption: "flex justify-center pt-1 relative items-center mb-6",
-        caption_label: "hidden", // We use custom CaptionLabel component
+        caption_label: "hidden", 
         nav: "flex items-center",
         button_previous: cn(
           buttonVariants({ variant: "ghost" }),
@@ -73,6 +73,8 @@ function Calendar({
           <ChevronRight className={cn("h-5 w-5", className)} {...props} />
         ),
         CaptionLabel: ({ displayMonth }: CaptionLabelProps) => {
+          const { goToMonth } = useDayPicker();
+          
           if (!displayMonth || !isValid(displayMonth)) {
             return <div className="h-8" />;
           }
@@ -83,15 +85,15 @@ function Calendar({
                 value={displayMonth.getMonth().toString()}
                 onValueChange={(val) => {
                   const newDate = setMonth(displayMonth, parseInt(val));
-                  props.onMonthChange?.(newDate);
+                  goToMonth(newDate);
                 }}
               >
-                <SelectTrigger className="h-8 w-[110px] font-bold text-slate-800 border-slate-200 bg-white shadow-sm text-[11px] uppercase tracking-widest rounded-lg focus:ring-0">
+                <SelectTrigger className="h-10 w-[120px] font-bold text-slate-800 border-slate-200 bg-white shadow-sm text-[11px] uppercase tracking-widest rounded-lg focus:ring-0">
                   <SelectValue>{months[displayMonth.getMonth()]}</SelectValue>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl shadow-2xl border-none">
                   {months.map((month, idx) => (
-                    <SelectItem key={month} value={idx.toString()} className="text-[11px] font-bold uppercase">
+                    <SelectItem key={month} value={idx.toString()} className="text-[11px] font-bold uppercase py-2.5">
                       {month}
                     </SelectItem>
                   ))}
@@ -102,15 +104,15 @@ function Calendar({
                 value={displayMonth.getFullYear().toString()}
                 onValueChange={(val) => {
                   const newDate = setYear(displayMonth, parseInt(val));
-                  props.onMonthChange?.(newDate);
+                  goToMonth(newDate);
                 }}
               >
-                <SelectTrigger className="h-8 w-[80px] font-bold text-slate-800 border-slate-200 bg-white shadow-sm text-[11px] tracking-widest rounded-lg focus:ring-0">
+                <SelectTrigger className="h-10 w-[90px] font-bold text-slate-800 border-slate-200 bg-white shadow-sm text-[11px] tracking-widest rounded-lg focus:ring-0">
                   <SelectValue>{displayMonth.getFullYear()}</SelectValue>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl shadow-2xl border-none">
                   {years.map((year) => (
-                    <SelectItem key={year} value={year.toString()} className="text-[11px] font-bold">
+                    <SelectItem key={year} value={year.toString()} className="text-[11px] font-bold py-2.5">
                       {year}
                     </SelectItem>
                   ))}
