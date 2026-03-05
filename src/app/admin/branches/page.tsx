@@ -32,7 +32,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getBranches, getDistricts, createBranch, updateBranch, createDistrict, updateDistrict, deleteNode } from '@/actions/hierarchy';
 import { cn } from '@/lib/utils';
@@ -374,7 +374,7 @@ export default function BranchesDistrictsPage() {
           </CardContent>
           <CardFooter className="bg-slate-50/80 border-t py-4 px-10">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
-              Authorized Master Registry &bull; {filteredBranches.length} Verified Entries
+              Authorized Master Registry & bull; {filteredBranches.length} Verified Entries
             </p>
           </CardFooter>
         </Card>
