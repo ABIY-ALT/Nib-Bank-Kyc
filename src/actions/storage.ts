@@ -7,6 +7,7 @@ import path from 'path';
 
 /**
  * Retrieves the institutional file inventory based on user jurisdiction.
+ * Includes relations for deep hierarchical filtering.
  */
 export async function getStorageInventory(params: {
   userId: string;
@@ -14,7 +15,7 @@ export async function getStorageInventory(params: {
   assignedBranches: string[];
   branchName?: string;
 }) {
-  const { userId, isSuperAdmin, assignedBranches, branchName } = params;
+  const { isSuperAdmin, assignedBranches, branchName } = params;
 
   try {
     let whereClause: any = {};
@@ -42,7 +43,13 @@ export async function getStorageInventory(params: {
             id: true,
             customerName: true,
             branchName: true,
-            status: true
+            status: true,
+            isResubmitted: true,
+            branch: {
+              include: {
+                district: true
+              }
+            }
           }
         },
         uploadedBy: {
@@ -52,7 +59,8 @@ export async function getStorageInventory(params: {
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 1000 // Optimized limit for discovery
     });
   } catch (error) {
     console.error('[Vault Storage] Fetch Error:', error);
