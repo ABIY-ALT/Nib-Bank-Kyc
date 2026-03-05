@@ -104,6 +104,14 @@ export async function getSubmissions(filters?: {
               select: { name: true }
             }
           }
+        },
+        memos: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            fileUrl: true
+          }
         }
       },
       orderBy: { createdAt: 'desc' },
@@ -478,7 +486,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
           role: 'BRANCH_MANAGER',
           performedBy: initiatedBy,
           timestamp: now.toISOString(),
-          comment: `Exception Initiated: ${reason}. Justification: ${justification}. ${remarks}`,
+          comment: `Exception Initiated: ${reason}. Justification: ${riskJustification}. ${remarks}`,
           action: 'INITIATE_EXCEPTION',
           memoAttached: true
         }],
@@ -561,7 +569,7 @@ export async function resubmitSubmission(formData: FormData) {
 
     await prisma.auditLog.create({
       data: {
-        userId,
+        userId: userId,
         kycId: id,
         action: 'RESUBMIT',
         ipAddress,

@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from "react"
@@ -194,9 +193,10 @@ export default function KYCOperationsMonitoringPage() {
     const completed = filteredData.filter(s => s.status === KYCStatus.APPROVED).length;
     
     const slaItems = filteredData.map(sub => {
-      const standardDeadline = addHours(new Date(sub.submittedAt || sub.createdAt), 24);
+      const subTime = new Date(sub.submittedAt || sub.createdAt);
+      const standardDeadline = addHours(subTime, 24);
       const now = new Date();
-      const hoursSinceSubmission = differenceInHours(now, new Date(sub.submittedAt || sub.createdAt));
+      const hoursSinceSubmission = differenceInHours(now, subTime);
       
       const isBreached = isAfter(now, standardDeadline);
       const hoursLeft = differenceInHours(standardDeadline, now);
@@ -504,7 +504,7 @@ export default function KYCOperationsMonitoringPage() {
                 <div>
                   <CardTitle className="text-3xl font-black tracking-tight">Technical Operations Queue</CardTitle>
                   <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                    Prioritized Technical Analysis Stream & bull; {analytics.total} Active Units
+                    Prioritized Technical Analysis Stream &bull; {analytics.total} Active Units
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="border-primary/30 text-primary font-black px-6 py-2 rounded-full h-10 text-[10px] tracking-widest">
@@ -613,14 +613,20 @@ export default function KYCOperationsMonitoringPage() {
                                 <div className="space-y-4">
                                   <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Bundle Assets</Label>
                                   <div className="flex flex-wrap gap-2.5">
-                                    {['National_ID.pdf', 'Memo_Authorized.jpg', 'Utility_Proof.png'].map(f => (
-                                      <Badge key={f} variant="outline" className="bg-white border-slate-200 text-[10px] font-black py-1.5 px-3 rounded-lg text-slate-500 hover:border-primary/30 transition-colors cursor-default">{f}</Badge>
-                                    ))}
+                                    {sub.memos && sub.memos.length > 0 ? sub.memos.map((memo: any) => (
+                                      <Badge key={memo.id} variant="outline" className="bg-white border-slate-200 text-[10px] font-black py-1.5 px-3 rounded-lg text-slate-500 hover:border-primary/30 transition-colors cursor-default">
+                                        {memo.name}
+                                      </Badge>
+                                    )) : (
+                                      <span className="text-[10px] font-bold text-slate-400 italic">No assets discovered in primary bundle.</span>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex items-end justify-end">
-                                  <Button variant="ghost" className="h-12 px-6 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] text-primary hover:bg-primary/5 border border-primary/10">
-                                    View Detailed Trail <ExternalLink className="w-4 h-4 ml-3" />
+                                  <Button variant="ghost" asChild className="h-12 px-6 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] text-primary hover:bg-primary/5 border border-primary/10">
+                                    <Link href={`/submissions/${sub.id}`}>
+                                      View Detailed Trail <ExternalLink className="w-4 h-4 ml-3" />
+                                    </Link>
                                   </Button>
                                 </div>
                               </div>
@@ -653,7 +659,7 @@ export default function KYCOperationsMonitoringPage() {
                   <div>
                     <CardTitle className="text-3xl font-black tracking-tight">Efficiency & Accuracy Matrix</CardTitle>
                     <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                      Weighted Specialist Metrics & bull; Audit Score Formula 40/30/20/10
+                      Weighted Specialist Metrics &bull; Audit Score Formula 40/30/20/10
                     </CardDescription>
                   </div>
                 </div>
