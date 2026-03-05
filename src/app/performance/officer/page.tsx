@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from "react"
@@ -66,6 +65,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { KYCStatus } from "@prisma/client";
 import Link from "next/link";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 export default function KYCOperationsMonitoringPage() {
   const { user } = useAuth();
@@ -84,9 +85,10 @@ export default function KYCOperationsMonitoringPage() {
   // Filtering States
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedOfficer, setSelectedOfficer] = useState<string>("all");
-  const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "custom">("month");
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
 
   const roleContext = useMemo(() => {
     if (!user) return 'OFFICER';
@@ -103,13 +105,17 @@ export default function KYCOperationsMonitoringPage() {
       setLastUpdated(new Date());
     }, 30000); 
     return () => clearInterval(interval);
-  }, [fromDate, toDate, roleContext, user, selectedBranch, selectedOfficer]);
+  }, [dateRange, roleContext, user, selectedBranch, selectedOfficer]);
 
   const loadData = async () => {
-    if (!user) return;
+    if (!user || !dateRange?.from || !dateRange?.to) return;
     setLoading(true);
     try {
-      let filters: any = { startDate: fromDate, endDate: toDate, limit: 1000 };
+      let filters: any = { 
+        startDate: format(dateRange.from, 'yyyy-MM-dd'), 
+        endDate: format(dateRange.to, 'yyyy-MM-dd'), 
+        limit: 1000 
+      };
       
       if (roleContext === 'OFFICER') {
         filters.assignedToId = user?.id;
@@ -131,15 +137,13 @@ export default function KYCOperationsMonitoringPage() {
   };
 
   const handleRangeSelection = (range: "today" | "week" | "month") => {
-    setDateRange(range);
     const now = new Date();
     let start;
     if (range === 'today') start = startOfDay(now);
     else if (range === 'week') start = subDays(now, 7);
     else start = subDays(now, 30);
     
-    setFromDate(format(start, 'yyyy-MM-dd'));
-    setToDate(format(now, 'yyyy-MM-dd'));
+    setDateRange({ from: start, to: now });
   };
 
   const handleManualEscalation = async (caseId: string) => {
@@ -270,7 +274,7 @@ export default function KYCOperationsMonitoringPage() {
     setSelectedBranch("all");
     setSelectedOfficer("all");
     setSearchTerm("");
-    handleRangeSelection("month");
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   const handleExport = () => {
@@ -315,29 +319,24 @@ export default function KYCOperationsMonitoringPage() {
               onClick={() => handleRangeSelection(r)}
               className={cn(
                 "px-6 h-10 rounded-xl font-black text-[10px] uppercase tracking-[0.1em] transition-all",
-                dateRange === r ? "bg-white text-primary shadow-lg shadow-black/5" : "text-slate-500 hover:text-primary"
+                "text-slate-500 hover:text-primary"
               )}
             >
               {r}
             </Button>
           ))}
-          <Button 
-            variant="outline" 
-            onClick={() => setDateRange("custom")}
-            className={cn(
-              "h-10 px-6 border-none shadow-none font-black text-[10px] uppercase tracking-[0.1em] rounded-xl gap-2 transition-all",
-              dateRange === 'custom' ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-transparent text-slate-500 hover:bg-white"
-            )}
-          >
-            <CalendarIcon className="w-3.5 h-3.5" /> Custom
-          </Button>
+          <DatePickerWithRange 
+            date={dateRange} 
+            onDateChange={setDateRange} 
+            className="ml-2"
+          />
         </div>
       </div>
 
       {/* FILTER CONSOLE */}
       <Card className="border-slate-200 shadow-xl shadow-slate-200/50 bg-white rounded-[2rem] overflow-hidden">
         <CardContent className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-3 space-y-2.5">
+          <div className="lg:col-span-4 space-y-2.5">
             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2 px-1">
               <Building2 className="w-3.5 h-3.5" /> Jurisdiction Branch
             </Label>
@@ -352,7 +351,7 @@ export default function KYCOperationsMonitoringPage() {
             </Select>
           </div>
 
-          <div className="lg:col-span-3 space-y-2.5">
+          <div className="lg:col-span-4 space-y-2.5">
             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2 px-1">
               <User className="w-3.5 h-3.5" /> Active Reviewer
             </Label>
@@ -382,24 +381,17 @@ export default function KYCOperationsMonitoringPage() {
             </div>
           </div>
 
-          <div className="lg:col-span-2 flex items-end">
-            <Button variant="ghost" onClick={resetFilters} className="w-full h-14 gap-2 font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-primary hover:bg-primary/5 rounded-2xl">
+          <div className="lg:col-span-12 flex items-center justify-between pt-4 border-t border-slate-50">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                <Clock className="w-3.5 h-3.5 text-primary" />
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Window: {dateRange?.from ? format(dateRange.from, 'MMM dd, yyyy') : '...'} - {dateRange?.to ? format(dateRange.to, 'MMM dd, yyyy') : '...'}</span>
+              </div>
+            </div>
+            <Button variant="ghost" onClick={resetFilters} className="h-12 gap-2 font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-primary hover:bg-primary/5 rounded-xl">
               <RotateCcw className="w-4 h-4" /> Reset Filters
             </Button>
           </div>
-
-          {dateRange === 'custom' && (
-            <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-top-4 duration-300">
-              <div className="space-y-2.5">
-                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Audit Start Date</Label>
-                <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-14 rounded-2xl border-slate-200 font-bold bg-slate-50/50" />
-              </div>
-              <div className="space-y-2.5">
-                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Audit Conclusion Date</Label>
-                <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-14 rounded-2xl border-slate-200 font-bold bg-slate-50/50" />
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -511,7 +503,7 @@ export default function KYCOperationsMonitoringPage() {
                 <div>
                   <CardTitle className="text-3xl font-black tracking-tight">Technical Operations Queue</CardTitle>
                   <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                    Prioritized Technical Analysis Stream &bull; {analytics.total} Active Units
+                    Prioritized Technical Analysis Stream & bull; {analytics.total} Active Units
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="border-primary/30 text-primary font-black px-6 py-2 rounded-full h-10 text-[10px] tracking-widest">

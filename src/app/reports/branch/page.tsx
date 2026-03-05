@@ -47,6 +47,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { KYCStatus } from "@prisma/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 export default function BranchReportsPage() {
   const { user } = useAuth();
@@ -60,8 +62,10 @@ export default function BranchReportsPage() {
 
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
 
   const isDistDir = user?.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
   const activeDistrict = isDistDir ? user?.districtName : (selectedDistrict === 'all' ? undefined : selectedDistrict);
@@ -92,13 +96,17 @@ export default function BranchReportsPage() {
   }, [branches, selectedDistrict]);
 
   const handleGenerateReport = async () => {
+    if (!dateRange?.from || !dateRange?.to) {
+      toast({ variant: "destructive", title: "Range Required", description: "Please select an analysis window." });
+      return;
+    }
     setLoading(true);
     try {
       const data = await getSubmissions({
         district: activeDistrict || undefined,
         branch: selectedBranch === 'all' ? undefined : selectedBranch,
-        startDate: fromDate,
-        endDate: toDate
+        startDate: format(dateRange.from, 'yyyy-MM-dd'),
+        endDate: format(dateRange.to, 'yyyy-MM-dd')
       });
       setReportData(data);
       toast({
@@ -124,8 +132,8 @@ export default function BranchReportsPage() {
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
     link.setAttribute('href', url);
     link.setAttribute('download', `nib-compliance-report-${format(new Date(), 'yyyyMMdd')}.csv`);
     link.click();
@@ -149,7 +157,7 @@ export default function BranchReportsPage() {
           <p className="text-muted-foreground text-lg font-medium">Audit-ready historical data for regulatory reporting and institutional verification.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 h-11 px-6 font-bold border-slate-200 bg-white" onClick={() => { setReportData(null); setSelectedDistrict(isDistDir ? user?.districtName || "all" : "all"); setSelectedBranch("all"); }}>
+          <Button variant="outline" className="gap-2 h-11 px-6 font-bold border-slate-200 bg-white" onClick={() => { setReportData(null); setSelectedDistrict(isDistDir ? user?.districtName || "all" : "all"); setSelectedBranch("all"); setDateRange({ from: subDays(new Date(), 30), to: new Date() }); }}>
             <Filter className="w-4 h-4" /> Reset
           </Button>
           <Button 
@@ -179,8 +187,8 @@ export default function BranchReportsPage() {
           <CardDescription>Configure the scope for regulatory data aggregation.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            <div className="md:col-span-3 space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <Map className="w-3 h-3" /> Regional District
               </Label>
@@ -189,7 +197,7 @@ export default function BranchReportsPage() {
                 onValueChange={(val) => { setSelectedDistrict(val); setSelectedBranch("all"); }}
                 disabled={isDistDir}
               >
-                <SelectTrigger className="h-11">
+                <SelectTrigger className="h-12 rounded-xl">
                   <SelectValue placeholder="All Districts" />
                 </SelectTrigger>
                 <SelectContent>
@@ -198,12 +206,12 @@ export default function BranchReportsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
+            <div className="md:col-span-3 space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <Building2 className="w-3 h-3" /> Specific Branch
               </Label>
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="h-11">
+                <SelectTrigger className="h-12 rounded-xl">
                   <SelectValue placeholder="All Branches" />
                 </SelectTrigger>
                 <SelectContent>
@@ -212,17 +220,16 @@ export default function BranchReportsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">From Date</Label>
-              <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-11" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">To Date</Label>
-              <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-11" />
+            <div className="md:col-span-6">
+              <DatePickerWithRange 
+                date={dateRange} 
+                onDateChange={setDateRange} 
+                label="Analysis Window" 
+              />
             </div>
           </div>
           <div className="mt-8 flex justify-end">
-            <Button size="lg" className="px-12 h-14 font-black gap-2 shadow-xl shadow-primary/20 bg-primary hover:bg-primary/90" onClick={handleGenerateReport} disabled={loading}>
+            <Button size="lg" className="px-12 h-14 font-black gap-2 shadow-xl shadow-primary/20 bg-primary hover:bg-primary/90 rounded-xl" onClick={handleGenerateReport} disabled={loading}>
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
               Compile Audit Trail
             </Button>
@@ -231,8 +238,8 @@ export default function BranchReportsPage() {
       </Card>
 
       {reportData && (
-        <Card className="border-slate-200 shadow-xl animate-in slide-in-from-top-4 duration-500 overflow-hidden">
-          <CardHeader className="bg-slate-900 text-white rounded-t-lg p-6">
+        <Card className="border-slate-200 shadow-xl animate-in slide-in-from-top-4 duration-500 overflow-hidden rounded-[2rem]">
+          <CardHeader className="bg-slate-900 text-white p-8">
             <div className="flex justify-between items-center">
               <div>
                 <CardTitle className="text-2xl font-bold tracking-tight">Audit Archive: {selectedDistrict === 'all' ? 'Global' : selectedDistrict} / {selectedBranch === 'all' ? 'All Nodes' : selectedBranch}</CardTitle>
