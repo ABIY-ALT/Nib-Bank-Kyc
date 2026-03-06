@@ -87,11 +87,21 @@ export async function resetUserPassword(email: string, authorizerId: string) {
 
 /**
  * Retrieves all personnel from the institutional registry, sorted alphabetically.
+ * EXCLUDES hashed passwords from the result.
  */
 export async function getAllUsers() {
   try {
     return await prisma.user.findMany({
-      include: { 
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phoneNumber: true,
+        status: true,
+        branchId: true,
+        needsPasswordChange: true,
+        assignedBranches: true,
         branch: {
           include: { district: true }
         },
@@ -139,6 +149,7 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
 /**
  * Provisions a new user or updates an existing one, including Branch Transfers and Role Transitions.
  * Returns the generated temporary password for initial registration.
+ * EXCLUDES hashed passwords from the return object.
  */
 export async function provisionUser(data: {
   id?: string;
@@ -160,13 +171,11 @@ export async function provisionUser(data: {
     const isNewUser = !data.id;
     let tempPass = data.password;
     
-    // Generate a temporary password ONLY for new users if one wasn't provided
     if (isNewUser && !tempPass) {
       tempPass = generateSecurePassword(10);
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Fetch current state for audit comparison and existence check
       const existingUser = await tx.user.findFirst({
         where: data.id ? { id: data.id } : { email: data.email.toLowerCase() },
         include: { 
@@ -175,16 +184,13 @@ export async function provisionUser(data: {
         }
       });
 
-      // Only hash a password if it's new or being updated
       let hashedPassword = undefined;
       if (tempPass) {
         hashedPassword = await bcrypt.hash(tempPass, 10);
       }
 
-      // 2. Process the User record using separate Update/Create calls to satisfy Prisma constraints
       let user;
       if (existingUser) {
-        // UPDATE existing personnel
         user = await tx.user.update({
           where: { id: existingUser.id },
           data: { 
@@ -199,7 +205,6 @@ export async function provisionUser(data: {
           }
         });
       } else {
-        // CREATE new personnel
         if (!hashedPassword) {
           const generated = generateSecurePassword(10);
           tempPass = generated;
@@ -220,7 +225,6 @@ export async function provisionUser(data: {
         });
       }
 
-      // 3. Handle Branch Transfer Logging
       const currentBranchId = existingUser?.branch?.id;
       if (existingUser && currentBranchId !== data.branchId) {
         const oldBranchName = existingUser.branch?.name || 'Institutional';
@@ -242,7 +246,6 @@ export async function provisionUser(data: {
         });
       }
 
-      // 4. Handle Role Transition Logging
       const currentRoleName = existingUser?.roles?.[0]?.role?.name;
       if (existingUser && currentRoleName !== data.role) {
         await tx.auditLog.create({
@@ -260,7 +263,6 @@ export async function provisionUser(data: {
         });
       }
 
-      // 5. Link the role via UserRole relational table
       if (data.role) {
         const role = await tx.role.findUnique({ where: { name: data.role } });
         if (role) {
@@ -274,9 +276,13 @@ export async function provisionUser(data: {
     });
 
     revalidatePath('/admin/users');
+    
+    // Explicitly strip password hash from the result before returning to client
+    const { password: _, ...safeUser } = result as any;
+
     return { 
       success: true, 
-      user: result, 
+      user: safeUser, 
       tempPassword: isNewUser ? tempPass : null 
     };
   } catch (error: any) {

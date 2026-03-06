@@ -22,6 +22,7 @@ async function getClientIp() {
 
 /**
  * Optimized Submission Fetcher.
+ * Uses strict selection to avoid leaking sensitive personnel details.
  */
 export async function getSubmissions(filters?: {
   status?: KYCStatus[];
@@ -87,14 +88,18 @@ export async function getSubmissions(filters?: {
         checklistState: true,
         createdBy: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
+            email: true,
           }
         },
         assignedTo: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
+            email: true,
           }
         },
         assignedToId: true,
@@ -168,8 +173,22 @@ export async function getSubmissionById(id: string) {
     const kyc = await prisma.kYC.findUnique({
       where: { id },
       include: {
-        createdBy: true,
-        assignedTo: true,
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          }
+        },
+        assignedTo: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          }
+        },
         branch: { include: { district: true } },
         memos: { orderBy: { createdAt: 'desc' } },
         auditLogs: { orderBy: { timestamp: 'desc' } },
