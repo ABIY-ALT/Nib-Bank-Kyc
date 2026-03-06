@@ -1,6 +1,7 @@
-
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -16,11 +17,31 @@ import {
   Building2,
   Scale,
   History,
-  Info
+  Info,
+  Loader2
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function SystemBRDPage() {
+  const router = useRouter();
+  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
+
+  useEffect(() => {
+    if (!permissionsLoading && !isSuperAdmin) {
+      router.push('/unauthorized');
+    }
+  }, [isSuperAdmin, permissionsLoading, router]);
+
+  if (permissionsLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">Verifying Clearance...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

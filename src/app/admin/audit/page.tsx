@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Table, 
   TableBody, 
@@ -28,9 +29,13 @@ import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { getGlobalAuditLogs } from "@/actions/audit";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function GlobalAuditLogPage() {
+  const router = useRouter();
   const { toast } = useToast();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [logs, setLogs] = useState<any[]>([]);
@@ -38,6 +43,12 @@ export default function GlobalAuditLogPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const limit = 10;
+
+  useEffect(() => {
+    if (!permissionsLoading && !hasPermission('VIEW_SYSTEM_AUDIT')) {
+      router.push('/unauthorized');
+    }
+  }, [hasPermission, permissionsLoading, router]);
 
   // Search Debounce Engine
   useEffect(() => {
@@ -50,8 +61,10 @@ export default function GlobalAuditLogPage() {
 
   // Data Fetching Sync
   useEffect(() => {
-    loadLogs();
-  }, [page, debouncedSearch]);
+    if (hasPermission('VIEW_SYSTEM_AUDIT')) {
+      loadLogs();
+    }
+  }, [page, debouncedSearch, hasPermission]);
 
   const loadLogs = async () => {
     setLoading(true);
@@ -101,6 +114,15 @@ export default function GlobalAuditLogPage() {
   };
 
   const totalPages = Math.ceil(total / limit) || 1;
+
+  if (permissionsLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">Verifying Clearance...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">

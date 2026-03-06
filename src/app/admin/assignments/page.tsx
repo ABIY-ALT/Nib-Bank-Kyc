@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -41,9 +42,13 @@ import {
 import { getAllUsers, updateUserPortfolio } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { cn } from "@/lib/utils";
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function StaffAssignmentsPage() {
+  const router = useRouter();
   const { toast } = useToast();
+  const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
+  
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState<any[]>([]);
@@ -53,6 +58,12 @@ export default function StaffAssignmentsPage() {
   // Searchable Popover State
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false);
   const [branchSearchQuery, setBranchSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (!permissionsLoading && !hasPermission('MAP_USERS_TO_BRANCH')) {
+      router.push('/unauthorized');
+    }
+  }, [hasPermission, permissionsLoading, router]);
 
   useEffect(() => {
     loadData();
@@ -118,7 +129,7 @@ export default function StaffAssignmentsPage() {
     return branches.filter(b => b.name.toLowerCase().includes(branchSearchQuery.toLowerCase()));
   }, [branches, branchSearchQuery]);
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />

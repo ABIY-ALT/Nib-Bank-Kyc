@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { 
   Building2, 
@@ -37,9 +38,13 @@ import { Badge } from "@/components/ui/badge";
 import { getBranches, getDistricts, createBranch, updateBranch, createDistrict, updateDistrict, deleteNode } from '@/actions/hierarchy';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function BranchesDistrictsPage() {
+  const router = useRouter();
   const { toast } = useToast();
+  const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
+  
   const [branches, setBranches] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +60,12 @@ export default function BranchesDistrictsPage() {
   
   const [branchForm, setBranchForm] = useState<any>({ name: '', districtName: '', code: '' });
   const [districtForm, setDistrictForm] = useState<any>({ name: '' });
+
+  useEffect(() => {
+    if (!permissionsLoading && !hasPermission('MANAGE_BRANCHES')) {
+      router.push('/unauthorized');
+    }
+  }, [hasPermission, permissionsLoading, router]);
 
   useEffect(() => {
     loadData();
@@ -174,7 +185,7 @@ export default function BranchesDistrictsPage() {
     }
   };
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-48 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -32,10 +33,14 @@ import {
 } from "@/components/ui/select";
 import { getGlobalSettings, updateGlobalSettings } from '@/actions/settings';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function SystemSettingsPage() {
+  const router = useRouter();
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  
   const [loading, setLoading] = useState(true);
   
   const [localSettings, setLocalSettings] = useState<any>({
@@ -51,6 +56,12 @@ export default function SystemSettingsPage() {
   const [newDocLabel, setNewDocLabel] = useState("");
   const [newEntityLabel, setNewEntityLabel] = useState("");
   const [newGuideline, setNewGuideline] = useState<any>({ title: "", description: "", type: 'info' });
+
+  useEffect(() => {
+    if (!permissionsLoading && !hasPermission('EDIT_SLA_POLICY')) {
+      router.push('/unauthorized');
+    }
+  }, [hasPermission, permissionsLoading, router]);
 
   useEffect(() => {
     loadSettings();
@@ -114,7 +125,7 @@ export default function SystemSettingsPage() {
     setLocalSettings({ ...localSettings, guidelines: updated });
   };
 
-  if (loading) return <div className="py-24 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
+  if (loading || permissionsLoading) return <div className="py-24 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">

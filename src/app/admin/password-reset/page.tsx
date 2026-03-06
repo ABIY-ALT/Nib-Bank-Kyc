@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,13 +21,23 @@ import {
 import { resetUserPassword } from '@/actions/users';
 import { tempPasswordRegistry } from '@/lib/temp-password-registry';
 import Link from 'next/link';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function AdminPasswordResetPage() {
+  const router = useRouter();
   const { user: currentUser } = useAuth();
+  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
+  
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ tempPass: string, name: string } | null>(null);
+
+  useEffect(() => {
+    if (!permissionsLoading && !isSuperAdmin) {
+      router.push('/unauthorized');
+    }
+  }, [isSuperAdmin, permissionsLoading, router]);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +68,15 @@ export default function AdminPasswordResetPage() {
     navigator.clipboard.writeText(text);
     toast({ title: "Successful", description: "Credential saved to clipboard." });
   };
+
+  if (permissionsLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">Verifying Clearance...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-0 animate-in fade-in duration-500 pb-20 pt-10 px-4 md:px-0">

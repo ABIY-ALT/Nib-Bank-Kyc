@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { 
@@ -68,8 +69,9 @@ import { cn } from '@/lib/utils';
 type AssetCategory = 'ALL' | 'INITIAL' | 'AMENDMENT' | 'MEMO' | 'OTHER';
 
 export default function StorageVaultPage() {
+  const router = useRouter();
   const { user } = useAuth();
-  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
+  const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
 
   // Data State
@@ -91,9 +93,17 @@ export default function StorageVaultPage() {
   const [fileToPurge, setFileToPurge] = useState<any | null>(null);
 
   useEffect(() => {
-    loadMetadata();
-    loadInventory();
-  }, [user]);
+    if (!permissionsLoading && !hasPermission('MANAGE_VAULT_STORAGE')) {
+      router.push('/unauthorized');
+    }
+  }, [hasPermission, permissionsLoading, router]);
+
+  useEffect(() => {
+    if (user && hasPermission('MANAGE_VAULT_STORAGE')) {
+      loadMetadata();
+      loadInventory();
+    }
+  }, [user, hasPermission]);
 
   const loadMetadata = async () => {
     try {

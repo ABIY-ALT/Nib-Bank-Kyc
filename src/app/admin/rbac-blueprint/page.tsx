@@ -1,6 +1,7 @@
-
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,9 +21,11 @@ import {
   LayoutDashboard,
   Building2,
   FileBarChart,
-  UserCog
+  UserCog,
+  Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePermissions } from '@/hooks/use-permissions';
 
 const MATRIX_DATA = [
   { module: "Dashboard", page: "Dashboard", officer: "R", super: "R", director: "R", admin: "R" },
@@ -55,6 +58,15 @@ const MATRIX_DATA = [
 ];
 
 export default function RBACBlueprintPage() {
+  const router = useRouter();
+  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
+
+  useEffect(() => {
+    if (!permissionsLoading && !isSuperAdmin) {
+      router.push('/unauthorized');
+    }
+  }, [isSuperAdmin, permissionsLoading, router]);
+
   const handlePrint = () => {
     window.print();
   };
@@ -65,6 +77,15 @@ export default function RBACBlueprintPage() {
     if (val === 'RW') return <div className="w-12 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 flex items-center justify-center font-black text-xs gap-1">R/W</div>;
     return <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-300 flex items-center justify-center font-black text-xs">-</div>;
   };
+
+  if (permissionsLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">Verifying Clearance...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20 print:p-0">
@@ -115,7 +136,7 @@ export default function RBACBlueprintPage() {
                 <div className="w-48 p-6 rounded-3xl bg-blue-500 text-white border-4 border-white shadow-xl shadow-blue-100 flex flex-col items-center text-center gap-2 group-hover:-translate-y-2 transition-transform">
                   <UserPlus className="w-6 h-6" />
                   <div>
-                    <p className="font-black text-sm">Step 1: Roles Table</p>
+                    <p className="font-black text-sm: Roles Table</p>
                     <p className="text-[9px] font-bold text-blue-100 uppercase tracking-widest">e.g. "KYC Auditor"</p>
                   </div>
                 </div>
