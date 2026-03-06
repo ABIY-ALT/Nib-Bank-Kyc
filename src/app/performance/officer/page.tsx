@@ -10,31 +10,27 @@ import {
   CardTitle, 
   CardContent, 
   CardDescription,
-  CardFooter 
 } from "@/components/ui/card"
 import { 
   Users, 
-  CheckCircle2, 
   FileDown, 
   TrendingUp,
-  Clock,
   Loader2,
   ShieldCheck,
   Search,
   Zap,
   Inbox,
   ArrowUpRight,
-  RotateCcw,
   ChevronRight,
   ChevronLeft,
-  MessageSquare,
   Building2,
   ShieldAlert,
   Download,
   Eye,
   Monitor,
-  LayoutGrid,
-  ExternalLink
+  Map,
+  Check,
+  ChevronsUpDown
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -43,6 +39,12 @@ import { useToast } from "@/hooks/use-toast"
 import { format, differenceInHours } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { getSubmissions, updateSubmissionStatus, logBundleDownload, getSubmissionById } from "@/actions/submissions";
 import { getAllUsers } from "@/actions/users";
 import { getDistricts, getBranches } from "@/actions/hierarchy";
@@ -60,13 +62,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 type ViewMode = 'officers' | 'branches' | 'cases';
 
@@ -86,14 +81,25 @@ export default function KYCOperationsMonitoringPage() {
   const [selectedOfficer, setSelectedOfficer] = useState<any | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   
-  const [searchTerm, setSearchTerm] = useState("");
+  // Searchable Filter States
+  const [districtSearch, setDistrictDistrict] = useState("");
+  const [branchSearch, setBranchSearch] = useState("");
+  const [officerSearch, setOfficerSearch] = useState("");
+  
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("all");
+  const [selectedOfficerFilter, setSelectedOfficerFilter] = useState<string>("all");
+  
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   
   const [isEscalating, setIsEscalating] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState<any | null>(null);
+
+  // Popover States
+  const [distOpen, setDistOpen] = useState(false);
+  const [branchOpen, setBranchOpen] = useState(false);
+  const [officerOpen, setOfficerOpen] = useState(false);
 
   useEffect(() => {
     loadBaseData();
@@ -204,12 +210,12 @@ export default function KYCOperationsMonitoringPage() {
         stats: { total: offSubs.length, approved, escalated, amended, branchesMapped }
       };
     }).filter(off => {
-      const matchesName = `${off.firstName} ${off.lastName}`.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSelection = selectedOfficerFilter === 'all' || off.id === selectedOfficerFilter;
       const matchesDistrict = selectedDistrict === 'all' || off.branch?.district?.name === selectedDistrict;
       const matchesBranch = selectedBranchFilter === 'all' || off.branchName === selectedBranchFilter;
-      return matchesName && matchesDistrict && matchesBranch;
+      return matchesSelection && matchesDistrict && matchesBranch;
     });
-  }, [officers, submissions, searchTerm, selectedDistrict, selectedBranchFilter]);
+  }, [officers, submissions, selectedOfficerFilter, selectedDistrict, selectedBranchFilter]);
 
   const currentBranches = useMemo(() => {
     if (!selectedOfficer) return [];
@@ -254,11 +260,17 @@ export default function KYCOperationsMonitoringPage() {
     link.click();
   };
 
-  if (loading || permissionsLoading) return <div className="py-48 text-center"><Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" /></div>;
+  const filteredDistricts = districts.filter(d => d.name.toLowerCase().includes(districtSearch.toLowerCase()));
+  const filteredBranchesList = branches.filter(b => (selectedDistrict === 'all' || b.district?.name === selectedDistrict) && b.name.toLowerCase().includes(branchSearch.toLowerCase()));
+  const filteredOfficersList = officers.filter(o => {
+    const name = `${o.firstName} ${o.lastName}`.toLowerCase();
+    return name.includes(officerSearch.toLowerCase());
+  });
+
+  if (loading || permissionsLoading) return <div className="py-48 text-center flex items-center justify-center"><Loader2 className="w-12 h-12 animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      {/* INSTITUTIONAL HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex items-center gap-5">
           <div className="p-4 bg-primary text-white rounded-[2rem] shadow-2xl">
@@ -277,37 +289,135 @@ export default function KYCOperationsMonitoringPage() {
         </div>
       </div>
 
-      {/* FILTER CONSOLE */}
       <Card className="border-slate-200 shadow-sm bg-white overflow-hidden rounded-[2rem]">
-        <CardContent className="p-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+        <CardContent className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* DISTRICT SEARCHABLE */}
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Jurisdiction District</Label>
-            <Select value={selectedDistrict} onValueChange={setSelectedDistrict}>
-              <SelectTrigger className="h-12 rounded-xl bg-slate-50/50 border-slate-200 font-bold"><SelectValue placeholder="All Districts" /></SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="all">Global Network</SelectItem>
-                {districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Popover open={distOpen} onOpenChange={setDistOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" className="w-full justify-between h-12 rounded-xl border-slate-200 bg-slate-50/50 font-bold">
+                  {selectedDistrict === 'all' ? "Global Network" : selectedDistrict}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0 rounded-2xl shadow-2xl border-none">
+                <div className="p-3 border-b bg-slate-50/50">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <Input placeholder="Search district..." className="pl-9 h-10 rounded-lg text-sm border-slate-200" value={districtSearch} onChange={(e) => setDistrictDistrict(e.target.value)} />
+                  </div>
+                </div>
+                <ScrollArea className="h-64">
+                  <div className="p-1">
+                    <div 
+                      className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedDistrict === 'all' ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
+                      onClick={() => { setSelectedDistrict('all'); setSelectedBranchFilter('all'); setDistOpen(false); }}
+                    >
+                      <div className="flex items-center gap-2"><Map className="w-4 h-4" /> Global Network</div>
+                      {selectedDistrict === 'all' && <Check className="w-4 h-4" />}
+                    </div>
+                    {filteredDistricts.map(d => (
+                      <div 
+                        key={d.id}
+                        className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedDistrict === d.name ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
+                        onClick={() => { setSelectedDistrict(d.name); setSelectedBranchFilter('all'); setDistOpen(false); }}
+                      >
+                        {d.name}
+                        {selectedDistrict === d.name && <Check className="w-4 h-4" />}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
           </div>
+
+          {/* BRANCH SEARCHABLE */}
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Branch Node</Label>
-            <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
-              <SelectTrigger className="h-12 rounded-xl bg-slate-50/50 border-slate-200 font-bold"><SelectValue placeholder="All Branches" /></SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="all">All Branches</SelectItem>
-                {branches.filter(b => selectedDistrict === 'all' || b.district?.name === selectedDistrict).map(b => (
-                  <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={branchOpen} onOpenChange={setBranchOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" className="w-full justify-between h-12 rounded-xl border-slate-200 bg-slate-50/50 font-bold">
+                  {selectedBranchFilter === 'all' ? "All Branches" : selectedBranchFilter}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0 rounded-2xl shadow-2xl border-none">
+                <div className="p-3 border-b bg-slate-50/50">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <Input placeholder="Search branch node..." className="pl-9 h-10 rounded-lg text-sm border-slate-200" value={branchSearch} onChange={(e) => setBranchSearch(e.target.value)} />
+                  </div>
+                </div>
+                <ScrollArea className="h-64">
+                  <div className="p-1">
+                    <div 
+                      className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedBranchFilter === 'all' ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
+                      onClick={() => { setSelectedBranchFilter('all'); setBranchOpen(false); }}
+                    >
+                      <div className="flex items-center gap-2"><Building2 className="w-4 h-4" /> All Branches</div>
+                      {selectedBranchFilter === 'all' && <Check className="w-4 h-4" />}
+                    </div>
+                    {filteredBranchesList.map(b => (
+                      <div 
+                        key={b.id}
+                        className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedBranchFilter === b.name ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
+                        onClick={() => { setSelectedBranchFilter(b.name); setBranchOpen(false); }}
+                      >
+                        {b.name}
+                        {selectedBranchFilter === b.name && <Check className="w-4 h-4" />}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
           </div>
-          <div className="md:col-span-2 space-y-2">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Personnel Discovery</Label>
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input placeholder="Search KYC Officer by name..." className="pl-11 h-12 bg-slate-50/50 rounded-xl border-slate-200 font-bold" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-            </div>
+
+          {/* OFFICER SEARCHABLE */}
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">KYC Officer Disclosure</Label>
+            <Popover open={officerOpen} onOpenChange={setOfficerOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" className="w-full justify-between h-12 rounded-xl border-slate-200 bg-slate-50/50 font-bold">
+                  {selectedOfficerFilter === 'all' ? "Select KYC Officer..." : officers.find(o => o.id === selectedOfficerFilter)?.firstName + " " + officers.find(o => o.id === selectedOfficerFilter)?.lastName}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0 rounded-2xl shadow-2xl border-none">
+                <div className="p-3 border-b bg-slate-50/50">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <Input placeholder="Search personnel..." className="pl-9 h-10 rounded-lg text-sm border-slate-200" value={officerSearch} onChange={(e) => setOfficerSearch(e.target.value)} />
+                  </div>
+                </div>
+                <ScrollArea className="h-64">
+                  <div className="p-1">
+                    <div 
+                      className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedOfficerFilter === 'all' ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
+                      onClick={() => { setSelectedOfficerFilter('all'); setOfficerOpen(false); }}
+                    >
+                      <div className="flex items-center gap-2"><Users className="w-4 h-4" /> All Personnel</div>
+                      {selectedOfficerFilter === 'all' && <Check className="w-4 h-4" />}
+                    </div>
+                    {filteredOfficersList.map(o => (
+                      <div 
+                        key={o.id}
+                        className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedOfficerFilter === o.id ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
+                        onClick={() => { setSelectedOfficerFilter(o.id); setOfficerOpen(false); }}
+                      >
+                        <div className="flex flex-col">
+                          <span>{o.firstName} {o.lastName}</span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase">{o.branchName || 'Institutional'}</span>
+                        </div>
+                        {selectedOfficerFilter === o.id && <Check className="w-4 h-4" />}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
           </div>
         </CardContent>
       </Card>
