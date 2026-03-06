@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from "react"
@@ -39,7 +38,8 @@ import {
   Building2,
   Trophy,
   User,
-  LayoutDashboard
+  LayoutDashboard,
+  Goal
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -52,7 +52,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast"
-import { format, differenceInHours, addHours, isAfter } from "date-fns";
+import { format, differenceInHours, addHours, isAfter, isWithinInterval } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getSubmissions, updateSubmissionStatus } from "@/actions/submissions";
@@ -61,6 +61,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { KYCStatus } from "@prisma/client";
 import Link from "next/link";
+import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 export default function KYCOperationsMonitoringPage() {
   const { user } = useAuth();
@@ -79,6 +80,7 @@ export default function KYCOperationsMonitoringPage() {
   // Filtering States
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedOfficer, setSelectedOfficer] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const roleContext = useMemo(() => {
     if (!user) return 'OFFICER';
@@ -95,7 +97,7 @@ export default function KYCOperationsMonitoringPage() {
       setLastUpdated(new Date());
     }, 30000); 
     return () => clearInterval(interval);
-  }, [roleContext, user, selectedBranch, selectedOfficer]);
+  }, [roleContext, user, selectedBranch, selectedOfficer, dateRange]);
 
   const loadData = async () => {
     if (!user) return;
@@ -107,6 +109,13 @@ export default function KYCOperationsMonitoringPage() {
         filters.assignedToId = user?.id;
       } else if (roleContext === 'SUPERVISOR' && user?.branchName) {
         filters.branch = user.branchName;
+      }
+
+      if (dateRange?.from) {
+        filters.startDate = dateRange.from.toISOString();
+        if (dateRange.to) {
+          filters.endDate = dateRange.to.toISOString();
+        }
       }
       
       const [data, globalSettings] = await Promise.all([
@@ -251,6 +260,7 @@ export default function KYCOperationsMonitoringPage() {
     setSelectedBranch("all");
     setSelectedOfficer("all");
     setSearchTerm("");
+    setDateRange(undefined);
   };
 
   const handleExport = () => {
@@ -287,6 +297,10 @@ export default function KYCOperationsMonitoringPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <DatePickerWithRange 
+            date={dateRange} 
+            onDateChange={setDateRange} 
+          />
           <Button variant="ghost" onClick={loadData} className="h-12 w-12 rounded-xl border border-slate-200 bg-white">
             <RotateCcw className="w-5 h-5 text-slate-400" />
           </Button>
@@ -457,7 +471,7 @@ export default function KYCOperationsMonitoringPage() {
                 <div>
                   <CardTitle className="text-3xl font-black tracking-tight">Technical Operations Queue</CardTitle>
                   <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                    Prioritized Technical Analysis Stream & bull; {analytics.total} Active Units
+                    Prioritized Technical Analysis Stream • {analytics.total} Active Units
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="border-primary/30 text-primary font-black px-6 py-2 rounded-full h-10 text-[10px] tracking-widest">
@@ -612,7 +626,7 @@ export default function KYCOperationsMonitoringPage() {
                   <div>
                     <CardTitle className="text-3xl font-black tracking-tight">Efficiency & Accuracy Matrix</CardTitle>
                     <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                      Weighted Specialist Metrics & bull; Audit Score Formula 40/30/20/10
+                      Weighted Specialist Metrics • Audit Score Formula 40/30/20/10
                     </CardDescription>
                   </div>
                 </div>

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -70,6 +69,7 @@ import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { createAuditLog } from "@/actions/audit";
 import { KYCStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
+import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 const COLORS = ['#B89334', '#10B981', '#3F51B5', '#F59E0B', '#EF4444', '#8B5CF6'];
 
@@ -88,17 +88,24 @@ export default function ManagementReportingPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     loadInstitutionalData();
-  }, [user]);
+  }, [user, dateRange]);
 
   const loadInstitutionalData = async () => {
     if (!user) return;
     setLoading(true);
     try {
+      let filters: any = { limit: 5000 };
+      if (dateRange?.from) {
+        filters.startDate = dateRange.from.toISOString();
+        if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+      }
+
       const [subs, b, d] = await Promise.all([
-        getSubmissions({ limit: 5000 }), 
+        getSubmissions(filters), 
         getBranches(),
         getDistricts()
       ]);
@@ -115,7 +122,6 @@ export default function ManagementReportingPage() {
   const filteredData = useMemo(() => {
     return submissions.filter(sub => {
       const matchesDistrict = selectedDistrict === 'all' || sub.branch?.district?.name === selectedDistrict;
-      const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
       const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
       const matchesType = selectedType === 'all' || sub.entityType === selectedType;
       const matchesSearch = sub.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || sub.id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -243,6 +249,10 @@ export default function ManagementReportingPage() {
           </div>
         </div>
         <div className="flex gap-3">
+          <DatePickerWithRange 
+            date={dateRange} 
+            onDateChange={setDateRange} 
+          />
           <Button className="h-12 px-8 gap-3 bg-primary text-white font-black shadow-xl rounded-xl hover:bg-primary/90 transition-all active:scale-[0.98]" onClick={handleExportExcel}>
             <Download className="w-5 h-5" /> Export Data (CSV)
           </Button>
@@ -294,7 +304,7 @@ export default function ManagementReportingPage() {
             </Select>
           </div>
           <div className="flex items-end">
-            <Button variant="ghost" onClick={() => { setSelectedStatus("all"); setSelectedRisk("all"); setSelectedDistrict("all"); }} className="w-full h-10 gap-2 font-bold text-slate-400 hover:text-primary">
+            <Button variant="ghost" onClick={() => { setSelectedStatus("all"); setSelectedRisk("all"); setSelectedDistrict("all"); setDateRange(undefined); }} className="w-full h-10 gap-2 font-bold text-slate-400 hover:text-primary">
               <RotateCcw className="w-4 h-4" /> Reset Filters
             </Button>
           </div>
