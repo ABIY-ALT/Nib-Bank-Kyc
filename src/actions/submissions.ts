@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import fs from 'fs/promises';
 import path from 'path';
+import { signId } from '@/lib/security';
 
 /**
  * Resolves the client IP address from request headers.
@@ -183,7 +184,7 @@ export async function getSubmissionById(id: string) {
         id: m.id,
         name: m.name || 'Document',
         type: m.type || 'Other',
-        url: m.fileUrl
+        url: `/api/memos/${signId(m.id)}`
       }))
     };
   } catch (error) {
@@ -486,7 +487,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
           role: 'BRANCH_MANAGER',
           performedBy: initiatedBy,
           timestamp: now.toISOString(),
-          comment: `Exception Initiated: ${reason}. Justification: ${riskJustification}. ${remarks}`,
+          comment: `Exception Initiated: ${reason}. Justification: ${justification}. ${remarks}`,
           action: 'INITIATE_EXCEPTION',
           memoAttached: true
         }],

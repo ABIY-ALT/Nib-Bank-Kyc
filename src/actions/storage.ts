@@ -4,10 +4,11 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs/promises';
 import path from 'path';
+import { signId } from '@/lib/security';
 
 /**
  * Retrieves the institutional file inventory based on user jurisdiction.
- * Includes relations for deep hierarchical filtering.
+ * Includes relations for deep hierarchical filtering and secures URLs with HMAC tokens.
  */
 export async function getStorageInventory(params: {
   userId: string;
@@ -35,7 +36,7 @@ export async function getStorageInventory(params: {
       }
     }
 
-    return await prisma.memo.findMany({
+    const memos = await prisma.memo.findMany({
       where: whereClause,
       include: {
         kyc: {
@@ -62,6 +63,12 @@ export async function getStorageInventory(params: {
       orderBy: { createdAt: 'desc' },
       take: 1000 // Optimized limit for discovery
     });
+
+    // Tokenize IDs to prevent IDOR during browser interaction
+    return memos.map(m => ({
+      ...m,
+      fileUrl: `/api/memos/${signId(m.id)}`
+    }));
   } catch (error) {
     console.error('[Vault Storage] Fetch Error:', error);
     return [];
