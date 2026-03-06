@@ -41,7 +41,8 @@ import {
   Eye,
   MoreVertical,
   MapPin,
-  Gavel
+  Gavel,
+  Monitor
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -493,7 +494,7 @@ export default function KYCOperationsMonitoringPage() {
                     <TableRow>
                       <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Case ID</TableHead>
                       <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Customer Entity</TableHead>
-                      <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Oversight Status</TableHead>
+                      <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Oversight</TableHead>
                       <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Workflow Status</TableHead>
                       <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
                     </TableRow>
@@ -550,7 +551,7 @@ export default function KYCOperationsMonitoringPage() {
                                 {isDownloading === sub.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
                               </Button>
                               <Button size="sm" asChild className="h-11 bg-slate-900 text-white font-black text-[10px] uppercase px-6 rounded-xl hover:bg-black">
-                                <Link href={`/submissions/${sub.id}`}>Run audit</Link>
+                                <Link href={`/submissions/${sub.id}`}>Inspect Case</Link>
                               </Button>
                             </div>
                           </TableCell>
