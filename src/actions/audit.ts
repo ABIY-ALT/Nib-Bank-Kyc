@@ -58,6 +58,10 @@ export async function getGlobalAuditLogs(params: {
   }
 }
 
+/**
+ * Centralized Security Event Logger.
+ * Captures user context, network origin, and severity.
+ */
 export async function createAuditLog(data: {
   userId: string | null;
   userEmail: string;
@@ -65,15 +69,25 @@ export async function createAuditLog(data: {
   action: string;
   details: string;
   kycId?: string;
+  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   metadata?: any;
 }) {
   try {
     const ipAddress = await getClientIp();
+    const { severity = 'LOW', ...logData } = data;
+
+    // INTEGRATION: High-severity event alerting logic
+    if (severity === 'CRITICAL' || severity === 'HIGH') {
+      console.warn(`[SECURITY_ALERT] ${data.action}: ${data.details} | User: ${data.userEmail} | IP: ${ipAddress}`);
+      // In a production environment, this would trigger an SMTP/SMS alert to the Security Officer.
+    }
+
     return await prisma.auditLog.create({
       data: {
-        ...data,
+        ...logData,
         ipAddress,
-        timestamp: new Date()
+        timestamp: new Date(),
+        details: severity !== 'LOW' ? `[${severity}] ${data.details}` : data.details
       }
     });
   } catch (error) {

@@ -3,12 +3,15 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { headers } from "next/headers";
+import { createAuditLog } from "@/actions/audit";
 
 /**
  * Institutional Authentication Gateway.
  * Authenticates @nibbank.com.et credentials and issues a secure HTTP-Only cookie.
+ * Logs all successful and failed attempts for security monitoring.
  */
 export async function POST(req: Request) {
+  let userEmail = "unknown";
   try {
     const body = await req.json();
     const { email, password } = body;
@@ -17,11 +20,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Identity and password required." }, { status: 400 });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    userEmail = email.toLowerCase().trim();
     const cleanPassword = password.trim();
 
     const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+      where: { email: userEmail },
       include: {
         roles: {
           include: {
@@ -41,39 +44,54 @@ export async function POST(req: Request) {
     });
 
     if (!user) {
+      await createAuditLog({
+        userId: null,
+        userEmail,
+        action: 'AUTH_FAILURE_IDENTITY',
+        details: 'Failed login attempt: Identity not discovered in vault.',
+        severity: 'MEDIUM'
+      });
       return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 401 });
     }
 
     if (user.status !== 'ACTIVE') {
+      await createAuditLog({
+        userId: user.id,
+        userEmail,
+        userName: `${user.firstName} ${user.lastName}`,
+        action: 'AUTH_FAILURE_RESTRICTED',
+        details: `Access attempt on ${user.status} account.`,
+        severity: 'HIGH'
+      });
       return NextResponse.json({ message: `Access restricted: Account is ${user.status}.` }, { status: 401 });
     }
 
     const isMatch = await bcrypt.compare(cleanPassword, user.password);
 
     if (!isMatch) {
+      await createAuditLog({
+        userId: user.id,
+        userEmail,
+        userName: `${user.firstName} ${user.lastName}`,
+        action: 'AUTH_FAILURE_CREDENTIAL',
+        details: 'Failed login attempt: Invalid password provided.',
+        severity: 'MEDIUM'
+      });
       return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 401 });
     }
 
-    // Capture Network Origin
-    const headerList = await headers();
-    const ip = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
-
-    // Log Security Event
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        userEmail: normalizedEmail,
-        userName: `${user.firstName} ${user.lastName}`,
-        action: 'LOGIN',
-        ipAddress: ip,
-        details: 'Institutional session initialized via Secure Gateway.',
-        timestamp: new Date()
-      }
+    // Capture Successful Auth
+    await createAuditLog({
+      userId: user.id,
+      userEmail,
+      userName: `${user.firstName} ${user.lastName}`,
+      action: 'LOGIN_SUCCESS',
+      details: 'Institutional session initialized via Secure Gateway.',
+      severity: 'LOW'
     });
 
     const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
     
-    // Map roles to a serializable format to avoid circular references
     const serializableRoles = user.roles.map(ur => ({
       role: {
         id: ur.role.id,
@@ -118,7 +136,6 @@ export async function POST(req: Request) {
       }
     });
 
-    // Set HTTP-Only Cookie
     response.cookies.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
