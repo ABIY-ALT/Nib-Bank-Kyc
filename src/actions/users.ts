@@ -5,12 +5,36 @@ import { UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
 import { generateSecurePassword } from '@/lib/security';
+import { cookies } from 'next/headers';
+import { jwtVerify } from 'jose';
+
+/**
+ * Server-side RBAC Check.
+ * Verifies if the current session has the required administrative clearance.
+ */
+async function verifyAdminClearance() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('token')?.value;
+  if (!token) return false;
+
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
+    const { payload } = await jwtVerify(token, secret);
+    return payload.role === 'SUPER_ADMIN';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Administrative Credential Reset.
  * Generates a temporary password and forces a rotation upon next login.
  */
 export async function resetUserPassword(email: string, authorizerId: string) {
+  if (!(await verifyAdminClearance())) {
+    return { success: false, error: 'Unauthorized: Administrative clearance required.' };
+  }
+
   try {
     const normalizedEmail = email.toLowerCase().trim();
     const user = await prisma.user.findUnique({ 
@@ -100,6 +124,10 @@ export async function getAllUsers() {
  * Updates a staff member's active status (Active/Inactive).
  */
 export async function updateUserStatus(userId: string, status: UserStatus) {
+  if (!(await verifyAdminClearance())) {
+    throw new Error('Unauthorized');
+  }
+
   const user = await prisma.user.update({
     where: { id: userId },
     data: { status }
@@ -124,6 +152,10 @@ export async function provisionUser(data: {
   status: UserStatus;
   authorizingAdminId?: string;
 }) {
+  if (!(await verifyAdminClearance())) {
+    return { success: false, error: 'Unauthorized: Administrative clearance required.' };
+  }
+
   try {
     const isNewUser = !data.id;
     let tempPass = data.password;
@@ -257,6 +289,10 @@ export async function provisionUser(data: {
  * Updates a specialist's assigned multi-branch portfolio.
  */
 export async function updateUserPortfolio(userId: string, branches: string[]) {
+  if (!(await verifyAdminClearance())) {
+    throw new Error('Unauthorized');
+  }
+
   try {
     await prisma.user.update({
       where: { id: userId },

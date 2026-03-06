@@ -1,14 +1,36 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
+import { jwtVerify } from 'jose';
+
+/**
+ * Server-side RBAC Check.
+ */
+async function verifyAdminClearance() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('token')?.value;
+  if (!token) return false;
+
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
+    const { payload } = await jwtVerify(token, secret);
+    return payload.role === 'SUPER_ADMIN';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Institutional Framework Synchronization Script.
  * Ensures the database exactly reflects the blueprint slugs required for the Sidebar.
  */
 export async function seedInstitutionalPermissions() {
+  if (!(await verifyAdminClearance())) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   const permissions = [
     // DASHBOARD
     { slug: 'DASHBOARD_VIEW', name: 'View General Dashboard', group: 'DASHBOARD' },
@@ -104,6 +126,10 @@ export async function getAllPermissions() {
 }
 
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
+  if (!(await verifyAdminClearance())) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   try {
     const existingByName = await prisma.role.findUnique({
       where: { name: data.name }
@@ -143,6 +169,10 @@ export async function upsertRole(data: { id?: string, name: string, description:
 }
 
 export async function toggleRoleStatus(id: string, currentStatus: boolean) {
+  if (!(await verifyAdminClearance())) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   try {
     const role = await prisma.role.update({
       where: { id },

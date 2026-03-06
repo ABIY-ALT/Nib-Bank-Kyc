@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
@@ -6,6 +5,7 @@ import { jwtVerify } from 'jose';
 /**
  * Institutional Security Matrix.
  * Defines authorized path prefixes for each personnel designation.
+ * Strictly enforced at the network edge.
  */
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: ['*'],
@@ -38,7 +38,7 @@ export async function middleware(req: NextRequest) {
 
   try {
     // 3. Verify JWT Identity
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
     const { payload } = await jwtVerify(token, secret);
 
     const userRole = (payload.role as string) || 'VIEWER';
@@ -65,8 +65,15 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
-    // Dynamic Prefix Check
-    // We allow root '/' for all, and then check specific module prefixes
+    // Strict Admin Prefix Check
+    // Only SUPER_ADMIN can access /admin paths
+    if (pathname.startsWith('/admin') && userRole !== 'SUPER_ADMIN') {
+      const url = req.nextUrl.clone();
+      url.pathname = '/unauthorized';
+      return NextResponse.redirect(url);
+    }
+
+    // Dynamic Prefix Check for other routes
     const isRoot = pathname === '/';
     const isAllowed = isRoot || allowedRoutes.some(route => 
       route !== '/' && pathname.startsWith(route)
@@ -91,13 +98,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api/auth (authentication endpoints)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     '/((?!api/auth|_next/static|_next/image|favicon.ico).*)',
   ],
 };
