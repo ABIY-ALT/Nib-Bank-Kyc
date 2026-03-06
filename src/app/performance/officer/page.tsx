@@ -15,35 +15,26 @@ import {
 import { 
   Users, 
   CheckCircle2, 
-  History, 
-  Filter, 
   FileDown, 
   TrendingUp,
   Clock,
   Loader2,
   ShieldCheck,
   Search,
-  AlertTriangle,
   Zap,
   Inbox,
   ArrowUpRight,
   RotateCcw,
-  Target,
   ChevronRight,
   ChevronLeft,
   MessageSquare,
-  FileText,
-  Activity,
   Building2,
   ShieldAlert,
-  BarChart3,
-  ExternalLink,
   Download,
   Eye,
-  MapPin,
   Monitor,
   LayoutGrid,
-  Scale
+  ExternalLink
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -155,7 +146,7 @@ export default function KYCOperationsMonitoringPage() {
     if (!user) return;
     setIsEscalating(caseId);
     try {
-      await updateSubmissionStatus(caseId, KYCStatus.ESCALATED, user.id, "Strategic escalation triggered by supervisor due to oversight threshold breach.");
+      await updateSubmissionStatus(caseId, KYCStatus.ESCALATED, user.id, "Strategic escalation triggered by Supervisor via Institutional Oversight.");
       toast({ title: "Escalation Successful" });
       await loadSubmissions();
     } catch (e) {
@@ -245,7 +236,7 @@ export default function KYCOperationsMonitoringPage() {
   }, [selectedBranch, selectedOfficer, submissions]);
 
   const handleExportCSV = () => {
-    const headers = ['Officer', 'Branches', 'Volume', 'Authorized', 'Amended', 'Escalated'];
+    const headers = ['KYC Officer', 'Mapped Nodes', 'Case Volume', 'Authorized', 'Amendment Cycles', 'Escalated'];
     const rows = processedOfficers.map(o => [
       `${o.firstName} ${o.lastName}`,
       o.stats.branchesMapped,
@@ -259,7 +250,7 @@ export default function KYCOperationsMonitoringPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `PERFORMANCE_AUDIT_${format(new Date(), 'yyyyMMdd')}.csv`;
+    link.download = `KYC_PERFORMANCE_${format(new Date(), 'yyyyMMdd')}.csv`;
     link.click();
   };
 
@@ -267,6 +258,7 @@ export default function KYCOperationsMonitoringPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
+      {/* INSTITUTIONAL HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex items-center gap-5">
           <div className="p-4 bg-primary text-white rounded-[2rem] shadow-2xl">
@@ -280,11 +272,12 @@ export default function KYCOperationsMonitoringPage() {
         <div className="flex items-center gap-3">
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
           <Button onClick={handleExportCSV} className="h-12 px-8 gap-2 bg-slate-900 text-white font-black rounded-xl shadow-xl hover:bg-black transition-all">
-            <FileDown className="w-5 h-5" /> Export performance
+            <FileDown className="w-5 h-5" /> KYC Performance CSV
           </Button>
         </div>
       </div>
 
+      {/* FILTER CONSOLE */}
       <Card className="border-slate-200 shadow-sm bg-white overflow-hidden rounded-[2rem]">
         <CardContent className="p-8 grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="space-y-2">
@@ -319,6 +312,7 @@ export default function KYCOperationsMonitoringPage() {
         </CardContent>
       </Card>
 
+      {/* DRILL-DOWN NAVIGATION TRACK */}
       <div className="flex items-center gap-3 bg-slate-100/50 p-2 rounded-2xl w-fit border border-slate-200/50 shadow-inner">
         <Button 
           variant={viewMode === 'officers' ? 'secondary' : 'ghost'} 
@@ -346,32 +340,40 @@ export default function KYCOperationsMonitoringPage() {
               variant="secondary" 
               className="h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest bg-primary text-white shadow-lg"
             >
-              Node: {selectedBranch}
+              Node Audit: {selectedBranch}
             </Button>
           </>
         )}
       </div>
 
+      {/* DYNAMIC VIEWPORT */}
       <div className="animate-in slide-in-from-bottom-4 duration-500">
         {viewMode === 'officers' && (
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
-            <CardHeader className="bg-slate-900 text-white p-8 border-b">
-              <CardTitle className="text-2xl font-black flex items-center gap-3"><Users className="w-6 h-6 text-primary" /> Specialist Analysis Matrix</CardTitle>
+            <CardHeader className="bg-slate-900 text-white p-8 border-b flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-2xl font-black flex items-center gap-3"><Users className="w-6 h-6 text-primary" /> Specialist Productivity Index</CardTitle>
+                <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Authorized personnel across regional nodes</CardDescription>
+              </div>
+              <Badge variant="outline" className="border-primary/30 text-primary font-black px-4 py-1.5 h-9">
+                {processedOfficers.length} Specialists Discovered
+              </Badge>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader className="bg-slate-50 border-b">
                   <TableRow>
                     <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">KYC Officer</TableHead>
-                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Branches Mapped</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Nodes Mapped</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Authorized</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amendment Cycles</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Overview</TableHead>
                     <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {processedOfficers.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No personnel discovered in current filters.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="py-32 text-center text-slate-400 italic">No personnel discovered in current selection context.</TableCell></TableRow>
                   ) : processedOfficers.map((off) => (
                     <TableRow key={off.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-100 group">
                       <TableCell className="py-8 pl-10">
@@ -388,11 +390,15 @@ export default function KYCOperationsMonitoringPage() {
                       <TableCell className="text-center font-black text-slate-700 text-lg">{off.stats.branchesMapped}</TableCell>
                       <TableCell className="text-center font-black text-emerald-600 text-lg">{off.stats.approved}</TableCell>
                       <TableCell className="text-center font-black text-orange-600 text-lg">{off.stats.amended}</TableCell>
+                      <TableCell className="text-center">
+                        <Button variant="ghost" size="icon" onClick={() => setShowSummary(off)} className="h-11 w-11 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all">
+                          <Eye className="w-5 h-5" />
+                        </Button>
+                      </TableCell>
                       <TableCell className="text-right pr-10">
-                        <div className="flex justify-end gap-3">
-                          <Button variant="ghost" size="icon" onClick={() => setShowSummary(off)} className="h-11 w-11 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all"><Eye className="w-5 h-5" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setSelectedOfficer(off); setViewMode('branches'); }} className="h-11 w-11 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all"><ChevronRight className="w-5 h-5" /></Button>
-                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => { setSelectedOfficer(off); setViewMode('branches'); }} className="h-11 w-11 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all">
+                          <ChevronRight className="w-5 h-5" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -407,17 +413,17 @@ export default function KYCOperationsMonitoringPage() {
             <div className="lg:col-span-2">
               <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
                 <CardHeader className="bg-slate-900 text-white p-8">
-                  <CardTitle className="text-2xl font-black">Jurisdiction Portfolio</CardTitle>
-                  <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Authorized nodes for {selectedOfficer.firstName} {selectedOfficer.lastName}</CardDescription>
+                  <CardTitle className="text-2xl font-black">Authorized Jurisdiction Portfolio</CardTitle>
+                  <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Specific branch mappings for {selectedOfficer.firstName} {selectedOfficer.lastName}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader className="bg-slate-50 border-b">
                       <TableRow>
                         <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch Node</TableHead>
-                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Files Sent</TableHead>
+                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Inflight Files</TableHead>
                         <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amend Cycles</TableHead>
-                        <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Node Status</TableHead>
+                        <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Node SLA Health</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -433,7 +439,7 @@ export default function KYCOperationsMonitoringPage() {
                           <TableCell className="text-center font-black text-orange-600">{b.amended}</TableCell>
                           <TableCell className="text-right pr-10">
                             <Badge className={cn("font-black text-[9px] uppercase px-3 py-1", b.pending > 0 ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700")}>
-                              {b.pending > 0 ? `${b.pending} ACTIVE` : 'COMPLIANT'}
+                              {b.pending > 0 ? `${b.pending} ACTIVE CASES` : 'SLA COMPLIANT'}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -445,18 +451,18 @@ export default function KYCOperationsMonitoringPage() {
             </div>
             <div className="space-y-8">
               <Card className="shadow-xl border-slate-200 overflow-hidden rounded-[2rem] bg-primary/5 border-l-4 border-l-primary">
-                <CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-lg font-black uppercase tracking-widest">Personnel Insight</CardTitle></CardHeader>
+                <CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-lg font-black uppercase tracking-widest">Specialist Profile</CardTitle></CardHeader>
                 <CardContent className="p-8 space-y-6">
                   <div className="flex items-center gap-5">
                     <div className="w-16 h-16 rounded-3xl bg-white flex items-center justify-center font-black text-2xl text-primary shadow-xl ring-4 ring-white">{selectedOfficer.firstName.charAt(0)}</div>
                     <div>
                       <p className="text-xl font-black text-slate-900">{selectedOfficer.firstName} {selectedOfficer.lastName}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Specialist Official</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Authorized Official</p>
                     </div>
                   </div>
                   <div className="pt-6 border-t border-slate-200 grid grid-cols-2 gap-6">
                     <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Approved Cases</p><p className="text-3xl font-black text-emerald-600">{selectedOfficer.stats.approved}</p></div>
-                    <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Amendment Cycles</p><p className="text-3xl font-black text-orange-600">{selectedOfficer.stats.amended}</p></div>
+                    <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Total Cycles</p><p className="text-3xl font-black text-orange-600">{selectedOfficer.stats.amended}</p></div>
                   </div>
                 </CardContent>
               </Card>
@@ -470,26 +476,26 @@ export default function KYCOperationsMonitoringPage() {
               <div className="flex items-center gap-6">
                 <div className="p-4 bg-primary/20 rounded-3xl"><Building2 className="w-8 h-8 text-primary" /></div>
                 <div>
-                  <CardTitle className="text-3xl font-black tracking-tight">Technical Analysis: {selectedBranch}</CardTitle>
-                  <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-widest mt-2 flex items-center gap-2"><Eye className="w-3.5 h-3.5" /> View-only administrative mode</CardDescription>
+                  <CardTitle className="text-3xl font-black tracking-tight">Institutional Audit: {selectedBranch}</CardTitle>
+                  <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-widest mt-2 flex items-center gap-2"><Eye className="w-3.5 h-3.5" /> View-only administrative oversight mode</CardDescription>
                 </div>
               </div>
-              <Button variant="outline" onClick={() => setViewMode('branches')} className="bg-white/10 border-white/20 text-white font-black rounded-xl h-12 px-8 hover:bg-white/20"><ChevronLeft className="w-4 h-4 mr-2" /> Back to branches</Button>
+              <Button variant="outline" onClick={() => setViewMode('branches')} className="bg-white/10 border-white/20 text-white font-black rounded-xl h-12 px-8 hover:bg-white/20"><ChevronLeft className="w-4 h-4 mr-2" /> Return to Portfolio</Button>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader className="bg-slate-50 border-b">
                   <TableRow>
                     <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Case ID</TableHead>
-                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Customer Entity</TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Customer Identity</TableHead>
                     <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Oversight</TableHead>
-                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Workflow Status</TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
                     <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {currentCases.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No cases discovered in this node jurisdiction.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No case lifecycle data discovered for this node.</TableCell></TableRow>
                   ) : currentCases.map((sub) => {
                     const subTime = new Date(sub.submittedAt || sub.createdAt);
                     const threshold = settings?.escalationHours || 72;
@@ -502,7 +508,7 @@ export default function KYCOperationsMonitoringPage() {
                         <TableCell>
                           <div className="flex flex-col">
                             <span className="font-black text-slate-900 leading-tight text-base">{sub.customerName}</span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{sub.entityType || 'Individual'} account</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{sub.entityType || 'Individual'} Account</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -556,14 +562,15 @@ export default function KYCOperationsMonitoringPage() {
         )}
       </div>
 
+      {/* PERFORMANCE SUMMARY DIALOG */}
       <Dialog open={!!showSummary} onOpenChange={() => setShowSummary(null)}>
         <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-[2.5rem] bg-white">
           <DialogHeader className="p-8 bg-primary text-white space-y-1">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-white/20 rounded-2xl"><TrendingUp className="w-6 h-6 text-white" /></div>
               <div>
-                <DialogTitle className="text-2xl font-black">Specialist Insight</DialogTitle>
-                <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest">Weighted performance profile</DialogDescription>
+                <DialogTitle className="text-2xl font-black leading-tight">Performance Summary</DialogTitle>
+                <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Weighted specialist profile</DialogDescription>
               </div>
             </div>
           </DialogHeader>
@@ -572,16 +579,28 @@ export default function KYCOperationsMonitoringPage() {
               <div className="w-16 h-16 rounded-[1.5rem] bg-primary/10 text-primary flex items-center justify-center font-black text-2xl shadow-inner border border-primary/5">{showSummary?.firstName.charAt(0)}</div>
               <div>
                 <p className="text-xl font-black text-slate-900 leading-tight">{showSummary?.firstName} {showSummary?.lastName}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Authorized Personnel</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Institutional specialist</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Branches</p><p className="text-3xl font-black text-primary">{showSummary?.stats.branchesMapped}</p></div>
-              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approved</p><p className="text-3xl font-black text-emerald-600">{showSummary?.stats.approved}</p></div>
-              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cycles</p><p className="text-3xl font-black text-orange-600">{showSummary?.stats.amended}</p></div>
-              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Escalated</p><p className="text-3xl font-black text-destructive">{showSummary?.stats.escalated}</p></div>
+              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Branches Mapped</p>
+                <p className="text-3xl font-black text-primary">{showSummary?.stats.branchesMapped}</p>
+              </div>
+              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approved Cases</p>
+                <p className="text-3xl font-black text-emerald-600">{showSummary?.stats.approved}</p>
+              </div>
+              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Amendment Cycles</p>
+                <p className="text-3xl font-black text-orange-600">{showSummary?.stats.amended}</p>
+              </div>
+              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Escalated Cases</p>
+                <p className="text-3xl font-black text-destructive">{showSummary?.stats.escalated}</p>
+              </div>
             </div>
-            <Button onClick={() => setShowSummary(null)} className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-black transition-all">Close profile</Button>
+            <Button onClick={() => setShowSummary(null)} className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-black transition-all">Close Performance Audit</Button>
           </div>
         </DialogContent>
       </Dialog>
