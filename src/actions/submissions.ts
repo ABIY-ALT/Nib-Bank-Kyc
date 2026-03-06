@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import fs from 'fs/promises';
 import path from 'path';
-import { signId } from '@/lib/security';
+import { signId, generateSecureNumericCode } from '@/lib/security';
 
 /**
  * Resolves the client IP address from request headers.
@@ -358,7 +358,7 @@ export async function createSubmission(formData: FormData) {
       update: {},
       create: { 
         name: branchName, 
-        code: branchName.substring(0, 3).toUpperCase() + Math.floor(10 + Math.random() * 90),
+        code: branchName.substring(0, 3).toUpperCase() + generateSecureNumericCode(10, 99),
         districtId: district.id
       }
     });

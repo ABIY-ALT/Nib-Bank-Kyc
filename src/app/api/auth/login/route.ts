@@ -98,7 +98,7 @@ export async function POST(req: Request) {
         needsPasswordChange: user.needsPasswordChange
       },
       secret,
-      { expiresIn: "1d" }
+      { expiresIn: "8h" }
     );
 
     const response = NextResponse.json({
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60 * 60 * 8, // 8 hours
       path: '/',
     });
 

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
+import { generateSecurePassword } from '@/lib/security';
 
 /**
  * Administrative Credential Reset.
@@ -20,8 +21,8 @@ export async function resetUserPassword(email: string, authorizerId: string) {
       throw new Error("Personnel record not discovered in the Institutional Vault.");
     }
 
-    // Generate random 8-character temporary password
-    const tempPass = Math.random().toString(36).slice(-8);
+    // Generate cryptographic random temporary password
+    const tempPass = generateSecurePassword(10);
     const hashedPassword = await bcrypt.hash(tempPass, 10);
 
     await prisma.$transaction(async (tx) => {
@@ -129,12 +130,11 @@ export async function provisionUser(data: {
     
     // Generate a temporary password ONLY for new users if one wasn't provided
     if (isNewUser && !tempPass) {
-      tempPass = Math.random().toString(36).slice(-8);
+      tempPass = generateSecurePassword(10);
     }
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Fetch current state for audit comparison and existence check
-      // Prefer ID for lookup if provided to allow email updates safely
       const existingUser = await tx.user.findFirst({
         where: data.id ? { id: data.id } : { email: data.email.toLowerCase() },
         include: { 
@@ -162,16 +162,14 @@ export async function provisionUser(data: {
             phoneNumber: data.phoneNumber,
             branch: data.branchId ? { connect: { id: data.branchId } } : { disconnect: true },
             status: data.status,
-            // Only update password and force change if a value was provided
             password: hashedPassword,
             needsPasswordChange: hashedPassword ? true : undefined
           }
         });
       } else {
         // CREATE new personnel
-        // Ensure a password exists for creation (should have been generated above if missing)
         if (!hashedPassword) {
-          const generated = Math.random().toString(36).slice(-8);
+          const generated = generateSecurePassword(10);
           tempPass = generated;
           hashedPassword = await bcrypt.hash(generated, 10);
         }

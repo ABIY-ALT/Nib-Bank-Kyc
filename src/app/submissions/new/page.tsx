@@ -112,7 +112,7 @@ export default function NewSubmission() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files).map(file => ({
-        id: Math.random().toString(36).substr(2, 9),
+        id: crypto.randomUUID(),
         file: file,
         type: "",
         previewUrl: URL.createObjectURL(file)
@@ -162,7 +162,11 @@ export default function NewSubmission() {
     try {
       const branchName = user.branchName || "HEADQUARTERS";
       const branchSlug = branchName.replace(/\s+/g, '_').toUpperCase();
-      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      
+      const randomArray = new Uint32Array(1);
+      window.crypto.getRandomValues(randomArray);
+      const randomSuffix = 1000 + (randomArray[0] % 9000);
+      
       const submissionId = `${branchSlug}-KYC-${randomSuffix}`;
       
       const formData = new FormData();
@@ -201,7 +205,6 @@ export default function NewSubmission() {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-bold text-muted-foreground">Initializing submission portal...</p>
       </div>
     );
   }

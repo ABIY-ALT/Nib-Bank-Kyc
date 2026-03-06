@@ -33,3 +33,38 @@ export function verifyToken(token: string): string | null {
   }
   return null;
 }
+
+/**
+ * Generates a cryptographically secure random password.
+ * Charset: [A-Z a-z 0-9 !@#$%]
+ */
+export function generateSecurePassword(length = 12): string {
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
+  const bytes = crypto.randomBytes(length);
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += charset[bytes[i] % charset.length];
+  }
+  return result;
+}
+
+/**
+ * Generates a cryptographically secure numeric code within a range.
+ */
+export function generateSecureNumericCode(min: number, max: number): number {
+  const range = max - min + 1;
+  const bytesNeeded = Math.ceil(Math.log2(range) / 8);
+  const randomBytes = crypto.randomBytes(bytesNeeded);
+  let value = 0;
+  for (let i = 0; i < bytesNeeded; i++) {
+    value = (value << 8) + randomBytes[i];
+  }
+  return min + (value % range);
+}
+
+/**
+ * Generates a high-entropy 32-byte security token.
+ */
+export function generateSecureToken(bytesCount = 32): string {
+  return crypto.randomBytes(bytesCount).toString('hex');
+}

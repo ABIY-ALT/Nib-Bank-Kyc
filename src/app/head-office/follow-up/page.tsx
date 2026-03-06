@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -75,7 +74,13 @@ export default function FollowUpDashboard() {
         return;
       }
 
-      const selected = assignable.sort(() => 0.5 - Math.random()).slice(0, 5);
+      // Cryptographically secure shuffle for random sampling
+      const selected = assignable
+        .map(value => ({ value, sort: window.crypto.getRandomValues(new Uint32Array(1))[0] }))
+        .sort((a, b) => a.sort - b.sort)
+        .map(({ value }) => value)
+        .slice(0, 5);
+
       const poolData = selected.map(s => ({
         submissionId: s.id,
         customerName: s.customerName,
@@ -98,7 +103,8 @@ export default function FollowUpDashboard() {
 
   const handleStartRandomAudit = () => {
     if (pendingVerifications.length === 0) return;
-    const randomCase = pendingVerifications[Math.floor(Math.random() * pendingVerifications.length)];
+    const randomIndex = window.crypto.getRandomValues(new Uint32Array(1))[0] % pendingVerifications.length;
+    const randomCase = pendingVerifications[randomIndex];
     router.push(`/head-office/follow-up/${randomCase.id}`);
   };
 
@@ -225,7 +231,6 @@ export default function FollowUpDashboard() {
             {loading ? (
               <div className="flex flex-col items-center justify-center py-32 text-muted-foreground gap-4">
                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                <p className="font-bold">Syncing pool...</p>
               </div>
             ) : pendingVerifications.length > 0 ? (
               <div className="divide-y">

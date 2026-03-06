@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { generateSecureNumericCode } from '@/lib/security';
 
 export async function getDistricts() {
   try {
@@ -71,7 +72,7 @@ export async function createBranch(data: { name: string, code?: string, district
     const branch = await prisma.branch.create({
       data: {
         name: data.name,
-        code: data.code || `BR-${Math.floor(100 + Math.random() * 900)}`,
+        code: data.code || `BR-${generateSecureNumericCode(100, 999)}`,
         districtId: district.id
       }
     });

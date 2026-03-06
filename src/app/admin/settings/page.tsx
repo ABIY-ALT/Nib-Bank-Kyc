@@ -102,7 +102,7 @@ export default function SystemSettingsPage() {
       toast({ variant: "destructive", title: "Information Required", description: "Title and description are mandatory for guidelines." });
       return;
     }
-    const id = Math.random().toString(36).substr(2, 9);
+    const id = crypto.randomUUID();
     const updated = [...(localSettings.guidelines || []), { ...newGuideline, id }];
     setLocalSettings({ ...localSettings, guidelines: updated });
     setNewGuideline({ title: "", description: "", type: 'info' });
