@@ -80,6 +80,7 @@
     "typescript": "^5"
   },
   "overrides": {
-    "fast-xml-parser": "^5.3.4"
+    "fast-xml-parser": "^5.3.4",
+    "tar": "^7.5.7"
   }
 }
