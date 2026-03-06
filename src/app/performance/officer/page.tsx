@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useMemo, useState, useEffect } from "react"
@@ -46,13 +45,6 @@ import {
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast"
 import { format, differenceInHours, addHours, isAfter } from "date-fns";
 import { Label } from "@/components/ui/label";
@@ -128,7 +120,7 @@ export default function KYCOperationsMonitoringPage() {
         getSubmissions(filters),
         getGlobalSettings()
       ]);
-      setSubmissions(data);
+      setSubmissions(data || []);
       setSettings(globalSettings);
     } catch (e) {
       toast({ variant: "destructive", title: "Audit Error" });
@@ -150,25 +142,6 @@ export default function KYCOperationsMonitoringPage() {
       setIsEscalating(null);
     }
   };
-
-  const uniqueBranches = useMemo(() => {
-    const branches = new Set<string>();
-    submissions.forEach(s => {
-      const name = s.branch?.name || s.branchName;
-      if (name) branches.add(name);
-    });
-    return Array.from(branches).sort();
-  }, [submissions]);
-
-  const uniqueOfficers = useMemo(() => {
-    const officers = new Map<string, string>();
-    submissions.forEach(s => {
-      if (s.assignedTo) {
-        officers.set(s.assignedToId, `${s.assignedTo.firstName} ${s.assignedTo.lastName}`);
-      }
-    });
-    return Array.from(officers.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [submissions]);
 
   const filteredData = useMemo(() => {
     return submissions.filter(s => {
@@ -262,13 +235,6 @@ export default function KYCOperationsMonitoringPage() {
     setExpandedRows(newExpanded);
   };
 
-  const resetFilters = () => {
-    setSelectedBranch("all");
-    setSelectedOfficer("all");
-    setSearchTerm("");
-    setDateRange(undefined);
-  };
-
   if (permissionsLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
@@ -280,7 +246,6 @@ export default function KYCOperationsMonitoringPage() {
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-20 max-w-[1600px] mx-auto">
-      {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-200 pb-8">
         <div className="flex items-center gap-5">
           <div className="p-4 bg-primary text-white rounded-[1.5rem] shadow-2xl shadow-primary/20 ring-4 ring-primary/10">
@@ -309,7 +274,6 @@ export default function KYCOperationsMonitoringPage() {
         </div>
       </div>
 
-      {/* KPI METRICS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white group hover:scale-[1.02] transition-all duration-500">
           <CardHeader className="p-6 pb-2 border-b bg-slate-50/50 flex flex-row items-center justify-between">
@@ -358,7 +322,6 @@ export default function KYCOperationsMonitoringPage() {
         </Card>
       </div>
 
-      {/* MAIN QUEUE */}
       <div className="space-y-8">
         {(roleContext === 'SUPERVISOR' || roleContext === 'DIRECTOR') && (
           <div className="flex gap-2 p-2 bg-slate-100/80 w-fit rounded-[1.5rem] border border-slate-200 backdrop-blur-md">

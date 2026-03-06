@@ -125,10 +125,9 @@ const DayCell = ({
         !isDayInCurrentMonth && "text-slate-200 pointer-events-none opacity-0",
         isDayInCurrentMonth && !isSelectedFrom && !isSelectedTo && !isInRange && "text-slate-600 hover:bg-slate-100",
         isToday && !isSelectedFrom && !isSelectedTo && "bg-slate-100 font-bold border border-slate-200",
-        isInRange && !isSelectedFrom && !isSelectedTo && "bg-primary/10 text-primary font-semibold rounded-none",
-        isSelectedFrom && "bg-primary text-white font-bold shadow-lg z-10 scale-110",
-        isSelectedTo && "bg-primary text-white font-bold shadow-lg z-10 scale-110",
-        // Visual connectors for ranges
+        isInRange && !isSelectedFrom && !isSelectedTo && "bg-[#a36224]/10 text-[#a36224] font-semibold rounded-none",
+        isSelectedFrom && "bg-[#a36224] text-white font-bold shadow-lg z-10 scale-110",
+        isSelectedTo && "bg-[#a36224] text-white font-bold shadow-lg z-10 scale-110",
         isInRange && isSelectedFrom && selectedTo && "rounded-r-none",
         isInRange && isSelectedTo && "rounded-l-none"
       )}
@@ -202,8 +201,6 @@ const CustomCalendar = ({
   );
 };
 
-// --- Main Export ---
-
 export function DatePickerWithRange({
   className,
   date,
@@ -214,7 +211,6 @@ export function DatePickerWithRange({
   const [rightMonth, setRightMonth] = React.useState<Date>(addMonths(leftMonth, 1));
   const [hoverDate, setHoverDate] = React.useState<Date | null>(null);
 
-  // Keep months in sync
   const handleSetLeftMonth = (d: Date) => {
     setLeftMonth(d);
     setRightMonth(addMonths(d, 1));
@@ -227,10 +223,8 @@ export function DatePickerWithRange({
 
   const handleSelect = (day: Date) => {
     if (!date?.from || (date.from && date.to)) {
-      // Start a new range
       onDateChange({ from: day, to: undefined });
     } else {
-      // Complete the range
       if (isBefore(day, date.from)) {
         onDateChange({ from: day, to: date.from });
       } else {
@@ -331,16 +325,14 @@ export function DatePickerWithRange({
             </div>
           </div>
           <div className="bg-slate-50 border-t p-4 flex items-center justify-end">
-            <div className="flex gap-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-[10px] font-black uppercase text-slate-500"
-                onClick={() => onDateChange(undefined)}
-              >
-                Clear Selections
-              </Button>
-            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-[10px] font-black uppercase text-slate-500"
+              onClick={() => onDateChange(undefined)}
+            >
+              Clear Selections
+            </Button>
           </div>
         </PopoverContent>
       </Popover>

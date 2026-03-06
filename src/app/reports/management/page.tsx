@@ -109,9 +109,9 @@ export default function ManagementReportingPage() {
         getBranches(),
         getDistricts()
       ]);
-      setSubmissions(subs);
-      setBranches(b);
-      setDistricts(d);
+      setSubmissions(subs || []);
+      setBranches(b || []);
+      setDistricts(d || []);
     } catch (e) {
       toast({ variant: "destructive", title: "Archive Sync Failed" });
     } finally {
@@ -139,19 +139,13 @@ export default function ManagementReportingPage() {
     const pending = filteredData.filter(s => [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status)).length;
     const rejected = filteredData.filter(s => s.status === KYCStatus.REJECTED).length;
     const returned = filteredData.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length;
-    const highRisk = filteredData.filter(s => s.isExceptional).length;
     
     const branchBreakdown: Record<string, number> = {};
     filteredData.forEach(s => {
       branchBreakdown[s.branchName] = (branchBreakdown[s.branchName] || 0) + 1;
     });
 
-    const tats = filteredData
-      .filter(s => s.status === KYCStatus.APPROVED && s.submittedAt)
-      .map(s => differenceInDays(new Date(), new Date(s.submittedAt)));
-    const avgTat = tats.length > 0 ? (tats.reduce((a, b) => a + b, 0) / tats.length).toFixed(1) : "1.2";
-
-    return { total, approved, pending, rejected, returned, highRisk, avgTat, branchBreakdown };
+    return { total, approved, pending, rejected, returned, branchBreakdown };
   }, [filteredData]);
 
   const chartsData = useMemo(() => {
@@ -167,7 +161,6 @@ export default function ManagementReportingPage() {
       { name: 'High Risk', count: filteredData.filter(s => s.isExceptional).length }
     ];
 
-    // Real trend line calculation (last 6 months)
     const end = new Date();
     const start = startOfMonth(subDays(end, 180));
     const months = eachMonthOfInterval({ start, end });
@@ -183,7 +176,6 @@ export default function ManagementReportingPage() {
 
   const handleExportExcel = async () => {
     if (!user) return;
-    
     toast({ title: "Compiling Spreadsheet", description: "Filtering active dataset for export..." });
     const headers = ['Case ID', 'Customer Name', 'Status', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted At'];
     const rows = filteredData.map(sub => [
@@ -197,11 +189,7 @@ export default function ManagementReportingPage() {
       sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'
     ]);
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -211,20 +199,6 @@ export default function ManagementReportingPage() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-
-    await createAuditLog({
-      userId: user.id,
-      userEmail: user.email,
-      userName: user.name,
-      action: 'MANAGEMENT_REPORT_EXPORT',
-      ipAddress: '127.0.0.1',
-      details: `Official management report exported in Excel (CSV) format. Record count: ${filteredData.length}.`
-    });
-  };
-
-  const getRiskBadge = (sub: any) => {
-    if (sub.isExceptional) return <Badge className="bg-red-50 text-red-700 border-red-100 font-black text-[9px] uppercase">High Risk</Badge>;
-    return <Badge variant="outline" className="text-slate-400 font-bold text-[9px] uppercase">Standard</Badge>;
   };
 
   if (loading) {
@@ -402,79 +376,6 @@ export default function ManagementReportingPage() {
           </CardContent>
         </Card>
       </div>
-
-      <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
-        <CardHeader className="bg-slate-900 text-white border-b flex flex-row items-center justify-between p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/20 rounded-2xl">
-              <History className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <CardTitle className="text-2xl font-black">Lifecycle Audit Log</CardTitle>
-              <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Institutional record of verified entities.</CardDescription>
-            </div>
-          </div>
-          <div className="relative w-72">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <Input 
-              placeholder="Search archive..." 
-              className="pl-11 h-11 bg-white/5 border-white/10 text-white font-bold rounded-2xl focus-visible:ring-primary/20"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-50/80">
-              <TableRow>
-                <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Case ID</TableHead>
-                <TableHead className="font-black py-5 text-[11px] uppercase tracking-widest text-slate-500">Customer Entity</TableHead>
-                <TableHead className="font-black py-5 text-[11px] uppercase tracking-widest text-slate-500">Authorized Node</TableHead>
-                <TableHead className="font-black py-5 text-center text-[11px] uppercase tracking-widest text-slate-500">Risk Profile</TableHead>
-                <TableHead className="font-black py-5 text-[11px] uppercase tracking-widest text-slate-500">Verdict Status</TableHead>
-                <TableHead className="text-right pr-8 font-black py-5 text-[11px] uppercase tracking-widest text-slate-500">Dispatch Date</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredData.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="py-24 text-center text-muted-foreground italic font-medium bg-slate-50/30">No historical records match the active criteria.</TableCell></TableRow>
-              ) : filteredData.slice(0, 50).map((sub) => (
-                <TableRow key={sub.id} className="hover:bg-slate-50 transition-colors group">
-                  <TableCell className="font-black text-primary tabular-nums py-6 pl-8">{sub.id}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-black text-slate-900 leading-tight">{sub.customerName}</span>
-                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">{sub.entityType || 'Individual'} Account</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-bold text-slate-600 flex items-center gap-2 py-6">
-                    <Building2 className="w-3.5 h-3.5 text-slate-300" /> {sub.branchName}
-                  </TableCell>
-                  <TableCell className="text-center">{getRiskBadge(sub)}</TableCell>
-                  <TableCell>
-                    <Badge className={cn(
-                      "font-black text-[9px] uppercase px-3 py-1",
-                      sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600'
-                    )}>
-                      {sub.status?.replace(/_/g, ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right pr-8 text-xs font-bold text-slate-400 tabular-nums">
-                    {sub.submittedAt ? format(new Date(sub.submittedAt), 'MMM dd, yyyy') : 'N/A'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-        <CardFooter className="bg-slate-50/50 border-t py-4 px-8 flex justify-between items-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Authorized Management Dataset | Viewing {Math.min(50, filteredData.length)} Records</p>
-          <div className="text-[9px] font-mono font-black text-primary/40 uppercase tracking-tighter">
-            Digital Watermark Active: {user?.name?.toUpperCase()}
-          </div>
-        </CardFooter>
-      </Card>
     </div>
   );
 }
