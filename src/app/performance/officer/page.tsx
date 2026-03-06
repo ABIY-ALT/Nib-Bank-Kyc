@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useEffect } from "react"
@@ -39,16 +40,16 @@ import {
   ExternalLink,
   Download,
   Eye,
-  MoreVertical,
   MapPin,
-  Gavel,
-  Monitor
+  Monitor,
+  LayoutGrid,
+  Scale
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { format, differenceInHours, addHours, isAfter } from "date-fns";
+import { format, differenceInHours } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getSubmissions, updateSubmissionStatus, logBundleDownload, getSubmissionById } from "@/actions/submissions";
@@ -83,7 +84,6 @@ export default function KYCOperationsMonitoringPage() {
   const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   
-  // Data State
   const [loading, setLoading] = useState(false);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [officers, setOfficers] = useState<any[]>([]);
@@ -91,18 +91,15 @@ export default function KYCOperationsMonitoringPage() {
   const [branches, setBranches] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   
-  // Navigation State
   const [viewMode, setViewMode] = useState<ViewMode>('officers');
   const [selectedOfficer, setSelectedOfficer] = useState<any | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   
-  // Filter State
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   
-  // UI State
   const [isEscalating, setIsEscalating] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState<any | null>(null);
@@ -123,7 +120,6 @@ export default function KYCOperationsMonitoringPage() {
         getBranches(),
         getGlobalSettings()
       ]);
-      // Filter for KYC roles only
       const kycPersonnel = u.filter((usr: any) => 
         usr.roles?.some((r: any) => 
           ['KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER'].includes(r.role.name)
@@ -134,7 +130,7 @@ export default function KYCOperationsMonitoringPage() {
       setBranches(b);
       setSettings(s);
     } catch (e) {
-      toast({ variant: "destructive", title: "Config Sync Failed" });
+      toast({ variant: "destructive", title: "Sync Failed" });
     }
   };
 
@@ -160,7 +156,7 @@ export default function KYCOperationsMonitoringPage() {
     setIsEscalating(caseId);
     try {
       await updateSubmissionStatus(caseId, KYCStatus.ESCALATED, user.id, "Strategic escalation triggered by supervisor due to oversight threshold breach.");
-      toast({ title: "Escalation Successful", description: "Case dispatched to Senior Risk Assessor." });
+      toast({ title: "Escalation Successful" });
       await loadSubmissions();
     } catch (e) {
       toast({ variant: "destructive", title: "Escalation Failed" });
@@ -204,7 +200,6 @@ export default function KYCOperationsMonitoringPage() {
     }
   };
 
-  // Aggregation Logic
   const processedOfficers = useMemo(() => {
     return officers.map(off => {
       const offSubs = submissions.filter(s => s.assignedToId === off.id);
@@ -225,25 +220,6 @@ export default function KYCOperationsMonitoringPage() {
     });
   }, [officers, submissions, searchTerm, selectedDistrict, selectedBranchFilter]);
 
-  const handleExportPerformanceCSV = () => {
-    const headers = ['Officer Name', 'Branches Mapped', 'Total Cases', 'Approved', 'Escalated', 'Amendment Cycles'];
-    const rows = processedOfficers.map(o => [
-      `${o.firstName} ${o.lastName}`,
-      o.stats.branchesMapped,
-      o.stats.total,
-      o.stats.approved,
-      o.stats.escalated,
-      o.stats.amended
-    ]);
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `KYC_OFFICER_PERFORMANCE_${format(new Date(), 'yyyyMMdd')}.csv`;
-    link.click();
-  };
-
   const currentBranches = useMemo(() => {
     if (!selectedOfficer) return [];
     const bNames = selectedOfficer.assignedBranches?.length > 0 
@@ -254,6 +230,7 @@ export default function KYCOperationsMonitoringPage() {
       const branchSubs = submissions.filter(s => s.branchName === name && s.assignedToId === selectedOfficer.id);
       return {
         name,
+        totalFiles: branchSubs.reduce((acc, s) => acc + (s.memos?.length || 0), 0),
         total: branchSubs.length,
         approved: branchSubs.filter(s => s.status === KYCStatus.APPROVED).length,
         amended: branchSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0),
@@ -267,14 +244,32 @@ export default function KYCOperationsMonitoringPage() {
     return submissions.filter(s => s.branchName === selectedBranch && s.assignedToId === selectedOfficer.id);
   }, [selectedBranch, selectedOfficer, submissions]);
 
-  if (permissionsLoading) return <div className="py-40 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
+  const handleExportCSV = () => {
+    const headers = ['Officer', 'Branches', 'Volume', 'Authorized', 'Amended', 'Escalated'];
+    const rows = processedOfficers.map(o => [
+      `${o.firstName} ${o.lastName}`,
+      o.stats.branchesMapped,
+      o.stats.total,
+      o.stats.approved,
+      o.stats.amended,
+      o.stats.escalated
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `PERFORMANCE_AUDIT_${format(new Date(), 'yyyyMMdd')}.csv`;
+    link.click();
+  };
+
+  if (loading || permissionsLoading) return <div className="py-48 text-center"><Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" /></div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20 max-w-[1600px] mx-auto">
-      {/* HEADER */}
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex items-center gap-5">
-          <div className="p-4 bg-primary text-white rounded-3xl shadow-xl">
+          <div className="p-4 bg-primary text-white rounded-[2rem] shadow-2xl">
             <Monitor className="w-8 h-8" />
           </div>
           <div>
@@ -284,30 +279,29 @@ export default function KYCOperationsMonitoringPage() {
         </div>
         <div className="flex items-center gap-3">
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
-          <Button onClick={handleExportPerformanceCSV} className="h-12 px-6 gap-2 bg-slate-900 text-white font-black rounded-xl shadow-xl">
+          <Button onClick={handleExportCSV} className="h-12 px-8 gap-2 bg-slate-900 text-white font-black rounded-xl shadow-xl hover:bg-black transition-all">
             <FileDown className="w-5 h-5" /> Export performance
           </Button>
         </div>
       </div>
 
-      {/* FILTER CONSOLE */}
-      <Card className="border-slate-200 shadow-sm bg-white overflow-hidden rounded-2xl">
-        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Jurisdiction District</Label>
+      <Card className="border-slate-200 shadow-sm bg-white overflow-hidden rounded-[2rem]">
+        <CardContent className="p-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Jurisdiction District</Label>
             <Select value={selectedDistrict} onValueChange={setSelectedDistrict}>
-              <SelectTrigger className="h-11 rounded-xl bg-slate-50/50"><SelectValue placeholder="All Districts" /></SelectTrigger>
-              <SelectContent>
+              <SelectTrigger className="h-12 rounded-xl bg-slate-50/50 border-slate-200 font-bold"><SelectValue placeholder="All Districts" /></SelectTrigger>
+              <SelectContent className="rounded-xl">
                 <SelectItem value="all">Global Network</SelectItem>
                 {districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Branch Node</Label>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Branch Node</Label>
             <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
-              <SelectTrigger className="h-11 rounded-xl bg-slate-50/50"><SelectValue placeholder="All Branches" /></SelectTrigger>
-              <SelectContent>
+              <SelectTrigger className="h-12 rounded-xl bg-slate-50/50 border-slate-200 font-bold"><SelectValue placeholder="All Branches" /></SelectTrigger>
+              <SelectContent className="rounded-xl">
                 <SelectItem value="all">All Branches</SelectItem>
                 {branches.filter(b => selectedDistrict === 'all' || b.district?.name === selectedDistrict).map(b => (
                   <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
@@ -315,22 +309,21 @@ export default function KYCOperationsMonitoringPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="md:col-span-2 space-y-1.5">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Personnel Discovery</Label>
+          <div className="md:col-span-2 space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Personnel Discovery</Label>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input placeholder="Search KYC Officer by name..." className="pl-11 h-11 bg-slate-50/50 rounded-xl" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <Input placeholder="Search KYC Officer by name..." className="pl-11 h-12 bg-slate-50/50 rounded-xl border-slate-200 font-bold" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* NAVIGATION BREADCRUMBS */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 bg-slate-100/50 p-2 rounded-2xl w-fit border border-slate-200/50 shadow-inner">
         <Button 
           variant={viewMode === 'officers' ? 'secondary' : 'ghost'} 
           onClick={() => { setViewMode('officers'); setSelectedOfficer(null); setSelectedBranch(null); }}
-          className={cn("h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest", viewMode === 'officers' && "bg-primary text-white hover:bg-primary")}
+          className={cn("h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all", viewMode === 'officers' ? "bg-primary text-white shadow-lg" : "text-slate-500")}
         >
           Specialist Matrix
         </Button>
@@ -340,7 +333,7 @@ export default function KYCOperationsMonitoringPage() {
             <Button 
               variant={viewMode === 'branches' ? 'secondary' : 'ghost'} 
               onClick={() => { setViewMode('branches'); setSelectedBranch(null); }}
-              className={cn("h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest", viewMode === 'branches' && "bg-primary text-white hover:bg-primary")}
+              className={cn("h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all", viewMode === 'branches' ? "bg-primary text-white shadow-lg" : "text-slate-500")}
             >
               {selectedOfficer.firstName} {selectedOfficer.lastName}'s Portfolio
             </Button>
@@ -351,7 +344,7 @@ export default function KYCOperationsMonitoringPage() {
             <ChevronRight className="w-4 h-4 text-slate-300" />
             <Button 
               variant="secondary" 
-              className="h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest bg-primary text-white hover:bg-primary"
+              className="h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest bg-primary text-white shadow-lg"
             >
               Node: {selectedBranch}
             </Button>
@@ -359,216 +352,212 @@ export default function KYCOperationsMonitoringPage() {
         )}
       </div>
 
-      {/* MAIN WORKSPACE */}
-      {loading ? (
-        <div className="py-40 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>
-      ) : (
-        <div className="animate-in slide-in-from-bottom-4 duration-500">
-          {viewMode === 'officers' && (
-            <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
-              <CardHeader className="bg-slate-900 text-white p-8 border-b">
-                <CardTitle className="text-2xl font-black flex items-center gap-3"><Users className="w-6 h-6" /> Specialist Analysis Matrix</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader className="bg-slate-50 border-b">
-                    <TableRow>
-                      <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">KYC Officer</TableHead>
-                      <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Authorized</TableHead>
-                      <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amendment Cycles</TableHead>
-                      <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Escalated</TableHead>
-                      <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
+      <div className="animate-in slide-in-from-bottom-4 duration-500">
+        {viewMode === 'officers' && (
+          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
+            <CardHeader className="bg-slate-900 text-white p-8 border-b">
+              <CardTitle className="text-2xl font-black flex items-center gap-3"><Users className="w-6 h-6 text-primary" /> Specialist Analysis Matrix</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-slate-50 border-b">
+                  <TableRow>
+                    <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">KYC Officer</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Branches Mapped</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Authorized</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amendment Cycles</TableHead>
+                    <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {processedOfficers.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No personnel discovered in current filters.</TableCell></TableRow>
+                  ) : processedOfficers.map((off) => (
+                    <TableRow key={off.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-100 group">
+                      <TableCell className="py-8 pl-10">
+                        <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setSelectedOfficer(off); setViewMode('branches'); }}>
+                          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black shadow-sm group-hover:scale-110 transition-transform">
+                            {off.firstName.charAt(0)}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-black text-slate-900 leading-none">{off.firstName} {off.lastName}</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{off.email}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center font-black text-slate-700 text-lg">{off.stats.branchesMapped}</TableCell>
+                      <TableCell className="text-center font-black text-emerald-600 text-lg">{off.stats.approved}</TableCell>
+                      <TableCell className="text-center font-black text-orange-600 text-lg">{off.stats.amended}</TableCell>
+                      <TableCell className="text-right pr-10">
+                        <div className="flex justify-end gap-3">
+                          <Button variant="ghost" size="icon" onClick={() => setShowSummary(off)} className="h-11 w-11 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all"><Eye className="w-5 h-5" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setSelectedOfficer(off); setViewMode('branches'); }} className="h-11 w-11 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all"><ChevronRight className="w-5 h-5" /></Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {processedOfficers.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No personnel discovered in current filters.</TableCell></TableRow>
-                    ) : processedOfficers.map((off) => (
-                      <TableRow key={off.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-100 group">
-                        <TableCell className="py-8 pl-10">
-                          <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setSelectedOfficer(off); setViewMode('branches'); }}>
-                            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black shadow-sm group-hover:scale-110 transition-transform">
-                              {off.firstName.charAt(0)}
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {viewMode === 'branches' && (
+          <div className="grid gap-8 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
+                <CardHeader className="bg-slate-900 text-white p-8">
+                  <CardTitle className="text-2xl font-black">Jurisdiction Portfolio</CardTitle>
+                  <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Authorized nodes for {selectedOfficer.firstName} {selectedOfficer.lastName}</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-slate-50 border-b">
+                      <TableRow>
+                        <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch Node</TableHead>
+                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Files Sent</TableHead>
+                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amend Cycles</TableHead>
+                        <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Node Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {currentBranches.map((b: any) => (
+                        <TableRow key={b.name} className="hover:bg-slate-50 transition-colors border-b cursor-pointer group" onClick={() => { setSelectedBranch(b.name); setViewMode('cases'); }}>
+                          <TableCell className="py-8 pl-10">
+                            <div className="flex items-center gap-4">
+                              <div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/10 group-hover:text-primary transition-colors"><Building2 className="w-5 h-5" /></div>
+                              <span className="font-black text-slate-900 text-base">{b.name}</span>
                             </div>
-                            <div className="flex flex-col">
-                              <span className="font-black text-slate-900 leading-none">{off.firstName} {off.lastName}</span>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{off.email}</span>
-                            </div>
+                          </TableCell>
+                          <TableCell className="text-center font-black text-slate-700">{b.totalFiles}</TableCell>
+                          <TableCell className="text-center font-black text-orange-600">{b.amended}</TableCell>
+                          <TableCell className="text-right pr-10">
+                            <Badge className={cn("font-black text-[9px] uppercase px-3 py-1", b.pending > 0 ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700")}>
+                              {b.pending > 0 ? `${b.pending} ACTIVE` : 'COMPLIANT'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="space-y-8">
+              <Card className="shadow-xl border-slate-200 overflow-hidden rounded-[2rem] bg-primary/5 border-l-4 border-l-primary">
+                <CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-lg font-black uppercase tracking-widest">Personnel Insight</CardTitle></CardHeader>
+                <CardContent className="p-8 space-y-6">
+                  <div className="flex items-center gap-5">
+                    <div className="w-16 h-16 rounded-3xl bg-white flex items-center justify-center font-black text-2xl text-primary shadow-xl ring-4 ring-white">{selectedOfficer.firstName.charAt(0)}</div>
+                    <div>
+                      <p className="text-xl font-black text-slate-900">{selectedOfficer.firstName} {selectedOfficer.lastName}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Specialist Official</p>
+                    </div>
+                  </div>
+                  <div className="pt-6 border-t border-slate-200 grid grid-cols-2 gap-6">
+                    <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Approved Cases</p><p className="text-3xl font-black text-emerald-600">{selectedOfficer.stats.approved}</p></div>
+                    <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Amendment Cycles</p><p className="text-3xl font-black text-orange-600">{selectedOfficer.stats.amended}</p></div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {viewMode === 'cases' && (
+          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[3rem] bg-white">
+            <CardHeader className="bg-slate-900 text-white p-10 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-6">
+                <div className="p-4 bg-primary/20 rounded-3xl"><Building2 className="w-8 h-8 text-primary" /></div>
+                <div>
+                  <CardTitle className="text-3xl font-black tracking-tight">Technical Analysis: {selectedBranch}</CardTitle>
+                  <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-widest mt-2 flex items-center gap-2"><Eye className="w-3.5 h-3.5" /> View-only administrative mode</CardDescription>
+                </div>
+              </div>
+              <Button variant="outline" onClick={() => setViewMode('branches')} className="bg-white/10 border-white/20 text-white font-black rounded-xl h-12 px-8 hover:bg-white/20"><ChevronLeft className="w-4 h-4 mr-2" /> Back to branches</Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-slate-50 border-b">
+                  <TableRow>
+                    <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Case ID</TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Customer Entity</TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Oversight</TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Workflow Status</TableHead>
+                    <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentCases.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No cases discovered in this node jurisdiction.</TableCell></TableRow>
+                  ) : currentCases.map((sub) => {
+                    const subTime = new Date(sub.submittedAt || sub.createdAt);
+                    const threshold = settings?.escalationHours || 72;
+                    const hoursSince = differenceInHours(new Date(), subTime);
+                    const isBreached = hoursSince >= threshold && ![KYCStatus.APPROVED, KYCStatus.REJECTED, KYCStatus.ESCALATED].includes(sub.status);
+                    
+                    return (
+                      <TableRow key={sub.id} className={cn("border-b border-slate-100 hover:bg-slate-50/50 transition-colors", isBreached && "bg-red-50/30")}>
+                        <TableCell className="py-8 pl-10 font-black text-primary tabular-nums tracking-tighter">{sub.id}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-black text-slate-900 leading-tight text-base">{sub.customerName}</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{sub.entityType || 'Individual'} account</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-center font-black text-emerald-600 text-lg">{off.stats.approved}</TableCell>
-                        <TableCell className="text-center font-black text-orange-600 text-lg">{off.stats.amended}</TableCell>
-                        <TableCell className="text-center font-black text-destructive text-lg">{off.stats.escalated}</TableCell>
+                        <TableCell>
+                          {isBreached ? (
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center gap-1.5 text-red-600">
+                                <ShieldAlert className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Oversight Alert</span>
+                              </div>
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleManualEscalation(sub.id)} 
+                                disabled={isEscalating === sub.id}
+                                className="h-9 px-5 bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase rounded-xl shadow-xl shadow-red-200 transition-all active:scale-95"
+                              >
+                                {isEscalating === sub.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Dispatch Escalation"}
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-emerald-600">
+                              <ShieldCheck className="w-4 h-4 opacity-50" />
+                              <span className="text-[10px] font-black uppercase tracking-widest">Compliant</span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn(
+                            "font-black text-[9px] uppercase px-3 py-1",
+                            sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'
+                          )}>
+                            {sub.status.replace(/_/g, ' ')}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-right pr-10">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => setShowSummary(off)} className="h-10 w-10 text-slate-400 hover:text-primary"><Eye className="w-5 h-5" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => { setSelectedOfficer(off); setViewMode('branches'); }} className="h-10 w-10 text-slate-400 hover:text-primary"><ChevronRight className="w-5 h-5" /></Button>
+                          <div className="flex justify-end gap-3">
+                            <Button variant="ghost" size="icon" onClick={() => handleDownloadBundle(sub)} disabled={isDownloading === sub.id} className="h-11 w-11 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50">
+                              {isDownloading === sub.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                            </Button>
+                            <Button size="sm" asChild className="h-11 bg-slate-900 text-white font-black text-[10px] uppercase px-8 rounded-xl hover:bg-black transition-all shadow-lg active:scale-95">
+                              <Link href={`/submissions/${sub.id}`}>Inspect Case</Link>
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
-          {viewMode === 'branches' && (
-            <div className="grid gap-8 lg:grid-cols-3">
-              <div className="lg:col-span-2">
-                <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
-                  <CardHeader className="bg-slate-900 text-white p-8">
-                    <CardTitle className="text-2xl font-black">Jurisdiction Portfolio</CardTitle>
-                    <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Branches assigned to {selectedOfficer.firstName} {selectedOfficer.lastName}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader className="bg-slate-50 border-b">
-                        <TableRow>
-                          <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch Node</TableHead>
-                          <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Total Cases</TableHead>
-                          <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Approved</TableHead>
-                          <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Cycles</TableHead>
-                          <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {currentBranches.map((b: any) => (
-                          <TableRow key={b.name} className="hover:bg-slate-50 transition-colors border-b cursor-pointer group" onClick={() => { setSelectedBranch(b.name); setViewMode('cases'); }}>
-                            <TableCell className="py-8 pl-10">
-                              <div className="flex items-center gap-4">
-                                <div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/10 group-hover:text-primary transition-colors"><Building2 className="w-5 h-5" /></div>
-                                <span className="font-black text-slate-900 text-base">{b.name}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center font-black text-slate-700">{b.total}</TableCell>
-                            <TableCell className="text-center font-black text-emerald-600">{b.approved}</TableCell>
-                            <TableCell className="text-center font-black text-orange-600">{b.amended}</TableCell>
-                            <TableCell className="text-right pr-10">
-                              <Badge className={cn("font-black text-[9px] uppercase", b.pending > 0 ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700")}>
-                                {b.pending > 0 ? `${b.pending} ACTIVE` : 'COMPLIANT'}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              </div>
-              <div className="space-y-8">
-                <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-primary/5">
-                  <CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-lg font-black uppercase tracking-widest">Personnel Insight</CardTitle></CardHeader>
-                  <CardContent className="p-8 space-y-6">
-                    <div className="flex items-center gap-5">
-                      <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center font-black text-2xl text-primary shadow-xl ring-4 ring-white">{selectedOfficer.firstName.charAt(0)}</div>
-                      <div>
-                        <p className="text-xl font-black text-slate-900">{selectedOfficer.firstName} {selectedOfficer.lastName}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Specialist Official</p>
-                      </div>
-                    </div>
-                    <div className="pt-6 border-t border-slate-200 grid grid-cols-2 gap-6">
-                      <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Approved Cases</p><p className="text-3xl font-black text-emerald-600">{selectedOfficer.stats.approved}</p></div>
-                      <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Amendment Cycles</p><p className="text-3xl font-black text-orange-600">{selectedOfficer.stats.amended}</p></div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          )}
-
-          {viewMode === 'cases' && (
-            <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[3rem] bg-white">
-              <CardHeader className="bg-slate-900 text-white p-10 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-3xl font-black tracking-tight">Technical Analysis View</CardTitle>
-                  <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-widest mt-2">View-only mode for node: {selectedBranch}</CardDescription>
-                </div>
-                <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setViewMode('branches')} className="bg-white/10 border-white/20 text-white font-black rounded-xl h-12 px-6"><ChevronLeft className="w-4 h-4 mr-2" /> Back to branches</Button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader className="bg-slate-50 border-b">
-                    <TableRow>
-                      <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Case ID</TableHead>
-                      <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Customer Entity</TableHead>
-                      <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Oversight</TableHead>
-                      <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Workflow Status</TableHead>
-                      <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {currentCases.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No cases discovered in this node.</TableCell></TableRow>
-                    ) : currentCases.map((sub) => {
-                      const subTime = new Date(sub.submittedAt || sub.createdAt);
-                      const threshold = settings?.escalationHours || 72;
-                      const hoursSince = differenceInHours(new Date(), subTime);
-                      const isBreached = hoursSince >= threshold && ![KYCStatus.APPROVED, KYCStatus.REJECTED, KYCStatus.ESCALATED].includes(sub.status);
-                      
-                      return (
-                        <TableRow key={sub.id} className={cn("border-b border-slate-100 hover:bg-slate-50/50 transition-colors", isBreached && "bg-red-50/30")}>
-                          <TableCell className="py-8 pl-10 font-black text-primary tabular-nums">{sub.id}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-black text-slate-900 leading-tight text-base">{sub.customerName}</span>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase mt-1">{sub.entityType || 'Individual'} account</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {isBreached ? (
-                              <div className="flex flex-col gap-2">
-                                <div className="flex items-center gap-1.5 text-red-600">
-                                  <AlertTriangle className="w-3.5 h-3.5" />
-                                  <span className="text-[10px] font-black uppercase tracking-widest">Oversight Alert</span>
-                                </div>
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => handleManualEscalation(sub.id)} 
-                                  disabled={isEscalating === sub.id}
-                                  className="h-8 px-4 bg-red-600 hover:bg-red-700 text-white font-black text-[9px] uppercase rounded-xl shadow-lg shadow-red-200"
-                                >
-                                  {isEscalating === sub.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "Dispatch Escalation"}
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest flex items-center gap-1.5"><ShieldCheck className="w-3 h-3" /> Compliant</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={cn(
-                              "font-black text-[9px] uppercase px-3 py-1",
-                              sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-primary/5 text-primary border-primary/20'
-                            )}>
-                              {sub.status.replace(/_/g, ' ')}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right pr-10">
-                            <div className="flex justify-end gap-3">
-                              <Button variant="ghost" size="icon" onClick={() => handleDownloadBundle(sub)} disabled={isDownloading === sub.id} className="h-11 w-11 rounded-xl hover:bg-emerald-50 text-emerald-600">
-                                {isDownloading === sub.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-                              </Button>
-                              <Button size="sm" asChild className="h-11 bg-slate-900 text-white font-black text-[10px] uppercase px-6 rounded-xl hover:bg-black">
-                                <Link href={`/submissions/${sub.id}`}>Inspect Case</Link>
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* PERFORMANCE SUMMARY MODAL */}
       <Dialog open={!!showSummary} onOpenChange={() => setShowSummary(null)}>
-        <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-[2rem] bg-white">
+        <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-[2.5rem] bg-white">
           <DialogHeader className="p-8 bg-primary text-white space-y-1">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-white/20 rounded-2xl"><TrendingUp className="w-6 h-6 text-white" /></div>
@@ -579,20 +568,20 @@ export default function KYCOperationsMonitoringPage() {
             </div>
           </DialogHeader>
           <div className="p-8 space-y-8">
-            <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-3xl border border-slate-100">
-              <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-2xl shadow-inner border border-primary/5">{showSummary?.firstName.charAt(0)}</div>
+            <div className="flex items-center gap-5 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+              <div className="w-16 h-16 rounded-[1.5rem] bg-primary/10 text-primary flex items-center justify-center font-black text-2xl shadow-inner border border-primary/5">{showSummary?.firstName.charAt(0)}</div>
               <div>
-                <p className="text-xl font-black text-slate-900">{showSummary?.firstName} {showSummary?.lastName}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Authorized Personnel</p>
+                <p className="text-xl font-black text-slate-900 leading-tight">{showSummary?.firstName} {showSummary?.lastName}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Authorized Personnel</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-6">
-              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Branches Mapped</p><p className="text-3xl font-black text-primary">{showSummary?.stats.branchesMapped}</p></div>
-              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approved Cases</p><p className="text-3xl font-black text-emerald-600">{showSummary?.stats.approved}</p></div>
-              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Amendment cycles</p><p className="text-3xl font-black text-orange-600">{showSummary?.stats.amended}</p></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Branches</p><p className="text-3xl font-black text-primary">{showSummary?.stats.branchesMapped}</p></div>
+              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approved</p><p className="text-3xl font-black text-emerald-600">{showSummary?.stats.approved}</p></div>
+              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cycles</p><p className="text-3xl font-black text-orange-600">{showSummary?.stats.amended}</p></div>
               <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Escalated</p><p className="text-3xl font-black text-destructive">{showSummary?.stats.escalated}</p></div>
             </div>
-            <Button onClick={() => setShowSummary(null)} className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl shadow-xl">Close profile</Button>
+            <Button onClick={() => setShowSummary(null)} className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-black transition-all">Close profile</Button>
           </div>
         </DialogContent>
       </Dialog>
