@@ -97,8 +97,10 @@ async function main() {
   }
 
   // 4. Provision Master Admin Account
+  // RULE: Utilize environment variables for passwords. Set rotation flag to true.
   const adminEmail = 'admin.user@nibbank.com.et';
-  const defaultPassword = await bcrypt.hash('Password123', 10);
+  const rawAdminPassword = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
+  const defaultPassword = await bcrypt.hash(rawAdminPassword, 10);
   
   const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
 
@@ -110,7 +112,7 @@ async function main() {
         firstName: 'System',
         lastName: 'Administrator',
         status: UserStatus.ACTIVE,
-        needsPasswordChange: false
+        needsPasswordChange: true // Enforce change on first login
       }
     });
 
@@ -120,7 +122,7 @@ async function main() {
         data: { userId: systemAdmin.id, roleId: adminRole.id }
       });
     }
-    console.log(`✔ Master Admin Created: ${adminEmail}`);
+    console.log(`✔ Master Admin Created: ${adminEmail} (Rotation Enforced)`);
   }
 
   // 5. Provision Sample Branch Account
@@ -135,7 +137,7 @@ async function main() {
         firstName: 'Branch',
         lastName: 'One',
         status: UserStatus.ACTIVE,
-        needsPasswordChange: true
+        needsPasswordChange: true // Enforce change on first login
       }
     });
 
@@ -145,7 +147,7 @@ async function main() {
         data: { userId: branchUser.id, roleId: officerRole.id }
       });
     }
-    console.log(`✔ Sample Branch User Created: ${branchEmail}`);
+    console.log(`✔ Sample Branch User Created: ${branchEmail} (Rotation Enforced)`);
   }
 
   console.log('✅ Institutional Registry Sync Complete.');
