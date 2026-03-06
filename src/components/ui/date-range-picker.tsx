@@ -273,7 +273,7 @@ export function DatePickerWithRange({
                   <span className="text-slate-900">{format(date.from, "LLL dd, y")}</span>
                 )
               ) : (
-                <span className="text-slate-400 font-medium">Select analysis window</span>
+                <span className="text-slate-400 font-medium">Date Filter</span>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -330,8 +330,7 @@ export function DatePickerWithRange({
               />
             </div>
           </div>
-          <div className="bg-slate-50 border-t p-4 flex items-center justify-between">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institutional Date Range Intelligence</p>
+          <div className="bg-slate-50 border-t p-4 flex items-center justify-end">
             <div className="flex gap-2">
               <Button 
                 variant="ghost" 
