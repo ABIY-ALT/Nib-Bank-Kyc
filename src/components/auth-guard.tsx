@@ -18,12 +18,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FCFAF7] gap-6">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FCFAF7]">
         <Loader2 className="w-16 h-16 animate-spin text-primary" />
-        <div className="text-center space-y-1">
-          <p className="font-black text-slate-900 tracking-tighter text-xl">Nib Institutional Gateway</p>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Verifying Secure Session...</p>
-        </div>
       </div>
     );
   }

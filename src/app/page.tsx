@@ -151,9 +151,8 @@ export default function Dashboard() {
 
   if (permissionsLoading) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
+      <div className="min-h-[60vh] flex flex-col items-center justify-center">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Syncing secure session...</p>
       </div>
     );
   }
@@ -222,9 +221,8 @@ export default function Dashboard() {
           <CardContent className="p-0">
             <div className="divide-y divide-slate-100">
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <div className="flex flex-col items-center justify-center py-20">
                   <Loader2 className="w-8 h-8 animate-spin text-primary/30" />
-                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Querying Vault...</p>
                 </div>
               ) : recentSubmissions && recentSubmissions.length > 0 ? (
                 recentSubmissions.slice(0, 10).map((sub) => (
