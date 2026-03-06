@@ -34,16 +34,12 @@ import {
   AlertTriangle,
   Loader2,
   ShieldCheck,
-  Calendar as CalendarIcon,
   RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { subDays, startOfDay, endOfDay, format } from "date-fns";
-import { Input } from "@/components/ui/input";
+import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { getFollowUpVerifications } from "@/actions/follow-up";
-import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { DateRange } from "react-day-picker";
 
 export default function FollowUpReportsPage() {
   const { toast } = useToast();
@@ -51,11 +47,6 @@ export default function FollowUpReportsPage() {
   const [allVerifications, setAllVerifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedResult, setSelectedResult] = useState<string>("all");
-  
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
 
   useEffect(() => {
     loadData();
@@ -74,21 +65,14 @@ export default function FollowUpReportsPage() {
   };
 
   const filteredData = useMemo(() => {
-    if (!allVerifications || !dateRange?.from || !dateRange?.to) return [];
+    if (!allVerifications) return [];
     
-    const start = startOfDay(dateRange.from);
-    const end = endOfDay(dateRange.to);
-
     return allVerifications.filter(v => {
       if (v.status !== 'COMPLETED') return false;
-      
-      const verifiedDate = new Date(v.verifiedAt);
-      const matchesDate = verifiedDate >= start && verifiedDate <= end;
       const matchesResult = selectedResult === "all" || v.result === selectedResult;
-      
-      return matchesDate && matchesResult;
+      return matchesResult;
     });
-  }, [allVerifications, dateRange, selectedResult]);
+  }, [allVerifications, selectedResult]);
 
   const handleExportCSV = () => {
     if (filteredData.length === 0) return;
@@ -121,7 +105,6 @@ export default function FollowUpReportsPage() {
 
   const resetFilters = () => {
     setSelectedResult("all");
-    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   return (
@@ -147,25 +130,16 @@ export default function FollowUpReportsPage() {
 
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
-            <div className="md:col-span-8">
-              <DatePickerWithRange 
-                date={dateRange} 
-                onDateChange={setDateRange} 
-                label="Audit Timeline" 
-              />
-            </div>
-            <div className="md:col-span-4 space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Finding</Label>
-              <Select value={selectedResult} onValueChange={setSelectedResult}>
-                <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="All Results" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Results</SelectItem>
-                  <SelectItem value="Correct" className="text-emerald-600 font-bold">Correct (Compliant)</SelectItem>
-                  <SelectItem value="Discrepancy" className="text-orange-600 font-bold">Discrepancy (Errors)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-2 max-w-sm">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Finding</Label>
+            <Select value={selectedResult} onValueChange={setSelectedResult}>
+              <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="All Results" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Results</SelectItem>
+                <SelectItem value="Correct" className="text-emerald-600 font-bold">Correct (Compliant)</SelectItem>
+                <SelectItem value="Discrepancy" className="text-orange-600 font-bold">Discrepancy (Errors)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>

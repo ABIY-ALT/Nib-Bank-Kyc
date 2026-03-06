@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -50,7 +51,6 @@ import {
   FileBarChart, 
   Download, 
   Filter, 
-  Calendar as CalendarIcon, 
   Search, 
   Building2, 
   ShieldCheck, 
@@ -62,10 +62,9 @@ import {
   Inbox,
   CheckCircle2,
   RotateCcw,
-  ShieldAlert,
-  Info
+  ShieldAlert
 } from "lucide-react";
-import { subDays, format, differenceInDays, startOfMonth, eachMonthOfInterval, isSameMonth } from "date-fns";
+import { format, differenceInDays, startOfMonth, eachMonthOfInterval, isSameMonth, subDays } from "date-fns";
 import { getSubmissions } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { createAuditLog } from "@/actions/audit";
@@ -84,10 +83,7 @@ export default function ManagementReportingPage() {
   const [districts, setDistricts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 90), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedRisk, setSelectedRisk] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
@@ -118,8 +114,6 @@ export default function ManagementReportingPage() {
 
   const filteredData = useMemo(() => {
     return submissions.filter(sub => {
-      const subDate = format(new Date(sub.submittedAt || sub.createdAt), 'yyyy-MM-dd');
-      const matchesDate = subDate >= fromDate && subDate <= toDate;
       const matchesDistrict = selectedDistrict === 'all' || sub.branch?.district?.name === selectedDistrict;
       const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
       const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
@@ -129,9 +123,9 @@ export default function ManagementReportingPage() {
       const riskLevel = sub.isExceptional ? 'HIGH' : 'LOW';
       const matchesRisk = selectedRisk === 'all' || riskLevel === selectedRisk;
 
-      return matchesDate && matchesDistrict && matchesBranch && matchesStatus && matchesType && matchesSearch && matchesRisk;
+      return matchesDistrict && matchesStatus && matchesType && matchesSearch && matchesRisk;
     });
-  }, [submissions, fromDate, toDate, selectedDistrict, selectedBranch, selectedStatus, selectedType, searchTerm, selectedRisk]);
+  }, [submissions, selectedDistrict, selectedStatus, selectedType, searchTerm, selectedRisk]);
 
   const stats = useMemo(() => {
     const total = filteredData.length;
@@ -167,9 +161,9 @@ export default function ManagementReportingPage() {
       { name: 'High Risk', count: filteredData.filter(s => s.isExceptional).length }
     ];
 
-    // Real trend line calculation
-    const start = startOfMonth(new Date(fromDate));
-    const end = new Date(toDate);
+    // Real trend line calculation (last 6 months)
+    const end = new Date();
+    const start = startOfMonth(subDays(end, 180));
     const months = eachMonthOfInterval({ start, end });
     
     const trendLine = months.map(m => {
@@ -179,7 +173,7 @@ export default function ManagementReportingPage() {
     });
 
     return { statusPie, riskBar, trendLine };
-  }, [filteredData, stats, fromDate, toDate]);
+  }, [filteredData, stats]);
 
   const handleExportExcel = async () => {
     if (!user) return;
@@ -261,15 +255,7 @@ export default function ManagementReportingPage() {
             <Filter className="w-4 h-4" /> Intelligence Filters
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-[9px] font-black uppercase text-slate-400">Date From</Label>
-            <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-10 text-xs font-bold" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-[9px] font-black uppercase text-slate-400">Date To</Label>
-            <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-10 text-xs font-bold" />
-          </div>
+        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-1.5">
             <Label className="text-[9px] font-black uppercase text-slate-400">Regional District</Label>
             <Select value={selectedDistrict} onValueChange={setSelectedDistrict} disabled={!isSuperAdmin}>
@@ -308,8 +294,8 @@ export default function ManagementReportingPage() {
             </Select>
           </div>
           <div className="flex items-end">
-            <Button variant="ghost" onClick={() => { setSelectedStatus("all"); setSelectedRisk("all"); setSelectedBranch("all"); setSelectedDistrict("all"); }} className="w-full h-10 gap-2 font-bold text-slate-400 hover:text-primary">
-              <RotateCcw className="w-4 h-4" /> Reset
+            <Button variant="ghost" onClick={() => { setSelectedStatus("all"); setSelectedRisk("all"); setSelectedDistrict("all"); }} className="w-full h-10 gap-2 font-bold text-slate-400 hover:text-primary">
+              <RotateCcw className="w-4 h-4" /> Reset Filters
             </Button>
           </div>
         </CardContent>
@@ -445,7 +431,7 @@ export default function ManagementReportingPage() {
                 <TableRow><TableCell colSpan={6} className="py-24 text-center text-muted-foreground italic font-medium bg-slate-50/30">No historical records match the active criteria.</TableCell></TableRow>
               ) : filteredData.slice(0, 50).map((sub) => (
                 <TableRow key={sub.id} className="hover:bg-slate-50 transition-colors group">
-                  <TableCell className="font-black text-primary tabular-nums pl-8 py-6">{sub.id}</TableCell>
+                  <TableCell className="font-black text-primary tabular-nums py-6 pl-8">{sub.id}</TableCell>
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-black text-slate-900 leading-tight">{sub.customerName}</span>
@@ -465,7 +451,7 @@ export default function ManagementReportingPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right pr-8 text-xs font-bold text-slate-400 tabular-nums">
-                    {format(new Date(sub.submittedAt || sub.createdAt), 'MMM dd, yyyy')}
+                    {sub.submittedAt ? format(new Date(sub.submittedAt), 'MMM dd, yyyy') : 'N/A'}
                   </TableCell>
                 </TableRow>
               ))}

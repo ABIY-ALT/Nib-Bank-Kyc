@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from "react";
@@ -29,7 +30,6 @@ import {
   FileText, 
   Download, 
   Filter, 
-  Calendar as CalendarIcon,
   Search,
   Building2,
   Map,
@@ -42,13 +42,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { getSubmissions } from "@/actions/submissions";
 import { getDistricts, getBranches } from "@/actions/hierarchy";
-import { subDays, format } from "date-fns";
+import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { KYCStatus } from "@prisma/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { DateRange } from "react-day-picker";
 
 export default function BranchReportsPage() {
   const { user } = useAuth();
@@ -62,10 +60,6 @@ export default function BranchReportsPage() {
 
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
 
   const isDistDir = user?.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
   const activeDistrict = isDistDir ? user?.districtName : (selectedDistrict === 'all' ? undefined : selectedDistrict);
@@ -96,17 +90,12 @@ export default function BranchReportsPage() {
   }, [branches, selectedDistrict]);
 
   const handleGenerateReport = async () => {
-    if (!dateRange?.from || !dateRange?.to) {
-      toast({ variant: "destructive", title: "Range Required", description: "Please select an analysis window." });
-      return;
-    }
     setLoading(true);
     try {
       const data = await getSubmissions({
         district: activeDistrict || undefined,
         branch: selectedBranch === 'all' ? undefined : selectedBranch,
-        startDate: format(dateRange.from, 'yyyy-MM-dd'),
-        endDate: format(dateRange.to, 'yyyy-MM-dd')
+        limit: 1000
       });
       setReportData(data);
       toast({
@@ -157,7 +146,7 @@ export default function BranchReportsPage() {
           <p className="text-muted-foreground text-lg font-medium">Audit-ready historical data for regulatory reporting and institutional verification.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 h-11 px-6 font-bold border-slate-200 bg-white" onClick={() => { setReportData(null); setSelectedDistrict(isDistDir ? user?.districtName || "all" : "all"); setSelectedBranch("all"); setDateRange({ from: subDays(new Date(), 30), to: new Date() }); }}>
+          <Button variant="outline" className="gap-2 h-11 px-6 font-bold border-slate-200 bg-white" onClick={() => { setReportData(null); setSelectedDistrict(isDistDir ? user?.districtName || "all" : "all"); setSelectedBranch("all"); }}>
             <Filter className="w-4 h-4" /> Reset
           </Button>
           <Button 
@@ -188,7 +177,7 @@ export default function BranchReportsPage() {
         </CardHeader>
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-3 space-y-2">
+            <div className="md:col-span-6 space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <Map className="w-3 h-3" /> Regional District
               </Label>
@@ -206,7 +195,7 @@ export default function BranchReportsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="md:col-span-3 space-y-2">
+            <div className="md:col-span-6 space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <Building2 className="w-3 h-3" /> Specific Branch
               </Label>
@@ -219,13 +208,6 @@ export default function BranchReportsPage() {
                   {filteredBranches.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="md:col-span-6">
-              <DatePickerWithRange 
-                date={dateRange} 
-                onDateChange={setDateRange} 
-                label="Analysis Window" 
-              />
             </div>
           </div>
           <div className="mt-8 flex justify-end">
@@ -286,7 +268,7 @@ export default function BranchReportsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-slate-500 font-bold tabular-nums text-right pr-8">
-                        {format(new Date(sub.submittedAt), 'MMM dd, yyyy')}
+                        {sub.submittedAt ? format(new Date(sub.submittedAt), 'MMM dd, yyyy') : 'N/A'}
                       </TableCell>
                     </TableRow>
                   ))}

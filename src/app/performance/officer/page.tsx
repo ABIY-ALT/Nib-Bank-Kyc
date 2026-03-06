@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useMemo, useState, useEffect } from "react"
@@ -17,16 +18,13 @@ import {
   History, 
   Filter, 
   FileDown, 
-  Calendar as CalendarIcon, 
   TrendingUp,
   Clock,
   Loader2,
   ShieldCheck,
-  UserCheck,
   Search,
   AlertTriangle,
   Zap,
-  ShieldAlert,
   Inbox,
   ArrowUpRight,
   RotateCcw,
@@ -35,8 +33,6 @@ import {
   ChevronDown,
   MessageSquare,
   FileText,
-  Play,
-  Goal,
   Activity,
   BarChart3,
   ExternalLink,
@@ -56,7 +52,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast"
-import { subDays, format, differenceInHours, addHours, isAfter, startOfDay } from "date-fns";
+import { format, differenceInHours, addHours, isAfter } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getSubmissions, updateSubmissionStatus } from "@/actions/submissions";
@@ -65,8 +61,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { KYCStatus } from "@prisma/client";
 import Link from "next/link";
-import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { DateRange } from "react-day-picker";
 
 export default function KYCOperationsMonitoringPage() {
   const { user } = useAuth();
@@ -85,10 +79,6 @@ export default function KYCOperationsMonitoringPage() {
   // Filtering States
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedOfficer, setSelectedOfficer] = useState<string>("all");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
 
   const roleContext = useMemo(() => {
     if (!user) return 'OFFICER';
@@ -105,17 +95,13 @@ export default function KYCOperationsMonitoringPage() {
       setLastUpdated(new Date());
     }, 30000); 
     return () => clearInterval(interval);
-  }, [dateRange, roleContext, user, selectedBranch, selectedOfficer]);
+  }, [roleContext, user, selectedBranch, selectedOfficer]);
 
   const loadData = async () => {
-    if (!user || !dateRange?.from || !dateRange?.to) return;
+    if (!user) return;
     setLoading(true);
     try {
-      let filters: any = { 
-        startDate: format(dateRange.from, 'yyyy-MM-dd'), 
-        endDate: format(dateRange.to, 'yyyy-MM-dd'), 
-        limit: 1000 
-      };
+      let filters: any = { limit: 1000 };
       
       if (roleContext === 'OFFICER') {
         filters.assignedToId = user?.id;
@@ -134,16 +120,6 @@ export default function KYCOperationsMonitoringPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleRangeSelection = (range: "today" | "week" | "month") => {
-    const now = new Date();
-    let start;
-    if (range === 'today') start = startOfDay(now);
-    else if (range === 'week') start = subDays(now, 7);
-    else start = subDays(now, 30);
-    
-    setDateRange({ from: start, to: now });
   };
 
   const handleManualEscalation = async (caseId: string) => {
@@ -275,7 +251,6 @@ export default function KYCOperationsMonitoringPage() {
     setSelectedBranch("all");
     setSelectedOfficer("all");
     setSearchTerm("");
-    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   const handleExport = () => {
@@ -311,26 +286,10 @@ export default function KYCOperationsMonitoringPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200">
-          {(["today", "week", "month"] as const).map((r) => (
-            <Button
-              key={r}
-              variant="ghost"
-              size="sm"
-              onClick={() => handleRangeSelection(r)}
-              className={cn(
-                "px-6 h-10 rounded-xl font-black text-[10px] uppercase tracking-[0.1em] transition-all",
-                "text-slate-500 hover:text-primary"
-              )}
-            >
-              {r}
-            </Button>
-          ))}
-          <DatePickerWithRange 
-            date={dateRange} 
-            onDateChange={setDateRange} 
-            className="ml-2"
-          />
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" onClick={loadData} className="h-12 w-12 rounded-xl border border-slate-200 bg-white">
+            <RotateCcw className="w-5 h-5 text-slate-400" />
+          </Button>
         </div>
       </div>
 
@@ -382,13 +341,7 @@ export default function KYCOperationsMonitoringPage() {
             </div>
           </div>
 
-          <div className="lg:col-span-12 flex items-center justify-between pt-4 border-t border-slate-50">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                <Clock className="w-3.5 h-3.5 text-primary" />
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Analysis Window: {dateRange?.from ? format(dateRange.from, 'MMM dd, yyyy') : '...'} - {dateRange?.to ? format(dateRange.to, 'MMM dd, yyyy') : '...'}</span>
-              </div>
-            </div>
+          <div className="lg:col-span-12 flex items-center justify-end pt-4 border-t border-slate-50">
             <Button variant="ghost" onClick={resetFilters} className="h-12 gap-2 font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-primary hover:bg-primary/5 rounded-xl">
               <RotateCcw className="w-4 h-4" /> Reset Filters
             </Button>
@@ -504,7 +457,7 @@ export default function KYCOperationsMonitoringPage() {
                 <div>
                   <CardTitle className="text-3xl font-black tracking-tight">Technical Operations Queue</CardTitle>
                   <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                    Prioritized Technical Analysis Stream &bull; {analytics.total} Active Units
+                    Prioritized Technical Analysis Stream & bull; {analytics.total} Active Units
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="border-primary/30 text-primary font-black px-6 py-2 rounded-full h-10 text-[10px] tracking-widest">
@@ -525,7 +478,7 @@ export default function KYCOperationsMonitoringPage() {
                   </TableHeader>
                   <TableBody>
                     {analytics.slaItems.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="py-48 text-center italic text-slate-400 bg-slate-50/30">No pending operations discovered in this analysis window.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6} className="py-48 text-center italic text-slate-400 bg-slate-50/30">No pending operations discovered.</TableCell></TableRow>
                     ) : analytics.slaItems.map((sub) => (
                       <React.Fragment key={sub.id}>
                         <TableRow 
@@ -659,7 +612,7 @@ export default function KYCOperationsMonitoringPage() {
                   <div>
                     <CardTitle className="text-3xl font-black tracking-tight">Efficiency & Accuracy Matrix</CardTitle>
                     <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">
-                      Weighted Specialist Metrics &bull; Audit Score Formula 40/30/20/10
+                      Weighted Specialist Metrics & bull; Audit Score Formula 40/30/20/10
                     </CardDescription>
                   </div>
                 </div>

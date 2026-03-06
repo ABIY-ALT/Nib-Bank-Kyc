@@ -16,7 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Folders, 
   Filter, 
-  Calendar as CalendarIcon, 
   Building2, 
   ShieldCheck, 
   Loader2,
@@ -36,15 +35,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { subDays, startOfDay, endOfDay, format } from "date-fns";
+import { format } from "date-fns";
 import JSZip from 'jszip';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from "@/lib/utils";
 import { getSubmissions, getSubmissionById } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYCStatus } from "@prisma/client";
-import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { DateRange } from "react-day-picker";
 
 const STATUS_OPTIONS = [
   { id: KYCStatus.APPROVED, label: 'Approved' },
@@ -58,10 +55,6 @@ export default function MasterBundleDownloadPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
@@ -98,22 +91,17 @@ export default function MasterBundleDownloadPage() {
   };
 
   const filteredSubmissions = useMemo(() => {
-    if (!allSubmissions || !dateRange?.from || !dateRange?.to) return [];
+    if (!allSubmissions) return [];
     
-    const start = startOfDay(dateRange.from);
-    const end = endOfDay(dateRange.to);
-
     return allSubmissions.filter(sub => {
-      const subDate = new Date(sub.submittedAt || sub.createdAt);
-      const matchesDate = subDate >= start && subDate <= end;
       const matchesStatus = selectedStatuses.length === 0 || 
                            (selectedStatuses.includes(KYCStatus.SUBMITTED) ? [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
       const matchesDistrict = selectedDistrict === 'all' || sub.branch?.district?.name === selectedDistrict;
       const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
 
-      return matchesDate && matchesStatus && matchesDistrict && matchesBranch;
+      return matchesStatus && matchesDistrict && matchesBranch;
     });
-  }, [allSubmissions, dateRange, selectedStatuses, selectedDistrict, selectedBranch]);
+  }, [allSubmissions, selectedStatuses, selectedDistrict, selectedBranch]);
 
   const handleToggleStatus = (statusId: string) => {
     setSelectedStatuses(prev => 
@@ -122,7 +110,7 @@ export default function MasterBundleDownloadPage() {
   };
 
   const handleDownloadMasterBundle = async () => {
-    if (!user || filteredSubmissions.length === 0 || !dateRange?.from || !dateRange?.to) return;
+    if (!user || filteredSubmissions.length === 0) return;
     setIsProcessing(true);
     setProgress(0);
 
@@ -132,7 +120,7 @@ export default function MasterBundleDownloadPage() {
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
       const bundleName = `NIB_BANK_MASTER_EXPORT_${timestamp}`;
 
-      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nDATE RANGE: ${format(dateRange.from, 'yyyy-MM-dd')} to ${format(dateRange.to, 'yyyy-MM-dd')}\nTOTAL CASES: ${filteredSubmissions.length}\n--------------------------------------------------\n\nSTRUCTURE: District / Branch / CaseID_CustomerName / Assets\n\nINVENTORY:\n`;
+      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nTOTAL CASES: ${filteredSubmissions.length}\n--------------------------------------------------\n\nSTRUCTURE: District / Branch / CaseID_CustomerName / Assets\n\nINVENTORY:\n`;
       
       let manifestBody = "";
 
@@ -189,7 +177,6 @@ export default function MasterBundleDownloadPage() {
     setSelectedStatuses([]);
     setSelectedDistrict("all");
     setSelectedBranch("all");
-    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   return (
@@ -267,14 +254,6 @@ export default function MasterBundleDownloadPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="space-y-4 pt-4 border-t">
-              <DatePickerWithRange 
-                date={dateRange} 
-                onDateChange={setDateRange} 
-                label="Analysis Window" 
-              />
             </div>
 
             <Button variant="ghost" onClick={resetFilters} className="w-full gap-2 font-bold text-slate-400 hover:text-primary">

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -46,15 +47,13 @@ import {
   Activity,
   ArrowUpRight,
   RotateCcw,
-  Calendar as CalendarIcon,
   ChevronRight,
-  TrendingUp,
-  LayoutGrid
+  TrendingUp
 } from "lucide-react";
 import { getSubmissions } from '@/actions/submissions';
 import { getGlobalSettings } from '@/actions/settings';
 import { KYCStatus } from '@prisma/client';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -80,8 +79,6 @@ export default function MyCasesPerformancePage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
-  const [fromDate, setFromDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   useEffect(() => {
     if (!permissionsLoading && !user) {
@@ -130,16 +127,14 @@ export default function MyCasesPerformancePage() {
 
   const filteredSubmissions = useMemo(() => {
     return submissions.filter(sub => {
-      const subDate = format(new Date(sub.submittedAt || sub.createdAt), 'yyyy-MM-dd');
       const matchesSearch = sub.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || sub.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
       const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
       const matchesType = selectedType === 'all' || sub.entityType === selectedType;
-      const matchesDate = subDate >= fromDate && subDate <= toDate;
 
-      return matchesSearch && matchesBranch && matchesStatus && matchesType && matchesDate;
+      return matchesSearch && matchesBranch && matchesStatus && matchesType;
     });
-  }, [submissions, searchTerm, selectedBranch, selectedStatus, selectedType, fromDate, toDate]);
+  }, [submissions, searchTerm, selectedBranch, selectedStatus, selectedType]);
 
   const stats = useMemo(() => {
     const total = filteredSubmissions.length;
@@ -160,8 +155,6 @@ export default function MyCasesPerformancePage() {
     setSelectedBranch("all");
     setSelectedStatus("all");
     setSelectedType("all");
-    setFromDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-    setToDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
   if (loading || permissionsLoading) {
@@ -290,23 +283,6 @@ export default function MyCasesPerformancePage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-4 pt-2 border-t">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">Period Start</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="pl-9 h-10 border-slate-200 font-bold" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">Period Conclusion</Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="pl-9 h-10 border-slate-200 font-bold" />
-                </div>
-              </div>
             </div>
 
             <Button variant="ghost" onClick={resetFilters} className="w-full gap-2 font-bold text-slate-400 hover:text-primary">

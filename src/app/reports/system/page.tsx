@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { 
   Card, 
   CardContent, 
@@ -20,48 +20,35 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
-  Download, 
   Globe, 
   History,
   ShieldCheck,
   Building2,
   Users,
-  Calendar as CalendarIcon,
   FileDown,
   Loader2,
   RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { subDays, format } from "date-fns";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { format } from "date-fns";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
-import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { DateRange } from "react-day-picker";
 
 export default function SystemWideReportsPage() {
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [reportDataActive, setReportDataActive] = useState(false);
-  
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
+
+  useEffect(() => {
+    // Optional: Load initial data if needed
+  }, []);
 
   const handleGenerateReport = async () => {
-    if (!dateRange?.from || !dateRange?.to) {
-      toast({ variant: "destructive", title: "Range Required" });
-      return;
-    }
     setLoading(true);
     try {
       const data = await getSubmissions({
-        startDate: format(dateRange.from, 'yyyy-MM-dd'),
-        endDate: format(dateRange.to, 'yyyy-MM-dd'),
-        limit: 5000 // Large limit for global audit
+        limit: 5000 // Master audit aggregation
       });
       setSubmissions(data);
       setReportDataActive(true);
@@ -136,7 +123,6 @@ export default function SystemWideReportsPage() {
   const resetFilters = () => {
     setReportDataActive(false);
     setSubmissions([]);
-    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   return (
@@ -161,20 +147,6 @@ export default function SystemWideReportsPage() {
           </Button>
         </div>
       </div>
-
-      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
-        <CardContent className="p-4 md:p-6">
-          <div className="flex flex-col md:flex-row items-end gap-6">
-            <div className="flex-1 w-full">
-              <DatePickerWithRange 
-                date={dateRange} 
-                onDateChange={setDateRange} 
-                label="Global Network Timeline" 
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {!reportDataActive ? (
         <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50 shadow-inner rounded-[2.5rem]">
@@ -302,7 +274,7 @@ export default function SystemWideReportsPage() {
           </div>
         </div>
       ) : (
-        <div className="py-20 text-center text-muted-foreground italic">No data discovered for the selected range.</div>
+        <div className="py-20 text-center text-muted-foreground italic">No data discovered.</div>
       )}
     </div>
   );

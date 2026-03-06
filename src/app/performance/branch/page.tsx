@@ -30,7 +30,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
-import { subDays, format } from "date-fns";
+import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
@@ -39,8 +39,6 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { DateRange } from "react-day-picker";
 
 export default function BranchPerformancePage() {
   const { user } = useAuth();
@@ -50,26 +48,20 @@ export default function BranchPerformancePage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
-  
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
 
   const isDistDir = hasPermission('REPORT_VIEW_DISTRICT');
   const isAdmin = isSuperAdmin;
 
   useEffect(() => {
     loadData();
-  }, [dateRange, isAdmin, isDistDir, user]);
+  }, [isAdmin, isDistDir, user]);
 
   const loadData = async () => {
-    if (!user || !dateRange?.from || !dateRange?.to) return;
+    if (!user) return;
     setLoading(true);
     const data = await getSubmissions({
-      startDate: format(dateRange.from, 'yyyy-MM-dd'),
-      endDate: format(dateRange.to, 'yyyy-MM-dd'),
-      district: isDistDir && !isAdmin ? user.districtName || undefined : undefined
+      district: isDistDir && !isAdmin ? user.districtName || undefined : undefined,
+      limit: 1000
     });
     setSubmissions(data);
     setLoading(false);
@@ -111,7 +103,6 @@ export default function BranchPerformancePage() {
 
   const resetFilters = () => {
     setSelectedBranches([]);
-    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   if (loading || permissionsLoading) {
@@ -200,25 +191,7 @@ export default function BranchPerformancePage() {
             <span className="text-5xl font-black text-primary tracking-tighter">{aggregateStats.accuracy}%</span>
             <div className="p-2 bg-primary/5 rounded-lg"><Activity className="w-4 h-4 text-primary" /></div>
           </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white rounded-2xl">
-        <CardContent className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
-          <div className="md:col-span-10">
-            <DatePickerWithRange 
-              date={dateRange} 
-              onDateChange={setDateRange} 
-              label="Performance Analysis Timeline" 
-            />
-          </div>
-          <div className="md:col-span-2">
-            <Button variant="ghost" onClick={resetFilters} className="w-full h-12 gap-2 font-bold text-slate-400 hover:text-primary rounded-xl">
-              <RotateCcw className="w-4 h-4" /> Reset
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {branchMetrics.map((branch) => {

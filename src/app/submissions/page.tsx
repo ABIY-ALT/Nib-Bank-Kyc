@@ -20,7 +20,6 @@ import {
   FileDown,
   Archive,
   Clock,
-  Calendar as CalendarIcon,
   Loader2,
   RotateCcw
 } from "lucide-react";
@@ -38,13 +37,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { subDays, format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
-import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { DateRange } from "react-day-picker";
 
 const STATUS_OPTIONS = [
   { id: KYCStatus.APPROVED, label: 'Approved' },
@@ -62,24 +58,15 @@ export default function CaseArchivePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
-  
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
 
   useEffect(() => {
     loadArchive();
-  }, [dateRange]);
+  }, []);
 
   const loadArchive = async () => {
-    if (!dateRange?.from || !dateRange?.to) return;
     setLoading(true);
     try {
-      const data = await getSubmissions({
-        startDate: format(dateRange.from, 'yyyy-MM-dd'),
-        endDate: format(dateRange.to, 'yyyy-MM-dd')
-      });
+      const data = await getSubmissions({ limit: 1000 });
       setSubmissions(data);
     } catch (error) {
       console.error("Archive load failed:", error);
@@ -152,7 +139,6 @@ export default function CaseArchivePage() {
     setSelectedStatuses([]);
     setSelectedBranches([]);
     setSearchTerm("");
-    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
 
   const getStatusBadge = (sub: any) => {
@@ -259,23 +245,14 @@ export default function CaseArchivePage() {
 
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-4 md:p-6">
-          <div className="flex flex-col md:flex-row items-end gap-6">
-            <div className="flex-1 w-full">
-              <DatePickerWithRange 
-                date={dateRange} 
-                onDateChange={setDateRange} 
-                label="Archive Analysis window" 
-              />
-            </div>
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input 
-                placeholder="Search archive..." 
-                className="pl-11 h-12 rounded-xl border-slate-200 bg-white" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+          <div className="relative w-full">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input 
+              placeholder="Search archive by name, ID or branch..." 
+              className="pl-11 h-12 rounded-xl border-slate-200 bg-white" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -320,7 +297,7 @@ export default function CaseArchivePage() {
                 <TableCell className="font-medium text-slate-600">{sub.branchName}</TableCell>
                 <TableCell>{getStatusBadge(sub)}</TableCell>
                 <TableCell className="text-slate-500 font-medium tabular-nums text-xs">
-                  {new Date(sub.submittedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                  {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
                 </TableCell>
                 <TableCell className="text-right pr-8">
                   <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/5 text-primary">

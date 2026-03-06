@@ -14,8 +14,6 @@ import {
   Building2, 
   Loader2,
   Dices,
-  FileDown,
-  Calendar,
   History,
   FileText,
   Zap,
@@ -26,14 +24,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { subDays, format } from "date-fns";
+import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { getFollowUpVerifications, seedFollowUpPool } from "@/actions/follow-up";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
-import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { DateRange } from "react-day-picker";
 
 export default function FollowUpDashboard() {
   const { user } = useAuth();
@@ -43,11 +39,6 @@ export default function FollowUpDashboard() {
   const [verifications, setVerifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSampling, setIsSampling] = useState(false);
-  
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
 
   useEffect(() => {
     loadData();
@@ -65,17 +56,11 @@ export default function FollowUpDashboard() {
   [verifications]);
 
   const handleSampleCases = async () => {
-    if (!dateRange?.from || !dateRange?.to) {
-      toast({ variant: "destructive", title: "Range Required" });
-      return;
-    }
-
     setIsSampling(true);
     try {
       const approved = await getSubmissions({
         status: [KYCStatus.APPROVED],
-        startDate: format(dateRange.from, 'yyyy-MM-dd'),
-        endDate: format(dateRange.to, 'yyyy-MM-dd')
+        limit: 100
       });
 
       const existingIds = new Set(verifications.map(v => v.submissionId));
@@ -85,7 +70,7 @@ export default function FollowUpDashboard() {
         toast({ 
           variant: "destructive", 
           title: "Sampling Pool Empty", 
-          description: "No new un-audited cases discovered in this window." 
+          description: "No new un-audited cases discovered in the archive." 
         });
         return;
       }
@@ -131,7 +116,7 @@ export default function FollowUpDashboard() {
     return { rate, total, discrepancies, byBranch };
   }, [verifications]);
 
-  const handleExportReport = () => {
+  const handleExportHistory = () => {
     const completed = verifications.filter(v => v.status === 'COMPLETED');
     if (completed.length === 0) return;
 
@@ -168,7 +153,7 @@ export default function FollowUpDashboard() {
             <Zap className="w-5 h-5 fill-white" />
             Start Next Random Audit
           </Button>
-          <Button variant="outline" onClick={handleExportReport} className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200">
+          <Button variant="outline" onClick={handleExportHistory} className="h-12 px-6 font-bold shadow-sm gap-2 border-slate-200">
             <History className="w-5 h-5 text-primary" />
             Export History
           </Button>
@@ -176,20 +161,15 @@ export default function FollowUpDashboard() {
       </div>
 
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
-        <CardContent className="p-4 md:p-6">
-          <div className="flex flex-col md:flex-row items-end gap-6">
-            <div className="flex-1 w-full">
-              <DatePickerWithRange 
-                date={dateRange} 
-                onDateChange={setDateRange} 
-                label="Sampling Date Range" 
-              />
-            </div>
-            <Button onClick={handleSampleCases} disabled={isSampling} className="bg-primary text-white font-black h-12 px-8 gap-3 shadow-xl min-w-[240px] rounded-xl">
-              {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
-              Seed Shared Audit Pool
-            </Button>
+        <CardContent className="p-4 md:p-6 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="font-bold text-slate-900">Shared Audit Pool Management</p>
+            <p className="text-sm text-slate-500">Seed the pool with cases from the Institutional Archive for random verification.</p>
           </div>
+          <Button onClick={handleSampleCases} disabled={isSampling} className="bg-primary text-white font-black h-12 px-8 gap-3 shadow-xl min-w-[240px] rounded-xl">
+            {isSampling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dices className="w-5 h-5" />}
+            Seed Shared Pool
+          </Button>
         </CardContent>
       </Card>
 
@@ -294,7 +274,7 @@ export default function FollowUpDashboard() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm font-bold text-slate-900 leading-none">{v.customerName}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">{v.branch} • {format(new Date(v.verifiedAt), 'MMM dd')}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">{v.branch} • {v.verifiedAt ? format(new Date(v.verifiedAt), 'MMM dd') : 'N/A'}</p>
                     </div>
                   </div>
                 ))}
