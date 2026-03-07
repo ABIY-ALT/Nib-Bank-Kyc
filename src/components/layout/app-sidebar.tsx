@@ -499,7 +499,7 @@ export function AppSidebar() {
           <UserProfileDialog>
             <div className="flex items-center gap-3 flex-1 cursor-pointer group overflow-hidden">
               <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-                {user.name.charAt(0)}
+                {user.name?.[0] || "?"}
               </div>
               <div className="flex-1 overflow-hidden text-left">
                 <p className="text-sm font-bold leading-tight truncate text-white group-hover:text-primary transition-colors">{user.name}</p>

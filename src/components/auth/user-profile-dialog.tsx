@@ -71,7 +71,7 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
 
   if (!user) return null;
 
-  const userInitial = user.firstName.charAt(0);
+  const userInitial = (user.firstName || user.name || "?")[0];
 
   return (
     <Dialog open={open} onOpenChange={(val) => {

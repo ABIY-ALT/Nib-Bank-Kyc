@@ -93,13 +93,29 @@ export async function POST(req: Request) {
       { expiresIn: "8h" }
     );
 
+    const serializableRoles = user.roles.map(ur => ({
+      role: {
+        id: ur.role.id,
+        name: ur.role.name,
+        permissions: ur.role.permissions.map(p => ({
+          permission: { slug: p.permission.slug, name: p.permission.name, group: p.permission.group }
+        }))
+      }
+    }));
+
     const response = NextResponse.json({
       success: true,
       user: {
         id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
         name: `${user.firstName} ${user.lastName}`,
         email: user.email,
+        status: user.status,
         branchName: user.branch?.name || null,
+        districtName: user.branch?.district?.name || null,
+        assignedBranches: user.assignedBranches || [],
+        roles: serializableRoles,
         needsPasswordChange: user.needsPasswordChange
       }
     });
