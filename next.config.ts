@@ -24,6 +24,7 @@ const cspHeader = `
 `.replace(/\s{2,}/g, ' ').trim();
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false, // MANDATORY: Removes X-Powered-By header to prevent technology fingerprinting.
   async headers() {
     return [
       {
