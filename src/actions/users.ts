@@ -5,25 +5,19 @@ import { UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
 import { generateSecurePassword } from '@/lib/security';
-import { cookies } from 'next/headers';
-import { jwtVerify } from 'jose';
+import { getServerSession } from './auth-server';
 
 /**
  * Server-side RBAC Check.
  * Verifies if the current session has the required administrative clearance.
+ * Leverages the consolidated getServerSession to ensure IP binding and version integrity.
  */
 async function verifyAdminClearance() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('token')?.value;
-  if (!token) return false;
-
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
-    const { payload } = await jwtVerify(token, secret);
-    return payload.role === 'SUPER_ADMIN';
-  } catch {
-    return false;
-  }
+  const session = await getServerSession();
+  if (!session) return false;
+  
+  // Rule: Only the designated SUPER_ADMIN role can manage personnel and credentials
+  return session.role === 'SUPER_ADMIN';
 }
 
 /**
