@@ -34,12 +34,13 @@ import {
   AlertTriangle,
   RotateCcw,
   Upload,
-  ShieldAlert
+  ShieldAlert,
+  X
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissionById, updateSubmissionStatus, updateSubmissionChecklist, processExceptionalStep } from "@/actions/submissions";
+import { getSubmissionById, updateSubmissionStatus, updateSubmissionChecklist, processExceptionalStep, resubmitSubmission } from "@/actions/submissions";
 import { deleteInstitutionalFile } from "@/actions/storage";
 import { getGlobalSettings } from "@/actions/settings";
 import { KYCStatus } from "@prisma/client";
@@ -100,6 +101,10 @@ export default function SubmissionDetails() {
   const [isActioning, setIsActioning] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
 
+  // Resubmit State
+  const [resubmitFiles, setResubmitFiles] = useState<{file: File, type: string, id: string}[]>([]);
+  const resubmitInputRef = useRef<HTMLInputElement>(null);
+
   const [govMemo, setGovMemo] = useState<File | null>(null);
   const govFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -130,29 +135,22 @@ export default function SubmissionDetails() {
     if (submission?.checklistState) {
       const raw = submission.checklistState;
       if (typeof raw === 'string' && raw.trim().length > 0) {
-        try {
-          state = JSON.parse(raw);
-        } catch {
-          state = {};
-        }
+        try { state = JSON.parse(raw); } catch { state = {}; }
       } else if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
         state = raw;
       }
     }
-    
-    if (!state || typeof state !== 'object' || Array.isArray(state)) {
-      state = {};
-    }
-    setChecklist(state);
+    setChecklist(state || {});
   }, [submission]);
 
+  const isCreator = user?.id === submission?.createdById;
+  
   const isReviewer = useMemo(() => {
+    if (isSuperAdmin) return true;
+    // Strictly gate: creators cannot review their own cases
+    if (isCreator) return false;
     return hasPermission('KYC_VERIFY_CHECKLIST') || hasPermission('KYC_APPROVE_STANDARD');
-  }, [hasPermission]);
-
-  const canPurgeAsset = useMemo(() => {
-    return isSuperAdmin || hasPermission('MANAGE_VAULT_STORAGE');
-  }, [isSuperAdmin, hasPermission]);
+  }, [hasPermission, isSuperAdmin, isCreator]);
 
   const isTerminal = submission?.status === KYCStatus.APPROVED || submission?.status === KYCStatus.REJECTED;
 
@@ -193,15 +191,72 @@ export default function SubmissionDetails() {
     }
   };
 
+  const handleResubmit = async () => {
+    if (!submission || !user || isActioning) return;
+    if (resubmitFiles.length === 0) {
+      toast({ variant: "destructive", title: "Assets Required", description: "Please attach corrected documents." });
+      return;
+    }
+    if (resubmitFiles.some(f => !f.type)) {
+      toast({ variant: "destructive", title: "Type Required", description: "Select classification for all files." });
+      return;
+    }
+
+    setIsActioning("RESUBMIT");
+    try {
+      const formData = new FormData();
+      formData.append('id', submission.id);
+      formData.append('remarks', remarks);
+      resubmitFiles.forEach(f => {
+        formData.append('files', f.file);
+        formData.append('types', f.type);
+      });
+
+      const res = await resubmitSubmission(formData);
+      if (res.success) {
+        toast({ title: "Successful", description: "Case resubmitted for specialist analysis." });
+        const updated = await getSubmissionById(submission.id);
+        setSubmission(updated);
+        setRemarks("");
+        setResubmitFiles([]);
+      } else {
+        throw new Error(res.error);
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Resubmission Failed", description: e.message });
+    } finally {
+      setIsActioning(null);
+    }
+  };
+
+  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      const valid: {file: File, type: string, id: string}[] = [];
+      for (const f of files) {
+        if (f.size > MAX_FILE_SIZE) {
+          toast({ variant: "destructive", title: "File Too Large", description: f.name });
+          continue;
+        }
+        if (!ALLOWED_TYPES.includes(f.type)) {
+          toast({ variant: "destructive", title: "Invalid Type", description: f.name });
+          continue;
+        }
+        valid.push({ file: f, type: "", id: crypto.randomUUID() });
+      }
+      setResubmitFiles(prev => [...prev, ...valid]);
+    }
+  };
+
   const handleGovFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > MAX_FILE_SIZE) {
-        toast({ variant: "destructive", title: "File Too Large", description: "Memo exceeds 10MB limit." });
+        toast({ variant: "destructive", title: "File Too Large" });
         return;
       }
       if (!ALLOWED_TYPES.includes(file.type)) {
-        toast({ variant: "destructive", title: "Invalid Type", description: "Only PDF or image files are allowed." });
+        toast({ variant: "destructive", title: "Invalid Type" });
         return;
       }
       setGovMemo(file);
@@ -213,7 +268,7 @@ export default function SubmissionDetails() {
 
     const needsMemo = ['AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(submission.exceptionalStatus);
     if (needsMemo && !govMemo) {
-      toast({ variant: "destructive", title: "Memo Required", description: "This governance action requires a signature-authorized memo." });
+      toast({ variant: "destructive", title: "Memo Required" });
       return;
     }
     
@@ -222,13 +277,12 @@ export default function SubmissionDetails() {
       const formData = new FormData();
       formData.append('id', submission.id);
       formData.append('nextStatus', nextStatus);
-      formData.append('reviewerId', user.id);
       formData.append('remarks', remarks);
       formData.append('actionLabel', actionLabel);
       if (govMemo) formData.append('memo', govMemo);
 
       await processExceptionalStep(formData);
-      toast({ title: "Successful", description: `Governance decision recorded: ${actionLabel}` });
+      toast({ title: "Successful" });
       const updated = await getSubmissionById(submission.id);
       setSubmission(updated);
       setRemarks("");
@@ -246,11 +300,9 @@ export default function SubmissionDetails() {
     try {
       const res = await deleteInstitutionalFile(fileToPurge.id);
       if (res.success) {
-        toast({ title: "Successful", description: "File wiped from case archive." });
+        toast({ title: "Successful" });
         const updated = await getSubmissionById(submission.id);
         setSubmission(updated);
-      } else {
-        toast({ variant: "destructive", title: "Purge Failed", description: res.error });
       }
     } finally {
       setIsPurging(null);
@@ -271,7 +323,6 @@ export default function SubmissionDetails() {
 
   const workflowSteps = useMemo(() => {
     if (!submission) return [];
-    
     const status = submission.status as KYCStatus;
     const excStatus = submission.exceptionalStatus;
     
@@ -287,41 +338,13 @@ export default function SubmissionDetails() {
       ];
     }
 
-    const steps = [
+    return [
       { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
       { id: 'review', label: 'Specialist Analysis', desc: 'Technical Review', state: status === KYCStatus.SUBMITTED ? 'active' : 'completed', icon: Search },
+      { id: 'verdict', label: 'Institutional Verdict', desc: 'Final Assessment', state: status === KYCStatus.IN_REVIEW ? 'active' : (isTerminal ? 'completed' : 'pending'), icon: ShieldCheck },
+      { id: 'closed', label: 'Case Closed', desc: 'Lifecycle Conclusion', state: isTerminal ? 'completed' : 'pending', icon: Activity }
     ];
-
-    if (status === KYCStatus.ESCALATED) {
-      steps.push({
-        id: 'escalated',
-        label: 'Senior Assessment',
-        desc: 'Technical Escalation',
-        state: 'active',
-        icon: ShieldAlert
-      });
-    }
-
-    steps.push({ 
-      id: 'verdict', 
-      label: 'Institutional Verdict', 
-      desc: 'Final Assessment', 
-      state: status === KYCStatus.IN_REVIEW ? 'active' : (isTerminal ? 'completed' : 'pending'), 
-      icon: ShieldCheck 
-    });
-
-    steps.push({ 
-      id: 'closed', 
-      label: 'Case Closed', 
-      desc: 'Lifecycle Conclusion', 
-      state: isTerminal ? 'completed' : 'pending', 
-      icon: Activity 
-    });
-
-    return steps;
   }, [submission, isTerminal]);
-
-  const needsGovMemo = submission?.isExceptional && ['AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(submission.exceptionalStatus);
 
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
@@ -339,7 +362,7 @@ export default function SubmissionDetails() {
                 submission.status === KYCStatus.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-200',
                 submission.isExceptional && 'bg-yellow-50 text-yellow-700 border-yellow-200'
               )}>
-                {submission.status === KYCStatus.APPROVED ? 'SUCCESSFULLY AUTHORIZED' : submission.status.replace(/_/g, ' ')}
+                {submission.status.replace(/_/g, ' ')}
               </Badge>
             </div>
             <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} • {submission.branchName}</p>
@@ -382,11 +405,7 @@ export default function SubmissionDetails() {
             </CardHeader>
             <CardContent className="pt-6 px-6">
               <div className="grid gap-4">
-                {submission.documents?.length === 0 ? (
-                  <div className="py-12 text-center text-muted-foreground italic bg-slate-50 rounded-2xl border-2 border-dashed">
-                    No files found in case archive.
-                  </div>
-                ) : submission.documents?.map((doc: any) => (
+                {submission.documents?.map((doc: any) => (
                   <div key={doc.id} className="flex items-center justify-between p-5 border rounded-2xl bg-white shadow-sm border-slate-100 group hover:border-primary/30 transition-all">
                     <div className="flex items-center gap-4">
                       <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-primary/5 transition-colors">
@@ -430,7 +449,7 @@ export default function SubmissionDetails() {
                           <span className="text-[10px] font-bold text-slate-400">{new Date(entry.timestamp).toLocaleString()}</span>
                         </div>
                       </div>
-                      <p className="text-sm text-slate-700 font-medium">{entry.comment}</p>
+                      <p className="text-sm text-slate-700 font-medium italic">"{entry.comment}"</p>
                     </div>
                   </div>
                 ))}
@@ -441,7 +460,7 @@ export default function SubmissionDetails() {
 
         <div className="space-y-8">
           {showChecklist && (
-            <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl animate-in zoom-in-95 duration-500 bg-white">
+            <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
               <CardHeader className="bg-primary p-5 border-b text-white">
                 <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-3"><ClipboardCheck className="w-5 h-5" /><CardTitle className="text-lg font-black uppercase">Protocol</CardTitle></div><span className="text-[10px] font-black">{verifiedCount}/{KYC_CHECKLIST_ITEMS.length}</span></div>
                 <Progress value={progressPercentage} className="h-1.5 bg-white/20" />
@@ -457,6 +476,83 @@ export default function SubmissionDetails() {
             </Card>
           )}
 
+          {/* BRANCH OFFICER RESUBMIT AREA */}
+          {isCreator && submission.status === KYCStatus.ACTION_REQUIRED && (
+            <Card className="border-orange-200 shadow-2xl rounded-3xl overflow-hidden bg-orange-50/30 animate-in zoom-in-95 duration-500">
+              <CardHeader className="bg-orange-600 text-white p-6 border-b">
+                <CardTitle className="text-lg font-black uppercase flex items-center gap-2"><RotateCcw className="w-5 h-5" /> Resubmission Panel</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <div className="p-4 bg-white rounded-xl border border-orange-100 shadow-sm flex gap-3">
+                  <AlertCircle className="w-5 h-5 text-orange-600 shrink-0" />
+                  <p className="text-xs font-bold text-orange-800 leading-relaxed">
+                    Review the specialist comments in "Verdict History" and upload the requested assets below to move this case back into analysis.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Correction Assets</Label>
+                  <div 
+                    onClick={() => resubmitInputRef.current?.click()}
+                    className="border-2 border-dashed border-orange-200 rounded-2xl p-8 text-center cursor-pointer hover:bg-orange-50 transition-all bg-white group"
+                  >
+                    <Upload className="w-8 h-8 text-orange-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                    <p className="text-xs font-black text-slate-900">Upload New/Corrected Files</p>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">PDF or Images (Max 10MB)</p>
+                  </div>
+                  <input type="file" ref={resubmitInputRef} className="hidden" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileSelection} />
+
+                  <div className="space-y-2">
+                    {resubmitFiles.map(f => (
+                      <div key={f.id} className="flex items-center gap-3 p-3 bg-white border rounded-xl shadow-sm">
+                        <FileText className="w-4 h-4 text-orange-400 shrink-0" />
+                        <span className="text-[10px] font-bold text-slate-700 flex-1 truncate">{f.file.name}</span>
+                        <Select value={f.type} onValueChange={(val) => setResubmitFiles(prev => prev.map(item => item.id === f.id ? {...item, type: val} : item))}>
+                          <SelectTrigger className="h-8 w-32 text-[10px] font-black uppercase"><SelectValue placeholder="Type..." /></SelectTrigger>
+                          <SelectContent className="text-[10px] font-black uppercase">
+                            {settings?.documentTypes?.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setResubmitFiles(prev => prev.filter(item => item.id !== f.id))}><X className="w-4 h-4" /></Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Response Note</Label>
+                  <Textarea placeholder="Explain the corrections made..." value={remarks} onChange={(e) => setRemarks(e.target.value)} className="min-h-[100px] bg-white rounded-xl" />
+                </div>
+
+                <Button 
+                  onClick={handleResubmit} 
+                  className="w-full h-14 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-xl shadow-xl shadow-orange-200"
+                  disabled={!!isActioning || resubmitFiles.length === 0}
+                >
+                  {isActioning === 'RESUBMIT' ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Zap className="w-5 h-5 mr-2" />}
+                  Dispatch Corrections
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* REVIEWER VERDICT AREA */}
+          {!submission.isExceptional && !isTerminal && isReviewer && (
+            <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden bg-white">
+              <CardHeader className="bg-primary text-white border-b py-5"><CardTitle className="text-lg font-black text-white">Technical Verdict</CardTitle></CardHeader>
+              <CardContent className="space-y-6 pt-6 px-6 pb-8">
+                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scenario Library</Label><Select onValueChange={(v) => { setIsCustomRemark(v.includes("other")); setRemarks(v.includes("other") ? "" : v); }}><SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Select Findings..." /></SelectTrigger><SelectContent>{AMENDMENT_SCENARIOS.map((s, i) => <SelectItem key={i} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Final Determination Remarks</Label><Textarea placeholder="Detail findings..." value={remarks} onChange={(e) => setRemarks(e.target.value)} readOnly={!isCustomRemark} className="min-h-[140px] rounded-2xl bg-slate-50/50 font-medium" /></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Button onClick={() => handleAction(KYCStatus.APPROVED)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Authorize</Button>
+                  <Button onClick={() => handleAction(KYCStatus.ACTION_REQUIRED)} variant="outline" className="border-orange-600 text-orange-600 font-black h-12 rounded-xl hover:bg-orange-50" disabled={!!isActioning}>Amend</Button>
+                  <Button onClick={() => handleAction(KYCStatus.ESCALATED)} className="bg-slate-900 hover:bg-black text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Escalate</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* EXCEPTIONAL DETERMINATION AREA */}
           {submission.isExceptional && !isTerminal && (
             <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden bg-primary/5">
               <CardHeader className="bg-primary text-white border-b py-5">
@@ -471,26 +567,12 @@ export default function SubmissionDetails() {
                 {needsGovMemo && (
                   <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Authorized Memo (Required)</Label>
-                    <div 
-                      onClick={() => govFileInputRef.current?.click()} 
-                      className={cn(
-                        "border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all bg-white group",
-                        govMemo ? "border-emerald-200 bg-emerald-50/30" : "border-primary/20 hover:bg-primary/5"
-                      )}
-                    >
+                    <div onClick={() => govFileInputRef.current?.click()} className={cn("border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all bg-white group", govMemo ? "border-emerald-200 bg-emerald-50/30" : "border-primary/20 hover:bg-primary/5")}>
                       <Upload className={cn("w-6 h-6 mx-auto mb-2", govMemo ? "text-emerald-600" : "text-primary")} />
-                      <p className="text-xs font-black text-slate-900 truncate max-w-full">
-                        {govMemo ? govMemo.name : "Select Signature-Authorized PDF/Image"}
-                      </p>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Only PDF or image files (max 10MB)</p>
+                      <p className="text-xs font-black text-slate-900 truncate max-w-full">{govMemo ? govMemo.name : "Select Signature-Authorized PDF/Image"}</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">PDF or Image (Max 10MB)</p>
                     </div>
-                    <input 
-                      type="file" 
-                      ref={govFileInputRef} 
-                      className="hidden" 
-                      accept=".pdf,.jpg,.jpeg,.png" 
-                      onChange={handleGovFileChange} 
-                    />
+                    <input type="file" ref={govFileInputRef} className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleGovFileChange} />
                   </div>
                 )}
 
@@ -527,21 +609,6 @@ export default function SubmissionDetails() {
               </CardContent>
             </Card>
           )}
-
-          {!submission.isExceptional && !isTerminal && isReviewer && (
-            <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden bg-white">
-              <CardHeader className="bg-primary text-white border-b py-5"><CardTitle className="text-lg font-black text-white">Verdict</CardTitle></CardHeader>
-              <CardContent className="space-y-6 pt-6 px-6 pb-8">
-                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Methodology</Label><Select onValueChange={(v) => { setIsCustomRemark(v.includes("other")); setRemarks(v.includes("other") ? "" : v); }}><SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Scenario..." /></SelectTrigger><SelectContent>{AMENDMENT_SCENARIOS.map((s, i) => <SelectItem key={i} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remarks</Label><Textarea placeholder="Justification..." value={remarks} onChange={(e) => setRemarks(e.target.value)} readOnly={!isCustomRemark} className="min-h-[140px] rounded-2xl bg-slate-50/50" /></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <Button onClick={() => handleAction(KYCStatus.APPROVED)} className="bg-emerald-600 text-white font-black h-12 rounded-xl" disabled={!!isActioning}>Authorize</Button>
-                  <Button onClick={() => handleAction(KYCStatus.ACTION_REQUIRED)} variant="outline" className="text-orange-600 font-black h-12 rounded-xl" disabled={!!isActioning}>Amend</Button>
-                  <Button onClick={() => handleAction(KYCStatus.ESCALATED)} className="bg-purple-600 text-white font-black h-12 rounded-xl" disabled={!!isActioning}>Senior Assess</Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
 
@@ -550,40 +617,17 @@ export default function SubmissionDetails() {
           <div className="bg-white">
             <AlertDialogHeader className="p-8 bg-red-50 border-b border-red-100">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-white rounded-2xl shadow-sm">
-                  <AlertTriangle className="w-6 h-6 text-red-600" />
-                </div>
-                <div className="space-y-1">
-                  <AlertDialogTitle className="text-xl font-black text-red-900 tracking-tight">
-                    Purge Asset
-                  </AlertDialogTitle>
-                  <p className="text-[10px] font-black uppercase text-red-400 tracking-widest">Digital Audit Warning</p>
-                </div>
+                <div className="p-3 bg-white rounded-2xl shadow-sm"><AlertTriangle className="w-6 h-6 text-red-600" /></div>
+                <div className="space-y-1"><AlertDialogTitle className="text-xl font-black text-red-900">Purge Asset</AlertDialogTitle><p className="text-[10px] font-black uppercase text-red-400">Security Warning</p></div>
               </div>
             </AlertDialogHeader>
-            <div className="p-8 space-y-6">
-              <div className="space-y-4">
-                <p className="text-sm font-bold text-slate-700 leading-relaxed">
-                  Permanently delete <span className="text-red-600">"{fileToPurge?.name}"</span> from this case record?
-                </p>
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex gap-3">
-                  <RotateCcw className="w-5 h-5 text-slate-400 shrink-0" />
-                  <p className="text-xs font-black text-slate-500 uppercase leading-normal">
-                    This file will be wiped from the server storage cluster immediately. This action is irreversible.
-                  </p>
-                </div>
-              </div>
+            <div className="p-8 space-y-4">
+              <p className="text-sm font-bold text-slate-700">Permanently delete <span className="text-red-600">"{fileToPurge?.name}"</span> from archive?</p>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex gap-3"><RotateCcw className="w-5 h-5 text-slate-400 shrink-0" /><p className="text-xs font-black text-slate-500 uppercase leading-normal">Irreversible action. File will be wiped from storage cluster.</p></div>
             </div>
             <AlertDialogFooter className="p-8 bg-slate-50 border-t flex flex-row items-center justify-end gap-4">
               <AlertDialogCancel disabled={!!isPurging} className="rounded-xl font-bold h-12 px-6">Abort</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={(e) => { e.preventDefault(); handleConfirmPurge(); }}
-                disabled={!!isPurging}
-                className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl h-12 px-10 shadow-xl shadow-red-200"
-              >
-                {isPurging ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
-                Purge Asset
-              </AlertDialogAction>
+              <AlertDialogAction onClick={(e) => { e.preventDefault(); handleConfirmPurge(); }} disabled={!!isPurging} className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl h-12 px-10 shadow-xl shadow-red-200">{isPurging ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />} Purge Asset</AlertDialogAction>
             </AlertDialogFooter>
           </div>
         </AlertDialogContent>

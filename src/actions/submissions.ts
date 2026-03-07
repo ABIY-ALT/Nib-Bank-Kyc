@@ -41,7 +41,6 @@ async function getClientIp() {
 
 /**
  * Optimized Submission Fetcher.
- * Explicitly excludes raw physical file paths to prevent accidental leak.
  */
 export async function getSubmissions(filters?: {
   status?: KYCStatus[];
@@ -134,8 +133,7 @@ export async function getSubmissions(filters?: {
           select: {
             id: true,
             name: true,
-            type: true,
-            // fileUrl explicitly omitted for bulk queries
+            type: true
           }
         }
       },
@@ -159,7 +157,6 @@ export async function getWorkflowCounts(params: {
   const session = await getServerSession();
   if (!session) return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
 
-  const userId = session.id;
   const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? {
     branchName: { in: branches }
   } : {
@@ -168,8 +165,8 @@ export async function getWorkflowCounts(params: {
 
   try {
     const [myCount, actionRequired, reviewQueue, resubmitted, escalated, exceptional, branchNodeCount] = await Promise.all([
-      prisma.kYC.count({ where: { createdById: userId, active: true } }),
-      prisma.kYC.count({ where: { createdById: userId, status: KYCStatus.ACTION_REQUIRED, active: true } }),
+      prisma.kYC.count({ where: { createdById: params.userId, active: true } }),
+      prisma.kYC.count({ where: { createdById: params.userId, status: KYCStatus.ACTION_REQUIRED, active: true } }),
       prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW] }, isExceptional: false, isResubmitted: false, active: true } }),
       prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW] }, isResubmitted: true, active: true } }),
       prisma.kYC.count({ where: { ...branchFilter, status: KYCStatus.ESCALATED, active: true } }),
@@ -227,7 +224,7 @@ export async function getSubmissionById(id: string) {
         id: m.id,
         name: m.name || 'Document',
         type: m.type || 'Other',
-        url: `/api/memos/${signDownloadToken(m.id)}` // Map to secure, expiring endpoint
+        url: `/api/memos/${signDownloadToken(m.id)}`
       }))
     };
   } catch (error) {
@@ -307,10 +304,9 @@ export async function processExceptionalStep(formData: FormData) {
     include: { roles: { include: { role: true } } }
   });
 
-  // Handle Memo Upload if present
   let memoData = undefined;
   if (memoFile) {
-    validateInstitutionalFile(memoFile); // Backend Guard
+    validateInstitutionalFile(memoFile);
 
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
     try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
@@ -426,7 +422,7 @@ export async function createSubmission(formData: FormData) {
     const memoData = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      validateInstitutionalFile(file); // Backend Guard
+      validateInstitutionalFile(file);
 
       const type = types[i];
       const timestamp = Date.now();
@@ -529,7 +525,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     const initiatedBy = formData.get('initiatedBy') as string;
     const memoFile = formData.get('memo') as File;
 
-    validateInstitutionalFile(memoFile); // Backend Guard
+    validateInstitutionalFile(memoFile);
 
     const ipAddress = await getClientIp();
 
@@ -558,7 +554,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
           role: 'BRANCH_MANAGER',
           performedBy: initiatedBy,
           timestamp: now.toISOString(),
-          comment: `Exception Initiated: ${reason}. Justification: ${riskJustification}. ${remarks}`,
+          comment: `Exception Initiated: ${reason}. Justification: ${justification}. ${remarks}`,
           action: 'INITIATE_EXCEPTION',
           memoAttached: true
         }],
@@ -577,7 +573,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       data: {
         userId: session.id,
         kycId,
-        action: 'INITIATE_EXCEPTION',
+        action: AuditAction.STATUS_CHANGE,
         ipAddress,
         details: `Governance exception initiated for ${kyc.customerName} with memo: ${memoFile.name}.`,
         timestamp: new Date()
@@ -608,10 +604,12 @@ export async function resubmitSubmission(formData: FormData) {
     if (!current) throw new Error("Case not found");
 
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
+
     const memoData = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      validateInstitutionalFile(file); // Backend Guard
+      validateInstitutionalFile(file);
 
       const type = types[i];
       const timestamp = Date.now();
@@ -647,7 +645,7 @@ export async function resubmitSubmission(formData: FormData) {
       data: {
         userId: session.id,
         kycId: id,
-        action: 'RESUBMIT',
+        action: AuditAction.STATUS_CHANGE,
         ipAddress,
         details: `Case resubmitted with ${files.length} new/corrected assets.`,
         timestamp: new Date()
