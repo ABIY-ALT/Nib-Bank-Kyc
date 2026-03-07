@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { getSubmissions, getSubmissionById } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYCStatus } from "@prisma/client";
+import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 const STATUS_OPTIONS = [
   { id: KYCStatus.APPROVED, label: 'Approved' },
@@ -58,6 +59,7 @@ export default function MasterBundleDownloadPage() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   
   const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -70,13 +72,19 @@ export default function MasterBundleDownloadPage() {
 
   useEffect(() => {
     loadInitialData();
-  }, []);
+  }, [dateRange]);
 
   const loadInitialData = async () => {
     setLoading(true);
     try {
+      let filters: any = { limit: 5000 };
+      if (dateRange?.from) {
+        filters.startDate = dateRange.from.toISOString();
+        if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+      }
+
       const [subs, b, d] = await Promise.all([
-        getSubmissions({ limit: 5000 }),
+        getSubmissions(filters),
         getBranches(),
         getDistricts()
       ]);
@@ -177,6 +185,7 @@ export default function MasterBundleDownloadPage() {
     setSelectedStatuses([]);
     setSelectedDistrict("all");
     setSelectedBranch("all");
+    setDateRange(undefined);
   };
 
   return (
@@ -192,6 +201,7 @@ export default function MasterBundleDownloadPage() {
           <p className="text-muted-foreground text-lg font-medium">Bulk institutional export with structured regional folders.</p>
         </div>
         <div className="flex items-center gap-3">
+          <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
           <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-4 py-1.5 font-bold h-10 flex items-center gap-2">
             <ShieldCheck className="w-4 h-4" /> Authorized HQ Access
           </Badge>
