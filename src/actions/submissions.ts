@@ -8,22 +8,64 @@ import fs from 'fs/promises';
 import path from 'path';
 import { signDownloadToken, generateSecureNumericCode } from '@/lib/security';
 import { getServerSession, verifyPermission } from './auth-server';
+import { createAuditLog } from './audit';
 
 /**
  * Institutional Validation Constants.
  */
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+const ALLOWED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png'];
+const DANGEROUS_EXTENSIONS = ['exe', 'js', 'sh', 'bat', 'com', 'scr', 'vbs', 'msi', 'ps1', 'php', 'py', 'rb'];
 
 /**
- * Redundant Server-Side Asset Validation.
+ * Hardened Server-Side Asset Validation.
+ * Performs multi-layered checks on extensions, MIME types, and naming patterns.
  */
-function validateInstitutionalFile(file: File) {
+async function validateInstitutionalFile(file: File, userId: string, userEmail: string) {
+  const extension = path.extname(file.name).toLowerCase();
+  
+  // 1. Size Validation
   if (file.size > MAX_FILE_SIZE) {
+    await createAuditLog({
+      userId,
+      userEmail,
+      action: 'FILE_UPLOAD_BLOCKED_SIZE',
+      details: `Blocked upload of "${file.name}": Exceeds 10MB limit (${(file.size / 1024 / 1024).toFixed(2)}MB).`,
+      severity: 'MEDIUM'
+    });
     throw new Error(`Asset "${file.name}" exceeds the 10MB institutional limit.`);
   }
-  if (!ALLOWED_TYPES.includes(file.type)) {
+
+  // 2. MIME Type & Extension Integrity Check
+  const isValidMime = ALLOWED_TYPES.includes(file.type);
+  const isValidExt = ALLOWED_EXTENSIONS.includes(extension);
+
+  if (!isValidMime || !isValidExt) {
+    await createAuditLog({
+      userId,
+      userEmail,
+      action: 'SECURITY_ALERT_UPLOAD_TYPE',
+      details: `Unauthorized file type rejected: "${file.name}" (MIME: ${file.type}, EXT: ${extension}). Rejecting potentially malicious content.`,
+      severity: 'HIGH'
+    });
     throw new Error("Only PDF or image files are allowed.");
+  }
+
+  // 3. Deobfuscation Detection (Double Extension Check)
+  const nameParts = file.name.split('.');
+  if (nameParts.length > 2) {
+    const hiddenExtension = nameParts[nameParts.length - 2].toLowerCase();
+    if (DANGEROUS_EXTENSIONS.includes(hiddenExtension)) {
+      await createAuditLog({
+        userId,
+        userEmail,
+        action: 'SECURITY_ALERT_UPLOAD_OBFUSCATION',
+        details: `Obfuscation attempt detected! Blocked file with suspicious naming pattern: "${file.name}".`,
+        severity: 'CRITICAL'
+      });
+      throw new Error("File security validation failed: naming anomaly detected.");
+    }
   }
 }
 
@@ -306,7 +348,7 @@ export async function processExceptionalStep(formData: FormData) {
 
   let memoData = undefined;
   if (memoFile) {
-    validateInstitutionalFile(memoFile);
+    await validateInstitutionalFile(memoFile, session.id, session.email);
 
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
     try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
@@ -323,6 +365,14 @@ export async function processExceptionalStep(formData: FormData) {
       fileUrl: `/uploads/${storedFileName}`,
       uploadedById: session.id
     };
+
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'FILE_UPLOAD_AUTHORIZED',
+      details: `Governance memo "${memoFile.name}" successfully committed to case ${id}.`,
+      severity: 'LOW'
+    });
   }
 
   const newEntry = {
@@ -422,7 +472,7 @@ export async function createSubmission(formData: FormData) {
     const memoData = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      validateInstitutionalFile(file);
+      await validateInstitutionalFile(file, session.id, session.email);
 
       const type = types[i];
       const timestamp = Date.now();
@@ -431,6 +481,14 @@ export async function createSubmission(formData: FormData) {
       const buffer = Buffer.from(await file.arrayBuffer());
       await fs.writeFile(filePath, buffer);
       memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id });
+      
+      await createAuditLog({
+        userId: session.id,
+        userEmail: session.email,
+        action: 'FILE_UPLOAD_AUTHORIZED',
+        details: `Initial document "${file.name}" (${type}) successfully committed to vault for case ${id}.`,
+        severity: 'LOW'
+      });
     }
 
     const now = new Date();
@@ -525,7 +583,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     const initiatedBy = formData.get('initiatedBy') as string;
     const memoFile = formData.get('memo') as File;
 
-    validateInstitutionalFile(memoFile);
+    await validateInstitutionalFile(memoFile, session.id, session.email);
 
     const ipAddress = await getClientIp();
 
@@ -569,6 +627,14 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       }
     });
 
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'FILE_UPLOAD_AUTHORIZED',
+      details: `Exceptional flow memo "${memoFile.name}" successfully committed for case ${kycId}.`,
+      severity: 'LOW'
+    });
+
     await prisma.auditLog.create({
       data: {
         userId: session.id,
@@ -609,7 +675,7 @@ export async function resubmitSubmission(formData: FormData) {
     const memoData = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      validateInstitutionalFile(file);
+      await validateInstitutionalFile(file, session.id, session.email);
 
       const type = types[i];
       const timestamp = Date.now();
@@ -618,6 +684,14 @@ export async function resubmitSubmission(formData: FormData) {
       const buffer = Buffer.from(await file.arrayBuffer());
       await fs.writeFile(filePath, buffer);
       memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id });
+
+      await createAuditLog({
+        userId: session.id,
+        userEmail: session.email,
+        action: 'FILE_UPLOAD_AUTHORIZED',
+        details: `Correction document "${file.name}" (${type}) successfully committed for case ${id}.`,
+        severity: 'LOW'
+      });
     }
 
     const now = new Date();
