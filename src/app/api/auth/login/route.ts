@@ -8,7 +8,7 @@ import jwt from "jsonwebtoken";
 /**
  * Institutional Authentication Gateway.
  * Hardened with Session Concurrency Control (Limit: 1).
- * Issues short-lived access tokens (15m) with binding to IP and Version.
+ * Issues short-lived access tokens (15m) with absolute lifetime binding (8h).
  */
 export async function POST(req: Request) {
   let userEmail = "unknown";
@@ -84,7 +84,11 @@ export async function POST(req: Request) {
     const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
     const roleName = updatedUser.roles?.[0]?.role?.name || 'VIEWER';
 
-    // SHORT-LIVED TOKEN: 15 minutes with explicit version binding
+    // SESSION LIFETIME PARAMETERS
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const absoluteLimit = nowSeconds + (8 * 60 * 60); // 8 Hours Absolute
+
+    // SHORT-LIVED TOKEN: 15 minutes inactivity with explicit absolute version binding
     const token = jwt.sign(
       { 
         id: updatedUser.id, 
@@ -92,6 +96,7 @@ export async function POST(req: Request) {
         role: roleName,
         ip: ipAddress,
         v: updatedUser.updatedAt.getTime(),
+        abs: absoluteLimit, // Absolute Session Lifetime
         needsPasswordChange: updatedUser.needsPasswordChange
       },
       secret,
@@ -129,7 +134,7 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: true,
       sameSite: 'lax',
-      maxAge: 60 * 15, // 15 minutes
+      maxAge: 60 * 15, // 15 minutes (Refreshed on activity)
       path: '/',
     });
 

@@ -5,7 +5,7 @@ import { isValidInternalRedirect } from './lib/url-security';
 
 /**
  * Institutional Security Matrix.
- * Strictly enforced at the network edge with IP binding verification.
+ * Strictly enforced at the network edge with IP binding and Absolute Lifetime verification.
  */
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: ['*'],
@@ -33,8 +33,6 @@ export async function middleware(req: NextRequest) {
   if (!token) {
     const loginUrl = new URL('/login', req.url);
     
-    // Securely capture the requested path for post-auth callback
-    // Only if it's a valid internal destination and not already at the gateway
     if (pathname !== '/' && pathname !== '/login' && isValidInternalRedirect(pathname)) {
       loginUrl.searchParams.set('callbackUrl', pathname);
     }
@@ -43,13 +41,22 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
-    // 3. Verify JWT Identity and Contextual Binding (IP)
+    // 3. Verify JWT Identity and Integrity
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
     const { payload } = await jwtVerify(token, secret);
 
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
+    // 4. Absolute Lifetime Check (8h)
+    if (payload.abs && typeof payload.abs === 'number' && nowSeconds > payload.abs) {
+      console.warn(`[SECURITY_ALERT] Absolute session lifetime expired for user: ${payload.email}`);
+      const response = NextResponse.redirect(new URL('/login', req.url));
+      response.cookies.delete('__Secure-auth-token');
+      return response;
+    }
+
+    // 5. Contextual Binding Verification (IP)
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || '127.0.0.1';
-    
-    // Strict IP Check at the Edge
     if (payload.ip && payload.ip !== clientIp) {
       console.warn(`[SECURITY_ALERT] Session IP breach attempt. Token IP: ${payload.ip}, Request IP: ${clientIp}`);
       const response = NextResponse.redirect(new URL('/login', req.url));
@@ -59,12 +66,12 @@ export async function middleware(req: NextRequest) {
 
     const userRole = (payload.role as string) || 'VIEWER';
     
-    // 4. Handle Authenticated Login Access
+    // 6. Handle Authenticated Login Access
     if (pathname === '/login') {
       return NextResponse.redirect(new URL('/', req.url));
     }
 
-    // 5. Enforce Path Authorization Matrix
+    // 7. Enforce Path Authorization Matrix
     const allowedRoutes = ROLE_PERMISSIONS[userRole];
     if (!allowedRoutes) {
       return NextResponse.redirect(new URL('/unauthorized', req.url));
@@ -89,7 +96,7 @@ export async function middleware(req: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
-    // 6. Sanitize Failed Sessions
+    // 8. Sanitize Failed Sessions
     const response = NextResponse.redirect(new URL('/login', req.url));
     response.cookies.delete('__Secure-auth-token');
     return response;

@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 
 /**
  * Session Verification & Rotation Endpoint.
- * Enforces IP binding, token versioning, and sliding window rotation.
+ * Enforces IP binding, token versioning, sliding window rotation, and absolute 8h limit.
  */
 export async function GET() {
   try {
@@ -22,11 +22,22 @@ export async function GET() {
     const secret = new TextEncoder().encode(secretStr);
     const { payload }: any = await jwtVerify(token, secret);
 
-    // 1. Contextual Binding Verification (IP Check)
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
+    // 1. Absolute Lifetime Verification (8h limit)
+    if (payload.abs && nowSeconds > payload.abs) {
+      const response = NextResponse.json({ message: "Absolute session lifetime reached." }, { status: 401 });
+      response.cookies.delete('__Secure-auth-token');
+      return response;
+    }
+
+    // 2. Contextual Binding Verification (IP Check)
     const currentIp = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
     if (payload.ip !== currentIp) {
       console.warn(`[SECURITY] Contextual binding violation. User: ${payload.email}`);
-      return NextResponse.json({ message: "Contextual binding violation." }, { status: 401 });
+      const response = NextResponse.json({ message: "Contextual binding violation." }, { status: 401 });
+      response.cookies.delete('__Secure-auth-token');
+      return response;
     }
 
     const user = await prisma.user.findUnique({
@@ -46,14 +57,17 @@ export async function GET() {
     });
 
     if (!user || user.status !== 'ACTIVE') {
-      return NextResponse.json({ message: "Account restricted." }, { status: 401 });
+      const response = NextResponse.json({ message: "Account restricted." }, { status: 401 });
+      response.cookies.delete('__Secure-auth-token');
+      return response;
     }
 
-    // 2. Token Versioning Verification (Revocation Check)
+    // 3. Token Versioning Verification (Revocation Check)
     const currentVersion = user.updatedAt.getTime();
     if (payload.v !== currentVersion) {
-      // Session has been revoked due to a newer login or administrative update
-      return NextResponse.json({ message: "Session revoked. Please re-authenticate." }, { status: 401 });
+      const response = NextResponse.json({ message: "Session revoked." }, { status: 401 });
+      response.cookies.delete('__Secure-auth-token');
+      return response;
     }
 
     const serializableRoles = user.roles.map(ur => ({
@@ -82,17 +96,17 @@ export async function GET() {
       }
     });
 
-    // 3. Token Rotation (Sliding Window)
+    // 4. Token Rotation (Sliding Window for Inactivity)
     // If the token has been active for more than 5 minutes, issue a fresh one
-    const now = Math.floor(Date.now() / 1000);
+    // while preserving the absolute expiration (abs)
     const iat = payload.iat || 0;
     const fiveMinutes = 5 * 60;
 
-    if (now - iat > fiveMinutes) {
+    if (nowSeconds - iat > fiveMinutes) {
       const newToken = jwt.sign(
         { 
           ...payload,
-          iat: now // Reset issued at
+          iat: nowSeconds // Reset issued at
         },
         secretStr,
         { expiresIn: "15m" }
