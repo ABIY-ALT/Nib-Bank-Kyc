@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
 import { generateSecurePassword } from '@/lib/security';
 import { getServerSession } from './auth-server';
+import { createAuditLog } from './audit';
 
 /**
  * Server-side RBAC Check.
@@ -45,20 +46,19 @@ export async function resetUserPassword(email: string, authorizerId: string) {
         where: { id: user.id },
         data: {
           password: hashedPassword,
-          needsPasswordChange: true
+          needsPasswordChange: true,
+          updatedAt: new Date() // Revoke any active sessions immediately
         }
       });
 
-      await tx.auditLog.create({
-        data: {
-          userId: authorizerId,
-          action: 'PASSWORD_RESET_ADMIN',
-          details: `Administrative credential reset for ${user.firstName} ${user.lastName}.`,
-          timestamp: new Date(),
-          metadata: {
-            targetUserId: user.id,
-            targetEmail: normalizedEmail
-          }
+      await createAuditLog({
+        userId: authorizerId,
+        userEmail: normalizedEmail,
+        action: 'PASSWORD_RESET_ADMIN',
+        details: `Administrative credential reset for ${user.firstName} ${user.lastName}. Previous sessions revoked.`,
+        severity: 'HIGH',
+        metadata: {
+          targetUserId: user.id
         }
       });
     });
@@ -137,7 +137,10 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
 
   const user = await prisma.user.update({
     where: { id: userId },
-    data: { status }
+    data: { 
+      status,
+      updatedAt: new Date() // Revoke session if status changes
+    }
   });
   revalidatePath('/admin/users');
   return { id: user.id, status: user.status };
@@ -197,7 +200,8 @@ export async function provisionUser(data: {
             branch: data.branchId ? { connect: { id: data.branchId } } : { disconnect: true },
             status: data.status,
             password: hashedPassword,
-            needsPasswordChange: hashedPassword ? true : undefined
+            needsPasswordChange: hashedPassword ? true : undefined,
+            updatedAt: new Date() // Force logout on profile modification for security
           }
         });
       } else {
@@ -269,7 +273,8 @@ export async function updateUserPortfolio(userId: string, branches: string[]) {
     await prisma.user.update({
       where: { id: userId },
       data: {
-        assignedBranches: branches
+        assignedBranches: branches,
+        updatedAt: new Date() // Force logout to refresh session claims
       }
     });
     revalidatePath('/admin/assignments');
