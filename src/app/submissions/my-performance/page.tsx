@@ -274,6 +274,7 @@ export default function MyCasesPerformancePage() {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   {Object.values(KYCStatus).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -345,7 +346,7 @@ export default function MyCasesPerformancePage() {
                           <TableCell>
                             <div className="flex flex-col">
                               <span className="font-black text-slate-900 leading-tight">{sub.customerName}</span>
-                              <span className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{sub.entityType || 'Individual'} Account</span>
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold mt-0.5">{sub.entityType || 'Individual'} Account</span>
                             </div>
                           </TableCell>
                           <TableCell className="font-bold text-slate-600 text-xs">
