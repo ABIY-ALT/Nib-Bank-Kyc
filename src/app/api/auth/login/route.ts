@@ -7,9 +7,16 @@ import jwt from "jsonwebtoken";
 
 /**
  * Institutional Authentication Gateway.
- * Hardened with Session Concurrency Control (Limit: 1).
- * Issues short-lived access tokens (15m) with absolute lifetime binding (8h).
+ * Hardened with:
+ * 1. Generic Error Responses (Anti-Enumeration)
+ * 2. Adaptive Throttling (Lockout via Audit Logs)
+ * 3. Session Concurrency Control (Limit: 1)
+ * 4. Absolute Lifetime Binding (8h)
  */
+
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_WINDOW_MINUTES = 15;
+
 export async function POST(req: Request) {
   let userEmail = "unknown";
   try {
@@ -19,11 +26,40 @@ export async function POST(req: Request) {
     
     const ipAddress = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
 
+    // INSTITUTIONAL POLICY: Use generic responses for all failure modes to prevent enumeration.
+    const genericErrorMessage = "Invalid institutional credentials.";
+
     if (!email || !password) {
-      return NextResponse.json({ message: "Identity and password required." }, { status: 400 });
+      return NextResponse.json({ message: genericErrorMessage }, { status: 400 });
     }
 
     userEmail = email.toLowerCase().trim();
+
+    // 1. ADAPTIVE THROTTLING: Check for recent failed attempts in the Audit Vault.
+    const recentFailures = await prisma.auditLog.count({
+      where: {
+        userEmail,
+        action: { in: ['AUTH_FAILURE', 'AUTH_FAILURE_CREDENTIAL', 'AUTH_LOCKOUT'] },
+        timestamp: {
+          gte: new Date(Date.now() - LOCKOUT_WINDOW_MINUTES * 60 * 1000)
+        }
+      }
+    });
+
+    if (recentFailures >= MAX_FAILED_ATTEMPTS) {
+      await createAuditLog({
+        userId: null,
+        userEmail,
+        action: 'AUTH_LOCKOUT',
+        details: `Brute-force protection: Account throttled after ${recentFailures} attempts. Origin: ${ipAddress}`,
+        severity: 'HIGH'
+      });
+      
+      return NextResponse.json({ 
+        message: "Maximum login attempts reached. For security preservation, access is temporarily throttled. Please try again in 15 minutes or contact the Security Officer." 
+      }, { status: 429 });
+    }
+
     const user = await prisma.user.findUnique({
       where: { email: userEmail },
       include: {
@@ -42,15 +78,16 @@ export async function POST(req: Request) {
       }
     });
 
+    // 2. IDENTITY VERIFICATION (With Generic Failure Response)
     if (!user || user.status !== 'ACTIVE') {
       await createAuditLog({
         userId: user?.id || null,
         userEmail,
         action: 'AUTH_FAILURE',
-        details: `Failed login attempt: ${!user ? 'Identity not discovered' : 'Account ' + user.status}`,
+        details: `Failed login attempt: ${!user ? 'Identity not discovered' : 'Account status: ' + user.status}`,
         severity: 'MEDIUM'
       });
-      return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 401 });
+      return NextResponse.json({ message: genericErrorMessage }, { status: 401 });
     }
 
     const isMatch = await bcrypt.compare(password.trim(), user.password);
@@ -60,13 +97,13 @@ export async function POST(req: Request) {
         userEmail,
         userName: `${user.firstName} ${user.lastName}`,
         action: 'AUTH_FAILURE_CREDENTIAL',
-        details: 'Failed login attempt: Invalid password.',
+        details: 'Failed login attempt: Invalid password hash match.',
         severity: 'MEDIUM'
       });
-      return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 401 });
+      return NextResponse.json({ message: genericErrorMessage }, { status: 401 });
     }
 
-    // CONCURRENCY CONTROL: Force updatedAt update to invalidate all previous sessions
+    // 3. CONCURRENCY CONTROL: Force updatedAt update to invalidate all previous sessions
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { updatedAt: new Date() }
@@ -77,18 +114,17 @@ export async function POST(req: Request) {
       userEmail: updatedUser.email,
       userName: `${updatedUser.firstName} ${updatedUser.lastName}`,
       action: 'LOGIN_SUCCESS',
-      details: 'Institutional session initialized. Previous sessions revoked via version rotation.',
+      details: 'Institutional session initialized. Previous sessions rotated.',
       severity: 'LOW'
     });
 
     const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
     const roleName = updatedUser.roles?.[0]?.role?.name || 'VIEWER';
 
-    // SESSION LIFETIME PARAMETERS
+    // 4. SESSION LIFETIME PARAMETERS
     const nowSeconds = Math.floor(Date.now() / 1000);
     const absoluteLimit = nowSeconds + (8 * 60 * 60); // 8 Hours Absolute
 
-    // SHORT-LIVED TOKEN: 15 minutes inactivity with explicit absolute version binding
     const token = jwt.sign(
       { 
         id: updatedUser.id, 
@@ -134,13 +170,13 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: true,
       sameSite: 'lax',
-      maxAge: 60 * 15, // 15 minutes (Refreshed on activity)
+      maxAge: 60 * 15, // 15 minutes
       path: '/',
     });
 
     return response;
   } catch (error: any) {
-    console.error("[Auth API] Login Error:", error);
+    console.error("[Auth API] Gateway Error:", error);
     return NextResponse.json({ message: "Internal security service error." }, { status: 500 });
   }
 }
