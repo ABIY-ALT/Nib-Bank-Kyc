@@ -4,7 +4,8 @@ import type {NextConfig} from 'next';
 /**
  * Institutional Content Security Policy.
  * Defines a strict allow-list for scripts, styles, and assets.
- * Mitigates XSS and injection vulnerabilities.
+ * Mitigates XSS and injection vulnerabilities by enforcing origin-based boundaries.
+ * Path segments (e.g., /auth) are strictly excluded per CSP specifications.
  */
 const cspHeader = `
     default-src 'self';
@@ -15,8 +16,9 @@ const cspHeader = `
     object-src 'none';
     base-uri 'self';
     form-action 'self';
-    frame-src 'self';
+    frame-src 'self' blob:;
     frame-ancestors 'none';
+    connect-src 'self';
     block-all-mixed-content;
     upgrade-insecure-requests;
 `.replace(/\s{2,}/g, ' ').trim();
