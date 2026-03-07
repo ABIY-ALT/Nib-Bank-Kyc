@@ -2,29 +2,11 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
-import { jwtVerify } from 'jose';
 import { createAuditLog } from './audit';
-
-/**
- * Server-side RBAC Check.
- */
-async function getActiveSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('token')?.value;
-  if (!token) return null;
-
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
-    const { payload } = await jwtVerify(token, secret);
-    return payload as { id: string, email: string, role: string };
-  } catch {
-    return null;
-  }
-}
+import { getServerSession } from './auth-server';
 
 export async function seedInstitutionalPermissions() {
-  const session = await getActiveSession();
+  const session = await getServerSession();
   if (!session || session.role !== 'SUPER_ADMIN') {
     if (session) {
       await createAuditLog({
@@ -126,7 +108,7 @@ export async function getAllPermissions() {
 }
 
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
-  const session = await getActiveSession();
+  const session = await getServerSession();
   if (!session || session.role !== 'SUPER_ADMIN') {
     return { success: false, error: 'Unauthorized' };
   }
@@ -179,7 +161,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
 }
 
 export async function toggleRoleStatus(id: string, currentStatus: boolean) {
-  const session = await getActiveSession();
+  const session = await getServerSession();
   if (!session || session.role !== 'SUPER_ADMIN') {
     return { success: false, error: 'Unauthorized' };
   }

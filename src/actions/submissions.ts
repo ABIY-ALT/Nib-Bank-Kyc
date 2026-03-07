@@ -7,6 +7,7 @@ import { headers } from 'next/headers';
 import fs from 'fs/promises';
 import path from 'path';
 import { signId, generateSecureNumericCode } from '@/lib/security';
+import { getServerSession, verifyPermission } from './auth-server';
 
 /**
  * Resolves the client IP address from request headers.
@@ -22,7 +23,6 @@ async function getClientIp() {
 
 /**
  * Optimized Submission Fetcher.
- * Uses strict selection to avoid leaking sensitive personnel details.
  */
 export async function getSubmissions(filters?: {
   status?: KYCStatus[];
@@ -136,7 +136,11 @@ export async function getWorkflowCounts(params: {
   branches?: string[],
   isSuperAdmin: boolean 
 }) {
-  const { userId, branchName, branches, isSuperAdmin } = params;
+  const { branchName, branches, isSuperAdmin } = params;
+  const session = await getServerSession();
+  if (!session) return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
+
+  const userId = session.id;
   const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? {
     branchName: { in: branches }
   } : {
@@ -212,6 +216,9 @@ export async function getSubmissionById(id: string) {
 }
 
 export async function updateSubmissionStatus(id: string, status: KYCStatus, reviewerId: string, remarks?: string) {
+  const session = await getServerSession();
+  if (!session) throw new Error("Unauthenticated");
+
   const now = new Date();
   const ipAddress = await getClientIp();
   const current = await prisma.kYC.findUnique({ where: { id } });
@@ -219,7 +226,7 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
 
   const history = (current.commentHistory as any[]) || [];
   const reviewer = await prisma.user.findUnique({ 
-    where: { id: reviewerId },
+    where: { id: session.id },
     include: { roles: { include: { role: true } } }
   });
 
@@ -235,7 +242,7 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
     where: { id },
     data: {
       status,
-      assignedToId: reviewerId,
+      assignedToId: session.id,
       updatedAt: now,
       commentHistory: [...history, newEntry],
       isResubmitted: status === KYCStatus.SUBMITTED && current.status === KYCStatus.ACTION_REQUIRED,
@@ -245,7 +252,7 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
 
   await prisma.auditLog.create({
     data: {
-      userId: reviewerId,
+      userId: session.id,
       kycId: id,
       action: AuditAction.STATUS_CHANGE,
       ipAddress,
@@ -260,9 +267,11 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
 }
 
 export async function processExceptionalStep(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) throw new Error("Unauthenticated");
+
   const id = formData.get('id') as string;
   const nextStatus = formData.get('nextStatus') as string;
-  const reviewerId = formData.get('reviewerId') as string;
   const remarks = formData.get('remarks') as string;
   const actionLabel = formData.get('actionLabel') as string;
   const memoFile = formData.get('memo') as File | null;
@@ -274,7 +283,7 @@ export async function processExceptionalStep(formData: FormData) {
 
   const history = (current.commentHistory as any[]) || [];
   const reviewer = await prisma.user.findUnique({ 
-    where: { id: reviewerId },
+    where: { id: session.id },
     include: { roles: { include: { role: true } } }
   });
 
@@ -294,7 +303,7 @@ export async function processExceptionalStep(formData: FormData) {
       name: memoFile.name,
       type: 'GOVERNANCE_MEMO',
       fileUrl: `/uploads/${storedFileName}`,
-      uploadedById: reviewerId
+      uploadedById: session.id
     };
   }
 
@@ -325,7 +334,7 @@ export async function processExceptionalStep(formData: FormData) {
 
   await prisma.auditLog.create({
     data: {
-      userId: reviewerId,
+      userId: session.id,
       kycId: id,
       action: AuditAction.STATUS_CHANGE,
       ipAddress,
@@ -339,6 +348,9 @@ export async function processExceptionalStep(formData: FormData) {
 }
 
 export async function updateSubmissionChecklist(id: string, checklistState: any) {
+  const session = await getServerSession();
+  if (!session) return { success: false, error: "Unauthenticated" };
+
   try {
     const kyc = await prisma.kYC.update({
       where: { id },
@@ -352,14 +364,18 @@ export async function updateSubmissionChecklist(id: string, checklistState: any)
 }
 
 export async function createSubmission(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) return { success: false, error: "Unauthenticated" };
+
+  const isAuthorized = await verifyPermission('CASE_SUBMIT');
+  if (!isAuthorized) return { success: false, error: "Unauthorized: Missing submission capability." };
+
   try {
     const id = formData.get('id') as string;
     const customerName = formData.get('customerName') as string;
     const entityType = formData.get('entityType') as string;
     const branchName = formData.get('branchName') as string;
     const districtName = formData.get('districtName') as string;
-    const createdById = formData.get('submittedById') as string;
-    const createdByName = formData.get('submittedByName') as string;
     const remarks = formData.get('remarks') as string;
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
@@ -394,17 +410,19 @@ export async function createSubmission(formData: FormData) {
       const filePath = path.join(uploadDir, storedFileName);
       const buffer = Buffer.from(await file.arrayBuffer());
       await fs.writeFile(filePath, buffer);
-      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: createdById });
+      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id });
     }
 
     const now = new Date();
+    const user = await prisma.user.findUnique({ where: { id: session.id } });
+    
     const kyc = await prisma.kYC.create({
       data: {
         id,
         customerName,
         branchId: branch.id,
         branchName: branchName,
-        createdById,
+        createdById: session.id,
         status: KYCStatus.SUBMITTED,
         entityType,
         active: true,
@@ -412,7 +430,7 @@ export async function createSubmission(formData: FormData) {
         exceptionalStatus: 'None',
         commentHistory: remarks ? [{
           role: 'BRANCH_OFFICER',
-          performedBy: createdByName,
+          performedBy: `${user?.firstName} ${user?.lastName}`,
           timestamp: now.toISOString(),
           comment: remarks,
           action: 'SUBMIT'
@@ -423,11 +441,11 @@ export async function createSubmission(formData: FormData) {
 
     await prisma.auditLog.create({
       data: { 
-        userId: createdById, 
+        userId: session.id, 
         kycId: kyc.id, 
         action: AuditAction.CREATE, 
         ipAddress,
-        details: `Initial submission for ${customerName}` 
+        details: `Initial submission for ${customerName} with ${files.length} assets.` 
       }
     });
 
@@ -445,11 +463,14 @@ export async function logBundleDownload(data: {
   sourceDistrict: string;
   sourceBranch: string;
 }) {
+  const session = await getServerSession();
+  if (!session) return false;
+
   try {
     const ipAddress = await getClientIp();
     await prisma.auditLog.create({
       data: {
-        userId: null, // SYSTEM log
+        userId: session.id,
         kycId: data.submissionId,
         action: 'BUNDLE_DOWNLOAD',
         ipAddress,
@@ -470,13 +491,18 @@ export async function logBundleDownload(data: {
 }
 
 export async function initiateExceptionalWorkflow(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) return { success: false, error: "Unauthenticated" };
+
+  const isAuthorized = await verifyPermission('TRIGGER_GOVERNANCE_FLOW');
+  if (!isAuthorized) return { success: false, error: "Unauthorized: Missing governance trigger capability." };
+
   try {
     const kycId = formData.get('id') as string;
     const reason = formData.get('reason') as string;
     const justification = formData.get('justification') as string;
     const remarks = formData.get('remarks') as string;
     const initiatedBy = formData.get('initiatedBy') as string;
-    const userId = formData.get('userId') as string;
     const memoFile = formData.get('memo') as File;
 
     const ipAddress = await getClientIp();
@@ -515,7 +541,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
             name: memoFile.name,
             type: 'GOVERNANCE_MEMO',
             fileUrl: `/uploads/${storedFileName}`,
-            uploadedById: userId
+            uploadedById: session.id
           }
         }
       }
@@ -523,11 +549,11 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
 
     await prisma.auditLog.create({
       data: {
-        userId,
+        userId: session.id,
         kycId,
         action: 'INITIATE_EXCEPTION',
         ipAddress,
-        details: `Governance exception initiated for ${kyc.customerName}.`,
+        details: `Governance exception initiated for ${kyc.customerName} with memo: ${memoFile.name}.`,
         timestamp: new Date()
       }
     });
@@ -541,9 +567,11 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
 }
 
 export async function resubmitSubmission(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) return { success: false, error: "Unauthenticated" };
+
   try {
     const id = formData.get('id') as string;
-    const userId = formData.get('userId') as string;
     const remarks = formData.get('remarks') as string;
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
@@ -563,12 +591,12 @@ export async function resubmitSubmission(formData: FormData) {
       const filePath = path.join(uploadDir, storedFileName);
       const buffer = Buffer.from(await file.arrayBuffer());
       await fs.writeFile(filePath, buffer);
-      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: userId });
+      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id });
     }
 
     const now = new Date();
     const history = (current.commentHistory as any[]) || [];
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: session.id } });
 
     const updated = await prisma.kYC.update({
       where: { id },
@@ -589,11 +617,11 @@ export async function resubmitSubmission(formData: FormData) {
 
     await prisma.auditLog.create({
       data: {
-        userId: userId,
+        userId: session.id,
         kycId: id,
         action: 'RESUBMIT',
         ipAddress,
-        details: `Case resubmitted after amendment request.`,
+        details: `Case resubmitted with ${files.length} new/corrected assets.`,
         timestamp: new Date()
       }
     });
