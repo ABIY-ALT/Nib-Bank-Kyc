@@ -4,11 +4,11 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs/promises';
 import path from 'path';
-import { signId } from '@/lib/security';
+import { signDownloadToken } from '@/lib/security';
 
 /**
  * Retrieves the institutional file inventory based on user jurisdiction.
- * Includes relations for deep hierarchical filtering and secures URLs with HMAC tokens.
+ * Includes relations for deep hierarchical filtering and secures URLs with time-limited tokens.
  */
 export async function getStorageInventory(params: {
   userId: string;
@@ -64,10 +64,10 @@ export async function getStorageInventory(params: {
       take: 1000 // Optimized limit for discovery
     });
 
-    // Tokenize IDs to prevent IDOR during browser interaction
+    // Tokenize IDs with expiration to prevent IDOR and stale link reuse
     return memos.map(m => ({
       ...m,
-      fileUrl: `/api/memos/${signId(m.id)}`
+      fileUrl: `/api/memos/${signDownloadToken(m.id)}` // Indirect route
     }));
   } catch (error) {
     console.error('[Vault Storage] Fetch Error:', error);

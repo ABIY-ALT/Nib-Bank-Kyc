@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import fs from 'fs/promises';
 import path from 'path';
-import { signId, generateSecureNumericCode } from '@/lib/security';
+import { signDownloadToken, generateSecureNumericCode } from '@/lib/security';
 import { getServerSession, verifyPermission } from './auth-server';
 
 /**
@@ -41,6 +41,7 @@ async function getClientIp() {
 
 /**
  * Optimized Submission Fetcher.
+ * Explicitly excludes raw physical file paths to prevent accidental leak.
  */
 export async function getSubmissions(filters?: {
   status?: KYCStatus[];
@@ -134,7 +135,7 @@ export async function getSubmissions(filters?: {
             id: true,
             name: true,
             type: true,
-            fileUrl: true
+            // fileUrl explicitly omitted for bulk queries
           }
         }
       },
@@ -217,6 +218,7 @@ export async function getSubmissionById(id: string) {
       }
     });
     if (!kyc) return null;
+    
     return {
       ...kyc,
       branchName: kyc.branch.name,
@@ -225,7 +227,7 @@ export async function getSubmissionById(id: string) {
         id: m.id,
         name: m.name || 'Document',
         type: m.type || 'Other',
-        url: `/api/memos/${signId(m.id)}`
+        url: `/api/memos/${signDownloadToken(m.id)}` // Map to secure, expiring endpoint
       }))
     };
   } catch (error) {
@@ -556,7 +558,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
           role: 'BRANCH_MANAGER',
           performedBy: initiatedBy,
           timestamp: now.toISOString(),
-          comment: `Exception Initiated: ${reason}. Justification: ${justification}. ${remarks}`,
+          comment: `Exception Initiated: ${reason}. Justification: ${riskJustification}. ${remarks}`,
           action: 'INITIATE_EXCEPTION',
           memoAttached: true
         }],

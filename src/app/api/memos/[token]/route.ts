@@ -7,7 +7,7 @@ import path from 'path';
 
 /**
  * Institutional Memo Gateway.
- * Provides secure file streaming with IDOR protection and audit logging.
+ * Provides secure file streaming with IDOR protection, expiration, and audit logging.
  */
 export async function GET(
   req: Request,
@@ -15,7 +15,7 @@ export async function GET(
 ) {
   const { token } = await props.params;
   const cookieStore = await cookies();
-  const jwt = cookieStore.get('token')?.value;
+  const jwt = cookieStore.get('__Secure-auth-token')?.value;
 
   // RULE: Unauthenticated -> 401
   if (!jwt) {
@@ -27,7 +27,7 @@ export async function GET(
     const { payload } = await jwtVerify(jwt, secret);
     const userId = payload.id as string;
 
-    // Check scope, token validity, and write audit log
+    // Check scope, token validity (including expiration), and write audit log
     const result = await getSecureMemo(token, userId);
 
     if (result.error) {
@@ -54,14 +54,15 @@ export async function GET(
           'Content-Disposition': `inline; filename="${fileName}"`,
           'X-Content-Type-Options': 'nosniff',
           'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Content-Security-Policy': "default-src 'none';", // Isolation for streamed content
         },
       });
     } catch (err) {
-      // Rule: Never 404 for unauthorized path probing
+      // Rule: Never 404 for unauthorized path probing to prevent metadata leakage
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
   } catch (e) {
     console.error('[Memo API] Security Gateway Fault:', e);
-    return NextResponse.json({ message: 'Internal Error' }, { status: 500 });
+    return NextResponse.json({ message: 'Internal Security Error' }, { status: 500 });
   }
 }

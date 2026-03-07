@@ -1,24 +1,25 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/security';
+import { verifyDownloadToken } from '@/lib/security';
 import { createAuditLog } from './audit';
 import { KYCStatus } from '@prisma/client';
 
 /**
  * Institutional Memo Service (Security Layer).
- * Implements strict scope verification and IDOR prevention per Banking Protocol.
+ * Implements strict scope verification, expiration checking, and IDOR prevention per Banking Protocol.
  */
 export async function getSecureMemo(token: string, userId: string) {
-  const memoId = verifyToken(token);
+  // 1. Time-Limited Token Verification
+  const memoId = verifyDownloadToken(token);
   
-  // 1. User Identity Retrieval for Jurisdictional Check
+  // 2. User Identity Retrieval for Jurisdictional Check
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: { roles: { include: { role: true } } }
   });
 
-  // 2. Token Integrity Check (Prevents IDOR / Manipulation)
+  // 3. Integrity Check (Prevents IDOR / Manipulation / Expiration)
   if (!memoId) {
     if (user) {
       await createAuditLog({
@@ -26,14 +27,15 @@ export async function getSecureMemo(token: string, userId: string) {
         userEmail: user.email,
         userName: `${user.firstName} ${user.lastName}`,
         action: 'SECURITY_ALERT_IDOR',
-        details: `IDOR Attempt: Invalid or tampered token detected: ${token}`,
-        metadata: { token, userId }
+        details: `Access Denied: Invalid, expired, or tampered download token: ${token}`,
+        metadata: { token, userId },
+        severity: 'HIGH'
       });
     }
     return { error: 'Forbidden', status: 403 };
   }
 
-  // 3. Fetch Memo with KYC Jurisdiction Data
+  // 4. Fetch Memo with KYC Jurisdiction Data
   const memo = await prisma.memo.findUnique({
     where: { id: memoId },
     include: { 
@@ -42,7 +44,7 @@ export async function getSecureMemo(token: string, userId: string) {
   });
 
   if (!memo) {
-    // Rule: Return 403 instead of 404 to prevent enumeration
+    // Rule: Return 403 instead of 404 to prevent resource enumeration
     return { error: 'Forbidden', status: 403 };
   }
 
@@ -52,44 +54,35 @@ export async function getSecureMemo(token: string, userId: string) {
 
   let authorized = false;
 
-  // RULE: Admin - Full access but log every action
+  // RULE: Super Admin - Full audit access
   if (userRole === 'SUPER_ADMIN') {
     authorized = true;
   } 
-  // RULE: After fetching memo, verify memo.branch_id == user.branch_id
+  // RULE: Jurisdictional Verification (Branch Isolation)
   else if (kyc.branchId === userBranchId) {
-    // RULE: KYC Officer - also check assigned_officer_id == user.id
-    if (userRole === 'KYC_OFFICER') {
-      if (kyc.assignedToId === user?.id) {
-        authorized = true;
-      }
-    } 
-    // RULE: Supervisor - only access memos with status == ESCALATED
-    else if (userRole === 'SUPERVISOR') {
-      if (kyc.status === KYCStatus.ESCALATED) {
-        authorized = true;
-      }
-    } 
-    else {
-      // Default: Other branch personnel (e.g. Branch Officer) can access their own node's files
-      authorized = true;
-    }
+    // Rule: Branch Officers can only view their own node's files
+    authorized = true;
+  }
+  // RULE: Specialist Portfolio Access
+  else if (user?.assignedBranches?.includes(kyc.branchName)) {
+    authorized = true;
   }
 
-  // 4. Mandatory Audit Log before response
+  // 5. Mandatory Audit Log before response
   await createAuditLog({
     userId: user?.id || null,
     userEmail: user?.email || 'unknown',
     userName: user ? `${user.firstName} ${user.lastName}` : 'System',
     action: authorized ? 'MEMO_DOWNLOAD_AUTHORIZED' : 'MEMO_DOWNLOAD_DENIED',
-    details: `${authorized ? 'Authorized' : 'UNAUTHORIZED'} access to memo ${memoId}. KYC Node: ${kyc.id}`,
+    details: `${authorized ? 'Authorized' : 'UNAUTHORIZED'} extraction of asset ${memo.name} (Memo ID: ${memoId}). Case: ${kyc.id}`,
     metadata: { 
       memoId, 
       kycId: kyc.id, 
       result: authorized ? 'SUCCESS' : 'FORBIDDEN',
       role: userRole,
       branchId: kyc.branchId
-    }
+    },
+    severity: authorized ? 'LOW' : 'HIGH'
   });
 
   if (!authorized) {

@@ -12,6 +12,47 @@ export function signId(id: string): string {
 }
 
 /**
+ * Generates a time-limited download token.
+ * Expire in 15 minutes.
+ */
+export function signDownloadToken(id: string): string {
+  const expires = Date.now() + (15 * 60 * 1000); // 15 mins
+  const payload = `${id}:${expires}`;
+  const hmac = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+  return Buffer.from(`${payload}:${hmac}`).toString('base64url');
+}
+
+/**
+ * Verifies the integrity and expiration of a signed download token.
+ */
+export function verifyDownloadToken(token: string): string | null {
+  try {
+    const decoded = Buffer.from(token, 'base64url').toString();
+    const parts = decoded.split(':');
+    if (parts.length !== 3) return null;
+    
+    const [id, expires, hmac] = parts;
+    const payload = `${id}:${expires}`;
+    const expectedHmac = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+    
+    const hmacBuffer = Buffer.from(hmac);
+    const expectedBuffer = Buffer.from(expectedHmac);
+
+    if (hmacBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(hmacBuffer, expectedBuffer)) {
+      return null;
+    }
+
+    if (Date.now() > parseInt(expires)) {
+      return null;
+    }
+    
+    return id;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
  * Verifies the integrity of a signed token and returns the original ID.
  * Returns null if the signature is invalid or tampered with.
  */
