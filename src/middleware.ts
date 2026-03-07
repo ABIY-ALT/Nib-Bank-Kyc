@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { isValidInternalRedirect } from './lib/url-security';
 
 /**
  * Institutional Security Matrix.
@@ -30,9 +31,15 @@ export async function middleware(req: NextRequest) {
 
   // 2. Redirect Unauthenticated Personnel
   if (!token) {
-    const url = req.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
+    const loginUrl = new URL('/login', req.url);
+    
+    // Securely capture the requested path for post-auth callback
+    // Only if it's a valid internal destination and not already at the gateway
+    if (pathname !== '/' && pathname !== '/login' && isValidInternalRedirect(pathname)) {
+      loginUrl.searchParams.set('callbackUrl', pathname);
+    }
+    
+    return NextResponse.redirect(loginUrl);
   }
 
   try {
