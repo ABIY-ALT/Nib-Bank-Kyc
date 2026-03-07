@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -57,6 +56,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
+import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 const DEFAULT_ENTITY_TYPES = [
   { id: "individual", label: "Individual" },
@@ -79,6 +79,7 @@ export default function MyCasesPerformancePage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     if (!permissionsLoading && !user) {
@@ -89,16 +90,23 @@ export default function MyCasesPerformancePage() {
   useEffect(() => {
     loadMyCases();
     loadConfiguration();
-  }, [user]);
+  }, [user, dateRange]);
 
   const loadMyCases = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await getSubmissions({
+      let filters: any = {
         assignedToId: user.id,
         limit: 1000
-      });
+      };
+
+      if (dateRange?.from) {
+        filters.startDate = dateRange.from.toISOString();
+        if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+      }
+
+      const data = await getSubmissions(filters);
       setSubmissions(data);
     } catch (error) {
       toast({ variant: "destructive", title: "Sync Failed", description: "Could not retrieve your cases from the Vault." });
@@ -155,6 +163,7 @@ export default function MyCasesPerformancePage() {
     setSelectedBranch("all");
     setSelectedStatus("all");
     setSelectedType("all");
+    setDateRange(undefined);
   };
 
   if (loading || permissionsLoading) {
@@ -167,7 +176,7 @@ export default function MyCasesPerformancePage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
+    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -179,6 +188,7 @@ export default function MyCasesPerformancePage() {
           <p className="text-muted-foreground text-lg font-medium">Specialist analysis dashboard and jurisdiction metrics.</p>
         </div>
         <div className="flex items-center gap-3">
+          <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
           <Select value={selectedBranch} onValueChange={setSelectedBranch}>
             <SelectTrigger className="h-12 w-64 bg-white border-slate-200 font-bold rounded-xl shadow-sm">
               <div className="flex items-center gap-2">
@@ -264,7 +274,6 @@ export default function MyCasesPerformancePage() {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
                   {Object.values(KYCStatus).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>

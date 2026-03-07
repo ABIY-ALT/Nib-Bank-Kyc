@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
@@ -38,6 +37,7 @@ import { SubmissionsPageContent } from "../submissions-content";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
 import { format } from "date-fns";
+import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 const STATUS_COLORS = {
   APPROVED: "#10B981",
@@ -63,6 +63,7 @@ export default function BranchMonitoringPage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
 
@@ -71,10 +72,17 @@ export default function BranchMonitoringPage() {
       if (!user) return;
       setLoading(true);
       try {
-        const data = await getSubmissions({
+        let filters: any = {
           branch: isAdmin ? undefined : user.branchName || undefined,
           limit: 1000
-        });
+        };
+
+        if (dateRange?.from) {
+          filters.startDate = dateRange.from.toISOString();
+          if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+        }
+
+        const data = await getSubmissions(filters);
         setSubmissions(data);
       } catch (error) {
         console.error("Load failed:", error);
@@ -83,7 +91,7 @@ export default function BranchMonitoringPage() {
       }
     }
     loadData();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, dateRange]);
 
   const cleanBranchTitle = useMemo(() => {
     const raw = isAdmin ? 'Branch Monitoring' : user?.branchName || 'Branch Monitoring';
@@ -178,6 +186,9 @@ export default function BranchMonitoringPage() {
               {user?.roles?.[0]?.role.name.replace(/_/g, ' ') || 'OFFICER'} Authorization
             </Badge>
           </div>
+        </div>
+        <div className="flex gap-3">
+          <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
         </div>
       </div>
 

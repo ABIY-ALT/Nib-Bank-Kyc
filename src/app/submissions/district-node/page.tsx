@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
@@ -39,6 +38,7 @@ import { SubmissionsPageContent } from "../submissions-content";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
 import { format } from "date-fns";
+import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 const STATUS_COLORS = {
   APPROVED: "#10B981",
@@ -64,6 +64,7 @@ export default function DistrictMonitoringPage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
   const districtName = user?.districtName || "Central";
@@ -73,10 +74,17 @@ export default function DistrictMonitoringPage() {
       if (!user) return;
       setLoading(true);
       try {
-        const data = await getSubmissions({
+        let filters: any = {
           district: isAdmin ? undefined : districtName,
           limit: 1000
-        });
+        };
+
+        if (dateRange?.from) {
+          filters.startDate = dateRange.from.toISOString();
+          if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+        }
+
+        const data = await getSubmissions(filters);
         setSubmissions(data);
       } catch (error) {
         console.error("Load failed:", error);
@@ -85,7 +93,7 @@ export default function DistrictMonitoringPage() {
       }
     }
     loadData();
-  }, [user, isAdmin, districtName]);
+  }, [user, isAdmin, districtName, dateRange]);
 
   const analytics = useMemo(() => {
     if (!submissions || submissions.length === 0) return null;
@@ -181,6 +189,9 @@ export default function DistrictMonitoringPage() {
             </Badge>
           </div>
         </div>
+        <div className="flex gap-3">
+          <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
+        </div>
       </div>
 
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
@@ -215,8 +226,7 @@ export default function DistrictMonitoringPage() {
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Analysis</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{analytics?.pending || 0}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
-            </Card>
-          </div>
+            </div>
 
           <Tabs defaultValue="summary" className="space-y-6">
             <TabsList className="bg-slate-100 p-1 border h-12">

@@ -41,6 +41,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
+import { format } from "date-fns";
 
 const STATUS_OPTIONS = [
   { id: KYCStatus.APPROVED, label: 'Approved' },

@@ -16,7 +16,9 @@ import {
   History,
   FileText,
   Zap,
-  ChevronRight
+  ChevronRight,
+  Filter,
+  RotateCcw
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { getFollowUpVerifications, seedFollowUpPool } from "@/actions/follow-up";
 import { getSubmissions } from "@/actions/submissions";
 import { KYCStatus } from "@prisma/client";
+import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 export default function FollowUpDashboard() {
   const { user } = useAuth();
@@ -38,14 +41,20 @@ export default function FollowUpDashboard() {
   const [verifications, setVerifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSampling, setIsSampling] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [dateRange]);
 
   const loadData = async () => {
     setLoading(true);
-    const data = await getFollowUpVerifications();
+    let filters: any = {};
+    if (dateRange?.from) {
+      filters.startDate = dateRange.from.toISOString();
+      if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+    }
+    const data = await getFollowUpVerifications(filters);
     setVerifications(data);
     setLoading(false);
   };
@@ -151,6 +160,7 @@ export default function FollowUpDashboard() {
           <p className="text-muted-foreground text-lg font-medium">Head Office shared pool for quality control and random audit.</p>
         </div>
         <div className="flex gap-3">
+          <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
           <Button 
             onClick={handleStartRandomAudit}
             disabled={pendingVerifications.length === 0}
