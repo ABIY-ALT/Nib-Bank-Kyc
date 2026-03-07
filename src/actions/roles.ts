@@ -140,6 +140,12 @@ export async function upsertRole(data: { id?: string, name: string, description:
         });
       }
 
+      // REVOKE SESSIONS: Refresh updatedAt for all users in this role to force re-login with new permissions
+      await tx.user.updateMany({
+        where: { roles: { some: { roleId: r.id } } },
+        data: { updatedAt: new Date() }
+      });
+
       return r;
     });
 
@@ -147,7 +153,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
       userId: session.id,
       userEmail: session.email,
       action: 'ROLE_MODIFICATION',
-      details: `Role "${data.name}" ${data.id ? 'updated' : 'created'} with ${data.permissionIds.length} capabilities.`,
+      details: `Role "${data.name}" updated. All active sessions for associated users have been revoked for security.`,
       severity: 'CRITICAL',
       metadata: { roleId: role.id, permissionCount: data.permissionIds.length }
     });
@@ -167,16 +173,26 @@ export async function toggleRoleStatus(id: string, currentStatus: boolean) {
   }
 
   try {
-    const role = await prisma.role.update({
-      where: { id },
-      data: { active: !currentStatus }
+    const role = await prisma.$transaction(async (tx) => {
+      const r = await tx.role.update({
+        where: { id },
+        data: { active: !currentStatus }
+      });
+
+      // REVOKE SESSIONS: Force logout for all users in the affected role
+      await tx.user.updateMany({
+        where: { roles: { some: { roleId: id } } },
+        data: { updatedAt: new Date() }
+      });
+
+      return r;
     });
 
     await createAuditLog({
       userId: session.id,
       userEmail: session.email,
       action: 'ROLE_STATUS_TOGGLE',
-      details: `Authority level "${role.name}" is now ${role.active ? 'ACTIVE' : 'INACTIVE'}.`,
+      details: `Authority level "${role.name}" is now ${role.active ? 'ACTIVE' : 'INACTIVE'}. Active sessions revoked.`,
       severity: 'HIGH'
     });
 
