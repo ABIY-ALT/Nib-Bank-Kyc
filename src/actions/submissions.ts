@@ -10,6 +10,24 @@ import { signId, generateSecureNumericCode } from '@/lib/security';
 import { getServerSession, verifyPermission } from './auth-server';
 
 /**
+ * Institutional Validation Constants.
+ */
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+
+/**
+ * Redundant Server-Side Asset Validation.
+ */
+function validateInstitutionalFile(file: File) {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`Asset "${file.name}" exceeds the 10MB institutional limit.`);
+  }
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    throw new Error("Only PDF or image files are allowed.");
+  }
+}
+
+/**
  * Resolves the client IP address from request headers.
  */
 async function getClientIp() {
@@ -290,6 +308,8 @@ export async function processExceptionalStep(formData: FormData) {
   // Handle Memo Upload if present
   let memoData = undefined;
   if (memoFile) {
+    validateInstitutionalFile(memoFile); // Backend Guard
+
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
     try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
     
@@ -404,6 +424,8 @@ export async function createSubmission(formData: FormData) {
     const memoData = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      validateInstitutionalFile(file); // Backend Guard
+
       const type = types[i];
       const timestamp = Date.now();
       const storedFileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
@@ -505,6 +527,8 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     const initiatedBy = formData.get('initiatedBy') as string;
     const memoFile = formData.get('memo') as File;
 
+    validateInstitutionalFile(memoFile); // Backend Guard
+
     const ipAddress = await getClientIp();
 
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
@@ -585,6 +609,8 @@ export async function resubmitSubmission(formData: FormData) {
     const memoData = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      validateInstitutionalFile(file); // Backend Guard
+
       const type = types[i];
       const timestamp = Date.now();
       const storedFileName = `resubmit_${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;

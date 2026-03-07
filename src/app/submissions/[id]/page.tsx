@@ -81,6 +81,9 @@ const KYC_CHECKLIST_ITEMS = [
   { id: 'signature_match', label: 'Specimen Signature Verification' }
 ];
 
+const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 export default function SubmissionDetails() {
   const params = useParams();
   const router = useRouter();
@@ -187,6 +190,21 @@ export default function SubmissionDetails() {
       toast({ variant: "destructive", title: "Action Failed", description: error.message });
     } finally {
       setIsActioning(null);
+    }
+  };
+
+  const handleGovFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast({ variant: "destructive", title: "File Too Large", description: "Memo exceeds 10MB limit." });
+        return;
+      }
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        toast({ variant: "destructive", title: "Invalid Type", description: "Only PDF or image files are allowed." });
+        return;
+      }
+      setGovMemo(file);
     }
   };
 
@@ -462,11 +480,17 @@ export default function SubmissionDetails() {
                     >
                       <Upload className={cn("w-6 h-6 mx-auto mb-2", govMemo ? "text-emerald-600" : "text-primary")} />
                       <p className="text-xs font-black text-slate-900 truncate max-w-full">
-                        {govMemo ? govMemo.name : "Select Signature-Authorized PDF"}
+                        {govMemo ? govMemo.name : "Select Signature-Authorized PDF/Image"}
                       </p>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Regulatory Format</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Only PDF or image files (max 10MB)</p>
                     </div>
-                    <input type="file" ref={govFileInputRef} className="hidden" accept="application/pdf" onChange={(e) => setGovMemo(e.target.files?.[0] || null)} />
+                    <input 
+                      type="file" 
+                      ref={govFileInputRef} 
+                      className="hidden" 
+                      accept=".pdf,.jpg,.jpeg,.png" 
+                      onChange={handleGovFileChange} 
+                    />
                   </div>
                 )}
 

@@ -30,6 +30,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import Link from "next/link";
 
+const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 export default function ExceptionalCasesPage() {
   const { user } = useAuth();
   const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
@@ -97,9 +100,24 @@ export default function ExceptionalCasesPage() {
     );
   }, [submissions, searchTerm]);
 
+  const handleMemoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast({ variant: "destructive", title: "File Too Large", description: "Memo exceeds the 10MB institutional limit." });
+        return;
+      }
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        toast({ variant: "destructive", title: "Invalid Type", description: "Only PDF or image files are allowed." });
+        return;
+      }
+      setMemoFile(file);
+    }
+  };
+
   const handleInitiateException = async () => {
     if (!user || !selectedCaseId || !exceptionReason || !riskJustification || !memoFile) {
-      toast({ variant: "destructive", title: "Validation Error", description: "All fields (including PDF memo) are required." });
+      toast({ variant: "destructive", title: "Validation Error", description: "All fields (including PDF/Image memo) are required." });
       return;
     }
 
@@ -255,7 +273,7 @@ export default function ExceptionalCasesPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Institutional Memo (PDF)</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Institutional Memo (PDF/Image)</Label>
               <div 
                 onClick={() => fileInputRef.current?.click()} 
                 className="border-2 border-dashed border-primary/20 rounded-2xl p-8 text-center cursor-pointer hover:bg-primary/5 transition-all bg-white group"
@@ -264,9 +282,15 @@ export default function ExceptionalCasesPage() {
                   <Upload className="w-7 h-7 text-primary" />
                 </div>
                 <p className="text-sm font-black text-slate-900">{memoFile ? memoFile.name : "Select Signature-Authorized Memo"}</p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Maximum 10MB • Regulatory Format</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Maximum 10MB • Only PDF or Image</p>
               </div>
-              <input type="file" ref={fileInputRef} className="hidden" accept="application/pdf" onChange={(e) => setMemoFile(e.target.files?.[0] || null)} />
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept=".pdf,.jpg,.jpeg,.png" 
+                onChange={handleMemoChange} 
+              />
             </div>
           </div>
 

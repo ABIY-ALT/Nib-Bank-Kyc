@@ -69,6 +69,9 @@ const DEFAULT_DOC_TYPES = [
   { id: "other", label: "Other Document" },
 ];
 
+const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 export default function NewSubmission() {
   const router = useRouter();
   const { toast } = useToast();
@@ -111,13 +114,39 @@ export default function NewSubmission() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files).map(file => ({
-        id: crypto.randomUUID(),
-        file: file,
-        type: "",
-        previewUrl: URL.createObjectURL(file)
-      }));
-      setUploadedFiles((prev) => [...prev, ...newFiles]);
+      const files = Array.from(e.target.files);
+      const validFiles: UploadedFile[] = [];
+      
+      for (const file of files) {
+        // Size Check
+        if (file.size > MAX_FILE_SIZE) {
+          toast({ 
+            variant: "destructive", 
+            title: "File Too Large", 
+            description: `"${file.name}" exceeds the 10MB limit.` 
+          });
+          continue;
+        }
+
+        // Type Check
+        if (!ALLOWED_TYPES.includes(file.type)) {
+          toast({ 
+            variant: "destructive", 
+            title: "Invalid Type", 
+            description: "Only PDF or image files are allowed." 
+          });
+          continue;
+        }
+
+        validFiles.push({
+          id: crypto.randomUUID(),
+          file: file,
+          type: "",
+          previewUrl: URL.createObjectURL(file)
+        });
+      }
+      
+      setUploadedFiles((prev) => [...prev, ...validFiles]);
     }
   };
 
@@ -249,10 +278,18 @@ export default function NewSubmission() {
             <CardTitle className="text-xl flex items-center gap-2 text-white"><FilePlus className="w-5 h-5 text-white" /> Documentation Bundle</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
-             <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.jpg,.jpeg,.png" />
+             <input 
+               type="file" 
+               className="hidden" 
+               ref={fileInputRef} 
+               onChange={handleFileChange} 
+               multiple 
+               accept=".pdf,.jpg,.jpeg,.png" 
+             />
              <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all">
                 <Upload className="w-10 h-10 text-primary mb-4" />
                 <p className="font-bold text-xl text-slate-800">Drop customer files here</p>
+                <p className="text-xs text-muted-foreground mt-1 font-bold uppercase tracking-widest">Only PDF or image files (max 10MB)</p>
                 <Button variant="outline" type="button" className="mt-4 font-bold border-primary/20 text-primary hover:bg-primary/5">Browse Filesystem</Button>
              </div>
 
