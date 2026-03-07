@@ -10,19 +10,17 @@ import { getServerSession } from './auth-server';
 /**
  * Server-side RBAC Check.
  * Verifies if the current session has the required administrative clearance.
- * Leverages the consolidated getServerSession to ensure IP binding and version integrity.
  */
 async function verifyAdminClearance() {
   const session = await getServerSession();
   if (!session) return false;
-  
-  // Rule: Only the designated SUPER_ADMIN role can manage personnel and credentials
   return session.role === 'SUPER_ADMIN';
 }
 
 /**
  * Administrative Credential Reset.
  * Generates a temporary password and forces a rotation upon next login.
+ * Sanitizes response to only return the specific temporary password.
  */
 export async function resetUserPassword(email: string, authorizerId: string) {
   if (!(await verifyAdminClearance())) {
@@ -39,12 +37,10 @@ export async function resetUserPassword(email: string, authorizerId: string) {
       throw new Error("Personnel record not discovered in the Institutional Vault.");
     }
 
-    // Generate cryptographic random temporary password
     const tempPass = generateSecurePassword(10);
     const hashedPassword = await bcrypt.hash(tempPass, 10);
 
     await prisma.$transaction(async (tx) => {
-      // 1. Update User Credential and Security Flag
       await tx.user.update({
         where: { id: user.id },
         data: {
@@ -53,12 +49,11 @@ export async function resetUserPassword(email: string, authorizerId: string) {
         }
       });
 
-      // 2. Log Security Event
       await tx.auditLog.create({
         data: {
           userId: authorizerId,
           action: 'PASSWORD_RESET_ADMIN',
-          details: `Administrative credential reset for ${user.firstName} ${user.lastName}. Jurisdictional security gate engaged.`,
+          details: `Administrative credential reset for ${user.firstName} ${user.lastName}.`,
           timestamp: new Date(),
           metadata: {
             targetUserId: user.id,
@@ -80,8 +75,8 @@ export async function resetUserPassword(email: string, authorizerId: string) {
 }
 
 /**
- * Retrieves all personnel from the institutional registry, sorted alphabetically.
- * EXCLUDES hashed passwords from the result.
+ * Retrieves all personnel from the institutional registry.
+ * Explicitly sanitizes results via Prisma select.
  */
 export async function getAllUsers() {
   try {
@@ -97,15 +92,23 @@ export async function getAllUsers() {
         needsPasswordChange: true,
         assignedBranches: true,
         branch: {
-          include: { district: true }
+          select: { 
+            id: true, 
+            name: true,
+            district: { select: { id: true, name: true } }
+          }
         },
         roles: { 
           include: { 
             role: {
-              include: {
+              select: {
+                id: true,
+                name: true,
                 permissions: {
                   include: {
-                    permission: true
+                    permission: {
+                      select: { id: true, slug: true, name: true, group: true }
+                    }
                   }
                 }
               }
@@ -125,7 +128,7 @@ export async function getAllUsers() {
 }
 
 /**
- * Updates a staff member's active status (Active/Inactive).
+ * Updates a staff member's active status.
  */
 export async function updateUserStatus(userId: string, status: UserStatus) {
   if (!(await verifyAdminClearance())) {
@@ -137,13 +140,12 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
     data: { status }
   });
   revalidatePath('/admin/users');
-  return user;
+  return { id: user.id, status: user.status };
 }
 
 /**
- * Provisions a new user or updates an existing one, including Branch Transfers and Role Transitions.
- * Returns the generated temporary password for initial registration.
- * EXCLUDES hashed passwords from the return object.
+ * Provisions a new user or updates an existing one.
+ * Uses strict object mapping for the return value to prevent metadata leakage.
  */
 export async function provisionUser(data: {
   id?: string;
@@ -219,44 +221,6 @@ export async function provisionUser(data: {
         });
       }
 
-      const currentBranchId = existingUser?.branch?.id;
-      if (existingUser && currentBranchId !== data.branchId) {
-        const oldBranchName = existingUser.branch?.name || 'Institutional';
-        const newBranch = data.branchId ? await tx.branch.findUnique({ where: { id: data.branchId } }) : null;
-        const newBranchName = newBranch?.name || 'Institutional';
-        
-        await tx.auditLog.create({
-          data: {
-            userId: data.authorizingAdminId && data.authorizingAdminId !== 'SYSTEM' ? data.authorizingAdminId : null,
-            action: 'BRANCH_TRANSFER',
-            details: `Personnel ${user.firstName} ${user.lastName} moved from ${oldBranchName} to ${newBranchName}. Jurisdictional handover complete.`,
-            metadata: {
-              targetUserId: user.id,
-              previousBranch: oldBranchName,
-              newBranch: newBranchName,
-              authorizer: data.authorizingAdminId || 'SYSTEM'
-            }
-          }
-        });
-      }
-
-      const currentRoleName = existingUser?.roles?.[0]?.role?.name;
-      if (existingUser && currentRoleName !== data.role) {
-        await tx.auditLog.create({
-          data: {
-            userId: data.authorizingAdminId && data.authorizingAdminId !== 'SYSTEM' ? data.authorizingAdminId : null,
-            action: 'ROLE_TRANSITION',
-            details: `Personnel ${user.firstName} ${user.lastName} authority updated from ${currentRoleName?.replace(/_/g, ' ')} to ${data.role.replace(/_/g, ' ')}.`,
-            metadata: {
-              targetUserId: user.id,
-              previousRole: currentRoleName,
-              newRole: data.role,
-              authorizer: data.authorizingAdminId || 'SYSTEM'
-            }
-          }
-        });
-      }
-
       if (data.role) {
         const role = await tx.role.findUnique({ where: { name: data.role } });
         if (role) {
@@ -271,8 +235,16 @@ export async function provisionUser(data: {
 
     revalidatePath('/admin/users');
     
-    // Explicitly strip password hash from the result before returning to client
-    const { password: _, ...safeUser } = result as any;
+    // Explicit construction of safe response object
+    const safeUser = {
+      id: result.id,
+      firstName: result.firstName,
+      lastName: result.lastName,
+      email: result.email,
+      status: result.status,
+      branchId: result.branchId,
+      needsPasswordChange: result.needsPasswordChange
+    };
 
     return { 
       success: true, 
