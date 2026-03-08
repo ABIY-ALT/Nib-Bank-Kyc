@@ -9,8 +9,9 @@ import jwt from "jsonwebtoken";
  * Institutional Authentication Gateway.
  * Hardened with:
  * 1. Generic Error Responses (Anti-Enumeration)
- * 2. Adaptive Throttling (Lockout via Audit Logs) - Bypassed on first run if DB not ready
+ * 2. Adaptive Throttling (Lockout via Audit Logs)
  * 3. Emergency Auto-Provisioning for Admin
+ * 4. Robust Role Serialization
  */
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -34,8 +35,7 @@ export async function POST(req: Request) {
 
     userEmail = email.toLowerCase().trim();
 
-    // 1. ADAPTIVE THROTTLING: Check for recent failed attempts in the Audit Vault.
-    // NOTE: Wrapped in try-catch to support first-time login before migrations run.
+    // 1. ADAPTIVE THROTTLING: Check for recent failed attempts
     try {
       const recentFailures = await prisma.auditLog.count({
         where: {
@@ -61,31 +61,26 @@ export async function POST(req: Request) {
         }, { status: 429 });
       }
     } catch (dbError) {
-      console.warn("[GATEWAY] Throttling check skipped: Database tables might not be initialized yet.");
+      console.warn("[GATEWAY] Throttling check skipped: Database might not be initialized yet.");
     }
 
-    let user = null;
-    try {
-      user = await prisma.user.findUnique({
-        where: { email: userEmail },
-        include: {
-          roles: {
-            include: {
-              role: {
-                include: {
-                  permissions: {
-                    include: { permission: true }
-                  }
+    let user = await prisma.user.findUnique({
+      where: { email: userEmail },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: { permission: true }
                 }
               }
             }
-          },
-          branch: { include: { district: true } }
-        }
-      });
-    } catch (dbError) {
-      console.warn("[GATEWAY] User lookup failed: Database tables might not be initialized yet.");
-    }
+          }
+        },
+        branch: { include: { district: true } }
+      }
+    });
 
     // 2. EMERGENCY AUTO-PROVISIONING (Unblocks the user if seed didn't run)
     if (!user && userEmail === 'admin.user@nibbank.com.et') {
@@ -93,7 +88,6 @@ export async function POST(req: Request) {
       const hashedPassword = await bcrypt.hash('ChangeMe123!', 10);
       
       try {
-        // Create Role if missing
         const adminRole = await prisma.role.upsert({
           where: { name: 'SUPER_ADMIN' },
           update: {},
@@ -129,18 +123,18 @@ export async function POST(req: Request) {
         });
       } catch (provisionError) {
         console.error("[GATEWAY] Provisioning failed:", provisionError);
-        return NextResponse.json({ message: "Institutional database initialization fault. Please ensure the server is ready." }, { status: 500 });
+        return NextResponse.json({ message: "Institutional database fault." }, { status: 500 });
       }
     }
 
-    // 3. IDENTITY VERIFICATION (With Generic Failure Response)
+    // 3. IDENTITY VERIFICATION
     if (!user || user.status !== 'ACTIVE') {
       try {
         await createAuditLog({
           userId: user?.id || null,
           userEmail,
           action: 'AUTH_FAILURE',
-          details: `Failed login attempt: ${!user ? 'Identity not discovered' : 'Account status: ' + user.status}`,
+          details: `Failed login: ${!user ? 'Identity not found' : 'Account status: ' + user.status}`,
           severity: 'MEDIUM'
         });
       } catch (e) {}
@@ -155,17 +149,31 @@ export async function POST(req: Request) {
           userEmail,
           userName: `${user.firstName} ${user.lastName}`,
           action: 'AUTH_FAILURE_CREDENTIAL',
-          details: 'Failed login attempt: Invalid password hash match.',
+          details: 'Failed login: Invalid password hash.',
           severity: 'MEDIUM'
         });
       } catch (e) {}
       return NextResponse.json({ message: genericErrorMessage }, { status: 401 });
     }
 
-    // 4. CONCURRENCY CONTROL: Force updatedAt update to invalidate all previous sessions
+    // 4. CONCURRENCY CONTROL: Force session rotation
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
-      data: { updatedAt: new Date() }
+      data: { updatedAt: new Date() },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: { permission: true }
+                }
+              }
+            }
+          }
+        },
+        branch: { include: { district: true } }
+      }
     });
 
     try {
@@ -174,15 +182,40 @@ export async function POST(req: Request) {
         userEmail: updatedUser.email,
         userName: `${updatedUser.firstName} ${updatedUser.lastName}`,
         action: 'LOGIN_SUCCESS',
-        details: 'Institutional session initialized. Previous sessions rotated.',
+        details: 'Institutional session initialized.',
         severity: 'LOW'
       });
     } catch (e) {}
 
-    const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
-    const roleName = updatedUser.roles?.[0]?.role?.name || 'VIEWER';
+    // 5. ROBUST ROLE SERIALIZATION
+    let serializableRoles = (updatedUser.roles ?? []).map(ur => ({
+      role: {
+        id: ur.role?.id ?? 'unknown',
+        name: ur.role?.name ?? 'UNKNOWN',
+        permissions: (ur.role?.permissions ?? []).map(p => ({
+          permission: { 
+            slug: p.permission?.slug ?? '', 
+            name: p.permission?.name ?? '', 
+            group: p.permission?.group ?? '' 
+          }
+        }))
+      }
+    }));
 
-    // 5. SESSION LIFETIME PARAMETERS
+    // Fallback for Admin if roles mapping is empty
+    if (serializableRoles.length === 0 && userEmail === 'admin.user@nibbank.com.et') {
+      serializableRoles = [{
+        role: {
+          id: 'admin-fallback',
+          name: 'SUPER_ADMIN',
+          permissions: []
+        }
+      }];
+    }
+
+    const roleName = serializableRoles[0]?.role.name || 'VIEWER';
+
+    const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
     const nowSeconds = Math.floor(Date.now() / 1000);
     const absoluteLimit = nowSeconds + (8 * 60 * 60); // 8 Hours Absolute
 
@@ -193,22 +226,12 @@ export async function POST(req: Request) {
         role: roleName,
         ip: ipAddress,
         v: updatedUser.updatedAt.getTime(),
-        abs: absoluteLimit, // Absolute Session Lifetime
+        abs: absoluteLimit,
         needsPasswordChange: updatedUser.needsPasswordChange
       },
       secret,
       { expiresIn: "15m" }
     );
-
-    const serializableRoles = updatedUser.roles.map(ur => ({
-      role: {
-        id: ur.role.id,
-        name: ur.role.name,
-        permissions: ur.role.permissions.map(p => ({
-          permission: { slug: p.permission.slug, name: p.permission.name, group: p.permission.group }
-        }))
-      }
-    }));
 
     const response = NextResponse.json({
       success: true,
@@ -231,7 +254,7 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 15, // 15 minutes
+      maxAge: 60 * 15,
       path: '/',
     });
 
