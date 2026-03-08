@@ -131,11 +131,9 @@ export default function MyCasesPerformancePage() {
     return DEFAULT_ENTITY_TYPES;
   }, [settings]);
 
-  const assignedBranches = useMemo(() => {
+  const assignedBranchesList = useMemo(() => {
     if (!user) return [];
-    const branches = user.assignedBranches;
-    if (Array.isArray(branches)) return branches;
-    if (typeof branches === 'string') return (branches as string).split(',').filter(Boolean);
+    if (Array.isArray(user.assignedBranches)) return user.assignedBranches;
     return user.branchName ? [user.branchName] : [];
   }, [user]);
 
@@ -204,7 +202,7 @@ export default function MyCasesPerformancePage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" className="font-bold">Combined (All Nodes)</SelectItem>
-              {assignedBranches.map(b => (
+              {assignedBranchesList.map(b => (
                 <SelectItem key={b} value={b}>{b}</SelectItem>
               ))}
             </SelectContent>

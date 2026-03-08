@@ -226,7 +226,8 @@ export default function DistrictMonitoringPage() {
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Analysis</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{analytics?.pending || 0}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
-            </div>
+            </Card>
+          </div>
 
           <Tabs defaultValue="summary" className="space-y-6">
             <TabsList className="bg-slate-100 p-1 border h-12">
