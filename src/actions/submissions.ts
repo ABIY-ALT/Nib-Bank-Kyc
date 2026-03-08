@@ -9,21 +9,12 @@ import { signDownloadToken, generateSecureNumericCode } from '@/lib/security';
 import { getServerSession, verifyPermission } from './auth-server';
 import { SubmissionSchema } from '@/lib/validation';
 import { z } from 'zod';
+import { KYC_STATUS, EXCEPTIONAL_STATUS } from '@/lib/kyc-data';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 const ALLOWED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png'];
 const DANGEROUS_EXTENSIONS = ['exe', 'js', 'sh', 'bat', 'com', 'scr', 'vbs', 'msi', 'ps1', 'php', 'py', 'rb'];
-
-// Robust string-based constants for SQLite compatibility
-const KYC_STATUS = {
-  SUBMITTED: 'SUBMITTED',
-  IN_REVIEW: 'IN_REVIEW',
-  ACTION_REQUIRED: 'ACTION_REQUIRED',
-  APPROVED: 'APPROVED',
-  REJECTED: 'REJECTED',
-  ESCALATED: 'ESCALATED'
-};
 
 const AUDIT_ACTION = {
   CREATE: 'CREATE',
@@ -109,21 +100,7 @@ export async function getSubmissions(filters?: {
         active: true,
         submittedAt: dateFilter,
       },
-      select: {
-        id: true,
-        customerName: true,
-        status: true,
-        submittedAt: true,
-        updatedAt: true,
-        branchName: true,
-        entityType: true,
-        isExceptional: true,
-        exceptionalStatus: true,
-        isResubmitted: true,
-        amendCycles: true,
-        createdById: true,
-        checklistState: true,
-        commentHistory: true,
+      include: {
         createdBy: {
           select: {
             id: true,
@@ -140,22 +117,12 @@ export async function getSubmissions(filters?: {
             email: true,
           }
         },
-        assignedToId: true,
         branch: {
-          select: {
-            name: true,
-            district: {
-              select: { name: true }
-            }
+          include: {
+            district: true
           }
         },
-        memos: {
-          select: {
-            id: true,
-            name: true,
-            type: true
-          }
-        }
+        memos: true
       },
       orderBy: { submittedAt: 'desc' },
       take: filters?.limit || 100,
@@ -245,7 +212,7 @@ export async function createSubmission(formData: FormData) {
         entityType: validated.entityType,
         active: true,
         checklistState: JSON.stringify({}),
-        exceptionalStatus: 'None',
+        exceptionalStatus: EXCEPTIONAL_STATUS.NONE,
         commentHistory: validated.remarks ? JSON.stringify([{
           role: 'BRANCH_OFFICER',
           performedBy: `${user?.firstName} ${user?.lastName}`,
@@ -447,7 +414,7 @@ export async function processExceptionalStep(formData: FormData) {
     memos: memoData ? { create: memoData } : undefined 
   };
   
-  if (nextStatus === 'COMPLETED') data.status = KYC_STATUS.APPROVED;
+  if (nextStatus === EXCEPTIONAL_STATUS.COMPLETED) data.status = KYC_STATUS.APPROVED;
 
   const kyc = await prisma.kYC.update({ where: { id }, data });
   revalidatePath(`/submissions/${id}`);
@@ -534,7 +501,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       where: { id: kycId },
       data: {
         isExceptional: true,
-        exceptionalStatus: 'AWAITING_DISTRICT',
+        exceptionalStatus: EXCEPTIONAL_STATUS.AWAITING_DISTRICT,
         updatedAt: now,
         commentHistory: JSON.stringify([...history, {
           role: 'BRANCH_MANAGER',

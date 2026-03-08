@@ -1,21 +1,26 @@
-export type SubmissionStatus = 
-  | 'PENDING' 
-  | 'IN_REVIEW' 
-  | 'AMENDED' 
-  | 'APPROVED' 
-  | 'ESCALATED' 
-  | 'REJECTED';
+export const KYC_STATUS = {
+  SUBMITTED: 'SUBMITTED',
+  IN_REVIEW: 'IN_REVIEW',
+  ACTION_REQUIRED: 'ACTION_REQUIRED',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  ESCALATED: 'ESCALATED'
+};
 
-export type ExceptionalStatus = 
-  | 'NONE'
-  | 'AWAITING_DISTRICT'
-  | 'AWAITING_DIRECTOR'
-  | 'AWAITING_CHIEF'
-  | 'AWAITING_DIVISION'
-  | 'AWAITING_SUPERVISOR'
-  | 'COMPLETED'
-  | 'REJECTED'
-  | 'CLARIFICATION_REQUIRED';
+export const EXCEPTIONAL_STATUS = {
+  NONE: 'None',
+  AWAITING_DISTRICT: 'AWAITING_DISTRICT',
+  AWAITING_DIRECTOR: 'AWAITING_DIRECTOR',
+  AWAITING_CHIEF: 'AWAITING_CHIEF',
+  AWAITING_DIVISION: 'AWAITING_DIVISION',
+  AWAITING_SUPERVISOR: 'AWAITING_SUPERVISOR',
+  COMPLETED: 'COMPLETED',
+  REJECTED: 'REJECTED',
+  CLARIFICATION_REQUIRED: 'CLARIFICATION_REQUIRED'
+};
+
+export type SubmissionStatus = keyof typeof KYC_STATUS;
+export type ExceptionalStatus = keyof typeof EXCEPTIONAL_STATUS;
 
 export interface ExceptionalApproval {
   role: string;
@@ -144,8 +149,4 @@ export const AMENDMENT_SCENARIOS = [
   "19. Other (specify)"
 ];
 
-/**
- * INSTITUTIONAL DATA POLICY: No mock submissions are permitted in production.
- * Real data is synchronized strictly from the primary Institutional Vault.
- */
 export const MOCK_SUBMISSIONS: Partial<KYCSubmission>[] = [];
