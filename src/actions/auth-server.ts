@@ -8,6 +8,8 @@ import { prisma } from '@/lib/prisma';
  * Institutional Session Resolver.
  * Cryptographically verifies the auth token, validates against DB version,
  * and enforces absolute session lifetime boundaries.
+ * 
+ * NOTE: SQLite timestamp precision is synchronized using Math.floor(ms / 1000).
  */
 export async function getServerSession() {
   try {
@@ -31,7 +33,11 @@ export async function getServerSession() {
       select: { updatedAt: true }
     });
 
-    if (!user || payload.v !== user.updatedAt.getTime()) {
+    if (!user) return null;
+
+    // Use second-level precision to match token storage
+    const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
+    if (payload.v !== currentVersion) {
       return null;
     }
     

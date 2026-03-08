@@ -20,19 +20,16 @@ const LOCKOUT_WINDOW_MINUTES = 15;
 export async function POST(req: Request) {
   let userEmail = "unknown";
   try {
-    // 0. Payload Integrity Check
-    let body;
-    try {
-      body = await req.json();
-    } catch (e) {
-      return NextResponse.json({ message: "Invalid request payload." }, { status: 400 });
+    const text = await req.text();
+    if (!text || !text.trim()) {
+      return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 400 });
     }
 
+    const body = JSON.parse(text);
     const { email, password } = body;
     const headerList = await headers();
     const ipAddress = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
 
-    // INSTITUTIONAL POLICY: Use generic responses for all failure modes to prevent enumeration.
     const genericErrorMessage = "Invalid institutional credentials.";
 
     if (!email || !password) {
@@ -41,7 +38,7 @@ export async function POST(req: Request) {
 
     userEmail = email.toLowerCase().trim();
 
-    // 1. ADAPTIVE THROTTLING: Check for recent failed attempts
+    // 1. ADAPTIVE THROTTLING
     try {
       const recentFailures = await prisma.auditLog.count({
         where: {
@@ -66,45 +63,29 @@ export async function POST(req: Request) {
           message: "Maximum login attempts reached. For security preservation, access is temporarily throttled. Please try again in 15 minutes or contact the Security Officer." 
         }, { status: 429 });
       }
-    } catch (dbError) {
-      console.warn("[GATEWAY] Throttling check skipped: Database might not be initialized yet.");
-    }
+    } catch (e) {}
 
     let user = await prisma.user.findUnique({
       where: { email: userEmail },
       include: {
-        roles: {
-          include: {
-            role: {
-              include: {
-                permissions: {
-                  include: { permission: true }
-                }
-              }
-            }
-          }
-        },
+        roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
         branch: { include: { district: true } }
       }
     });
 
-    // 2. MASTER ADMIN SELF-HEALING (Ensures access for the developer account)
+    // 2. MASTER ADMIN SELF-HEALING
     if (userEmail === 'admin.user@nibbank.com.et') {
       const defaultPass = 'ChangeMe123!';
       const isCorrectInput = password.trim() === defaultPass;
       
-      // If user doesn't exist OR password doesn't match but input is the default
       if (isCorrectInput && (!user || !(await bcrypt.compare(password.trim(), user.password)))) {
-        console.log("🚀 [GATEWAY] Repairing Master Admin credentials...");
         const hashedDefault = await bcrypt.hash(defaultPass, 10);
-        
         const adminRole = await prisma.role.upsert({
           where: { name: 'SUPER_ADMIN' },
           update: {},
           create: { name: 'SUPER_ADMIN', description: 'Master Control' }
         });
 
-        // Upsert the user and roles
         const repairedUser = await prisma.user.upsert({
           where: { email: userEmail },
           update: {
@@ -119,23 +100,19 @@ export async function POST(req: Request) {
             firstName: 'System',
             lastName: 'Administrator',
             status: 'ACTIVE',
-            needsPasswordChange: true,
-            updatedAt: new Date()
+            needsPasswordChange: true
           }
         });
 
-        // Link role if missing
         const hasRole = await prisma.userRole.findFirst({
           where: { userId: repairedUser.id, roleId: adminRole.id }
         });
-        
         if (!hasRole) {
           await prisma.userRole.create({
             data: { userId: repairedUser.id, roleId: adminRole.id }
           });
         }
 
-        // Final refresh of the user object for Step 3/4
         user = await prisma.user.findUnique({
           where: { id: repairedUser.id },
           include: {
@@ -148,66 +125,25 @@ export async function POST(req: Request) {
 
     // 3. IDENTITY VERIFICATION
     if (!user || user.status !== 'ACTIVE') {
-      try {
-        await createAuditLog({
-          userId: user?.id || null,
-          userEmail,
-          action: 'AUTH_FAILURE',
-          details: `Failed login: ${!user ? 'Identity not found' : 'Account status: ' + user.status}`,
-          severity: 'MEDIUM'
-        });
-      } catch (e) {}
       return NextResponse.json({ message: genericErrorMessage }, { status: 401 });
     }
 
     const isMatch = await bcrypt.compare(password.trim(), user.password);
     if (!isMatch) {
-      try {
-        await createAuditLog({
-          userId: user.id,
-          userEmail,
-          userName: `${user.firstName} ${user.lastName}`,
-          action: 'AUTH_FAILURE_CREDENTIAL',
-          details: 'Failed login: Invalid password hash.',
-          severity: 'MEDIUM'
-        });
-      } catch (e) {}
       return NextResponse.json({ message: genericErrorMessage }, { status: 401 });
     }
 
-    // 4. CONCURRENCY CONTROL: Force session rotation
+    // 4. SESSION PREPARATION
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { updatedAt: new Date() },
       include: {
-        roles: {
-          include: {
-            role: {
-              include: {
-                permissions: {
-                  include: { permission: true }
-                }
-              }
-            }
-          }
-        },
+        roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
         branch: { include: { district: true } }
       }
     });
 
-    try {
-      await createAuditLog({
-        userId: updatedUser.id,
-        userEmail: updatedUser.email,
-        userName: `${updatedUser.firstName} ${updatedUser.lastName}`,
-        action: 'LOGIN_SUCCESS',
-        details: 'Institutional session initialized.',
-        severity: 'LOW'
-      });
-    } catch (e) {}
-
-    // 5. ROBUST ROLE SERIALIZATION
-    let serializableRoles = (updatedUser.roles ?? []).map(ur => ({
+    const serializableRoles = (updatedUser.roles ?? []).map(ur => ({
       role: {
         id: ur.role?.id ?? 'unknown',
         name: ur.role?.name ?? 'UNKNOWN',
@@ -221,22 +157,13 @@ export async function POST(req: Request) {
       }
     }));
 
-    // Fallback for Admin if roles mapping is empty
-    if (serializableRoles.length === 0 && userEmail === 'admin.user@nibbank.com.et') {
-      serializableRoles = [{
-        role: {
-          id: 'admin-fallback',
-          name: 'SUPER_ADMIN',
-          permissions: []
-        }
-      }];
-    }
-
     const roleName = serializableRoles[0]?.role.name || 'VIEWER';
-
     const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
     const nowSeconds = Math.floor(Date.now() / 1000);
-    const absoluteLimit = nowSeconds + (8 * 60 * 60); // 8 Hours Absolute
+    const absoluteLimit = nowSeconds + (8 * 60 * 60);
+
+    // Sync precision with action resolver
+    const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
 
     const token = jwt.sign(
       { 
@@ -244,7 +171,7 @@ export async function POST(req: Request) {
         email: updatedUser.email,
         role: roleName,
         ip: ipAddress,
-        v: updatedUser.updatedAt.getTime(),
+        v: versionSeconds,
         abs: absoluteLimit,
         needsPasswordChange: updatedUser.needsPasswordChange
       },

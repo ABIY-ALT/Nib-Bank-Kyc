@@ -58,7 +58,7 @@ export function ForcePasswordChangeModal() {
         description: "Your new institutional credential has been established.",
       });
     } catch (err: any) {
-      setError(err.message || "Failed to update security profile.");
+      setError(err.message || "Database fault during credential reset.");
     } finally {
       setLoading(false);
     }
@@ -74,17 +74,17 @@ export function ForcePasswordChangeModal() {
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <div className="bg-white">
-          <DialogHeader className="bg-orange-50/50 border-b p-8 space-y-0">
+          <DialogHeader className="bg-slate-50 border-b p-8 space-y-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white rounded-lg shadow-sm">
-                  <Lock className="w-5 h-5 text-orange-600" />
+                  <Lock className="w-5 h-5 text-primary" />
                 </div>
                 <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight">
                   Create New Password
                 </DialogTitle>
               </div>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">Security Gate</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Security Gate</span>
             </div>
           </DialogHeader>
 

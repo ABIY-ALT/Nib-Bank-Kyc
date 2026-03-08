@@ -45,16 +45,18 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
       data: {
         password: hashedPassword,
         needsPasswordChange: false,
-        updatedAt: new Date() // Force rotation of token version (v)
+        updatedAt: new Date()
       }
     });
 
-    // 5. SESSION CONTINUITY: Re-issue token so current user isn't logged out
+    // 5. SESSION CONTINUITY: Re-issue token with synchronized precision
     const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
+    const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
+
     const newToken = jwt.sign(
       { 
         ...session,
-        v: updatedUser.updatedAt.getTime(),
+        v: versionSeconds,
         needsPasswordChange: false
       },
       secret,
