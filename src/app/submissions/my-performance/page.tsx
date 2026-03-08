@@ -130,7 +130,10 @@ export default function MyCasesPerformancePage() {
 
   const assignedBranches = useMemo(() => {
     if (!user) return [];
-    return user.assignedBranches || (user.branchName ? [user.branchName] : []);
+    const branches = user.assignedBranches;
+    if (Array.isArray(branches)) return branches;
+    if (typeof branches === 'string') return (branches as string).split(',').filter(Boolean);
+    return user.branchName ? [user.branchName] : [];
   }, [user]);
 
   const filteredSubmissions = useMemo(() => {

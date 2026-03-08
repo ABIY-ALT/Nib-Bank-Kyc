@@ -62,8 +62,8 @@ export async function GET() {
       return response;
     }
 
-    // 3. Token Versioning Verification (Revocation Check)
-    const currentVersion = user.updatedAt.getTime();
+    // 3. Token Versioning Verification
+    const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) {
       const response = NextResponse.json({ message: "Session revoked." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
@@ -90,13 +90,13 @@ export async function GET() {
         status: user.status,
         branchName: user.branch?.name || null,
         districtName: user.branch?.district?.name || null,
-        assignedBranches: user.assignedBranches || [],
+        assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [],
         roles: serializableRoles,
         needsPasswordChange: user.needsPasswordChange
       }
     });
 
-    // 4. Token Rotation (Sliding Window for Inactivity)
+    // 4. Token Rotation
     const iat = payload.iat || 0;
     const fiveMinutes = 5 * 60;
 
@@ -104,7 +104,7 @@ export async function GET() {
       const newToken = jwt.sign(
         { 
           ...payload,
-          iat: nowSeconds // Reset issued at
+          iat: nowSeconds
         },
         secretStr,
         { expiresIn: "15m" }

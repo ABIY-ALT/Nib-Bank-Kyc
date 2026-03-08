@@ -82,7 +82,6 @@ export async function POST(req: Request) {
     });
 
     // 2. MASTER ADMIN SELF-HEALING
-    // Rule: Ensure admin exists and is functional with one stable password.
     if (userEmail === 'admin.user@nibbank.com.et') {
       const defaultPass = 'ChangeMe123!';
       const isCorrectInput = password.trim() === defaultPass;
@@ -100,7 +99,7 @@ export async function POST(req: Request) {
           update: {
             password: hashedDefault,
             status: 'ACTIVE',
-            needsPasswordChange: false, // Bypass forced rotation for initial admin access
+            needsPasswordChange: false,
             updatedAt: new Date()
           },
           create: {
@@ -170,8 +169,6 @@ export async function POST(req: Request) {
     const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
     const nowSeconds = Math.floor(Date.now() / 1000);
     const absoluteLimit = nowSeconds + (8 * 60 * 60);
-
-    // Sync precision with action resolver (second-level precision)
     const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
 
     const token = jwt.sign(
@@ -199,7 +196,7 @@ export async function POST(req: Request) {
         status: updatedUser.status,
         branchName: updatedUser.branch?.name || null,
         districtName: updatedUser.branch?.district?.name || null,
-        assignedBranches: updatedUser.assignedBranches || [],
+        assignedBranches: updatedUser.assignedBranches ? updatedUser.assignedBranches.split(',').filter(Boolean) : [],
         roles: serializableRoles,
         needsPasswordChange: updatedUser.needsPasswordChange
       }

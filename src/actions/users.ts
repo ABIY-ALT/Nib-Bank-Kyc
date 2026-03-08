@@ -140,7 +140,7 @@ export async function provisionUser(data: {
 
 export async function getAllUsers() {
   try {
-    return await prisma.user.findMany({
+    const users = await prisma.user.findMany({
       select: {
         id: true,
         firstName: true,
@@ -156,6 +156,11 @@ export async function getAllUsers() {
       },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }]
     });
+
+    return users.map(u => ({
+      ...u,
+      assignedBranches: u.assignedBranches ? u.assignedBranches.split(',').filter(Boolean) : []
+    }));
   } catch (error) {
     return [];
   }
@@ -175,7 +180,7 @@ export async function updateUserPortfolio(userId: string, branches: string[]) {
   if (!(await verifyAdminClearance())) throw new Error('Unauthorized');
   await prisma.user.update({
     where: { id: userId },
-    data: { assignedBranches: branches, updatedAt: new Date() }
+    data: { assignedBranches: branches.join(','), updatedAt: new Date() }
   });
   revalidatePath('/admin/assignments');
   return { success: true };

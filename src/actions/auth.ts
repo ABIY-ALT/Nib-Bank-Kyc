@@ -32,7 +32,6 @@ export async function getUserProfile(userId: string) {
 
     if (!user) return null;
 
-    // Strict construction of safe profile to prevent accidental metadata leakage
     return {
       id: user.id,
       firstName: user.firstName,
@@ -44,7 +43,7 @@ export async function getUserProfile(userId: string) {
       branchId: user.branchId,
       branchName: user.branch?.name || null,
       districtName: user.branch?.district?.name || null,
-      assignedBranches: user.assignedBranches || [],
+      assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [],
       roles: user.roles.map(ur => ({
         role: {
           id: ur.role.id,
