@@ -25,7 +25,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid institutional credentials." }, { status: 400 });
     }
 
-    const body = JSON.parse(text);
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch (e) {
+      return NextResponse.json({ message: "Invalid request format." }, { status: 400 });
+    }
+
     const { email, password } = body;
     const headerList = await headers();
     const ipAddress = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
@@ -63,7 +69,9 @@ export async function POST(req: Request) {
           message: "Maximum login attempts reached. For security preservation, access is temporarily throttled. Please try again in 15 minutes or contact the Security Officer." 
         }, { status: 429 });
       }
-    } catch (e) {}
+    } catch (e) {
+      // Fallback if audit log is not yet ready
+    }
 
     let user = await prisma.user.findUnique({
       where: { email: userEmail },
@@ -74,6 +82,7 @@ export async function POST(req: Request) {
     });
 
     // 2. MASTER ADMIN SELF-HEALING
+    // Rule: Ensure admin exists and is functional with one stable password.
     if (userEmail === 'admin.user@nibbank.com.et') {
       const defaultPass = 'ChangeMe123!';
       const isCorrectInput = password.trim() === defaultPass;
@@ -91,7 +100,7 @@ export async function POST(req: Request) {
           update: {
             password: hashedDefault,
             status: 'ACTIVE',
-            needsPasswordChange: true,
+            needsPasswordChange: false, // Bypass forced rotation for initial admin access
             updatedAt: new Date()
           },
           create: {
@@ -100,7 +109,7 @@ export async function POST(req: Request) {
             firstName: 'System',
             lastName: 'Administrator',
             status: 'ACTIVE',
-            needsPasswordChange: true
+            needsPasswordChange: false
           }
         });
 
@@ -162,7 +171,7 @@ export async function POST(req: Request) {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const absoluteLimit = nowSeconds + (8 * 60 * 60);
 
-    // Sync precision with action resolver
+    // Sync precision with action resolver (second-level precision)
     const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
 
     const token = jwt.sign(
