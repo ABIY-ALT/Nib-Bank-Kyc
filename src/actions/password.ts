@@ -2,6 +2,8 @@
 
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { getServerSession } from './auth-server';
 import { createAuditLog } from './audit';
@@ -19,8 +21,6 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
     }
 
     // 2. Identity Binding (Anti-IDOR)
-    // Personnel can only modify their own credentials unless they are an authorized admin
-    // using the dedicated administrative reset flow.
     if (session.id !== userId) {
       await createAuditLog({
         userId: session.id,
@@ -40,14 +40,34 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // 4. Atomic Update with Version Rotation
-    // needsPasswordChange is cleared and updatedAt is refreshed to revoke all other sessions
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         password: hashedPassword,
         needsPasswordChange: false,
         updatedAt: new Date() // Force rotation of token version (v)
       }
+    });
+
+    // 5. SESSION CONTINUITY: Re-issue token so current user isn't logged out
+    const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
+    const newToken = jwt.sign(
+      { 
+        ...session,
+        v: updatedUser.updatedAt.getTime(),
+        needsPasswordChange: false
+      },
+      secret,
+      { expiresIn: "15m" }
+    );
+
+    const cookieStore = await cookies();
+    cookieStore.set('nib-auth-token', newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 15,
+      path: '/',
     });
 
     await createAuditLog({

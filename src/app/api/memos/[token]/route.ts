@@ -15,16 +15,16 @@ export async function GET(
 ) {
   const { token } = await props.params;
   const cookieStore = await cookies();
-  const jwt = cookieStore.get('__Secure-auth-token')?.value;
+  const jwtToken = cookieStore.get('nib-auth-token')?.value;
 
   // RULE: Unauthenticated -> 401
-  if (!jwt) {
+  if (!jwtToken) {
     return NextResponse.json({ message: 'Unauthenticated' }, { status: 401 });
   }
 
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
-    const { payload } = await jwtVerify(jwt, secret);
+    const { payload } = await jwtVerify(jwtToken, secret);
     const userId = payload.id as string;
 
     // Check scope, token validity (including expiration), and write audit log

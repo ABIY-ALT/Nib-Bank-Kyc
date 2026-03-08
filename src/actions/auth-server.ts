@@ -6,13 +6,13 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * Institutional Session Resolver.
- * Cryptographically verifies the __Secure- auth token, validates against DB version,
+ * Cryptographically verifies the auth token, validates against DB version,
  * and enforces absolute session lifetime boundaries.
  */
 export async function getServerSession() {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get('__Secure-auth-token')?.value;
+    const token = cookieStore.get('nib-auth-token')?.value;
     if (!token) return null;
 
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
@@ -26,7 +26,6 @@ export async function getServerSession() {
     }
 
     // 2. SERVER-SIDE REVOCATION CHECK
-    // Every Server Action must verify that the session hasn't been rotated or revoked.
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
       select: { updatedAt: true }
@@ -36,7 +35,7 @@ export async function getServerSession() {
       return null;
     }
     
-    return payload as { id: string, email: string, role: string, v: number, abs: number };
+    return payload as { id: string, email: string, role: string, v: number, abs: number, ip: string };
   } catch {
     return null;
   }

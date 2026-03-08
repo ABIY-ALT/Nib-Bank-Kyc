@@ -16,7 +16,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const token = req.cookies.get('__Secure-auth-token')?.value;
+  const token = req.cookies.get('nib-auth-token')?.value;
 
   // 1. Allow Public Assets and Auth APIs
   if (
@@ -51,7 +51,7 @@ export async function middleware(req: NextRequest) {
     if (payload.abs && typeof payload.abs === 'number' && nowSeconds > payload.abs) {
       console.warn(`[SECURITY_ALERT] Absolute session lifetime expired for user: ${payload.email}`);
       const response = NextResponse.redirect(new URL('/login', req.url));
-      response.cookies.delete('__Secure-auth-token');
+      response.cookies.delete('nib-auth-token');
       return response;
     }
 
@@ -60,7 +60,7 @@ export async function middleware(req: NextRequest) {
     if (payload.ip && payload.ip !== clientIp) {
       console.warn(`[SECURITY_ALERT] Session IP breach attempt. Token IP: ${payload.ip}, Request IP: ${clientIp}`);
       const response = NextResponse.redirect(new URL('/login', req.url));
-      response.cookies.delete('__Secure-auth-token');
+      response.cookies.delete('nib-auth-token');
       return response;
     }
 
@@ -98,7 +98,7 @@ export async function middleware(req: NextRequest) {
   } catch (error) {
     // 8. Sanitize Failed Sessions
     const response = NextResponse.redirect(new URL('/login', req.url));
-    response.cookies.delete('__Secure-auth-token');
+    response.cookies.delete('nib-auth-token');
     return response;
   }
 }

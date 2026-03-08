@@ -12,7 +12,7 @@ export async function GET() {
   try {
     const cookieStore = await cookies();
     const headerList = await headers();
-    const token = cookieStore.get("__Secure-auth-token")?.value;
+    const token = cookieStore.get("nib-auth-token")?.value;
 
     if (!token) {
       return NextResponse.json({ message: "No active session." }, { status: 401 });
@@ -27,7 +27,7 @@ export async function GET() {
     // 1. Absolute Lifetime Verification (8h limit)
     if (payload.abs && nowSeconds > payload.abs) {
       const response = NextResponse.json({ message: "Absolute session lifetime reached." }, { status: 401 });
-      response.cookies.delete('__Secure-auth-token');
+      response.cookies.delete('nib-auth-token');
       return response;
     }
 
@@ -36,7 +36,7 @@ export async function GET() {
     if (payload.ip !== currentIp) {
       console.warn(`[SECURITY] Contextual binding violation. User: ${payload.email}`);
       const response = NextResponse.json({ message: "Contextual binding violation." }, { status: 401 });
-      response.cookies.delete('__Secure-auth-token');
+      response.cookies.delete('nib-auth-token');
       return response;
     }
 
@@ -58,7 +58,7 @@ export async function GET() {
 
     if (!user || user.status !== 'ACTIVE') {
       const response = NextResponse.json({ message: "Account restricted." }, { status: 401 });
-      response.cookies.delete('__Secure-auth-token');
+      response.cookies.delete('nib-auth-token');
       return response;
     }
 
@@ -66,7 +66,7 @@ export async function GET() {
     const currentVersion = user.updatedAt.getTime();
     if (payload.v !== currentVersion) {
       const response = NextResponse.json({ message: "Session revoked." }, { status: 401 });
-      response.cookies.delete('__Secure-auth-token');
+      response.cookies.delete('nib-auth-token');
       return response;
     }
 
@@ -97,8 +97,6 @@ export async function GET() {
     });
 
     // 4. Token Rotation (Sliding Window for Inactivity)
-    // If the token has been active for more than 5 minutes, issue a fresh one
-    // while preserving the absolute expiration (abs)
     const iat = payload.iat || 0;
     const fiveMinutes = 5 * 60;
 
@@ -112,9 +110,9 @@ export async function GET() {
         { expiresIn: "15m" }
       );
 
-      response.cookies.set('__Secure-auth-token', newToken, {
+      response.cookies.set('nib-auth-token', newToken, {
         httpOnly: true,
-        secure: true,
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         maxAge: 60 * 15,
         path: '/',
