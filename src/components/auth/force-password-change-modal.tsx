@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { 
   Dialog, 
   DialogContent,
-  DialogHeader,
+  DialogHeader, 
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -82,7 +82,7 @@ export function ForcePasswordChangeModal() {
                   <Lock className="w-5 h-5 text-orange-600" />
                 </div>
                 <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight">
-                  Establish New Credential
+                  Create New Password
                 </DialogTitle>
               </div>
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">Security Gate</span>
@@ -99,7 +99,7 @@ export function ForcePasswordChangeModal() {
               )}
 
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">New Institutional Password</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">New Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
@@ -140,7 +140,7 @@ export function ForcePasswordChangeModal() {
                   <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0" />
                 </div>
                 <p className="text-[11px] text-blue-800 font-medium leading-relaxed">
-                  <strong>Policy Reminder:</strong> Use at least 8 characters with a mix of letters, numbers, and symbols. Your password is cryptographically secured.
+                  Use at least 8 characters with a mix of letters, numbers, and symbols.
                 </p>
               </div>
 
@@ -150,7 +150,7 @@ export function ForcePasswordChangeModal() {
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                Establish Security Profile
+                Change New Password
                 <ChevronRight className="w-5 h-5" />
               </Button>
             </form>
