@@ -321,12 +321,12 @@ export default function MyCasesPerformancePage() {
 
             <TabsContent value="work-queue" className="animate-in slide-in-from-bottom-2 duration-300">
               <Card className="shadow-xl border-slate-200 overflow-hidden rounded-[2rem] bg-white">
-                <CardHeader className="bg-slate-900 text-white p-6 border-b flex flex-row items-center justify-between">
+                <CardHeader className="bg-primary text-white p-6 border-b flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl font-black">Technical Work Queue</CardTitle>
-                    <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Pending and in-review institutional cases</CardDescription>
+                    <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Pending and in-review institutional cases</CardDescription>
                   </div>
-                  <Badge variant="outline" className="border-primary/30 text-primary font-black px-4 py-1">
+                  <Badge variant="outline" className="bg-white/20 border-white/20 text-white font-black px-4 py-1">
                     {filteredSubmissions.filter(s => ![KYCStatus.APPROVED, KYCStatus.REJECTED].includes(s.status)).length} Priority Items
                   </Badge>
                 </CardHeader>

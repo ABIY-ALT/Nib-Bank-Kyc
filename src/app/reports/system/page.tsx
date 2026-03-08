@@ -135,7 +135,39 @@ export default function SystemWideReportsPage() {
              <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Review</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-orange-600 tracking-tighter">{stats.pending}</span></CardContent></Card>
              <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Accuracy Index</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-primary tracking-tighter">{stats.accuracy}%</span></CardContent></Card>
           </div>
-          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white"><CardHeader className="bg-primary text-white border-b p-6 flex flex-row items-center justify-between"><CardTitle className="text-xl font-black flex items-center gap-3 text-white"><div className="p-2 bg-white/20 rounded-lg"><Building2 className="w-5 h-5 text-white" /></div>Branch Network</CardTitle><Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-white font-bold hover:bg-white/10 h-10 px-4"><FileDown className="w-4 h-4 mr-2" /> Export Summary</Button></CardHeader><CardContent className="p-0"><Table><TableHeader><TableRow className="bg-slate-50/80"><TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Jurisdiction Node</TableHead><TableHead className="font-black text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Throughput</TableHead></TableRow></TableHeader><TableBody>{stats.branches.map((branch) => (<TableRow key={branch.name} className="hover:bg-slate-50 transition-colors"><TableCell className="font-bold text-slate-800 py-5 pl-8">{branch.name}</TableCell><TableCell className="text-right pr-8"><Badge variant="secondary" className="font-black px-4 py-1.5 bg-primary/5 text-primary border-primary/10">{branch.count} Cases</Badge></TableCell></TableRow>))}</TableBody></Table></CardContent></Card>
+          <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
+            <CardHeader className="bg-primary text-white border-b p-6 flex flex-row items-center justify-between">
+              <CardTitle className="text-xl font-black flex items-center gap-3 text-white">
+                <div className="p-2 bg-white/20 rounded-lg"><Building2 className="w-5 h-5 text-white" /></div>
+                Branch Network
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={handleExportCSV} className="text-white font-bold hover:bg-white/10 h-10 px-4">
+                <FileDown className="w-4 h-4 mr-2" /> Export Summary
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80">
+                    <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Jurisdiction Node</TableHead>
+                    <TableHead className="font-black text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Throughput</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.branches.map((branch) => (
+                    <TableRow key={branch.name} className="hover:bg-slate-50 transition-colors">
+                      <TableCell className="font-bold text-slate-800 py-5 pl-8">{branch.name}</TableCell>
+                      <TableCell className="text-right pr-8">
+                        <Badge variant="secondary" className="font-black px-4 py-1.5 bg-primary/5 text-primary border-primary/10">
+                          {branch.count} Cases
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

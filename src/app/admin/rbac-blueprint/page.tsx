@@ -25,7 +25,7 @@ import {
   Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePermissions } from '@/hooks/use-permissions';
+import { usePermissions } from "@/hooks/use-permissions";
 
 const MATRIX_DATA = [
   { module: "Dashboard", page: "Dashboard", officer: "R", super: "R", director: "R", admin: "R" },
@@ -89,7 +89,6 @@ export default function RBACBlueprintPage() {
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20 print:p-0">
-      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -105,7 +104,6 @@ export default function RBACBlueprintPage() {
         </Button>
       </div>
 
-      {/* FLOW DIAGRAM SECTION */}
       <section className="space-y-6">
         <div className="flex items-center gap-2">
           <Workflow className="w-5 h-5 text-primary" />
@@ -115,10 +113,8 @@ export default function RBACBlueprintPage() {
         <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
           <CardContent className="p-12">
             <div className="flex flex-col lg:flex-row items-center justify-between gap-8 relative">
-              {/* SVG Connectors (Desktop) */}
               <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-100 hidden lg:block -translate-y-1/2 z-0" />
               
-              {/* START */}
               <div className="z-10 flex flex-col items-center gap-4 group">
                 <div className="w-20 h-20 rounded-3xl bg-slate-100 border-2 border-slate-200 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
                   <div className="text-xs font-black text-slate-400 uppercase tracking-tighter">Start</div>
@@ -131,12 +127,11 @@ export default function RBACBlueprintPage() {
 
               <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
 
-              {/* STEP 1 */}
               <div className="z-10 flex flex-col items-center gap-4 group">
                 <div className="w-48 p-6 rounded-3xl bg-blue-500 text-white border-4 border-white shadow-xl shadow-blue-100 flex flex-col items-center text-center gap-2 group-hover:-translate-y-2 transition-transform">
                   <UserPlus className="w-6 h-6" />
                   <div>
-                    <p className="font-black text-sm: Roles Table</p>
+                    <p className="font-black text-sm">Step 1: Roles Table</p>
                     <p className="text-[9px] font-bold text-blue-100 uppercase tracking-widest">e.g. "KYC Auditor"</p>
                   </div>
                 </div>
@@ -144,7 +139,6 @@ export default function RBACBlueprintPage() {
 
               <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
 
-              {/* STEP 2 */}
               <div className="z-10 flex flex-col items-center gap-4 group">
                 <div className="w-48 p-6 rounded-3xl bg-blue-600 text-white border-4 border-white shadow-xl shadow-blue-100 flex flex-col items-center text-center gap-2 group-hover:-translate-y-2 transition-transform">
                   <Settings2 className="w-6 h-6" />
@@ -161,7 +155,6 @@ export default function RBACBlueprintPage() {
 
               <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
 
-              {/* STEP 3 */}
               <div className="z-10 flex flex-col items-center gap-4 group">
                 <div className="w-48 p-6 rounded-3xl bg-blue-700 text-white border-4 border-white shadow-xl shadow-blue-100 flex flex-col items-center text-center gap-2 group-hover:-translate-y-2 transition-transform">
                   <UserCog className="w-6 h-6" />
@@ -174,7 +167,6 @@ export default function RBACBlueprintPage() {
 
               <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
 
-              {/* STEP 4 */}
               <div className="z-10 flex flex-col items-center gap-4 group">
                 <div className="w-48 p-6 rounded-3xl bg-slate-900 text-white border-4 border-white shadow-xl shadow-slate-200 flex flex-col items-center text-center gap-2 group-hover:-translate-y-2 transition-transform">
                   <Lock className="w-6 h-6" />
@@ -187,7 +179,6 @@ export default function RBACBlueprintPage() {
 
               <ChevronRight className="w-6 h-6 text-slate-200 lg:block hidden" />
 
-              {/* END */}
               <div className="z-10 flex flex-col items-center gap-4 group">
                 <div className="w-20 h-20 rounded-full bg-emerald-500 text-white border-4 border-white shadow-xl shadow-emerald-100 flex items-center justify-center group-hover:scale-110 transition-transform">
                   <CheckCircle2 className="w-8 h-8" />
@@ -202,7 +193,6 @@ export default function RBACBlueprintPage() {
         </Card>
       </section>
 
-      {/* MATRIX SECTION */}
       <section className="space-y-6">
         <div className="flex items-center gap-2">
           <TableIcon className="w-5 h-5 text-primary" />
@@ -210,15 +200,15 @@ export default function RBACBlueprintPage() {
         </div>
 
         <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
-          <CardHeader className="bg-slate-900 text-white p-8">
+          <CardHeader className="bg-primary text-white p-8">
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle className="text-2xl font-black">Role-Based Capability Matrix</CardTitle>
-                <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Single Source of Truth for Security Audits</CardDescription>
+                <CardTitle className="text-2xl font-black text-white">Role-Based Capability Matrix</CardTitle>
+                <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Single Source of Truth for Security Audits</CardDescription>
               </div>
               <div className="flex gap-4">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-emerald-500" /><span className="text-[10px] font-black uppercase text-slate-400">Read Only</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-blue-500" /><span className="text-[10px] font-black uppercase text-slate-400">Write Access</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-emerald-500" /><span className="text-[10px] font-black uppercase text-white/60">Read Only</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-blue-500" /><span className="text-[10px] font-black uppercase text-white/60">Write Access</span></div>
               </div>
             </div>
           </CardHeader>
@@ -281,7 +271,6 @@ export default function RBACBlueprintPage() {
         </Card>
       </section>
 
-      {/* LEGEND SECTION */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 print:hidden">
         <Card className="border-slate-200 shadow-lg">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Level R: Read</CardTitle></CardHeader>

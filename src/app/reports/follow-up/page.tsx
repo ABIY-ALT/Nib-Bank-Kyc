@@ -56,7 +56,6 @@ export default function FollowUpReportsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // In a real app, the server action would handle the range filter
       const data = await getFollowUpVerifications();
       setAllVerifications(data || []);
     } catch (error) {
@@ -111,16 +110,71 @@ export default function FollowUpReportsPage() {
             onDateChange={setDateRange} 
           />
           <Button variant="outline" className="gap-2 h-12 px-6 border-slate-200 bg-white" onClick={() => { setSelectedResult("all"); setDateRange(undefined); }}><RotateCcw className="w-4 h-4" /> Reset</Button>
-          <Button className="gap-2 bg-primary hover:bg-primary/90 h-12 px-6 font-bold shadow-lg" disabled={filteredData.length === 0} onClick={handleExportCSV}><ShieldCheck className="w-4 h-4" /> Download Report</Button>
+          <Button className="gap-2 bg-primary hover:bg-primary/90 h-12 px-6 font-bold shadow-lg text-white" disabled={filteredData.length === 0} onClick={handleExportCSV}><ShieldCheck className="w-4 h-4" /> Download Report</Button>
         </div>
       </div>
 
-      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white"><CardContent className="p-6"><div className="space-y-2 max-w-sm"><Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Finding</Label><Select value={selectedResult} onValueChange={setSelectedResult}><SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="All Results" /></SelectTrigger><SelectContent><SelectItem value="all">All Results</SelectItem><SelectItem value="Correct">Correct (Compliant)</SelectItem><SelectItem value="Discrepancy">Discrepancy (Errors)</SelectItem></SelectContent></Select></div></CardContent></Card>
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-6">
+          <div className="space-y-2 max-w-sm">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Finding</Label>
+            <Select value={selectedResult} onValueChange={setSelectedResult}>
+              <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="All Results" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Results</SelectItem>
+                <SelectItem value="Correct">Correct (Compliant)</SelectItem>
+                <SelectItem value="Discrepancy">Discrepancy (Errors)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       {loading ? (
         <div className="py-40 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" /></div>
       ) : (
-        <Card className="border-slate-200 shadow-xl overflow-hidden rounded-[2rem] bg-white"><CardHeader className="bg-slate-900 text-white p-6 flex flex-row items-center justify-between"><div><CardTitle className="text-2xl font-bold tracking-tight flex items-center gap-3"><ClipboardCheck className="w-6 h-6 text-primary" />Quality Control Log</CardTitle></div><Badge variant="outline" className="bg-primary/20 text-white border-primary/40 font-black px-4 h-8">{filteredData.length} Records</Badge></CardHeader><CardContent className="p-0"><Table><TableHeader className="bg-slate-50/80"><TableRow><TableHead className="font-black py-4 pl-8 text-[11px] uppercase">Audit ID</TableHead><TableHead className="font-black text-[11px] uppercase">Customer / Case</TableHead><TableHead className="font-black text-center text-[11px] uppercase">Result</TableHead><TableHead className="font-black text-[11px] uppercase">Verified By</TableHead><TableHead className="font-black text-right pr-8 text-[11px] uppercase">Date</TableHead></TableRow></TableHeader><TableBody>{filteredData.map((v) => (<TableRow key={v.id} className="hover:bg-slate-50 border-b border-slate-100"><TableCell className="font-bold text-primary py-5 pl-8">{v.id}</TableCell><TableCell><div className="flex flex-col"><span className="font-bold text-slate-900">{v.customerName}</span><span className="text-[10px] font-black uppercase text-slate-400">{v.submissionId}</span></div></TableCell><TableCell className="text-center"><Badge className={v.result === 'Correct' ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}>{v.result}</Badge></TableCell><TableCell className="font-bold text-slate-700">{v.verifiedBy || 'System'}</TableCell><TableCell className="text-right pr-8 text-xs font-bold text-slate-500">{v.verifiedAt ? format(new Date(v.verifiedAt), 'MMM dd, yyyy') : 'N/A'}</TableCell></TableRow>))}</TableBody></Table></CardContent></Card>
+        <Card className="border-slate-200 shadow-xl overflow-hidden rounded-[2rem] bg-white">
+          <CardHeader className="bg-primary text-white p-6 border-b flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl font-bold tracking-tight flex items-center gap-3">
+                <ClipboardCheck className="w-6 h-6 text-white" />
+                Quality Control Log
+              </CardTitle>
+            </div>
+            <Badge variant="outline" className="bg-white/20 border-white/40 text-white font-black px-4 h-8">{filteredData.length} Records</Badge>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-slate-50/80">
+                <TableRow>
+                  <TableHead className="font-black py-4 pl-8 text-[11px] uppercase">Audit ID</TableHead>
+                  <TableHead className="font-black text-[11px] uppercase">Customer / Case</TableHead>
+                  <TableHead className="font-black text-center text-[11px] uppercase">Result</TableHead>
+                  <TableHead className="font-black text-[11px] uppercase">Verified By</TableHead>
+                  <TableHead className="font-black text-right pr-8 text-[11px] uppercase">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredData.map((v) => (
+                  <TableRow key={v.id} className="hover:bg-slate-50 border-b border-slate-100">
+                    <TableCell className="font-bold text-primary py-5 pl-8">{v.id}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-900">{v.customerName}</span>
+                        <span className="text-[10px] font-black uppercase text-slate-400">{v.submissionId}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge className={v.result === 'Correct' ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}>{v.result}</Badge>
+                    </TableCell>
+                    <TableCell className="font-bold text-slate-700">{v.verifiedBy || 'System'}</TableCell>
+                    <TableCell className="text-right pr-8 text-xs font-bold text-slate-500">{v.verifiedAt ? format(new Date(v.verifiedAt), 'MMM dd, yyyy') : 'N/A'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

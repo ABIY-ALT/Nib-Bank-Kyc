@@ -60,11 +60,10 @@ export default function SystemBRDPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-12">
-        {/* EXECUTIVE SUMMARY */}
         <Card className="lg:col-span-8 shadow-xl border-slate-200 overflow-hidden">
-          <CardHeader className="bg-slate-900 text-white border-b">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Globe className="w-5 h-5 text-primary" />
+          <CardHeader className="bg-primary text-white border-b">
+            <CardTitle className="text-xl flex items-center gap-2 text-white">
+              <Globe className="w-5 h-5 text-white" />
               1. Executive Summary
             </CardTitle>
           </CardHeader>
@@ -85,7 +84,6 @@ export default function SystemBRDPage() {
           </CardContent>
         </Card>
 
-        {/* QUICK STATS */}
         <div className="lg:col-span-4 space-y-6">
           <Card className="shadow-lg border-primary/20 bg-primary/5">
             <CardHeader className="pb-2">
@@ -117,7 +115,6 @@ export default function SystemBRDPage() {
           </div>
         </div>
 
-        {/* FUNCTIONAL REQUIREMENTS */}
         <Card className="lg:col-span-12 shadow-xl border-slate-200 overflow-hidden">
           <CardHeader className="bg-slate-50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">
@@ -165,7 +162,6 @@ export default function SystemBRDPage() {
           </CardContent>
         </Card>
 
-        {/* SECURITY PROTOCOLS */}
         <Card className="lg:col-span-6 shadow-xl border-slate-200">
           <CardHeader className="bg-slate-50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">
@@ -200,7 +196,6 @@ export default function SystemBRDPage() {
           </CardContent>
         </Card>
 
-        {/* PERFORMANCE & REPORTING */}
         <Card className="lg:col-span-6 shadow-xl border-slate-200">
           <CardHeader className="bg-slate-50 border-b">
             <CardTitle className="text-xl flex items-center gap-2">

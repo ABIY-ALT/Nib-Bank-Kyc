@@ -308,9 +308,9 @@ export default function ManagementReportingPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
-          <CardHeader className="bg-slate-50/50 border-b p-6">
+          <CardHeader className="bg-primary text-white p-6 border-b">
             <CardTitle className="text-lg font-black flex items-center gap-2">
-              <History className="w-5 h-5 text-primary" /> Workflow Distribution
+              <History className="w-5 h-5 text-white" /> Workflow Distribution
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-8 h-[300px]">
@@ -331,9 +331,9 @@ export default function ManagementReportingPage() {
         </Card>
 
         <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
-          <CardHeader className="bg-slate-50/50 border-b p-6">
+          <CardHeader className="bg-primary text-white p-6 border-b">
             <CardTitle className="text-lg font-black flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-primary" /> Risk Level Aggregation
+              <ShieldAlert className="w-5 h-5 text-white" /> Risk Level Aggregation
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-8 h-[300px]">
@@ -354,9 +354,9 @@ export default function ManagementReportingPage() {
         </Card>
 
         <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
-          <CardHeader className="bg-slate-50/50 border-b p-6">
+          <CardHeader className="bg-primary text-white p-6 border-b">
             <CardTitle className="text-lg font-black flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" /> Institutional KYC Trend
+              <TrendingUp className="w-5 h-5 text-white" /> Institutional KYC Trend
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-8 h-[300px]">

@@ -53,9 +53,12 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
     const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
     const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
 
+    // Hardened: Strip iat/exp from session to prevent jwt.sign conflicts
+    const { iat, exp, ...sessionData } = session as any;
+
     const newToken = jwt.sign(
       { 
-        ...session,
+        ...sessionData,
         v: versionSeconds,
         needsPasswordChange: false
       },
