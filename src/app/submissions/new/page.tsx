@@ -109,7 +109,10 @@ export default function NewSubmission() {
   }, [settings]);
 
   const entityClassifications = useMemo(() => {
-    return settings?.entityTypes || DEFAULT_ENTITY_TYPES;
+    if (settings?.entityTypes && Array.isArray(settings.entityTypes) && settings.entityTypes.length > 0) {
+      return settings.entityTypes;
+    }
+    return DEFAULT_ENTITY_TYPES;
   }, [settings]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

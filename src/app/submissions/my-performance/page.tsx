@@ -125,7 +125,10 @@ export default function MyCasesPerformancePage() {
   };
 
   const entityClassifications = useMemo(() => {
-    return settings?.entityTypes?.length > 0 ? settings.entityTypes : DEFAULT_ENTITY_TYPES;
+    if (settings?.entityTypes && Array.isArray(settings.entityTypes) && settings.entityTypes.length > 0) {
+      return settings.entityTypes;
+    }
+    return DEFAULT_ENTITY_TYPES;
   }, [settings]);
 
   const assignedBranches = useMemo(() => {
@@ -349,7 +352,7 @@ export default function MyCasesPerformancePage() {
                           <TableCell>
                             <div className="flex flex-col">
                               <span className="font-black text-slate-900 leading-tight">{sub.customerName}</span>
-                              <span className="text-[10px] text-muted-foreground uppercase font-bold mt-0.5">{sub.entityType || 'Individual'} Account</span>
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold mt-0.5">{sub.entityType?.replace(/_/g, ' ') || 'Individual'} Account</span>
                             </div>
                           </TableCell>
                           <TableCell className="font-bold text-slate-600 text-xs">
