@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -10,53 +9,28 @@ import path from 'path';
 import { signDownloadToken, generateSecureNumericCode } from '@/lib/security';
 import { getServerSession, verifyPermission } from './auth-server';
 import { createAuditLog } from './audit';
+import { SubmissionSchema } from '@/lib/validation';
 import { z } from 'zod';
 
-/**
- * Institutional Validation Constants.
- */
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 const ALLOWED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png'];
 const DANGEROUS_EXTENSIONS = ['exe', 'js', 'sh', 'bat', 'com', 'scr', 'vbs', 'msi', 'ps1', 'php', 'py', 'rb'];
 
-/**
- * Institutional Zod Schemas for Input Validation.
- */
-const CreateSubmissionSchema = z.object({
-  id: z.string().min(5).max(50),
-  customerName: z.string().min(2).max(255),
-  entityType: z.string().min(1).max(100),
-  branchName: z.string().min(1).max(100),
-  districtName: z.string().min(1).max(100),
-  remarks: z.string().max(2000).optional(),
-});
-
-const ResubmitSchema = z.object({
-  id: z.string().min(5),
-  remarks: z.string().min(1).max(2000),
-});
-
-/**
- * Hardened Server-Side Asset Validation.
- * Performs multi-layered checks on extensions, MIME types, and naming patterns.
- */
 async function validateInstitutionalFile(file: File, userId: string, userEmail: string) {
   const extension = path.extname(file.name).toLowerCase();
   
-  // 1. Size Validation
   if (file.size > MAX_FILE_SIZE) {
     await createAuditLog({
       userId,
       userEmail,
       action: 'FILE_UPLOAD_BLOCKED_SIZE',
-      details: `Blocked upload of "${file.name}": Exceeds 10MB limit (${(file.size / 1024 / 1024).toFixed(2)}MB).`,
+      details: `Blocked upload: Exceeds 10MB limit.`,
       severity: 'MEDIUM'
     });
     throw new Error(`Asset "${file.name}" exceeds the 10MB institutional limit.`);
   }
 
-  // 2. MIME Type & Extension Integrity Check
   const isValidMime = ALLOWED_TYPES.includes(file.type);
   const isValidExt = ALLOWED_EXTENSIONS.includes(extension);
 
@@ -65,13 +39,12 @@ async function validateInstitutionalFile(file: File, userId: string, userEmail: 
       userId,
       userEmail,
       action: 'SECURITY_ALERT_UPLOAD_TYPE',
-      details: `Unauthorized file type rejected: "${file.name}" (MIME: ${file.type}, EXT: ${extension}). Rejecting potentially malicious content.`,
+      details: `Unauthorized file type rejected: "${file.name}".`,
       severity: 'HIGH'
     });
     throw new Error("Only PDF or image files are allowed.");
   }
 
-  // 3. Deobfuscation Detection (Double Extension Check)
   const nameParts = file.name.split('.');
   if (nameParts.length > 2) {
     const hiddenExtension = nameParts[nameParts.length - 2].toLowerCase();
@@ -80,17 +53,14 @@ async function validateInstitutionalFile(file: File, userId: string, userEmail: 
         userId,
         userEmail,
         action: 'SECURITY_ALERT_UPLOAD_OBFUSCATION',
-        details: `Obfuscation attempt detected! Blocked file with suspicious naming pattern: "${file.name}".`,
+        details: `Obfuscation attempt detected!`,
         severity: 'CRITICAL'
       });
-      throw new Error("File security validation failed: naming anomaly detected.");
+      throw new Error("File security validation failed.");
     }
   }
 }
 
-/**
- * Resolves the client IP address from request headers.
- */
 async function getClientIp() {
   try {
     const h = await headers();
@@ -100,9 +70,6 @@ async function getClientIp() {
   }
 }
 
-/**
- * Optimized Submission Fetcher.
- */
 export async function getSubmissions(filters?: {
   status?: KYCStatus[];
   branchId?: string;
@@ -208,88 +175,107 @@ export async function getSubmissions(filters?: {
   }
 }
 
-export async function getWorkflowCounts(params: { 
-  userId: string, 
-  branchName?: string, 
-  branches?: string[],
-  isSuperAdmin: boolean 
-}) {
-  const { branchName, branches, isSuperAdmin } = params;
+export async function createSubmission(formData: FormData) {
   const session = await getServerSession();
-  if (!session) return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
+  if (!session) return { success: false, error: "Unauthenticated" };
 
-  const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? {
-    branchName: { in: branches }
-  } : {
-    branchName: branchName || "NONE"
-  });
+  const isAuthorized = await verifyPermission('CASE_SUBMIT');
+  if (!isAuthorized) return { success: false, error: "Unauthorized." };
 
   try {
-    const [myCount, actionRequired, reviewQueue, resubmitted, escalated, exceptional, branchNodeCount] = await Promise.all([
-      prisma.kYC.count({ where: { createdById: params.userId, active: true } }),
-      prisma.kYC.count({ where: { createdById: params.userId, status: KYCStatus.ACTION_REQUIRED, active: true } }),
-      prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW] }, isExceptional: false, isResubmitted: false, active: true } }),
-      prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW] }, isResubmitted: true, active: true } }),
-      prisma.kYC.count({ where: { ...branchFilter, status: KYCStatus.ESCALATED, active: true } }),
-      prisma.kYC.count({ where: { ...branchFilter, isExceptional: true, status: { not: KYCStatus.APPROVED }, active: true } }),
-      prisma.kYC.count({ where: { branchName: branchName || "NONE", active: true } })
-    ]);
-
-    return {
-      mySubmissions: myCount,
-      actionRequired,
-      reviewQueue,
-      resubmitted,
-      escalated,
-      exceptional,
-      branchNode: branchNodeCount
+    const rawData = {
+      id: formData.get('id'),
+      customerName: formData.get('customerName'),
+      entityType: formData.get('entityType'),
+      branchName: formData.get('branchName'),
+      districtName: formData.get('districtName'),
+      remarks: formData.get('remarks'),
     };
-  } catch (error) {
-    return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
-  }
-}
 
-export async function getSubmissionById(id: string) {
-  try {
-    const kyc = await prisma.kYC.findUnique({
-      where: { id },
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          }
-        },
-        assignedTo: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          }
-        },
-        branch: { include: { district: true } },
-        memos: { orderBy: { createdAt: 'desc' } },
-        auditLogs: { orderBy: { timestamp: 'desc' } },
+    const validated = SubmissionSchema.parse(rawData);
+    const files = formData.getAll('files') as File[];
+    const types = formData.getAll('types') as string[];
+
+    if (files.length === 0) throw new Error("At least one document is required.");
+
+    const ipAddress = await getClientIp();
+
+    const district = await prisma.district.upsert({
+      where: { name: validated.districtName },
+      update: {},
+      create: { name: validated.districtName }
+    });
+
+    const branch = await prisma.branch.upsert({
+      where: { name: validated.branchName },
+      update: {},
+      create: { 
+        name: validated.branchName, 
+        code: validated.branchName.substring(0, 3).toUpperCase() + generateSecureNumericCode(10, 99),
+        districtId: district.id
       }
     });
-    if (!kyc) return null;
+
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
+
+    const memoData = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      await validateInstitutionalFile(file, session.id, session.email);
+
+      const type = types[i] || 'OTHER';
+      const timestamp = Date.now();
+      const storedFileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      const filePath = path.join(uploadDir, storedFileName);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(filePath, buffer);
+      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id });
+    }
+
+    const now = new Date();
+    const user = await prisma.user.findUnique({ where: { id: session.id } });
     
-    return {
-      ...kyc,
-      branchName: kyc.branch.name,
-      districtName: kyc.branch.district.name,
-      documents: kyc.memos.map(m => ({
-        id: m.id,
-        name: m.name || 'Document',
-        type: m.type || 'Other',
-        url: `/api/memos/${signDownloadToken(m.id)}`
-      }))
-    };
-  } catch (error) {
-    return null;
+    const kyc = await prisma.kYC.create({
+      data: {
+        id: validated.id,
+        customerName: validated.customerName,
+        branchId: branch.id,
+        branchName: validated.branchName,
+        createdById: session.id,
+        status: KYCStatus.SUBMITTED,
+        entityType: validated.entityType,
+        active: true,
+        checklistState: {},
+        exceptionalStatus: 'None',
+        commentHistory: validated.remarks ? [{
+          role: 'BRANCH_OFFICER',
+          performedBy: `${user?.firstName} ${user?.lastName}`,
+          timestamp: now.toISOString(),
+          comment: validated.remarks,
+          action: 'SUBMIT'
+        }] : [],
+        memos: { create: memoData }
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: { 
+        userId: session.id, 
+        kycId: kyc.id, 
+        action: AuditAction.CREATE, 
+        ipAddress,
+        details: `Initial submission for ${validated.customerName}.` 
+      }
+    });
+
+    revalidatePath('/');
+    return { success: true, kyc };
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: "Validation fault: " + error.errors[0].message };
+    }
+    return { success: false, error: error.message };
   }
 }
 
@@ -334,7 +320,7 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
       kycId: id,
       action: AuditAction.STATUS_CHANGE,
       ipAddress,
-      details: `Status changed from ${current.status} to ${status}`,
+      details: `Status changed to ${status}`,
       metadata: { remarks: remarks?.substring(0, 500) }
     }
   });
@@ -342,6 +328,80 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
   revalidatePath(`/submissions/${id}`);
   revalidatePath('/submissions');
   return kyc;
+}
+
+export async function getSubmissionById(id: string) {
+  try {
+    const kyc = await prisma.kYC.findUnique({
+      where: { id },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true, email: true } },
+        assignedTo: { select: { id: true, firstName: true, lastName: true, email: true } },
+        branch: { include: { district: true } },
+        memos: { orderBy: { createdAt: 'desc' } },
+        auditLogs: { orderBy: { timestamp: 'desc' } },
+      }
+    });
+    if (!kyc) return null;
+    return {
+      ...kyc,
+      branchName: kyc.branch.name,
+      districtName: kyc.branch.district.name,
+      documents: kyc.memos.map(m => ({
+        id: m.id,
+        name: m.name || 'Document',
+        type: m.type || 'Other',
+        url: `/api/memos/${signDownloadToken(m.id)}`
+      }))
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+export async function updateSubmissionChecklist(id: string, checklistState: any) {
+  const session = await getServerSession();
+  if (!session) return { success: false, error: "Unauthenticated" };
+  try {
+    const kyc = await prisma.kYC.update({ where: { id }, data: { checklistState } });
+    revalidatePath(`/submissions/${id}`);
+    return { success: true, kyc };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getWorkflowCounts(params: { 
+  userId: string, 
+  branchName?: string, 
+  branches?: string[],
+  isSuperAdmin: boolean 
+}) {
+  const { branchName, branches, isSuperAdmin } = params;
+  const session = await getServerSession();
+  if (!session) return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
+
+  const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? {
+    branchName: { in: branches }
+  } : {
+    branchName: branchName || "NONE"
+  });
+
+  try {
+    const [myCount, actionRequired, reviewQueue, resubmitted, escalated, exceptional, branchNodeCount] = await Promise.all([
+      prisma.kYC.count({ where: { createdById: params.userId, active: true } }),
+      prisma.kYC.count({ where: { createdById: params.userId, status: KYCStatus.ACTION_REQUIRED, active: true } }),
+      prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW] }, isExceptional: false, isResubmitted: false, active: true } }),
+      prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW] }, isResubmitted: true, active: true } }),
+      prisma.kYC.count({ where: { ...branchFilter, status: KYCStatus.ESCALATED, active: true } }),
+      prisma.kYC.count({ where: { ...branchFilter, isExceptional: true, status: { not: KYCStatus.APPROVED }, active: true } }),
+      prisma.kYC.count({ where: { branchName: branchName || "NONE", active: true } })
+    ]);
+
+    return { mySubmissions: myCount, actionRequired, reviewQueue, resubmitted, escalated, exceptional, branchNode: branchNodeCount };
+  } catch (error) {
+    return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
+  }
 }
 
 export async function processExceptionalStep(formData: FormData) {
@@ -355,7 +415,6 @@ export async function processExceptionalStep(formData: FormData) {
   const memoFile = formData.get('memo') as File | null;
 
   const now = new Date();
-  const ipAddress = await getClientIp();
   const current = await prisma.kYC.findUnique({ where: { id } });
   if (!current) throw new Error("KYC record not found");
 
@@ -368,198 +427,119 @@ export async function processExceptionalStep(formData: FormData) {
   let memoData = undefined;
   if (memoFile) {
     await validateInstitutionalFile(memoFile, session.id, session.email);
-
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
     try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-    
-    const timestamp = Date.now();
-    const storedFileName = `gov_${timestamp}_${memoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const storedFileName = `gov_${Date.now()}_${memoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
     const filePath = path.join(uploadDir, storedFileName);
     const buffer = Buffer.from(await memoFile.arrayBuffer());
     await fs.writeFile(filePath, buffer);
     
-    memoData = {
-      name: memoFile.name,
-      type: 'GOVERNANCE_MEMO',
-      fileUrl: `/uploads/${storedFileName}`,
-      uploadedById: session.id
-    };
-
-    await createAuditLog({
-      userId: session.id,
-      userEmail: session.email,
-      action: 'FILE_UPLOAD_AUTHORIZED',
-      details: `Governance memo "${memoFile.name}" successfully committed to case ${id}.`,
-      severity: 'LOW'
-    });
+    memoData = { name: memoFile.name, type: 'GOVERNANCE_MEMO', fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id };
   }
 
-  const newEntry = {
-    role: reviewer?.roles?.[0]?.role?.name || 'GOVERNANCE',
-    performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
-    timestamp: now.toISOString(),
-    comment: (remarks || actionLabel).substring(0, 2000),
-    action: actionLabel,
-    memoAttached: !!memoFile
-  };
+  const data: any = { exceptionalStatus: nextStatus, updatedAt: now, commentHistory: [...history, { role: reviewer?.roles?.[0]?.role?.name || 'GOVERNANCE', performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`, timestamp: now.toISOString(), comment: (remarks || actionLabel).substring(0, 2000), action: actionLabel, memoAttached: !!memoFile }], memos: memoData ? { create: memoData } : undefined };
+  if (nextStatus === 'COMPLETED') data.status = KYCStatus.APPROVED;
 
-  const data: any = {
-    exceptionalStatus: nextStatus,
-    updatedAt: now,
-    commentHistory: [...history, newEntry],
-    memos: memoData ? { create: memoData } : undefined
-  };
-
-  if (nextStatus === 'COMPLETED') {
-    data.status = KYCStatus.APPROVED;
-  }
-
-  const kyc = await prisma.kYC.update({
-    where: { id },
-    data
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: session.id,
-      kycId: id,
-      action: AuditAction.STATUS_CHANGE,
-      ipAddress,
-      details: `Exceptional flow transition: ${actionLabel}${memoFile ? ' (Memo Attached)' : ''}`,
-      metadata: { nextStatus, remarks: remarks?.substring(0, 500), hasMemo: !!memoFile }
-    }
-  });
-
+  const kyc = await prisma.kYC.update({ where: { id }, data });
   revalidatePath(`/submissions/${id}`);
   return kyc;
 }
 
-export async function updateSubmissionChecklist(id: string, checklistState: any) {
+export async function resubmitSubmission(formData: FormData) {
   const session = await getServerSession();
   if (!session) return { success: false, error: "Unauthenticated" };
 
   try {
-    const kyc = await prisma.kYC.update({
-      where: { id },
-      data: { checklistState }
-    });
-    revalidatePath(`/submissions/${id}`);
-    return { success: true, kyc };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
-export async function createSubmission(formData: FormData) {
-  const session = await getServerSession();
-  if (!session) return { success: false, error: "Unauthenticated" };
-
-  const isAuthorized = await verifyPermission('CASE_SUBMIT');
-  if (!isAuthorized) return { success: false, error: "Unauthorized: Missing submission capability." };
-
-  try {
-    // 1. Structural Validation
-    const rawData = {
-      id: formData.get('id'),
-      customerName: formData.get('customerName'),
-      entityType: formData.get('entityType'),
-      branchName: formData.get('branchName'),
-      districtName: formData.get('districtName'),
-      remarks: formData.get('remarks'),
-    };
-
-    const validated = CreateSubmissionSchema.parse(rawData);
+    const id = formData.get('id') as string;
+    const remarks = formData.get('remarks') as string;
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
 
-    if (files.length === 0) throw new Error("At least one document is required.");
+    if (files.length === 0) throw new Error("Correction assets required.");
 
-    const ipAddress = await getClientIp();
-
-    const district = await prisma.district.upsert({
-      where: { name: validated.districtName },
-      update: {},
-      create: { name: validated.districtName }
-    });
-
-    const branch = await prisma.branch.upsert({
-      where: { name: validated.branchName },
-      update: {},
-      create: { 
-        name: validated.branchName, 
-        code: validated.branchName.substring(0, 3).toUpperCase() + generateSecureNumericCode(10, 99),
-        districtId: district.id
-      }
-    });
+    const current = await prisma.kYC.findUnique({ where: { id } });
+    if (!current) throw new Error("Case not found");
 
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-
     const memoData = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       await validateInstitutionalFile(file, session.id, session.email);
-
-      const type = types[i] || 'OTHER';
-      const timestamp = Date.now();
-      const storedFileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      const storedFileName = `resubmit_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
       const filePath = path.join(uploadDir, storedFileName);
-      const buffer = Buffer.from(await file.arrayBuffer());
-      await fs.writeFile(filePath, buffer);
-      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id });
-      
-      await createAuditLog({
-        userId: session.id,
-        userEmail: session.email,
-        action: 'FILE_UPLOAD_AUTHORIZED',
-        details: `Initial document "${file.name}" (${type}) successfully committed to vault for case ${validated.id}.`,
-        severity: 'LOW'
-      });
+      await fs.writeFile(filePath, Buffer.from(await file.arrayBuffer()));
+      memoData.push({ name: file.name, type: types[i] || 'OTHER', fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id });
     }
 
     const now = new Date();
     const user = await prisma.user.findUnique({ where: { id: session.id } });
-    
-    const kyc = await prisma.kYC.create({
+    const updated = await prisma.kYC.update({
+      where: { id },
       data: {
-        id: validated.id,
-        customerName: validated.customerName,
-        branchId: branch.id,
-        branchName: validated.branchName,
-        createdById: session.id,
         status: KYCStatus.SUBMITTED,
-        entityType: validated.entityType,
-        active: true,
-        checklistState: {},
-        exceptionalStatus: 'None',
-        commentHistory: validated.remarks ? [{
+        isResubmitted: true,
+        updatedAt: now,
+        commentHistory: [...(current.commentHistory as any[]), {
           role: 'BRANCH_OFFICER',
           performedBy: `${user?.firstName} ${user?.lastName}`,
           timestamp: now.toISOString(),
-          comment: validated.remarks,
-          action: 'SUBMIT'
-        }] : [],
+          comment: remarks,
+          action: 'RESUBMIT'
+        }],
         memos: { create: memoData }
       }
     });
 
-    await prisma.auditLog.create({
-      data: { 
-        userId: session.id, 
-        kycId: kyc.id, 
-        action: AuditAction.CREATE, 
-        ipAddress,
-        details: `Initial submission for ${validated.customerName} with ${files.length} assets.` 
+    revalidatePath(`/submissions/${id}`);
+    return { success: true, kyc: updated };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function initiateExceptionalWorkflow(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) return { success: false, error: "Unauthenticated" };
+  const isAuthorized = await verifyPermission('TRIGGER_GOVERNANCE_FLOW');
+  if (!isAuthorized) return { success: false, error: "Unauthorized." };
+
+  try {
+    const kycId = formData.get('id') as string;
+    const reason = formData.get('reason') as string;
+    const justification = formData.get('justification') as string;
+    const remarks = formData.get('remarks') as string;
+    const initiatedBy = formData.get('initiatedBy') as string;
+    const memoFile = formData.get('memo') as File;
+
+    await validateInstitutionalFile(memoFile, session.id, session.email);
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    const storedFileName = `init_gov_${Date.now()}_${memoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    await fs.writeFile(path.join(uploadDir, storedFileName), Buffer.from(await memoFile.arrayBuffer()));
+
+    const current = await prisma.kYC.findUnique({ where: { id: kycId } });
+    const now = new Date();
+    const kyc = await prisma.kYC.update({
+      where: { id: kycId },
+      data: {
+        isExceptional: true,
+        exceptionalStatus: 'AWAITING_DISTRICT',
+        updatedAt: now,
+        commentHistory: [...(current?.commentHistory as any[] || []), {
+          role: 'BRANCH_MANAGER',
+          performedBy: initiatedBy,
+          timestamp: now.toISOString(),
+          comment: `Exception Initiated: ${reason}. ${remarks}`,
+          action: 'INITIATE_EXCEPTION',
+          memoAttached: true
+        }],
+        memos: { create: { name: memoFile.name, type: 'GOVERNANCE_MEMO', fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id } }
       }
     });
 
-    revalidatePath('/');
+    revalidatePath(`/submissions/${kycId}`);
     return { success: true, kyc };
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return { success: false, error: "Institutional validation fault: " + error.errors[0].message };
-    }
-    return { success: false, error: error.message || 'Institutional storage fault.' };
+    return { success: false, error: error.message };
   }
 }
 
@@ -572,7 +552,6 @@ export async function logBundleDownload(data: {
 }) {
   const session = await getServerSession();
   if (!session) return false;
-
   try {
     const ipAddress = await getClientIp();
     await prisma.auditLog.create({
@@ -581,196 +560,12 @@ export async function logBundleDownload(data: {
         kycId: data.submissionId,
         action: 'BUNDLE_DOWNLOAD',
         ipAddress,
-        details: `Case bundle exported by ${data.performedBy}. Source Node: ${data.sourceDistrict} / ${data.sourceBranch}. Bundle: ${data.bundleName}`,
-        metadata: {
-          bundleName: data.bundleName,
-          district: data.sourceDistrict,
-          branch: data.sourceBranch,
-          official: data.performedBy
-        }
+        details: `Bundle exported: ${data.bundleName}`,
+        metadata: { ...data }
       }
     });
     return true;
-  } catch (error) {
-    console.error('[Archiving Audit] Log Failure:', error);
+  } catch {
     return false;
-  }
-}
-
-export async function initiateExceptionalWorkflow(formData: FormData) {
-  const session = await getServerSession();
-  if (!session) return { success: false, error: "Unauthenticated" };
-
-  const isAuthorized = await verifyPermission('TRIGGER_GOVERNANCE_FLOW');
-  if (!isAuthorized) return { success: false, error: "Unauthorized: Missing governance trigger capability." };
-
-  try {
-    const kycId = formData.get('id') as string;
-    const reason = formData.get('reason') as string;
-    const justification = formData.get('justification') as string;
-    const remarks = formData.get('remarks') as string;
-    const initiatedBy = formData.get('initiatedBy') as string;
-    const memoFile = formData.get('memo') as File;
-
-    if (!kycId || !reason || !justification || !memoFile) {
-      throw new Error("Missing mandatory governance parameters.");
-    }
-
-    await validateInstitutionalFile(memoFile, session.id, session.email);
-
-    const ipAddress = await getClientIp();
-
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-    
-    const timestamp = Date.now();
-    const storedFileName = `init_gov_${timestamp}_${memoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    const filePath = path.join(uploadDir, storedFileName);
-    const buffer = Buffer.from(await memoFile.arrayBuffer());
-    await fs.writeFile(filePath, buffer);
-
-    const now = new Date();
-    const current = await prisma.kYC.findUnique({ where: { id: kycId } });
-    if (!current) throw new Error("Case not found");
-
-    const history = (current.commentHistory as any[]) || [];
-
-    const kyc = await prisma.kYC.update({
-      where: { id: kycId },
-      data: {
-        isExceptional: true,
-        exceptionalStatus: 'AWAITING_DISTRICT',
-        updatedAt: now,
-        commentHistory: [...history, {
-          role: 'BRANCH_MANAGER',
-          performedBy: initiatedBy,
-          timestamp: now.toISOString(),
-          comment: `Exception Initiated: ${reason}. Justification: ${justification}. ${remarks}`,
-          action: 'INITIATE_EXCEPTION',
-          memoAttached: true
-        }],
-        memos: {
-          create: {
-            name: memoFile.name,
-            type: 'GOVERNANCE_MEMO',
-            fileUrl: `/uploads/${storedFileName}`,
-            uploadedById: session.id
-          }
-        }
-      }
-    });
-
-    await createAuditLog({
-      userId: session.id,
-      userEmail: session.email,
-      action: 'FILE_UPLOAD_AUTHORIZED',
-      details: `Exceptional flow memo "${memoFile.name}" successfully committed for case ${kycId}.`,
-      severity: 'LOW'
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        userId: session.id,
-        kycId,
-        action: AuditAction.STATUS_CHANGE,
-        ipAddress,
-        details: `Governance exception initiated for ${kyc.customerName} with memo: ${memoFile.name}.`,
-        timestamp: new Date()
-      }
-    });
-
-    revalidatePath('/submissions/exceptional');
-    revalidatePath(`/submissions/${kycId}`);
-    return { success: true, kyc };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
-export async function resubmitSubmission(formData: FormData) {
-  const session = await getServerSession();
-  if (!session) return { success: false, error: "Unauthenticated" };
-
-  try {
-    const rawData = {
-      id: formData.get('id'),
-      remarks: formData.get('remarks'),
-    };
-
-    const validated = ResubmitSchema.parse(rawData);
-    const files = formData.getAll('files') as File[];
-    const types = formData.getAll('types') as string[];
-
-    if (files.length === 0) throw new Error("Correction assets are required for resubmission.");
-
-    const ipAddress = await getClientIp();
-
-    const current = await prisma.kYC.findUnique({ where: { id: validated.id } });
-    if (!current) throw new Error("Case not found");
-
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-
-    const memoData = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      await validateInstitutionalFile(file, session.id, session.email);
-
-      const type = types[i] || 'OTHER';
-      const timestamp = Date.now();
-      const storedFileName = `resubmit_${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-      const filePath = path.join(uploadDir, storedFileName);
-      const buffer = Buffer.from(await file.arrayBuffer());
-      await fs.writeFile(filePath, buffer);
-      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id });
-
-      await createAuditLog({
-        userId: session.id,
-        userEmail: session.email,
-        action: 'FILE_UPLOAD_AUTHORIZED',
-        details: `Correction document "${file.name}" (${type}) successfully committed for case ${validated.id}.`,
-        severity: 'LOW'
-      });
-    }
-
-    const now = new Date();
-    const history = (current.commentHistory as any[]) || [];
-    const user = await prisma.user.findUnique({ where: { id: session.id } });
-
-    const updated = await prisma.kYC.update({
-      where: { id: validated.id },
-      data: {
-        status: KYCStatus.SUBMITTED,
-        isResubmitted: true,
-        updatedAt: now,
-        commentHistory: [...history, {
-          role: 'BRANCH_OFFICER',
-          performedBy: `${user?.firstName} ${user?.lastName}`,
-          timestamp: now.toISOString(),
-          comment: validated.remarks,
-          action: 'RESUBMIT'
-        }],
-        memos: { create: memoData }
-      }
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        userId: session.id,
-        kycId: validated.id,
-        action: AuditAction.STATUS_CHANGE,
-        ipAddress,
-        details: `Case resubmitted with ${files.length} new/corrected assets.`,
-        timestamp: new Date()
-      }
-    });
-
-    revalidatePath(`/submissions/${validated.id}`);
-    return { success: true, kyc: updated };
-  } catch (e: any) {
-    if (e instanceof z.ZodError) {
-      return { success: false, error: "Institutional validation fault: " + e.errors[0].message };
-    }
-    return { success: false, error: e.message };
   }
 }
