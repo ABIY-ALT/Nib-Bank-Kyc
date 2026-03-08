@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -7,6 +8,21 @@ import bcrypt from 'bcryptjs';
 import { generateSecurePassword } from '@/lib/security';
 import { getServerSession } from './auth-server';
 import { createAuditLog } from './audit';
+import { z } from 'zod';
+
+/**
+ * Institutional Validation Schemas.
+ */
+const UserProvisionSchema = z.object({
+  id: z.string().optional(),
+  firstName: z.string().min(2).max(100),
+  lastName: z.string().min(2).max(100),
+  email: z.string().email().endsWith('@nibbank.com.et'),
+  phoneNumber: z.string().max(20).optional(),
+  role: z.string().min(1),
+  status: z.nativeEnum(UserStatus),
+  branchId: z.string().nullable().optional(),
+});
 
 /**
  * Server-side RBAC Check.
@@ -30,6 +46,10 @@ export async function resetUserPassword(email: string, authorizerId: string) {
 
   try {
     const normalizedEmail = email.toLowerCase().trim();
+    if (!normalizedEmail.endsWith('@nibbank.com.et')) {
+      throw new Error("Target identity is outside the institutional domain.");
+    }
+
     const user = await prisma.user.findUnique({ 
       where: { email: normalizedEmail } 
     });
@@ -167,7 +187,9 @@ export async function provisionUser(data: {
   }
 
   try {
-    const isNewUser = !data.id;
+    // 1. Validation
+    const validated = UserProvisionSchema.parse(data);
+    const isNewUser = !validated.id;
     let tempPass = data.password;
     
     if (isNewUser && !tempPass) {
@@ -176,7 +198,7 @@ export async function provisionUser(data: {
 
     const result = await prisma.$transaction(async (tx) => {
       const existingUser = await tx.user.findFirst({
-        where: data.id ? { id: data.id } : { email: data.email.toLowerCase() },
+        where: validated.id ? { id: validated.id } : { email: validated.email.toLowerCase() },
         include: { 
           branch: true,
           roles: { include: { role: true } }
@@ -193,12 +215,12 @@ export async function provisionUser(data: {
         user = await tx.user.update({
           where: { id: existingUser.id },
           data: { 
-            firstName: data.firstName,
-            lastName: data.lastName,
-            email: data.email.toLowerCase(),
-            phoneNumber: data.phoneNumber,
-            branch: data.branchId ? { connect: { id: data.branchId } } : { disconnect: true },
-            status: data.status,
+            firstName: validated.firstName,
+            lastName: validated.lastName,
+            email: validated.email.toLowerCase(),
+            phoneNumber: validated.phoneNumber,
+            branch: validated.branchId ? { connect: { id: validated.branchId } } : { disconnect: true },
+            status: validated.status,
             password: hashedPassword,
             needsPasswordChange: hashedPassword ? true : undefined,
             updatedAt: new Date() // Force logout on profile modification for security
@@ -213,13 +235,13 @@ export async function provisionUser(data: {
 
         user = await tx.user.create({
           data: { 
-            email: data.email.toLowerCase(),
+            email: validated.email.toLowerCase(),
             password: hashedPassword,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            phoneNumber: data.phoneNumber,
-            branch: data.branchId ? { connect: { id: data.branchId } } : undefined,
-            status: data.status,
+            firstName: validated.firstName,
+            lastName: validated.lastName,
+            phoneNumber: validated.phoneNumber,
+            branch: validated.branchId ? { connect: { id: validated.branchId } } : undefined,
+            status: validated.status,
             needsPasswordChange: true
           }
         });
@@ -257,6 +279,9 @@ export async function provisionUser(data: {
     };
   } catch (error: any) {
     console.error('[Vault Provisioning] Error:', error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: "Validation fault: " + error.errors[0].message };
+    }
     return { success: false, error: error.message || 'Institutional registration fault.' };
   }
 }

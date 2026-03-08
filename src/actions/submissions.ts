@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -9,6 +10,7 @@ import path from 'path';
 import { signDownloadToken, generateSecureNumericCode } from '@/lib/security';
 import { getServerSession, verifyPermission } from './auth-server';
 import { createAuditLog } from './audit';
+import { z } from 'zod';
 
 /**
  * Institutional Validation Constants.
@@ -17,6 +19,23 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 const ALLOWED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png'];
 const DANGEROUS_EXTENSIONS = ['exe', 'js', 'sh', 'bat', 'com', 'scr', 'vbs', 'msi', 'ps1', 'php', 'py', 'rb'];
+
+/**
+ * Institutional Zod Schemas for Input Validation.
+ */
+const CreateSubmissionSchema = z.object({
+  id: z.string().min(5).max(50),
+  customerName: z.string().min(2).max(255),
+  entityType: z.string().min(1).max(100),
+  branchName: z.string().min(1).max(100),
+  districtName: z.string().min(1).max(100),
+  remarks: z.string().max(2000).optional(),
+});
+
+const ResubmitSchema = z.object({
+  id: z.string().min(5),
+  remarks: z.string().min(1).max(2000),
+});
 
 /**
  * Hardened Server-Side Asset Validation.
@@ -293,7 +312,7 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
     role: reviewer?.roles?.[0]?.role?.name || 'SYSTEM',
     performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
     timestamp: now.toISOString(),
-    comment: remarks || `Status updated to ${status}`,
+    comment: (remarks || `Status updated to ${status}`).substring(0, 2000),
     action: status
   };
 
@@ -316,7 +335,7 @@ export async function updateSubmissionStatus(id: string, status: KYCStatus, revi
       action: AuditAction.STATUS_CHANGE,
       ipAddress,
       details: `Status changed from ${current.status} to ${status}`,
-      metadata: { remarks }
+      metadata: { remarks: remarks?.substring(0, 500) }
     }
   });
 
@@ -379,7 +398,7 @@ export async function processExceptionalStep(formData: FormData) {
     role: reviewer?.roles?.[0]?.role?.name || 'GOVERNANCE',
     performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
     timestamp: now.toISOString(),
-    comment: remarks || actionLabel,
+    comment: (remarks || actionLabel).substring(0, 2000),
     action: actionLabel,
     memoAttached: !!memoFile
   };
@@ -407,7 +426,7 @@ export async function processExceptionalStep(formData: FormData) {
       action: AuditAction.STATUS_CHANGE,
       ipAddress,
       details: `Exceptional flow transition: ${actionLabel}${memoFile ? ' (Memo Attached)' : ''}`,
-      metadata: { nextStatus, remarks, hasMemo: !!memoFile }
+      metadata: { nextStatus, remarks: remarks?.substring(0, 500), hasMemo: !!memoFile }
     }
   });
 
@@ -439,29 +458,36 @@ export async function createSubmission(formData: FormData) {
   if (!isAuthorized) return { success: false, error: "Unauthorized: Missing submission capability." };
 
   try {
-    const id = formData.get('id') as string;
-    const customerName = formData.get('customerName') as string;
-    const entityType = formData.get('entityType') as string;
-    const branchName = formData.get('branchName') as string;
-    const districtName = formData.get('districtName') as string;
-    const remarks = formData.get('remarks') as string;
+    // 1. Structural Validation
+    const rawData = {
+      id: formData.get('id'),
+      customerName: formData.get('customerName'),
+      entityType: formData.get('entityType'),
+      branchName: formData.get('branchName'),
+      districtName: formData.get('districtName'),
+      remarks: formData.get('remarks'),
+    };
+
+    const validated = CreateSubmissionSchema.parse(rawData);
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
+
+    if (files.length === 0) throw new Error("At least one document is required.");
 
     const ipAddress = await getClientIp();
 
     const district = await prisma.district.upsert({
-      where: { name: districtName },
+      where: { name: validated.districtName },
       update: {},
-      create: { name: districtName }
+      create: { name: validated.districtName }
     });
 
     const branch = await prisma.branch.upsert({
-      where: { name: branchName },
+      where: { name: validated.branchName },
       update: {},
       create: { 
-        name: branchName, 
-        code: branchName.substring(0, 3).toUpperCase() + generateSecureNumericCode(10, 99),
+        name: validated.branchName, 
+        code: validated.branchName.substring(0, 3).toUpperCase() + generateSecureNumericCode(10, 99),
         districtId: district.id
       }
     });
@@ -474,7 +500,7 @@ export async function createSubmission(formData: FormData) {
       const file = files[i];
       await validateInstitutionalFile(file, session.id, session.email);
 
-      const type = types[i];
+      const type = types[i] || 'OTHER';
       const timestamp = Date.now();
       const storedFileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
       const filePath = path.join(uploadDir, storedFileName);
@@ -486,7 +512,7 @@ export async function createSubmission(formData: FormData) {
         userId: session.id,
         userEmail: session.email,
         action: 'FILE_UPLOAD_AUTHORIZED',
-        details: `Initial document "${file.name}" (${type}) successfully committed to vault for case ${id}.`,
+        details: `Initial document "${file.name}" (${type}) successfully committed to vault for case ${validated.id}.`,
         severity: 'LOW'
       });
     }
@@ -496,21 +522,21 @@ export async function createSubmission(formData: FormData) {
     
     const kyc = await prisma.kYC.create({
       data: {
-        id,
-        customerName,
+        id: validated.id,
+        customerName: validated.customerName,
         branchId: branch.id,
-        branchName: branchName,
+        branchName: validated.branchName,
         createdById: session.id,
         status: KYCStatus.SUBMITTED,
-        entityType,
+        entityType: validated.entityType,
         active: true,
         checklistState: {},
         exceptionalStatus: 'None',
-        commentHistory: remarks ? [{
+        commentHistory: validated.remarks ? [{
           role: 'BRANCH_OFFICER',
           performedBy: `${user?.firstName} ${user?.lastName}`,
           timestamp: now.toISOString(),
-          comment: remarks,
+          comment: validated.remarks,
           action: 'SUBMIT'
         }] : [],
         memos: { create: memoData }
@@ -523,13 +549,16 @@ export async function createSubmission(formData: FormData) {
         kycId: kyc.id, 
         action: AuditAction.CREATE, 
         ipAddress,
-        details: `Initial submission for ${customerName} with ${files.length} assets.` 
+        details: `Initial submission for ${validated.customerName} with ${files.length} assets.` 
       }
     });
 
     revalidatePath('/');
     return { success: true, kyc };
   } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: "Institutional validation fault: " + error.errors[0].message };
+    }
     return { success: false, error: error.message || 'Institutional storage fault.' };
   }
 }
@@ -582,6 +611,10 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     const remarks = formData.get('remarks') as string;
     const initiatedBy = formData.get('initiatedBy') as string;
     const memoFile = formData.get('memo') as File;
+
+    if (!kycId || !reason || !justification || !memoFile) {
+      throw new Error("Missing mandatory governance parameters.");
+    }
 
     await validateInstitutionalFile(memoFile, session.id, session.email);
 
@@ -659,14 +692,20 @@ export async function resubmitSubmission(formData: FormData) {
   if (!session) return { success: false, error: "Unauthenticated" };
 
   try {
-    const id = formData.get('id') as string;
-    const remarks = formData.get('remarks') as string;
+    const rawData = {
+      id: formData.get('id'),
+      remarks: formData.get('remarks'),
+    };
+
+    const validated = ResubmitSchema.parse(rawData);
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
 
+    if (files.length === 0) throw new Error("Correction assets are required for resubmission.");
+
     const ipAddress = await getClientIp();
 
-    const current = await prisma.kYC.findUnique({ where: { id } });
+    const current = await prisma.kYC.findUnique({ where: { id: validated.id } });
     if (!current) throw new Error("Case not found");
 
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
@@ -677,7 +716,7 @@ export async function resubmitSubmission(formData: FormData) {
       const file = files[i];
       await validateInstitutionalFile(file, session.id, session.email);
 
-      const type = types[i];
+      const type = types[i] || 'OTHER';
       const timestamp = Date.now();
       const storedFileName = `resubmit_${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
       const filePath = path.join(uploadDir, storedFileName);
@@ -689,7 +728,7 @@ export async function resubmitSubmission(formData: FormData) {
         userId: session.id,
         userEmail: session.email,
         action: 'FILE_UPLOAD_AUTHORIZED',
-        details: `Correction document "${file.name}" (${type}) successfully committed for case ${id}.`,
+        details: `Correction document "${file.name}" (${type}) successfully committed for case ${validated.id}.`,
         severity: 'LOW'
       });
     }
@@ -699,7 +738,7 @@ export async function resubmitSubmission(formData: FormData) {
     const user = await prisma.user.findUnique({ where: { id: session.id } });
 
     const updated = await prisma.kYC.update({
-      where: { id },
+      where: { id: validated.id },
       data: {
         status: KYCStatus.SUBMITTED,
         isResubmitted: true,
@@ -708,7 +747,7 @@ export async function resubmitSubmission(formData: FormData) {
           role: 'BRANCH_OFFICER',
           performedBy: `${user?.firstName} ${user?.lastName}`,
           timestamp: now.toISOString(),
-          comment: remarks,
+          comment: validated.remarks,
           action: 'RESUBMIT'
         }],
         memos: { create: memoData }
@@ -718,7 +757,7 @@ export async function resubmitSubmission(formData: FormData) {
     await prisma.auditLog.create({
       data: {
         userId: session.id,
-        kycId: id,
+        kycId: validated.id,
         action: AuditAction.STATUS_CHANGE,
         ipAddress,
         details: `Case resubmitted with ${files.length} new/corrected assets.`,
@@ -726,9 +765,12 @@ export async function resubmitSubmission(formData: FormData) {
       }
     });
 
-    revalidatePath(`/submissions/${id}`);
+    revalidatePath(`/submissions/${validated.id}`);
     return { success: true, kyc: updated };
   } catch (e: any) {
+    if (e instanceof z.ZodError) {
+      return { success: false, error: "Institutional validation fault: " + e.errors[0].message };
+    }
     return { success: false, error: e.message };
   }
 }
