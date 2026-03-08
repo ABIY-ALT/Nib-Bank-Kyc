@@ -23,7 +23,6 @@ import {
   Eye,
   EyeOff
 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { isValidInternalRedirect } from '@/lib/url-security';
 
@@ -86,10 +85,6 @@ function LoginContent() {
   return (
     <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in-95 duration-500">
       <div className="flex flex-col items-center text-center space-y-2 mb-4">
-        <div className="p-4 bg-primary/5 rounded-2xl mb-2 flex items-center justify-center">
-          <ShieldCheck className="w-10 h-10 text-primary" />
-        </div>
-        <h1 className="text-4xl font-black text-slate-900 font-headline tracking-tight">Nib Bank KYC</h1>
         <p className="text-slate-500 text-lg font-medium">Secure institutional access portal.</p>
       </div>
 
@@ -97,7 +92,7 @@ function LoginContent() {
         <CardHeader className="bg-white border-b p-8 py-6">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl font-black flex items-center gap-2 text-slate-800">
-              <Building2 className="w-5 h-5 text-primary" />
+              <Building2 className="w-5 h-5 text-[#B89334]" />
               Staff Login
             </CardTitle>
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Secure</span>
@@ -107,9 +102,13 @@ function LoginContent() {
           <form onSubmit={handleSubmit} className="space-y-8">
             {error && (
               <div className="animate-in slide-in-from-top-2">
-                <div className="flex items-center gap-3 p-4 rounded-xl border border-red-200 bg-white">
-                  <AlertCircle className="h-5 w-5 text-red-500 shrink-0" />
-                  <span className="text-sm font-bold text-red-500">{error}</span>
+                <div className="flex items-start gap-4 p-5 rounded-2xl border border-red-200 bg-red-50/30">
+                  <div className="p-2 bg-white rounded-full shadow-sm mt-0.5">
+                    <AlertCircle className="h-5 w-5 text-red-500 shrink-0" />
+                  </div>
+                  <span className="text-sm font-bold text-red-600 leading-relaxed">
+                    {error}
+                  </span>
                 </div>
               </div>
             )}
@@ -121,7 +120,7 @@ function LoginContent() {
                 <Input 
                   type="email" 
                   placeholder="admin.user@nibbank.com.et" 
-                  className="pl-12 h-14 bg-blue-50/30 border-slate-200 font-black text-slate-900 rounded-xl focus-visible:ring-primary/20 transition-all"
+                  className="pl-12 h-14 bg-[#EBF2FF] border-slate-100 font-black text-slate-900 rounded-xl focus-visible:ring-[#B89334]/20 transition-all shadow-inner"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -136,7 +135,7 @@ function LoginContent() {
                 <Input 
                   type={showPassword ? "text" : "password"} 
                   placeholder="••••••••" 
-                  className="pl-12 pr-12 h-14 bg-white border-2 border-primary/20 focus:border-primary font-black text-slate-900 rounded-xl focus-visible:ring-primary/20 transition-all"
+                  className="pl-12 pr-12 h-14 bg-white border-2 border-[#B89334]/40 focus:border-[#B89334] font-black text-slate-900 rounded-xl focus-visible:ring-[#B89334]/20 transition-all"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -153,12 +152,12 @@ function LoginContent() {
 
             <Button 
               type="submit" 
-              className="w-full h-16 bg-primary hover:bg-primary/90 text-white font-black text-xl rounded-xl shadow-xl shadow-primary/20 gap-2 transition-all active:scale-[0.98]"
+              className="w-full h-16 bg-[#B89334] hover:bg-[#A6822D] text-white font-black text-2xl rounded-xl shadow-xl shadow-[#B89334]/20 gap-2 transition-all active:scale-[0.98]"
               disabled={loading}
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : null}
               Login
-              <ChevronRight className="w-6 h-6 stroke-[3px]" />
+              <ChevronRight className="w-6 h-6 stroke-[4px]" />
             </Button>
           </form>
         </CardContent>
