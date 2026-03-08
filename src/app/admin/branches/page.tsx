@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -299,30 +300,30 @@ export default function BranchesDistrictsPage() {
 
         {/* BRANCH PANEL */}
         <Card className="lg:col-span-8 shadow-2xl overflow-hidden border-slate-200 rounded-[2.5rem] bg-white flex flex-col h-[700px]">
-          <CardHeader className="bg-slate-900 text-white border-b py-8 px-10">
+          <CardHeader className="bg-primary text-white border-b py-8 px-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-1">
-                <CardTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
-                  <Building2 className="w-6 h-6 text-primary" /> 
+                <CardTitle className="text-2xl font-black tracking-tight flex items-center gap-3 text-white">
+                  <Building2 className="w-6 h-6 text-white" /> 
                   {activeDistrict ? `${activeDistrict.name} Branches` : 'Global Branch List'}
                 </CardTitle>
-                <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
+                <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-[0.2em]">
                   {filteredBranches.length} Nodes Discovered in Current Filter
                 </CardDescription>
               </div>
               
               <div className="relative w-full md:w-72">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
                 <Input 
                   placeholder="Search branch or code..." 
-                  className="pl-11 h-12 bg-white/5 border-white/10 text-white font-bold rounded-2xl focus-visible:ring-primary/20 transition-all shadow-inner"
+                  className="pl-11 h-12 bg-white/10 border-white/20 text-white placeholder:text-white/40 font-bold rounded-2xl focus-visible:ring-white/20 transition-all shadow-inner"
                   value={branchSearchQuery}
                   onChange={(e) => setBranchSearchQuery(e.target.value)}
                 />
                 {branchSearchQuery && (
                   <button 
                     onClick={() => setBranchSearchQuery("")}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -394,7 +395,7 @@ export default function BranchesDistrictsPage() {
       <Dialog open={isBranchDialogOpen} onOpenChange={setIsBranchDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
           <DialogHeader className="p-8 bg-primary text-white">
-            <DialogTitle className="text-2xl font-black flex items-center gap-3 tracking-tight">
+            <DialogTitle className="text-2xl font-black flex items-center gap-3 tracking-tight text-white">
               <div className="p-2 bg-white/20 rounded-xl"><Building2 className="w-6 h-6 text-white" /></div>
               {editingNode ? 'Modify Branch' : 'Register Branch'}
             </DialogTitle>
@@ -429,7 +430,7 @@ export default function BranchesDistrictsPage() {
       <Dialog open={isDistrictDialogOpen} onOpenChange={setIsDistrictDialogOpen}>
         <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
           <DialogHeader className="p-8 bg-primary text-white">
-            <DialogTitle className="text-2xl font-black flex items-center gap-3 tracking-tight">
+            <DialogTitle className="text-2xl font-black flex items-center gap-3 tracking-tight text-white">
               <div className="p-2 bg-white/20 rounded-xl"><Globe className="w-6 h-6 text-white" /></div>
               {editingNode ? 'Update Region' : 'Establish District'}
             </DialogTitle>

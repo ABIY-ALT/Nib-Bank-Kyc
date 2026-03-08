@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -233,17 +234,17 @@ export default function StaffAssignmentsPage() {
           {!selectedBranch ? (
             <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
               <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
-                <CardHeader className="bg-slate-900 text-white border-b flex flex-row items-center justify-between p-6">
+                <CardHeader className="bg-primary text-white border-b flex flex-row items-center justify-between p-6">
                   <div className="flex items-center gap-4">
-                    <div className="p-3 bg-primary/20 rounded-2xl shadow-lg shadow-black/20">
-                      <ShieldCheck className="w-6 h-6 text-primary" />
+                    <div className="p-3 bg-white/20 rounded-2xl shadow-lg shadow-black/20">
+                      <ShieldCheck className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <CardTitle className="text-2xl font-black tracking-tight">Global Coverage Matrix</CardTitle>
-                      <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Inventory of active specialist portfolios</CardDescription>
+                      <CardTitle className="text-2xl font-black tracking-tight text-white">Global Coverage Matrix</CardTitle>
+                      <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Inventory of active specialist portfolios</CardDescription>
                     </div>
                   </div>
-                  <Badge variant="outline" className="bg-white/5 border-primary/30 text-primary font-black px-4 py-1.5 h-9">
+                  <Badge variant="outline" className="bg-white/20 border-white/20 text-white font-black px-4 py-1.5 h-9">
                     {allMappedSpecialists.length} Specialists Active
                   </Badge>
                 </CardHeader>

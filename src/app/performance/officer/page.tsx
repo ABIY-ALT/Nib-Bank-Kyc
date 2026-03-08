@@ -460,12 +460,12 @@ export default function KYCOperationsMonitoringPage() {
       <div className="animate-in slide-in-from-bottom-4 duration-500">
         {viewMode === 'officers' && (
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
-            <CardHeader className="bg-slate-900 text-white p-8 border-b flex flex-row items-center justify-between">
+            <CardHeader className="bg-primary text-white p-8 border-b flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-2xl font-black flex items-center gap-3"><Users className="w-6 h-6 text-primary" /> Specialist Productivity Index</CardTitle>
-                <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Authorized personnel across regional nodes</CardDescription>
+                <CardTitle className="text-2xl font-black flex items-center gap-3"><Users className="w-6 h-6 text-white" /> Specialist Productivity Index</CardTitle>
+                <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Authorized personnel across regional nodes</CardDescription>
               </div>
-              <Badge variant="outline" className="border-primary/30 text-primary font-black px-4 py-1.5 h-9">
+              <Badge variant="outline" className="bg-white/20 border-white/20 text-white font-black px-4 py-1.5 h-9">
                 {processedOfficers.length} Specialists Discovered
               </Badge>
             </CardHeader>
@@ -522,9 +522,9 @@ export default function KYCOperationsMonitoringPage() {
           <div className="grid gap-8 lg:grid-cols-3">
             <div className="lg:col-span-2">
               <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
-                <CardHeader className="bg-slate-900 text-white p-8">
+                <CardHeader className="bg-primary text-white p-8">
                   <CardTitle className="text-2xl font-black">Authorized Jurisdiction Portfolio</CardTitle>
-                  <CardDescription className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Specific branch mappings for {selectedOfficer.firstName} {selectedOfficer.lastName}</CardDescription>
+                  <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Specific branch mappings for {selectedOfficer.firstName} {selectedOfficer.lastName}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
@@ -561,7 +561,7 @@ export default function KYCOperationsMonitoringPage() {
             </div>
             <div className="space-y-8">
               <Card className="shadow-xl border-slate-200 overflow-hidden rounded-[2rem] bg-primary/5 border-l-4 border-l-primary">
-                <CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-lg font-black uppercase tracking-widest">Specialist Profile</CardTitle></CardHeader>
+                <CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-lg font-black uppercase tracking-widest text-white">Specialist Profile</CardTitle></CardHeader>
                 <CardContent className="p-8 space-y-6">
                   <div className="flex items-center gap-5">
                     <div className="w-16 h-16 rounded-3xl bg-white flex items-center justify-center font-black text-2xl text-primary shadow-xl ring-4 ring-white">{selectedOfficer.firstName.charAt(0)}</div>
@@ -582,12 +582,12 @@ export default function KYCOperationsMonitoringPage() {
 
         {viewMode === 'cases' && (
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[3rem] bg-white">
-            <CardHeader className="bg-slate-900 text-white p-10 flex flex-row items-center justify-between">
+            <CardHeader className="bg-primary text-white p-10 flex flex-row items-center justify-between">
               <div className="flex items-center gap-6">
-                <div className="p-4 bg-primary/20 rounded-3xl"><Building2 className="w-8 h-8 text-primary" /></div>
+                <div className="p-4 bg-white/20 rounded-3xl"><Building2 className="w-8 h-8 text-white" /></div>
                 <div>
-                  <CardTitle className="text-3xl font-black tracking-tight">Institutional Audit: {selectedBranch}</CardTitle>
-                  <CardDescription className="text-slate-400 font-bold text-[11px] uppercase tracking-widest mt-2 flex items-center gap-2"><Eye className="w-3.5 h-3.5" /> View-only administrative oversight mode</CardDescription>
+                  <CardTitle className="text-3xl font-black tracking-tight text-white">Institutional Audit: {selectedBranch}</CardTitle>
+                  <CardDescription className="text-white/70 font-bold text-[11px] uppercase tracking-widest mt-2 flex items-center gap-2"><Eye className="w-3.5 h-3.5" /> View-only administrative oversight mode</CardDescription>
                 </div>
               </div>
               <Button variant="outline" onClick={() => setViewMode('branches')} className="bg-white/10 border-white/20 text-white font-black rounded-xl h-12 px-8 hover:bg-white/20"><ChevronLeft className="w-4 h-4 mr-2" /> Return to Portfolio</Button>
@@ -679,7 +679,7 @@ export default function KYCOperationsMonitoringPage() {
             <div className="flex items-center gap-4">
               <div className="p-3 bg-white/20 rounded-2xl"><TrendingUp className="w-6 h-6 text-white" /></div>
               <div>
-                <DialogTitle className="text-2xl font-black leading-tight">Performance Summary</DialogTitle>
+                <DialogTitle className="text-2xl font-black leading-tight text-white">Performance Summary</DialogTitle>
                 <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Weighted specialist profile</DialogDescription>
               </div>
             </div>
