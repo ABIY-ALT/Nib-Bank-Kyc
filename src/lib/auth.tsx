@@ -48,15 +48,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          setUser(null);
-          setLoading(false);
-          return;
-        }
-
-        const data = await res.json().catch(() => null);
-        if (data && data.user) {
-          setUser(data.user);
+        const text = await res.text();
+        
+        if (text && text.trim() && contentType && contentType.includes("application/json")) {
+          try {
+            const data = JSON.parse(text);
+            if (data && data.user) {
+              setUser(data.user);
+            } else {
+              setUser(null);
+            }
+          } catch (e) {
+            console.error("[Auth] Session JSON parse failure:", e);
+            setUser(null);
+          }
         } else {
           setUser(null);
         }
@@ -87,11 +92,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const text = await res.text();
     let data: any = null;
 
-    if (text && contentType && contentType.includes("application/json")) {
+    if (text && text.trim() && contentType && contentType.includes("application/json")) {
       try {
         data = JSON.parse(text);
       } catch (e) {
-        // Fallback if JSON is malformed
+        console.error("[Auth] Login JSON parse failure:", e);
       }
     }
 

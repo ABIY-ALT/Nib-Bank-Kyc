@@ -5,6 +5,7 @@
  * - Timeout enforcement (30s)
  * - SSRF Prevention (Private IP blocking)
  * - Automatic Security Headers
+ * - Resilient JSON Parsing (prevents Unexpected end of JSON input)
  */
 
 const MAX_CONTENT_LENGTH = 10 * 1024 * 1024; // 10MB
@@ -98,14 +99,18 @@ export class InstitutionalHttpClient {
       const response = await fetch(url, { ...options, headers, signal });
 
       const contentType = response.headers.get('content-type');
+      const text = await response.text();
       let data: T;
 
-      if (contentType?.includes('application/json')) {
-        data = await response.json();
-      } else if (contentType?.includes('text')) {
-        data = (await response.text()) as T;
+      if (text && text.trim() && contentType?.includes('application/json')) {
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          console.error('[Institutional HTTP Client] Malformed JSON response:', url);
+          data = text as T;
+        }
       } else {
-        data = (await response.blob()) as T;
+        data = text as T;
       }
 
       const isValid = validateStatus(response.status);
