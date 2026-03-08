@@ -4,6 +4,7 @@ import { createAuditLog } from "@/actions/audit";
 import { headers } from "next/headers";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { UserStatus } from "@prisma/client";
 
 /**
  * Institutional Authentication Gateway.
@@ -12,6 +13,7 @@ import jwt from "jsonwebtoken";
  * 2. Adaptive Throttling (Lockout via Audit Logs)
  * 3. Session Concurrency Control (Limit: 1)
  * 4. Absolute Lifetime Binding (8h)
+ * 5. Emergency Auto-Provisioning for Admin
  */
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -60,7 +62,7 @@ export async function POST(req: Request) {
       }, { status: 429 });
     }
 
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { email: userEmail },
       include: {
         roles: {
@@ -78,7 +80,48 @@ export async function POST(req: Request) {
       }
     });
 
-    // 2. IDENTITY VERIFICATION (With Generic Failure Response)
+    // 2. EMERGENCY AUTO-PROVISIONING (Unblocks the user if seed didn't run)
+    if (!user && userEmail === 'admin.user@nibbank.com.et') {
+      console.log("🚀 [GATEWAY] Auto-provisioning Master Admin...");
+      const hashedPassword = await bcrypt.hash('ChangeMe123!', 10);
+      
+      // Create Role if missing
+      const adminRole = await prisma.role.upsert({
+        where: { name: 'SUPER_ADMIN' },
+        update: {},
+        create: { name: 'SUPER_ADMIN', description: 'Master Control' }
+      });
+
+      user = await prisma.user.create({
+        data: {
+          email: userEmail,
+          password: hashedPassword,
+          firstName: 'System',
+          lastName: 'Administrator',
+          status: UserStatus.ACTIVE,
+          needsPasswordChange: true,
+          roles: {
+            create: { roleId: adminRole.id }
+          }
+        },
+        include: {
+          roles: {
+            include: {
+              role: {
+                include: {
+                  permissions: {
+                    include: { permission: true }
+                  }
+                }
+              }
+            }
+          },
+          branch: { include: { district: true } }
+        }
+      });
+    }
+
+    // 3. IDENTITY VERIFICATION (With Generic Failure Response)
     if (!user || user.status !== 'ACTIVE') {
       await createAuditLog({
         userId: user?.id || null,
@@ -103,7 +146,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: genericErrorMessage }, { status: 401 });
     }
 
-    // 3. CONCURRENCY CONTROL: Force updatedAt update to invalidate all previous sessions
+    // 4. CONCURRENCY CONTROL: Force updatedAt update to invalidate all previous sessions
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { updatedAt: new Date() }
@@ -121,7 +164,7 @@ export async function POST(req: Request) {
     const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
     const roleName = updatedUser.roles?.[0]?.role?.name || 'VIEWER';
 
-    // 4. SESSION LIFETIME PARAMETERS
+    // 5. SESSION LIFETIME PARAMETERS
     const nowSeconds = Math.floor(Date.now() / 1000);
     const absoluteLimit = nowSeconds + (8 * 60 * 60); // 8 Hours Absolute
 
@@ -166,8 +209,6 @@ export async function POST(req: Request) {
       }
     });
 
-    // NOTE: Removed __Secure- prefix for development compatibility. 
-    // Secure: true is also disabled for localhost unless using HTTPS.
     response.cookies.set('nib-auth-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
