@@ -21,7 +21,8 @@ import {
   Building2,
   ChevronRight,
   Eye,
-  EyeOff
+  EyeOff,
+  Landmark
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isValidInternalRedirect } from '@/lib/url-security';
@@ -84,7 +85,14 @@ function LoginContent() {
 
   return (
     <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in-95 duration-500">
-      <div className="flex flex-col items-center text-center space-y-2 mb-4">
+      {/* INSTITUTIONAL LOGO SECTION */}
+      <div className="flex flex-col items-center text-center space-y-4 mb-2">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-primary text-white rounded-2xl shadow-xl">
+            <Landmark className="w-8 h-8" />
+          </div>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">NIB BANK <span className="text-primary">KYC</span></h1>
+        </div>
         <p className="text-slate-500 text-lg font-medium">Secure institutional access portal.</p>
       </div>
 
@@ -95,7 +103,7 @@ function LoginContent() {
               <Building2 className="w-5 h-5 text-[#B89334]" />
               Staff Login
             </CardTitle>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Secure</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">SECURE</span>
           </div>
         </CardHeader>
         <CardContent className="pt-8 px-8 pb-10 space-y-8">
