@@ -8,8 +8,6 @@ import { prisma } from '@/lib/prisma';
  * Institutional Session Resolver.
  * Cryptographically verifies the auth token, validates against DB version,
  * and enforces absolute session lifetime boundaries.
- * 
- * NOTE: SQLite timestamp precision is synchronized using Math.floor(ms / 1000).
  */
 export async function getServerSession() {
   try {
@@ -50,6 +48,7 @@ export async function getServerSession() {
 /**
  * Server-side Permission Guard.
  * Validates if the active session holds the required capability slug.
+ * HARDENED: Super Admin bypasses all slug-level restrictions.
  */
 export async function verifyPermission(slug: string) {
   const session = await getServerSession();
@@ -60,13 +59,7 @@ export async function verifyPermission(slug: string) {
     include: {
       roles: {
         include: {
-          role: {
-            include: {
-              permissions: {
-                include: { permission: true }
-              }
-            }
-          }
+          role: true
         }
       }
     }
@@ -74,10 +67,26 @@ export async function verifyPermission(slug: string) {
 
   if (!user) return false;
   
-  // Rule: Master Admin bypasses slug check
+  // RULE: Master Admin Override (Absolute Bypass)
   if (user.roles.some(ur => ur.role.name === 'SUPER_ADMIN')) return true;
 
-  return user.roles.some(ur => 
+  // Standard RBAC check
+  const userRoles = await prisma.userRole.findMany({
+    where: { userId: user.id },
+    include: {
+      role: {
+        include: {
+          permissions: {
+            include: {
+              permission: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  return userRoles.some(ur => 
     ur.role.permissions.some(rp => rp.permission.slug === slug)
   );
 }

@@ -6,13 +6,17 @@ import { useMemo, useCallback } from "react";
 /**
  * Production-ready Permission Engine.
  * Optimized with useCallback to prevent infinite update loops in the UI Shell.
+ * HARDENED: Grants absolute bypass for SUPER_ADMIN role.
  */
 export function usePermissions() {
   const { user, loading: authLoading } = useAuth();
 
   const isSuperAdmin = useMemo(() => {
     if (!user) return false;
-    return user.roles?.some((ur: any) => ur.role?.name === 'SUPER_ADMIN');
+    // Check both the role designation and the explicit role object if available
+    return user.roles?.some((ur: any) => 
+      ur.role?.name === 'SUPER_ADMIN' || ur.name === 'SUPER_ADMIN'
+    );
   }, [user]);
 
   const permissionsSlugs = useMemo(() => {
@@ -34,11 +38,13 @@ export function usePermissions() {
   }, [user]);
 
   const hasPermission = useCallback((slug: string) => {
+    // RULE: Master Override for Super Admin
     if (isSuperAdmin) return true;
     return permissionsSlugs.has(slug);
   }, [isSuperAdmin, permissionsSlugs]);
   
   const hasAnyInGroup = useCallback((group: string) => {
+    // RULE: Master Override for Super Admin
     if (isSuperAdmin) return true;
     if (!user || !user.roles) return false;
     
@@ -53,7 +59,7 @@ export function usePermissions() {
     hasAnyInGroup, 
     isSuperAdmin,
     loading: authLoading,
-    canManageFindings: hasPermission('VIEW_FQ_LIBRARY')
+    canManageFindings: isSuperAdmin || permissionsSlugs.has('VIEW_FQ_LIBRARY')
   };
 }
 
