@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -140,7 +141,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
     const role = await prisma.$transaction(async (tx) => {
       const r = await tx.role.upsert({
         where: { id: data.id || 'new-id' },
-        update: { name: data.name, description: data.description },
+        update: { name: data.name, description: data.description, updatedAt: new Date() },
         create: { name: data.name, description: data.description }
       });
 
