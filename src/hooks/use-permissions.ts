@@ -13,10 +13,15 @@ export function usePermissions() {
 
   const isSuperAdmin = useMemo(() => {
     if (!user) return false;
-    // Check both the role designation and the explicit role object if available
-    return user.roles?.some((ur: any) => 
-      ur.role?.name === 'SUPER_ADMIN' || ur.name === 'SUPER_ADMIN'
-    );
+    
+    // Check direct role string from JWT payload
+    if ((user as any).role === 'SUPER_ADMIN') return true;
+
+    // Check serializable roles array
+    return user.roles?.some((ur: any) => {
+      const name = ur.role?.name || ur.name;
+      return name === 'SUPER_ADMIN';
+    });
   }, [user]);
 
   const permissionsSlugs = useMemo(() => {
@@ -24,11 +29,12 @@ export function usePermissions() {
     if (!user) return aggregatedSlugs;
 
     user.roles?.forEach((userRoleRel: any) => {
-      const role = userRoleRel.role;
+      const role = userRoleRel.role || userRoleRel;
       if (role?.permissions) {
         role.permissions.forEach((permRel: any) => {
-          if (permRel.permission?.slug) {
-            aggregatedSlugs.add(permRel.permission.slug);
+          const slug = permRel.permission?.slug || permRel.slug;
+          if (slug) {
+            aggregatedSlugs.add(slug);
           }
         });
       }
@@ -38,19 +44,23 @@ export function usePermissions() {
   }, [user]);
 
   const hasPermission = useCallback((slug: string) => {
-    // RULE: Master Override for Super Admin
+    // RULE: Master Override for Super Admin (Full Access)
     if (isSuperAdmin) return true;
     return permissionsSlugs.has(slug);
   }, [isSuperAdmin, permissionsSlugs]);
   
   const hasAnyInGroup = useCallback((group: string) => {
-    // RULE: Master Override for Super Admin
+    // RULE: Master Override for Super Admin (Full Access)
     if (isSuperAdmin) return true;
     if (!user || !user.roles) return false;
     
-    return user.roles.some((ur: any) => 
-      ur.role?.permissions?.some((pr: any) => pr.permission?.group === group)
-    );
+    return user.roles.some((ur: any) => {
+      const role = ur.role || ur;
+      return role.permissions?.some((pr: any) => {
+        const p = pr.permission || pr;
+        return p.group === group;
+      });
+    });
   }, [isSuperAdmin, user]);
 
   return { 

@@ -54,31 +54,21 @@ export async function verifyPermission(slug: string) {
   const session = await getServerSession();
   if (!session) return false;
 
+  // RULE: Master Admin Override (Absolute Bypass)
+  if (session.role === 'SUPER_ADMIN') return true;
+
   const user = await prisma.user.findUnique({
     where: { id: session.id },
     include: {
       roles: {
         include: {
-          role: true
-        }
-      }
-    }
-  });
-
-  if (!user) return false;
-  
-  // RULE: Master Admin Override (Absolute Bypass)
-  if (user.roles.some(ur => ur.role.name === 'SUPER_ADMIN')) return true;
-
-  // Standard RBAC check
-  const userRoles = await prisma.userRole.findMany({
-    where: { userId: user.id },
-    include: {
-      role: {
-        include: {
-          permissions: {
+          role: {
             include: {
-              permission: true
+              permissions: {
+                include: {
+                  permission: true
+                }
+              }
             }
           }
         }
@@ -86,7 +76,13 @@ export async function verifyPermission(slug: string) {
     }
   });
 
-  return userRoles.some(ur => 
+  if (!user) return false;
+  
+  // Secondary check for role name in DB
+  if (user.roles.some(ur => ur.role.name === 'SUPER_ADMIN')) return true;
+
+  // Standard RBAC check
+  return user.roles.some(ur => 
     ur.role.permissions.some(rp => rp.permission.slug === slug)
   );
 }

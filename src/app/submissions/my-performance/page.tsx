@@ -51,7 +51,7 @@ import {
 } from "lucide-react";
 import { getSubmissions } from '@/actions/submissions';
 import { getGlobalSettings } from '@/actions/settings';
-import { KYCStatus } from '@prisma/client';
+import { KYC_STATUS } from '@/lib/kyc-data';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -68,7 +68,7 @@ const DEFAULT_ENTITY_TYPES = [
 
 export default function MyCasesPerformancePage() {
   const { user } = useAuth();
-  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -88,8 +88,10 @@ export default function MyCasesPerformancePage() {
   }, [user, permissionsLoading, router]);
 
   useEffect(() => {
-    loadMyCases();
-    loadConfiguration();
+    if (user) {
+      loadMyCases();
+      loadConfiguration();
+    }
   }, [user, dateRange]);
 
   const loadMyCases = async () => {
@@ -107,7 +109,7 @@ export default function MyCasesPerformancePage() {
       }
 
       const data = await getSubmissions(filters);
-      setSubmissions(data);
+      setSubmissions(data || []);
     } catch (error) {
       toast({ variant: "destructive", title: "Sync Failed", description: "Could not retrieve your cases from the Vault." });
     } finally {
@@ -138,7 +140,7 @@ export default function MyCasesPerformancePage() {
   }, [user]);
 
   const filteredSubmissions = useMemo(() => {
-    return submissions.filter(sub => {
+    return (submissions || []).filter(sub => {
       const matchesSearch = sub.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || sub.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
       const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
@@ -150,9 +152,9 @@ export default function MyCasesPerformancePage() {
 
   const stats = useMemo(() => {
     const total = filteredSubmissions.length;
-    const running = filteredSubmissions.filter(s => s.status === KYCStatus.IN_REVIEW).length;
-    const completed = filteredSubmissions.filter(s => s.status === KYCStatus.APPROVED || s.status === KYCStatus.REJECTED).length;
-    const pending = filteredSubmissions.filter(s => s.status === KYCStatus.SUBMITTED).length;
+    const running = filteredSubmissions.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;
+    const completed = filteredSubmissions.filter(s => s.status === KYC_STATUS.APPROVED || s.status === KYC_STATUS.REJECTED).length;
+    const pending = filteredSubmissions.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
 
     const branchBreakdown: Record<string, number> = {};
     filteredSubmissions.forEach(s => {
@@ -279,7 +281,7 @@ export default function MyCasesPerformancePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  {Object.values(KYCStatus).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
+                  {Object.values(KYC_STATUS).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -327,7 +329,7 @@ export default function MyCasesPerformancePage() {
                     <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Pending and in-review institutional cases</CardDescription>
                   </div>
                   <Badge variant="outline" className="bg-white/20 border-white/20 text-white font-black px-4 py-1">
-                    {filteredSubmissions.filter(s => ![KYCStatus.APPROVED, KYCStatus.REJECTED].includes(s.status)).length} Priority Items
+                    {filteredSubmissions.filter(s => ![KYC_STATUS.APPROVED, KYC_STATUS.REJECTED].includes(s.status)).length} Priority Items
                   </Badge>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -342,9 +344,9 @@ export default function MyCasesPerformancePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredSubmissions.filter(s => ![KYCStatus.APPROVED, KYCStatus.REJECTED].includes(s.status)).length === 0 ? (
+                      {filteredSubmissions.filter(s => ![KYC_STATUS.APPROVED, KYC_STATUS.REJECTED].includes(s.status)).length === 0 ? (
                         <TableRow><TableCell colSpan={5} className="py-24 text-center italic text-slate-400 bg-slate-50/30">Your active tray is clear. No pending operations discovered.</TableCell></TableRow>
-                      ) : filteredSubmissions.filter(s => ![KYCStatus.APPROVED, KYCStatus.REJECTED].includes(s.status)).map((sub) => (
+                      ) : filteredSubmissions.filter(s => ![KYC_STATUS.APPROVED, KYC_STATUS.REJECTED].includes(s.status)).map((sub) => (
                         <TableRow key={sub.id} className="hover:bg-slate-50 transition-colors group">
                           <TableCell className="font-black text-primary tabular-nums py-6 pl-8">{sub.id}</TableCell>
                           <TableCell>
@@ -359,7 +361,7 @@ export default function MyCasesPerformancePage() {
                           <TableCell>
                             <Badge className={cn(
                               "font-black text-[9px] uppercase px-3",
-                              sub.status === KYCStatus.SUBMITTED ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                              sub.status === KYC_STATUS.SUBMITTED ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200'
                             )}>
                               {sub.status.replace(/_/g, ' ')}
                             </Badge>
@@ -394,15 +396,15 @@ export default function MyCasesPerformancePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredSubmissions.filter(s => [KYCStatus.APPROVED, KYCStatus.REJECTED].includes(s.status)).length === 0 ? (
+                      {filteredSubmissions.filter(s => [KYC_STATUS.APPROVED, KYC_STATUS.REJECTED].includes(s.status)).length === 0 ? (
                         <TableRow><TableCell colSpan={4} className="py-24 text-center italic text-slate-400">No terminal verdicts recorded in this analysis period.</TableCell></TableRow>
-                      ) : filteredSubmissions.filter(s => [KYCStatus.APPROVED, KYCStatus.REJECTED].includes(s.status)).map((sub) => (
+                      ) : filteredSubmissions.filter(s => [KYC_STATUS.APPROVED, KYC_STATUS.REJECTED].includes(s.status)).map((sub) => (
                         <TableRow key={sub.id} className="hover:bg-slate-50 transition-colors">
                           <TableCell className="font-bold text-slate-900 py-5 pl-8 tabular-nums">{sub.id}</TableCell>
                           <TableCell className="font-bold text-slate-700">{sub.customerName}</TableCell>
                           <TableCell>
-                            <Badge className={sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}>
-                              {sub.status === KYCStatus.APPROVED ? 'Successfully Authorized' : 'Risk Rejected'}
+                            <Badge className={sub.status === KYC_STATUS.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}>
+                              {sub.status === KYC_STATUS.APPROVED ? 'Successfully Authorized' : 'Risk Rejected'}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right pr-8 text-xs font-bold text-slate-400 tabular-nums">
