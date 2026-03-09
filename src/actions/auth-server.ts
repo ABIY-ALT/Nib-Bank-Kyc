@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * Institutional Session Resolver.
- * Cryptographically verifies the auth token and validates against DB version.
+ * Hardened with token versioning and absolute lifetime verification.
  */
 export async function getServerSession() {
   try {
@@ -14,19 +14,24 @@ export async function getServerSession() {
     const token = cookieStore.get('nib-auth-token')?.value;
     if (!token) return null;
 
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
+    const secretStr = process.env.JWT_SECRET || "";
+    if (secretStr.length < 32) return null;
+
+    const secret = new TextEncoder().encode(secretStr);
     const { payload }: any = await jwtVerify(token, secret);
     
     const nowSeconds = Math.floor(Date.now() / 1000);
 
+    // 1. Absolute Limit Check
     if (payload.abs && nowSeconds > payload.abs) return null;
 
+    // 2. Versioning Check (DB Verification)
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
-      select: { updatedAt: true }
+      select: { updatedAt: true, status: true }
     });
 
-    if (!user) return null;
+    if (!user || user.status !== 'ACTIVE') return null;
 
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) return null;
@@ -39,13 +44,12 @@ export async function getServerSession() {
 
 /**
  * Server-side Permission Guard.
- * HARDENED: Super Admin bypasses all slug-level restrictions.
+ * MASTER BYPASS: Super Admin role is evaluated at the session level for total command.
  */
 export async function verifyPermission(slug: string) {
   const session = await getServerSession();
   if (!session) return false;
 
-  // RULE: Master Admin Override (Absolute Bypass)
   if (session.role === 'SUPER_ADMIN') return true;
 
   const user = await prisma.user.findUnique({
@@ -69,7 +73,6 @@ export async function verifyPermission(slug: string) {
 
   if (!user) return false;
   
-  // Real-time role check for bypass
   if (user.roles.some(ur => ur.role.name === 'SUPER_ADMIN')) return true;
 
   return user.roles.some(ur => 

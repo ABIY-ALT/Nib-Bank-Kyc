@@ -10,36 +10,33 @@ import { createAuditLog } from './audit';
 
 /**
  * Institutional Security: Resets user password.
- * Strictly gated by session identity and version rotation.
+ * Triggers session versioning rotation via updatedAt update.
  */
 export async function updateInstitutionalPassword(userId: string, newPassword: string) {
   try {
-    // 1. Mandatory Session Verification
     const session = await getServerSession();
     if (!session) {
-      return { success: false, error: 'Unauthenticated session. Access denied.' };
+      return { success: false, error: 'Unauthenticated session.' };
     }
 
-    // 2. Identity Binding (Anti-IDOR)
-    if (session.id !== userId) {
+    if (session.role !== 'SUPER_ADMIN' && session.id !== userId) {
       await createAuditLog({
         userId: session.id,
         userEmail: session.email,
         action: 'SECURITY_ALERT_IDOR',
-        details: `Unauthorized attempt to modify credentials for User ID: ${userId}`,
+        details: `Unauthorized credential modification attempt for ID: ${userId}`,
         severity: 'CRITICAL'
       });
-      return { success: false, error: 'Jurisdictional violation: identity mismatch.' };
+      return { success: false, error: 'Authorization violation.' };
     }
 
-    // 3. Complexity Validation (Server-Side)
     if (!newPassword || newPassword.length < 8) {
-      return { success: false, error: 'Institutional policy requires a minimum of 8 characters.' };
+      return { success: false, error: 'Institutional policy: Minimum 8 characters.' };
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // 4. Atomic Update with Version Rotation
+    // Atomic Update: Changing password updates 'updatedAt', which rotates the token version 'v'
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -49,44 +46,44 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
       }
     });
 
-    // 5. SESSION CONTINUITY: Re-issue token with synchronized precision
-    const secret = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
-    const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
+    // Re-issue token for current user session continuity
+    if (session.id === userId) {
+      const secret = process.env.JWT_SECRET || "";
+      const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
+      const { iat, exp, ...sessionData } = session as any;
 
-    // Hardened: Strip iat/exp from session to prevent jwt.sign conflicts
-    const { iat, exp, ...sessionData } = session as any;
+      const newToken = jwt.sign(
+        { 
+          ...sessionData,
+          v: versionSeconds,
+          needsPasswordChange: false
+        },
+        secret,
+        { expiresIn: "15m" }
+      );
 
-    const newToken = jwt.sign(
-      { 
-        ...sessionData,
-        v: versionSeconds,
-        needsPasswordChange: false
-      },
-      secret,
-      { expiresIn: "15m" }
-    );
-
-    const cookieStore = await cookies();
-    cookieStore.set('nib-auth-token', newToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 15,
-      path: '/',
-    });
+      const cookieStore = await cookies();
+      cookieStore.set('nib-auth-token', newToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 15,
+        path: '/',
+      });
+    }
 
     await createAuditLog({
       userId: session.id,
       userEmail: session.email,
       action: 'PASSWORD_CHANGE_SUCCESS',
-      details: 'Personnel credential established. Active sessions rotated.',
+      details: `Credential reset for ${updatedUser.email}. Sessions rotated.`,
       severity: 'MEDIUM'
     });
 
-    revalidatePath('/');
+    revalidatePath('/admin/users');
     return { success: true };
   } catch (error: any) {
     console.error('[Security Vault] Password Update Failure:', error);
-    return { success: false, error: 'Database fault during credential reset.' };
+    return { success: false, error: 'Institutional database fault.' };
   }
 }

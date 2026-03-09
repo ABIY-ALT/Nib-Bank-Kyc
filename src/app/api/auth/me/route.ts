@@ -18,7 +18,11 @@ export async function GET() {
       return NextResponse.json({ message: "No active session." }, { status: 401 });
     }
 
-    const secretStr = process.env.JWT_SECRET || "institutional_default_secret_32_chars_min";
+    const secretStr = process.env.JWT_SECRET || "";
+    if (!secretStr || secretStr.length < 32) {
+      return NextResponse.json({ message: "System configuration fault." }, { status: 500 });
+    }
+
     const secret = new TextEncoder().encode(secretStr);
     const { payload }: any = await jwtVerify(token, secret);
 
@@ -34,8 +38,8 @@ export async function GET() {
     // 2. Contextual Binding Verification (IP Check)
     const currentIp = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
     if (payload.ip !== currentIp) {
-      console.warn(`[SECURITY] Contextual binding violation. User: ${payload.email}`);
-      const response = NextResponse.json({ message: "Contextual binding violation." }, { status: 401 });
+      console.warn(`[SECURITY] Contextual binding violation detected. User: ${payload.email}`);
+      const response = NextResponse.json({ message: "Session restricted due to network change." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
       return response;
     }
@@ -62,10 +66,10 @@ export async function GET() {
       return response;
     }
 
-    // 3. Token Versioning Verification
+    // 3. Token Versioning Verification (Password change / Profile update invalidation)
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) {
-      const response = NextResponse.json({ message: "Session revoked." }, { status: 401 });
+      const response = NextResponse.json({ message: "Session revoked due to security update." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
       return response;
     }
@@ -96,11 +100,11 @@ export async function GET() {
       }
     });
 
-    // 4. Token Rotation
+    // 4. Token Rotation (Sliding window)
     const iat = payload.iat || 0;
-    const fiveMinutes = 5 * 60;
+    const rotationThreshold = 5 * 60; // Rotate every 5 minutes
 
-    if (nowSeconds - iat > fiveMinutes) {
+    if (nowSeconds - iat > rotationThreshold) {
       const newToken = jwt.sign(
         { 
           ...payload,
@@ -121,6 +125,6 @@ export async function GET() {
 
     return response;
   } catch (error) {
-    return NextResponse.json({ message: "Session verification failed." }, { status: 401 });
+    return NextResponse.json({ message: "Invalid session." }, { status: 401 });
   }
 }
