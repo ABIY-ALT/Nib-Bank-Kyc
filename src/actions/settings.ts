@@ -45,6 +45,7 @@ export async function getGlobalSettings() {
 
     return settings;
   } catch (error) {
+    console.error("[Settings Action] Fetch Fault:", error);
     return null;
   }
 }
@@ -67,6 +68,7 @@ export async function updateGlobalSettings(data: any) {
     revalidatePath('/');
     return settings;
   } catch (error: any) {
+    console.error("[Settings Action] Update Fault:", error);
     throw new Error('Institutional database fault during configuration commit.');
   }
 }

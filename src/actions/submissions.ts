@@ -11,7 +11,7 @@ import fs from 'fs/promises';
 import path from 'path';
 
 /**
- * Retrieves submissions with PostgreSQL-optimized filtering.
+ * Retrieves submissions with PostgreSQL native JSON support.
  */
 export async function getSubmissions(filters?: any) {
   try {
@@ -48,12 +48,14 @@ export async function getSubmissions(filters?: any) {
       skip: filters?.offset || 0,
     });
 
+    // In PostgreSQL with Json columns, Prisma returns objects directly
     return data.map(item => ({
       ...item,
-      checklistState: item.checklistState ? JSON.parse(item.checklistState) : {},
-      commentHistory: item.commentHistory ? JSON.parse(item.commentHistory) : []
+      checklistState: item.checklistState || {},
+      commentHistory: item.commentHistory || []
     }));
   } catch (error) {
+    console.error("[Submissions Action] Fetch Fault:", error);
     return [];
   }
 }
@@ -114,19 +116,27 @@ export async function createSubmission(formData: FormData) {
         status: KYC_STATUS.SUBMITTED,
         entityType: validated.entityType,
         remarks: validated.remarks,
-        checklistState: JSON.stringify({}),
-        commentHistory: JSON.stringify([]),
+        checklistState: {}, // Native JSON object for PostgreSQL
+        commentHistory: [], // Native JSON object for PostgreSQL
         memos: { create: memoData }
       }
     });
 
     await prisma.auditLog.create({
-      data: { userId: session.id, kycId: kyc.id, action: 'CREATE', details: `Initial submission for ${validated.customerName}.`, userEmail: session.email }
+      data: { 
+        userId: session.id, 
+        kycId: kyc.id, 
+        action: 'CREATE', 
+        details: `Initial submission for ${validated.customerName}.`, 
+        userEmail: session.email,
+        userName: session.email.split('@')[0]
+      }
     });
 
     revalidatePath('/');
     return { success: true, kyc };
   } catch (error: any) {
+    console.error("[Submissions Action] Create Fault:", error);
     return { success: false, error: error.message };
   }
 }
@@ -135,7 +145,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   const current = await prisma.kYC.findUnique({ where: { id } });
   if (!current) throw new Error("KYC record not found");
 
-  const history = current.commentHistory ? JSON.parse(current.commentHistory) : [];
+  const history = (current.commentHistory as any[]) || [];
   const reviewer = await prisma.user.findUnique({ where: { id: reviewerId } });
 
   const newEntry = {
@@ -152,7 +162,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
       status,
       assignedToId: reviewerId,
       updatedAt: new Date(),
-      commentHistory: JSON.stringify([...history, newEntry]),
+      commentHistory: [...history, newEntry],
       isResubmitted: status === KYC_STATUS.SUBMITTED && current.status === KYC_STATUS.ACTION_REQUIRED,
       amendCycles: status === KYC_STATUS.ACTION_REQUIRED ? { increment: 1 } : undefined
     }
@@ -176,8 +186,8 @@ export async function getSubmissionById(id: string) {
     if (!kyc) return null;
     return {
       ...kyc,
-      checklistState: kyc.checklistState ? JSON.parse(kyc.checklistState) : {},
-      commentHistory: kyc.commentHistory ? JSON.parse(kyc.commentHistory) : [],
+      checklistState: kyc.checklistState || {},
+      commentHistory: kyc.commentHistory || [],
       documents: kyc.memos.map(m => ({
         id: m.id,
         name: m.name,
@@ -194,7 +204,7 @@ export async function updateSubmissionChecklist(id: string, checklistState: any)
   try {
     return await prisma.kYC.update({ 
       where: { id }, 
-      data: { checklistState: JSON.stringify(checklistState) } 
+      data: { checklistState } 
     });
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -229,12 +239,12 @@ export async function processExceptionalStep(formData: FormData) {
   const actionLabel = formData.get('actionLabel') as string;
 
   const current = await prisma.kYC.findUnique({ where: { id } });
-  const history = current?.commentHistory ? JSON.parse(current.commentHistory) : [];
+  const history = (current?.commentHistory as any[]) || [];
 
   const data: any = { 
     exceptionalStatus: nextStatus, 
     updatedAt: new Date(), 
-    commentHistory: JSON.stringify([...history, { role: 'GOVERNANCE', performedBy: 'System', timestamp: new Date().toISOString(), comment: remarks || actionLabel, action: actionLabel }])
+    commentHistory: [...history, { role: 'GOVERNANCE', performedBy: 'System', timestamp: new Date().toISOString(), comment: remarks || actionLabel, action: actionLabel }]
   };
   
   if (nextStatus === EXCEPTIONAL_STATUS.COMPLETED) data.status = KYC_STATUS.APPROVED;
@@ -251,7 +261,7 @@ export async function resubmitSubmission(formData: FormData) {
   const types = formData.getAll('types') as string[];
 
   const current = await prisma.kYC.findUnique({ where: { id } });
-  const history = current?.commentHistory ? JSON.parse(current.commentHistory) : [];
+  const history = (current?.commentHistory as any[]) || [];
   
   const uploadDir = path.join(process.cwd(), 'public', 'uploads');
   const memoData = [];
@@ -268,7 +278,7 @@ export async function resubmitSubmission(formData: FormData) {
       status: KYC_STATUS.SUBMITTED,
       isResubmitted: true,
       updatedAt: new Date(),
-      commentHistory: JSON.stringify([...history, { role: 'BRANCH_OFFICER', performedBy: 'Staff', timestamp: new Date().toISOString(), comment: remarks, action: 'RESUBMIT' }]),
+      commentHistory: [...history, { role: 'BRANCH_OFFICER', performedBy: 'Staff', timestamp: new Date().toISOString(), comment: remarks, action: 'RESUBMIT' }],
       memos: { create: memoData }
     }
   });
@@ -288,7 +298,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
   await fs.writeFile(path.join(uploadDir, storedFileName), Buffer.from(await memoFile.arrayBuffer()));
 
   const current = await prisma.kYC.findUnique({ where: { id: kycId } });
-  const history = current?.commentHistory ? JSON.parse(current.commentHistory) : [];
+  const history = (current?.commentHistory as any[]) || [];
   
   const kyc = await prisma.kYC.update({
     where: { id: kycId },
@@ -296,7 +306,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       isExceptional: true,
       exceptionalStatus: EXCEPTIONAL_STATUS.AWAITING_DISTRICT,
       updatedAt: new Date(),
-      commentHistory: JSON.stringify([...history, { role: 'MANAGER', performedBy: 'Manager', timestamp: new Date().toISOString(), comment: `Exception Initiated: ${reason}`, action: 'INITIATE_EXCEPTION' }]),
+      commentHistory: [...history, { role: 'MANAGER', performedBy: 'Manager', timestamp: new Date().toISOString(), comment: `Exception Initiated: ${reason}`, action: 'INITIATE_EXCEPTION' }],
       memos: { create: { name: memoFile.name, type: 'GOVERNANCE_MEMO', fileUrl: `/uploads/${storedFileName}`, uploadedById: 'system' } }
     }
   });
