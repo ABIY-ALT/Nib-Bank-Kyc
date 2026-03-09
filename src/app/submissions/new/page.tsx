@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -51,24 +52,6 @@ interface UploadedFile {
   previewUrl: string;
 }
 
-const DEFAULT_ENTITY_TYPES = [
-  { id: "individual", label: "Individual Account" },
-  { id: "company", label: "Company Account" },
-  { id: "association", label: "Association Account" },
-  { id: "foreign_ngo", label: "Foreign NGO Account" },
-  { id: "foreign_employment_agency", label: "Foreign Employment Agency Account" },
-];
-
-const DEFAULT_DOC_TYPES = [
-  { id: "id_card", label: "ID Card / National ID" },
-  { id: "passport", label: "Passport" },
-  { id: "utility_bill", label: "Utility Bill" },
-  { id: "bank_statement", label: "Bank Statement" },
-  { id: "incorporation", label: "Certificate of Incorporation" },
-  { id: "tax_cert", label: "Tax Certificate" },
-  { id: "other", label: "Other Document" },
-];
-
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -104,15 +87,14 @@ export default function NewSubmission() {
     loadConfig();
   }, []);
 
+  // MANDATORY: Document types are derived exclusively from configuration
   const documentTypes = useMemo(() => {
-    return settings?.documentTypes || DEFAULT_DOC_TYPES;
+    return settings?.documentTypes || [];
   }, [settings]);
 
+  // MANDATORY: Entity types are derived exclusively from configuration
   const entityClassifications = useMemo(() => {
-    if (settings?.entityTypes && Array.isArray(settings.entityTypes) && settings.entityTypes.length > 0) {
-      return settings.entityTypes;
-    }
-    return DEFAULT_ENTITY_TYPES;
+    return settings?.entityTypes || [];
   }, [settings]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,7 +103,6 @@ export default function NewSubmission() {
       const validFiles: UploadedFile[] = [];
       
       for (const file of files) {
-        // Size Check
         if (file.size > MAX_FILE_SIZE) {
           toast({ 
             variant: "destructive", 
@@ -131,7 +112,6 @@ export default function NewSubmission() {
           continue;
         }
 
-        // Type Check
         if (!ALLOWED_TYPES.includes(file.type)) {
           toast({ 
             variant: "destructive", 
@@ -237,6 +217,7 @@ export default function NewSubmission() {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Synchronizing Config...</p>
       </div>
     );
   }
@@ -256,20 +237,30 @@ export default function NewSubmission() {
           <CardContent className="grid gap-6 md:grid-cols-2 pt-6">
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Customer Full Name</Label>
-              <input placeholder="Full legal name" required className="h-11 w-full px-3 border rounded-md" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+              <input 
+                placeholder="Full legal name" 
+                required 
+                className="h-11 w-full px-3 border rounded-md font-bold focus:outline-none focus:ring-2 focus:ring-primary/20" 
+                value={customerName} 
+                onChange={(e) => setCustomerName(e.target.value)} 
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Account Classification</Label>
               <Select value={entityType} onValueChange={setEntityType}>
-                <SelectTrigger className="h-11">
+                <SelectTrigger className="h-11 font-bold">
                   <SelectValue placeholder="Select account category" />
                 </SelectTrigger>
-                <SelectContent>
-                  {entityClassifications.map((classification: any) => (
-                    <SelectItem key={classification.id} value={classification.id}>
-                      {classification.label}
-                    </SelectItem>
-                  ))}
+                <SelectContent className="rounded-xl shadow-2xl">
+                  {entityClassifications.length > 0 ? (
+                    entityClassifications.map((classification: any) => (
+                      <SelectItem key={classification.id} value={classification.id} className="font-medium">
+                        {classification.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-xs text-muted-foreground italic">No classifications configured.</div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -289,7 +280,7 @@ export default function NewSubmission() {
                multiple 
                accept=".pdf,.jpg,.jpeg,.png" 
              />
-             <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all">
+             <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all bg-slate-50/30">
                 <Upload className="w-10 h-10 text-primary mb-4" />
                 <p className="font-bold text-xl text-slate-800">Drop customer files here</p>
                 <p className="text-xs text-muted-foreground mt-1 font-bold uppercase tracking-widest">Only PDF or image files (max 10MB)</p>
@@ -310,11 +301,19 @@ export default function NewSubmission() {
                    </div>
                    <div className="flex items-center gap-4 w-full md:w-auto">
                      <Select value={item.type} onValueChange={(val) => handleTypeChange(item.id, val)}>
-                       <SelectTrigger className="h-10 w-full md:w-60 bg-slate-50/50">
+                       <SelectTrigger className="h-10 w-full md:w-60 bg-slate-50/50 font-bold">
                          <SelectValue placeholder="Select file type" />
                        </SelectTrigger>
-                       <SelectContent>
-                         {documentTypes.map((type: any) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}
+                       <SelectContent className="rounded-xl shadow-2xl">
+                         {documentTypes.length > 0 ? (
+                           documentTypes.map((type: any) => (
+                             <SelectItem key={type.id} value={type.id} className="font-medium">
+                               {type.label}
+                             </SelectItem>
+                           ))
+                         ) : (
+                           <div className="p-4 text-center text-xs text-muted-foreground italic">No document types configured.</div>
+                         )}
                        </SelectContent>
                      </Select>
                      <div className="flex gap-1">
@@ -340,11 +339,11 @@ export default function NewSubmission() {
         <Card className="border-slate-200 shadow-sm overflow-hidden">
           <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl text-white">Initial Remarks</CardTitle></CardHeader>
           <CardContent className="pt-6">
-             <Textarea placeholder="Provide internal context for the KYC Officer (optional)..." className="min-h-[140px]" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+             <Textarea placeholder="Provide internal context for the KYC Officer (optional)..." className="min-h-[140px] font-medium" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           </CardContent>
           <CardFooter className="flex justify-end gap-4 border-t pt-8">
             <Button variant="outline" type="button" onClick={() => router.back()} className="px-8 h-11 font-bold" disabled={isSubmitting}>Cancel</Button>
-            <Button type="submit" className="px-12 h-11 bg-primary font-bold shadow-lg text-white" disabled={isSubmitting}>
+            <Button type="submit" className="px-12 h-11 bg-primary font-black shadow-lg text-white rounded-xl hover:bg-primary/90 transition-all active:scale-[0.98]" disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Dispatch for Review
             </Button>

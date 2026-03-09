@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -57,14 +58,6 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
-
-const DEFAULT_ENTITY_TYPES = [
-  { id: "individual", label: "Individual" },
-  { id: "company", label: "Company" },
-  { id: "association", label: "Association" },
-  { id: "foreign_ngo", label: "Foreign NGO" },
-  { id: "foreign_employment_agency", label: "Foreign Employment Agency" },
-];
 
 export default function MyCasesPerformancePage() {
   const { user } = useAuth();
@@ -126,11 +119,9 @@ export default function MyCasesPerformancePage() {
     }
   };
 
+  // MANDATORY: Entity classifications are derived exclusively from configuration
   const entityClassifications = useMemo(() => {
-    if (settings?.entityTypes && Array.isArray(settings.entityTypes) && settings.entityTypes.length > 0) {
-      return settings.entityTypes;
-    }
-    return DEFAULT_ENTITY_TYPES;
+    return settings?.entityTypes || [];
   }, [settings]);
 
   const assignedBranchesList = useMemo(() => {
@@ -202,7 +193,7 @@ export default function MyCasesPerformancePage() {
                 <SelectValue placeholder="Branch View Mode" />
               </div>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl shadow-2xl">
               <SelectItem value="all" className="font-bold">Combined (All Nodes)</SelectItem>
               {assignedBranchesList.map(b => (
                 <SelectItem key={b} value={b}>{b}</SelectItem>
@@ -279,7 +270,7 @@ export default function MyCasesPerformancePage() {
                 <SelectTrigger className="h-10 border-slate-200">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl shadow-2xl">
                   <SelectItem value="all">All Statuses</SelectItem>
                   {Object.values(KYC_STATUS).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
@@ -292,11 +283,15 @@ export default function MyCasesPerformancePage() {
                 <SelectTrigger className="h-10 border-slate-200">
                   <SelectValue placeholder="All Classifications" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl shadow-2xl">
                   <SelectItem value="all">All Types</SelectItem>
-                  {entityClassifications.map((type: any) => (
-                    <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>
-                  ))}
+                  {entityClassifications.length > 0 ? (
+                    entityClassifications.map((type: any) => (
+                      <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-xs text-muted-foreground italic">No types configured.</div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
