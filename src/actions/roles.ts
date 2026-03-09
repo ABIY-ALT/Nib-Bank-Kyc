@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -6,12 +7,32 @@ import { createAuditLog } from './audit';
 import { getServerSession } from './auth-server';
 
 /**
+ * Robust Authorization Helper.
+ * Checks JWT role first, then performs a database fallback for Master Admins.
+ */
+async function isAuthorizedAdmin() {
+  const session = await getServerSession();
+  if (!session) return false;
+
+  // Level 1: JWT Session Check
+  if (session.role === 'SUPER_ADMIN') return true;
+
+  // Level 2: Database Fallback (Prevents stale token rejection)
+  const user = await prisma.user.findUnique({
+    where: { id: session.id },
+    include: { roles: { include: { role: true } } }
+  });
+
+  return user?.roles.some(ur => ur.role.name === 'SUPER_ADMIN') || false;
+}
+
+/**
  * Institutional Capability Registry Sync.
  * Provisioning standard capabilities required for operational workflows.
  */
 export async function seedInstitutionalPermissions() {
   const session = await getServerSession();
-  if (!session || session.role !== 'SUPER_ADMIN') {
+  if (!(await isAuthorizedAdmin())) {
     if (session) {
       await createAuditLog({
         userId: session.id,
@@ -80,8 +101,8 @@ export async function seedInstitutionalPermissions() {
     }
 
     await createAuditLog({
-      userId: session.id,
-      userEmail: session.email,
+      userId: session!.id,
+      userEmail: session!.email,
       action: 'PERMISSION_REGISTRY_SYNC',
       details: 'Master permission slugs synchronized with the institutional blueprint.',
       severity: 'MEDIUM'
@@ -126,7 +147,7 @@ export async function getAllPermissions() {
 
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
   const session = await getServerSession();
-  if (!session || session.role !== 'SUPER_ADMIN') {
+  if (!(await isAuthorizedAdmin())) {
     return { success: false, error: 'Unauthorized' };
   }
 
@@ -167,8 +188,8 @@ export async function upsertRole(data: { id?: string, name: string, description:
     });
 
     await createAuditLog({
-      userId: session.id,
-      userEmail: session.email,
+      userId: session!.id,
+      userEmail: session!.email,
       action: 'ROLE_MODIFICATION',
       details: `Role "${data.name}" updated. All active sessions for associated users have been revoked for security.`,
       severity: 'CRITICAL',
@@ -185,7 +206,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
 
 export async function toggleRoleStatus(id: string, currentStatus: boolean) {
   const session = await getServerSession();
-  if (!session || session.role !== 'SUPER_ADMIN') {
+  if (!(await isAuthorizedAdmin())) {
     return { success: false, error: 'Unauthorized' };
   }
 
@@ -206,8 +227,8 @@ export async function toggleRoleStatus(id: string, currentStatus: boolean) {
     });
 
     await createAuditLog({
-      userId: session.id,
-      userEmail: session.email,
+      userId: session!.id,
+      userEmail: session!.email,
       action: 'ROLE_STATUS_TOGGLE',
       details: `Authority level "${role.name}" is now ${role.active ? 'ACTIVE' : 'INACTIVE'}. Active sessions revoked.`,
       severity: 'HIGH'
