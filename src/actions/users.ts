@@ -10,10 +10,25 @@ import { createAuditLog } from './audit';
 import { CreateUserSchema } from '@/lib/validation';
 import { z } from 'zod';
 
+/**
+ * Robust Authorization Helper.
+ * Checks JWT role first, then performs a database fallback for Master Admins.
+ * This prevents "Unauthorized" errors if the session token is stale.
+ */
 async function verifyAdminClearance() {
   const session = await getServerSession();
   if (!session) return false;
-  return session.role === 'SUPER_ADMIN';
+
+  // Level 1: JWT Session Check
+  if (session.role === 'SUPER_ADMIN') return true;
+
+  // Level 2: Database Fallback (Prevents stale token rejection)
+  const user = await prisma.user.findUnique({
+    where: { id: session.id },
+    include: { roles: { include: { role: true } } }
+  });
+
+  return user?.roles.some(ur => ur.role.name === 'SUPER_ADMIN') || false;
 }
 
 export async function resetUserPassword(email: string, authorizerId: string) {

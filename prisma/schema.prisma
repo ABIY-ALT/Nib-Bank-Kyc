@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -15,162 +14,166 @@ enum UserStatus {
 }
 
 model User {
-  id                  String     @id @default(uuid())
+  id                  String     @id @default(cuid())
   email               String     @unique
   password            String
   firstName           String
   lastName            String
   phoneNumber         String?
   status              UserStatus @default(ACTIVE)
-  branchId            String?
-  branchName          String?    // Redundant for performance
-  districtName        String?    // Redundant for performance
-  assignedBranches    String?    // Comma separated list for Specialists
   needsPasswordChange Boolean    @default(true)
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
-
+  branchId            String?
   branch              Branch?    @relation(fields: [branchId], references: [id])
+  assignedBranches    String?    @db.Text // Comma separated list for specialists
+  
   roles               UserRole[]
   kycSubmissions      KYC[]      @relation("CreatedBy")
-  assignedCases       KYC[]      @relation("AssignedTo")
-  memos               Memo[]
+  assignedKyc         KYC[]      @relation("AssignedTo")
   auditLogs           AuditLog[]
+  memos               Memo[]
+  
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 }
 
 model Role {
-  id          String           @id @default(uuid())
+  id          String           @id @default(cuid())
   name        String           @unique
   description String?
   active      Boolean          @default(true)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  permissions RolePermission[]
   users       UserRole[]
-}
-
-model Permission {
-  id        String           @id @default(uuid())
-  slug      String           @unique
-  name      String
-  group     String
-  createdAt DateTime         @default(now())
-
-  roles     RolePermission[]
+  permissions RolePermission[]
 }
 
 model UserRole {
   userId String
   roleId String
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+  role   Role   @relation(fields: [roleId], references: [id])
 
   @@id([userId, roleId])
+}
+
+model Permission {
+  id    String           @id @default(cuid())
+  slug  String           @unique
+  name  String
+  group String
+  roles RolePermission[]
 }
 
 model RolePermission {
   roleId       String
   permissionId String
-
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
 
   @@id([roleId, permissionId])
 }
 
 model District {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  branches  Branch[]
+  id       String   @id @default(cuid())
+  name     String   @unique
+  branches Branch[]
 }
 
 model Branch {
-  id         String   @id @default(uuid())
+  id         String   @id @default(cuid())
   name       String   @unique
   code       String?  @unique
   districtId String
-  createdAt  DateTime @default(now())
-
   district   District @relation(fields: [districtId], references: [id])
   users      User[]
-  kycEntries KYC[]
+  kyc        KYC[]
 }
 
 model KYC {
   id                String   @id
   customerName      String
-  status            String
-  isExceptional     Boolean  @default(false)
-  exceptionalStatus String   @default("None")
   entityType        String?
-  amendCycles       Int      @default(0)
-  isResubmitted     Boolean  @default(false)
-  active            Boolean  @default(true)
-  checklistState    String?  @db.Text
-  commentHistory    String?  @db.Text
   branchId          String
+  branch            Branch   @relation(fields: [branchId], references: [id])
   branchName        String
   createdById       String
+  createdBy         User     @relation("CreatedBy", fields: [createdById], references: [id])
   assignedToId      String?
+  assignedTo        User?    @relation("AssignedTo", fields: [assignedToId], references: [id])
+  status            String   @default("SUBMITTED")
   submittedAt       DateTime @default(now())
   updatedAt         DateTime @updatedAt
-
-  branch     Branch     @relation(fields: [branchId], references: [id])
-  createdBy  User       @relation("CreatedBy", fields: [createdById], references: [id])
-  assignedTo User?      @relation("AssignedTo", fields: [assignedToId], references: [id])
-  memos      Memo[]
-  auditLogs  AuditLog[]
+  active            Boolean  @default(true)
+  
+  isResubmitted     Boolean  @default(false)
+  amendCycles       Int      @default(0)
+  
+  isExceptional     Boolean  @default(false)
+  exceptionalStatus String   @default("None")
+  
+  checklistState    String?  @db.Text // JSON string
+  commentHistory    String?  @db.Text // JSON string
+  
+  memos             Memo[]
+  auditLogs         AuditLog[]
 }
 
 model Memo {
-  id           String   @id @default(uuid())
+  id           String   @id @default(cuid())
   name         String
   type         String
   fileUrl      String
   kycId        String
+  kyc          KYC      @relation(fields: [kycId], references: [id])
   uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())
-
-  kyc        KYC  @relation(fields: [kycId], references: [id], onDelete: Cascade)
-  uploadedBy User @relation(fields: [uploadedById], references: [id])
 }
 
 model AuditLog {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   userEmail String?
   userName  String?
   action    String
   details   String   @db.Text
   ipAddress String?
-  kycId     String?
-  metadata  String?  @db.Text
   timestamp DateTime @default(now())
-
-  user User? @relation(fields: [userId], references: [id])
-  kyc  KYC?  @relation(fields: [kycId], references: [id])
+  kycId     String?
+  kyc       KYC?     @relation(fields: [kycId], references: [id])
+  metadata  String?  @db.Text // JSON string
 }
 
 model GlobalSetting {
   id            String   @id @default("global")
-  entityTypes   String?  @db.Text
-  documentTypes String?  @db.Text
-  guidelines    String?  @db.Text
+  entityTypes   String?  @db.Text // JSON
+  documentTypes String?  @db.Text // JSON
+  guidelines    String?  @db.Text // JSON
   lastUpdated   DateTime @default(now())
 }
 
 model Finding {
-  id           String   @id @default(uuid())
+  id           String   @id @default(cuid())
   code         String   @unique
   title        String
   description  String   @db.Text
   category     String
   severity     String
-  applicableTo String[] // This will be stored as an array in PostgreSQL
+  applicableTo String?  @db.Text // JSON string list
   active       Boolean  @default(true)
   source       String   @default("manual")
   createdAt    DateTime @default(now())
+}
+
+model FollowUpVerification {
+  id           String    @id @default(cuid())
+  submissionId String    @unique
+  customerName String
+  branch       String
+  officer      String
+  accountType  String
+  verifiedBy   String?
+  verifiedAt   DateTime?
+  result       String?
+  remarks      String?   @db.Text
+  status       String    @default("PENDING")
 }
