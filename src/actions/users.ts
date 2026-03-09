@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -57,8 +56,7 @@ export async function getAllUsers() {
 
 /**
  * Institutional Provisioning Action.
- * Handles both new account creation and existing profile updates.
- * Separation of concerns prevents Prisma validation faults for the password field.
+ * Re-engineered to separate create/update logic to resolve the "password missing" error.
  */
 export async function provisionUser(data: {
   id?: string;
@@ -80,7 +78,6 @@ export async function provisionUser(data: {
     const isUpdate = !!data.id;
     let tempPass = data.password;
     
-    // 1. Resolve Target Node Data
     const branch = data.branchId ? await prisma.branch.findUnique({
       where: { id: data.branchId },
       include: { district: true }
@@ -91,26 +88,29 @@ export async function provisionUser(data: {
 
       if (isUpdate) {
         // UPDATE PATH: Preserve existing password if not provided
-        let hashedPassword = tempPass ? await bcrypt.hash(tempPass, 10) : undefined;
+        let updateData: any = {
+          firstName: validated.firstName,
+          lastName: validated.lastName,
+          email: validated.email,
+          phoneNumber: validated.phoneNumber,
+          branchId: data.branchId || null,
+          branchName: branch?.name || null,
+          districtName: branch?.district?.name || null,
+          status: data.status,
+          updatedAt: new Date()
+        };
+
+        if (tempPass) {
+          updateData.password = await bcrypt.hash(tempPass, 10);
+          updateData.needsPasswordChange = true;
+        }
 
         user = await tx.user.update({
           where: { id: data.id },
-          data: {
-            firstName: validated.firstName,
-            lastName: validated.lastName,
-            email: validated.email,
-            phoneNumber: validated.phoneNumber,
-            branchId: data.branchId || null,
-            branchName: branch?.name || null,
-            districtName: branch?.district?.name || null,
-            status: data.status,
-            password: hashedPassword,
-            needsPasswordChange: hashedPassword ? true : undefined,
-            updatedAt: new Date()
-          }
+          data: updateData
         });
       } else {
-        // CREATE PATH: Mandatory initial credential generation
+        // CREATE PATH: Generate credentials
         if (!tempPass) tempPass = generateSecurePassword(10);
         const hashedPassword = await bcrypt.hash(tempPass, 10);
 
@@ -130,7 +130,7 @@ export async function provisionUser(data: {
         });
       }
 
-      // 2. Synchronize Jurisdictional Role
+      // 2. Synchronize Role
       const role = await tx.role.findUnique({ where: { name: validated.role } });
       if (role) {
         await tx.userRole.deleteMany({ where: { userId: user.id } });
@@ -145,13 +145,13 @@ export async function provisionUser(data: {
       userEmail: result.email,
       action: isUpdate ? 'USER_PROFILE_UPDATE' : 'USER_PROVISION_SUCCESS',
       details: isUpdate 
-        ? `Profile modified for ${result.firstName} ${result.lastName}. Authority: ${data.role}` 
-        : `New personnel provisioned: ${result.firstName} ${result.lastName}. Authority: ${data.role}`,
+        ? `Profile modified for ${result.firstName} ${result.lastName}. Role: ${data.role}` 
+        : `New personnel provisioned: ${result.firstName} ${result.lastName}. Role: ${data.role}`,
       severity: 'MEDIUM'
     });
 
     revalidatePath('/admin/users');
-    return { success: true, user: result, tempPassword: !isUpdate ? tempPass : null };
+    return { success: true, user: result, tempPassword: !isUpdate ? tempPass : (data.password ? tempPass : null) };
   } catch (error: any) {
     console.error('[Personnel Provisioning] Action Error:', error);
     return { success: false, error: error.message };

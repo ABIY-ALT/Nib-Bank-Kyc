@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -55,9 +54,7 @@ export async function seedInstitutionalPermissions() {
     
     // WORKFLOWS - Monitoring
     { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },
-    { slug: 'DASHBOARD_VIEW_BRANCH', name: 'View Branch Specific Dashboard', group: 'MONITORING' },
-    { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'MONITORING' },
-    { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Dashboard', group: 'MONITORING' },
+    { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'Access District Monitoring', group: 'MONITORING' },
     
     // INFRASTRUCTURE
     { slug: 'MANAGE_VAULT_STORAGE', name: 'Manage Vault Storage', group: 'INFRASTRUCTURE' },
@@ -132,7 +129,6 @@ export async function getAllPermissions() {
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
   const session = await getServerSession();
   
-  // Hardened Clearance Check
   if (!(await isAuthorizedAdmin())) {
     return { success: false, error: 'Unauthorized' };
   }
@@ -152,7 +148,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
         });
       }
 
-      // Security: Rotate user update timestamps to force JWT refresh
+      // Rotate user update timestamps to force session refresh
       await tx.user.updateMany({
         where: { roles: { some: { roleId: r.id } } },
         data: { updatedAt: new Date() }

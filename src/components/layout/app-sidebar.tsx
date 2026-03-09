@@ -29,7 +29,6 @@ import {
   History,
   Activity,
   TrendingUp,
-  KeyRound,
   Monitor
 } from "lucide-react"
 
@@ -240,42 +239,44 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions/branch-node') || pathname.includes('/submissions/district-node')}>
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="Monitoring">
-                      <BarChart3 className="w-4 h-4" />
-                      <span>Monitoring</span>
-                      <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {hasPermission('CASE_VIEW_BRANCH') && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
-                            <Link href="/submissions/branch-node">
-                              <Building2 className="w-4 h-4 mr-2 text-primary" />
-                              <span>Branch Monitoring</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )}
+              {(hasPermission('CASE_VIEW_BRANCH') || hasPermission('DASHBOARD_VIEW_DISTRICT')) && (
+                <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions/branch-node') || pathname.includes('/submissions/district-node')}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip="Monitoring">
+                        <BarChart3 className="w-4 h-4" />
+                        <span>Monitoring</span>
+                        <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {hasPermission('CASE_VIEW_BRANCH') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/submissions/branch-node'}>
+                              <Link href="/submissions/branch-node">
+                                <Building2 className="w-4 h-4 mr-2 text-primary" />
+                                <span>Branch Monitoring</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
 
-                      {hasPermission('DASHBOARD_VIEW_DISTRICT') && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={pathname === '/submissions/district-node'}>
-                            <Link href="/submissions/district-node">
-                              <Map className="w-4 h-4 mr-2 text-primary" />
-                              <span>District Monitoring</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+                        {hasPermission('DASHBOARD_VIEW_DISTRICT') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={pathname === '/submissions/district-node'}>
+                              <Link href="/submissions/district-node">
+                                <Map className="w-4 h-4 mr-2 text-primary" />
+                                <span>District Monitoring</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
 
               {hasPermission('MANAGE_VAULT_STORAGE') && (
                 <SidebarMenuItem>

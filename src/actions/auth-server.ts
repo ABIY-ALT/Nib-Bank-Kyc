@@ -1,4 +1,3 @@
-
 'use server';
 
 import { cookies } from 'next/headers';
@@ -69,6 +68,8 @@ export async function verifyPermission(slug: string) {
   });
 
   if (!user) return false;
+  
+  // Real-time role check for bypass
   if (user.roles.some(ur => ur.role.name === 'SUPER_ADMIN')) return true;
 
   return user.roles.some(ur => 
