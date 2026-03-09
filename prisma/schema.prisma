@@ -16,20 +16,6 @@ enum UserStatus {
   SUSPENDED
 }
 
-enum FindingCategory {
-  IDENTITY
-  DOCUMENTATION
-  COMPLIANCE
-  ACCOUNT_VALIDATION
-}
-
-enum FindingSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
 model User {
   id                  String     @id @default(cuid())
   email               String     @unique
@@ -38,19 +24,23 @@ model User {
   lastName            String
   phoneNumber         String?
   status              UserStatus @default(ACTIVE)
+  needsPasswordChange Boolean    @default(false)
+  
   branchId            String?
   branch              Branch?    @relation(fields: [branchId], references: [id])
-  needsPasswordChange Boolean    @default(true)
-  assignedBranches    String?    // Stored as comma-separated list
+  
+  assignedBranches    String?    // Comma separated list for specialists
+  
+  roles               UserRole[]
+  
+  submissions         KYC[]      @relation("CreatedBy")
+  assignedSubmissions KYC[]      @relation("AssignedTo")
+  
+  auditLogs           AuditLog[]
+  memos               Memo[]     @relation("UploadedBy")
+  
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
-
-  // Relations
-  roles               UserRole[]
-  submissions         KYC[]      @relation("CreatedBy")
-  assignments         KYC[]      @relation("AssignedTo")
-  memos               Memo[]
-  auditLogs           AuditLog[]
 }
 
 model Role {
@@ -64,19 +54,10 @@ model Role {
 
 model Permission {
   id    String           @id @default(cuid())
-  slug  String           @unique
+  slug  String           @unique // e.g., 'CASE_SUBMIT'
   name  String
-  group String
+  group String           // e.g., 'WORKFLOWS', 'SYSTEM'
   roles RolePermission[]
-}
-
-model UserRole {
-  userId String
-  roleId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@id([userId, roleId])
 }
 
 model RolePermission {
@@ -86,6 +67,15 @@ model RolePermission {
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
 }
 
 model District {
@@ -101,35 +91,41 @@ model Branch {
   districtId String
   district   District @relation(fields: [districtId], references: [id])
   users      User[]
-  kycs       KYC[]
+  submissions KYC[]
 }
 
 model KYC {
-  id                String   @id // Custom ID like BRANCH-KYC-1234
+  id                String   @id // Custom format e.g. BR-KYC-1234
   customerName      String
+  entityType        String?
+  
   branchId          String
-  branchName        String
   branch            Branch   @relation(fields: [branchId], references: [id])
+  branchName        String   // Denormalized for fast filtering
+  
   createdById       String
   createdBy         User     @relation("CreatedBy", fields: [createdById], references: [id])
+  
   assignedToId      String?
   assignedTo        User?    @relation("AssignedTo", fields: [assignedToId], references: [id])
+  
+  submittedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
   status            String   // From KYC_STATUS constants
+  active            Boolean  @default(true)
+  
   isExceptional     Boolean  @default(false)
   exceptionalStatus String   @default("None")
-  isResubmitted     Boolean  @default(false)
-  active            Boolean  @default(true)
-  checklistState    String?  @db.Text // JSON string
-  commentHistory    String?  @db.Text // JSON string
+  
+  checklistState    String?  @db.Text // JSON blob
+  commentHistory    String?  @db.Text // JSON blob
+  
   amendCycles       Int      @default(0)
-  entityType        String?
-  submittedAt       DateTime @default(now())
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  // Relations
-  memos     Memo[]
-  auditLogs AuditLog[]
+  isResubmitted     Boolean  @default(false)
+  
+  memos             Memo[]
+  auditLogs         AuditLog[]
 }
 
 model Memo {
@@ -140,7 +136,7 @@ model Memo {
   kycId        String
   kyc          KYC      @relation(fields: [kycId], references: [id], onDelete: Cascade)
   uploadedById String
-  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  uploadedBy   User     @relation("UploadedBy", fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())
 }
 
@@ -152,49 +148,31 @@ model AuditLog {
   userName  String?
   action    String
   details   String   @db.Text
+  ipAddress String?
+  severity  String   @default("LOW")
+  metadata  String?  @db.Text
   kycId     String?
   kyc       KYC?     @relation(fields: [kycId], references: [id])
-  ipAddress String?
   timestamp DateTime @default(now())
-  severity  String   @default("LOW")
-  metadata  String?  @db.Text // JSON string
 }
 
 model GlobalSetting {
-  id               String   @id @default("global")
-  entityTypes      String?  @db.Text // JSON string
-  documentTypes    String?  @db.Text // JSON string
-  guidelines       String?  @db.Text // JSON string
-  autoEscalation   Boolean  @default(true)
-  escalationHours  Int      @default(72)
-  strictSla        Boolean  @default(true)
-  slaHours         Int      @default(24)
-  lastUpdated      DateTime @default(now())
-}
-
-model FollowUpVerification {
-  id           String    @id @default(cuid())
-  submissionId String
-  customerName String
-  branch       String
-  officer      String
-  accountType  String
-  verifiedBy   String?
-  verifiedAt   DateTime? @default(now())
-  result       String?   // "Correct" | "Discrepancy"
-  remarks      String?   @db.Text
-  status       String    @default("PENDING") // "PENDING" | "COMPLETED"
+  id            String   @id @default("global")
+  entityTypes   String?  @db.Text // JSON array
+  documentTypes String?  @db.Text // JSON array
+  guidelines    String?  @db.Text // JSON array
+  lastUpdated   DateTime @default(now())
 }
 
 model Finding {
-  id           String          @id @default(cuid())
-  code         String          @unique
+  id           String   @id @default(cuid())
+  code         String   @unique
   title        String
-  description  String          @db.Text
-  category     FindingCategory
-  severity     FindingSeverity
-  applicableTo String?         // Comma separated types
-  active       Boolean         @default(true)
-  source       String          @default("manual")
-  createdAt    DateTime        @default(now())
+  description  String   @db.Text
+  category     String
+  severity     String
+  applicableTo String?  // Comma separated
+  active       Boolean  @default(true)
+  source       String   @default("manual")
+  createdAt    DateTime @default(now())
 }
