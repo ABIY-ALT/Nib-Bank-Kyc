@@ -8,7 +8,7 @@ import { getServerSession } from './auth-server';
 
 /**
  * Robust Authorization Helper.
- * Checks JWT role first, then performs a database fallback for Master Admins.
+ * Performs a real-time database fallback for Master Admins to prevent stale token rejection.
  */
 async function isAuthorizedAdmin() {
   const session = await getServerSession();
@@ -17,7 +17,7 @@ async function isAuthorizedAdmin() {
   // Level 1: JWT Session Check
   if (session.role === 'SUPER_ADMIN') return true;
 
-  // Level 2: Database Fallback (Prevents stale token rejection)
+  // Level 2: Database Fallback (Ensures promoted admins have instant access)
   const user = await prisma.user.findUnique({
     where: { id: session.id },
     include: { roles: { include: { role: true } } }
@@ -26,22 +26,9 @@ async function isAuthorizedAdmin() {
   return user?.roles.some(ur => ur.role.name === 'SUPER_ADMIN') || false;
 }
 
-/**
- * Institutional Capability Registry Sync.
- * Provisioning standard capabilities required for operational workflows.
- */
 export async function seedInstitutionalPermissions() {
   const session = await getServerSession();
   if (!(await isAuthorizedAdmin())) {
-    if (session) {
-      await createAuditLog({
-        userId: session.id,
-        userEmail: session.email,
-        action: 'UNAUTHORIZED_ADMIN_ACCESS',
-        details: 'Attempted to trigger Permission Seeding without Super Admin clearance.',
-        severity: 'HIGH'
-      });
-    }
     return { success: false, error: 'Unauthorized' };
   }
 
@@ -51,18 +38,17 @@ export async function seedInstitutionalPermissions() {
     { slug: 'DASHBOARD_VIEW_SYSTEM', name: 'View System-wide Command Dashboard', group: 'DASHBOARD' },
 
     // WORKFLOWS - KYC Operations
-    { slug: 'CASE_SUBMIT', name: 'Create New Submission', group: 'CASE_MANAGEMENT' },
-    { slug: 'CASE_VIEW_OWN', name: 'View My Submissions', group: 'CASE_MANAGEMENT' },
-    { slug: 'KYC_VIEW_QUEUE', name: 'Access Review & Action', group: 'CASE_MANAGEMENT' },
-    { slug: 'VIEW_AMENDMENT_QUEUE', name: 'Access Amendment Review', group: 'CASE_MANAGEMENT' },
-    { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Returned Cases', group: 'CASE_MANAGEMENT' },
-    { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'CASE_MANAGEMENT' },
-    { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'CASE_MANAGEMENT' },
-    { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'CASE_MANAGEMENT' },
+    { slug: 'CASE_SUBMIT', name: 'Create New Submission', group: 'WORKFLOWS' },
+    { slug: 'CASE_VIEW_OWN', name: 'View My Submissions', group: 'WORKFLOWS' },
+    { slug: 'KYC_VIEW_QUEUE', name: 'Access Review & Action', group: 'WORKFLOWS' },
+    { slug: 'VIEW_AMENDMENT_QUEUE', name: 'Access Amendment Review', group: 'WORKFLOWS' },
+    { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Returned Cases', group: 'WORKFLOWS' },
+    { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
+    { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'WORKFLOWS' },
+    { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
     
     // WORKFLOWS - Monitoring
     { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },
-    { slug: 'DASHBOARD_VIEW_BRANCH', name: 'View Branch Specific Dashboard', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Dashboard', group: 'MONITORING' },
     
@@ -111,7 +97,6 @@ export async function seedInstitutionalPermissions() {
     revalidatePath('/admin/roles');
     return { success: true };
   } catch (error) {
-    console.error('[Institutional Framework] Seeding Error:', error);
     return { success: false };
   }
 }
@@ -119,17 +104,10 @@ export async function seedInstitutionalPermissions() {
 export async function getRoleDefinitions() {
   try {
     return await prisma.role.findMany({
-      include: { 
-        permissions: { 
-          include: { 
-            permission: true 
-          } 
-        } 
-      },
+      include: { permissions: { include: { permission: true } } },
       orderBy: { name: 'asc' }
     });
   } catch (e) {
-    console.error('[Vault Roles] Fetch Error:', e);
     return [];
   }
 }
@@ -140,7 +118,6 @@ export async function getAllPermissions() {
       orderBy: [{ group: 'asc' }, { name: 'asc' }]
     });
   } catch (e) {
-    console.error('[Permissions Registry] Fetch Error:', e);
     return [];
   }
 }
@@ -152,33 +129,20 @@ export async function upsertRole(data: { id?: string, name: string, description:
   }
 
   try {
-    const existingByName = await prisma.role.findUnique({
-      where: { name: data.name }
-    });
-
-    if (existingByName && (!data.id || existingByName.id !== data.id)) {
-      return { 
-        success: false, 
-        error: `A role with the designation "${data.name}" already exists.` 
-      };
-    }
-
     const role = await prisma.$transaction(async (tx) => {
       const r = await tx.role.upsert({
-        where: { id: data.id || 'new-role-id' },
+        where: { id: data.id || 'new-id' },
         update: { name: data.name, description: data.description },
         create: { name: data.name, description: data.description }
       });
 
       await tx.rolePermission.deleteMany({ where: { roleId: r.id } });
-      
       if (data.permissionIds.length > 0) {
         await tx.rolePermission.createMany({
           data: data.permissionIds.map(pid => ({ roleId: r.id, permissionId: pid }))
         });
       }
 
-      // REVOKE SESSIONS: Refresh updatedAt for all users in this role to force re-login with new permissions
       await tx.user.updateMany({
         where: { roles: { some: { roleId: r.id } } },
         data: { updatedAt: new Date() }
@@ -191,53 +155,29 @@ export async function upsertRole(data: { id?: string, name: string, description:
       userId: session!.id,
       userEmail: session!.email,
       action: 'ROLE_MODIFICATION',
-      details: `Role "${data.name}" updated. All active sessions for associated users have been revoked for security.`,
-      severity: 'CRITICAL',
-      metadata: { roleId: role.id, permissionCount: data.permissionIds.length }
+      details: `Role "${data.name}" updated. All active sessions revoked for security.`,
+      severity: 'CRITICAL'
     });
 
     revalidatePath('/admin/roles');
     return { success: true, role };
   } catch (error: any) {
-    console.error('[Vault Authority Upsert] Failure:', error);
-    return { success: false, error: error.message || 'Institutional database fault during role commit.' };
+    return { success: false, error: error.message };
   }
 }
 
 export async function toggleRoleStatus(id: string, currentStatus: boolean) {
-  const session = await getServerSession();
-  if (!(await isAuthorizedAdmin())) {
-    return { success: false, error: 'Unauthorized' };
-  }
+  if (!(await isAuthorizedAdmin())) return { success: false, error: 'Unauthorized' };
 
   try {
-    const role = await prisma.$transaction(async (tx) => {
-      const r = await tx.role.update({
-        where: { id },
-        data: { active: !currentStatus }
-      });
-
-      // REVOKE SESSIONS: Force logout for all users in the affected role
-      await tx.user.updateMany({
-        where: { roles: { some: { roleId: id } } },
-        data: { updatedAt: new Date() }
-      });
-
-      return r;
-    });
-
-    await createAuditLog({
-      userId: session!.id,
-      userEmail: session!.email,
-      action: 'ROLE_STATUS_TOGGLE',
-      details: `Authority level "${role.name}" is now ${role.active ? 'ACTIVE' : 'INACTIVE'}. Active sessions revoked.`,
-      severity: 'HIGH'
+    const role = await prisma.role.update({
+      where: { id },
+      data: { active: !currentStatus, updatedAt: new Date() }
     });
 
     revalidatePath('/admin/roles');
     return { success: true, role };
   } catch (e) {
-    console.error('[Vault Authority Toggle] Failure:', e);
     return { success: false };
   }
 }

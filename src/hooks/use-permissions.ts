@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from "@/lib/auth";
@@ -5,7 +6,6 @@ import { useMemo, useCallback } from "react";
 
 /**
  * Production-ready Permission Engine.
- * Optimized with useCallback to prevent infinite update loops in the UI Shell.
  * HARDENED: Grants absolute bypass for SUPER_ADMIN role.
  */
 export function usePermissions() {
@@ -33,9 +33,7 @@ export function usePermissions() {
       if (role?.permissions) {
         role.permissions.forEach((permRel: any) => {
           const slug = permRel.permission?.slug || permRel.slug;
-          if (slug) {
-            aggregatedSlugs.add(slug);
-          }
+          if (slug) aggregatedSlugs.add(slug);
         });
       }
     });

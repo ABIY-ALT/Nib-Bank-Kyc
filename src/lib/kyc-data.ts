@@ -1,3 +1,10 @@
+
+/**
+ * @fileOverview Institutional Status Registry.
+ * Centralized string constants to ensure absolute compatibility across 
+ * SQL databases and UI layers.
+ */
+
 export const KYC_STATUS = {
   SUBMITTED: 'SUBMITTED',
   IN_REVIEW: 'IN_REVIEW',
@@ -22,111 +29,6 @@ export const EXCEPTIONAL_STATUS = {
 export type SubmissionStatus = keyof typeof KYC_STATUS;
 export type ExceptionalStatus = keyof typeof EXCEPTIONAL_STATUS;
 
-export interface ExceptionalApproval {
-  role: string;
-  action: 'Approved' | 'Rejected' | 'Clarification' | 'Forwarded to Chief' | 'Returned to Director';
-  performedBy: string;
-  timestamp: string;
-  remarks: string;
-  memoAttached?: boolean;
-}
-
-export interface ExceptionalData {
-  reason: 'Missing Documents' | 'High Deposit Amount' | 'High-Risk Profile' | 'Case Aging beyond SLA';
-  justification: string;
-  memoUrl: string;
-  initiatedBy: string;
-  initiatedAt: string;
-  approvalHistory: ExceptionalApproval[];
-}
-
-export interface CommentHistoryEntry {
-  role: string;
-  performedBy: string;
-  timestamp: string;
-  comment: string;
-  action: string;
-}
-
-export interface Document {
-  id: string;
-  name: string;
-  type: string;
-  uploadedAt: string;
-  status: 'Current' | 'Replaced';
-  url: string;
-}
-
-export interface BundleDownloadLog {
-  id: string;
-  performedBy: string;
-  timestamp: string;
-  bundleName: string;
-  sourceDistrict: string;
-  sourceBranch: string;
-}
-
-export interface AuditLog {
-  id: string;
-  action: string;
-  performedBy: string;
-  performedAt: string;
-  details: string;
-}
-
-export interface KYCSubmission {
-  id: string;
-  customerId?: string;
-  customerName: string;
-  branch: string;
-  district: string;
-  submittedBy: string;
-  submittedAt: string;
-  status: SubmissionStatus;
-  isExceptional?: boolean;
-  exceptionalStatus?: ExceptionalStatus;
-  exceptionalData?: ExceptionalData;
-  commentHistory?: CommentHistoryEntry[];
-  documents?: Document[];
-  remarks?: string;
-  isResubmitted?: boolean;
-  resubmittedAt?: string;
-  entityType?: string;
-  amendmentCycles?: number;
-  reviewedBy?: string;
-  reviewedAt?: string;
-  checklistState?: Record<string, boolean>;
-}
-
-export interface FollowUpVerification {
-  id: string;
-  submissionId: string;
-  customerName: string;
-  branch: string;
-  officer: string;
-  accountType: string;
-  verifiedBy?: string;
-  verifiedAt?: string;
-  result?: 'Correct' | 'Discrepancy';
-  remarks?: string;
-  status: 'PENDING' | 'COMPLETED';
-  assignedTo?: string;
-  assignedToName?: string;
-}
-
-export interface KYCFinding {
-  id: string;
-  code: string;
-  title: string;
-  description: string;
-  category: 'IDENTITY' | 'DOCUMENTATION' | 'COMPLIANCE' | 'ACCOUNT_VALIDATION';
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  applicableTo: string[];
-  createdAt: string;
-  active: boolean;
-  source: 'manual' | 'auto';
-}
-
 export const AMENDMENT_SCENARIOS = [
   "1. Duplicate CID found on NIB search",
   "2. Amend Customer/Mother Name on T24",
@@ -148,5 +50,3 @@ export const AMENDMENT_SCENARIOS = [
   "18. MOA, POA, AOA, or National ID not authenticated",
   "19. Other (specify)"
 ];
-
-export const MOCK_SUBMISSIONS: Partial<KYCSubmission>[] = [];

@@ -1,3 +1,4 @@
+
 'use server';
 
 import { cookies } from 'next/headers';
@@ -6,8 +7,7 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * Institutional Session Resolver.
- * Cryptographically verifies the auth token, validates against DB version,
- * and enforces absolute session lifetime boundaries.
+ * Cryptographically verifies the auth token and validates against DB version.
  */
 export async function getServerSession() {
   try {
@@ -20,12 +20,8 @@ export async function getServerSession() {
     
     const nowSeconds = Math.floor(Date.now() / 1000);
 
-    // 1. ABSOLUTE LIFETIME CHECK
-    if (payload.abs && nowSeconds > payload.abs) {
-      return null;
-    }
+    if (payload.abs && nowSeconds > payload.abs) return null;
 
-    // 2. SERVER-SIDE REVOCATION CHECK
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
       select: { updatedAt: true }
@@ -33,11 +29,8 @@ export async function getServerSession() {
 
     if (!user) return null;
 
-    // Use second-level precision to match token storage
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
-    if (payload.v !== currentVersion) {
-      return null;
-    }
+    if (payload.v !== currentVersion) return null;
     
     return payload as { id: string, email: string, role: string, v: number, abs: number, ip: string };
   } catch {
@@ -47,7 +40,6 @@ export async function getServerSession() {
 
 /**
  * Server-side Permission Guard.
- * Validates if the active session holds the required capability slug.
  * HARDENED: Super Admin bypasses all slug-level restrictions.
  */
 export async function verifyPermission(slug: string) {
@@ -77,11 +69,8 @@ export async function verifyPermission(slug: string) {
   });
 
   if (!user) return false;
-  
-  // Secondary check for role name in DB
   if (user.roles.some(ur => ur.role.name === 'SUPER_ADMIN')) return true;
 
-  // Standard RBAC check
   return user.roles.some(ur => 
     ur.role.permissions.some(rp => rp.permission.slug === slug)
   );
