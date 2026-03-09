@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -24,7 +23,13 @@ async function verifyAdminClearance() {
   // Level 2: Database Fallback (Ensures promoted admins have instant access)
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    include: { roles: { include: { role: true } } }
+    include: { 
+      roles: { 
+        include: { 
+          role: true 
+        } 
+      } 
+    }
   });
 
   return user?.roles.some(ur => ur.role.name === 'SUPER_ADMIN') || false;

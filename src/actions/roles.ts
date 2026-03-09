@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -20,7 +19,13 @@ async function isAuthorizedAdmin() {
   // Level 2: Database Fallback (Ensures promoted admins have instant access)
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    include: { roles: { include: { role: true } } }
+    include: { 
+      roles: { 
+        include: { 
+          role: true 
+        } 
+      } 
+    }
   });
 
   return user?.roles.some(ur => ur.role.name === 'SUPER_ADMIN') || false;
@@ -49,6 +54,7 @@ export async function seedInstitutionalPermissions() {
     
     // WORKFLOWS - Monitoring
     { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },
+    { slug: 'DASHBOARD_VIEW_BRANCH', name: 'View Branch Specific Dashboard', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_DISTRICT_NODE', name: 'Access District Monitoring', group: 'MONITORING' },
     { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'View District Dashboard', group: 'MONITORING' },
     
@@ -124,6 +130,8 @@ export async function getAllPermissions() {
 
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
   const session = await getServerSession();
+  
+  // Hardened Clearance Check
   if (!(await isAuthorizedAdmin())) {
     return { success: false, error: 'Unauthorized' };
   }
@@ -143,6 +151,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
         });
       }
 
+      // Security: Rotate user update timestamps to force JWT refresh
       await tx.user.updateMany({
         where: { roles: { some: { roleId: r.id } } },
         data: { updatedAt: new Date() }
@@ -155,7 +164,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
       userId: session!.id,
       userEmail: session!.email,
       action: 'ROLE_MODIFICATION',
-      details: `Role "${data.name}" updated. All active sessions revoked for security.`,
+      details: `Role "${data.name}" updated. Associated personnel sessions marked for rotation.`,
       severity: 'CRITICAL'
     });
 
