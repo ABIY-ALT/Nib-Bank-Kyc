@@ -35,7 +35,8 @@ import {
   RotateCcw,
   Upload,
   ShieldAlert,
-  X
+  X,
+  History
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -318,6 +319,11 @@ export default function SubmissionDetails() {
     ];
   }, [submission, isTerminal]);
 
+  const sortedHistory = useMemo(() => {
+    if (!submission?.commentHistory || !Array.isArray(submission.commentHistory)) return [];
+    return [...submission.commentHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [submission]);
+
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
 
@@ -405,21 +411,30 @@ export default function SubmissionDetails() {
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="bg-primary p-6 border-b"><CardTitle className="text-xl font-black text-white">Verdict History</CardTitle></CardHeader>
             <CardContent className="pt-8 px-8 pb-10">
-              <div className="relative space-y-8">
-                <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
-                {submission.commentHistory?.map((entry: any, idx: number) => (
-                  <div key={idx} className="relative flex gap-6">
-                    <div className="z-10 w-10 h-10 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5 text-slate-400" /></div>
-                    <div className="flex-1 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
-                      <div className="flex justify-between mb-2">
-                        <span className="text-xs font-black text-slate-900 uppercase">{entry.performedBy} <span className="text-primary">[{entry.role}]</span></span>
-                        <span className="text-[10px] font-bold text-slate-400">{new Date(entry.timestamp).toLocaleString()}</span>
+              {sortedHistory.length > 0 ? (
+                <div className="relative space-y-8">
+                  <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100" />
+                  {sortedHistory.map((entry: any, idx: number) => (
+                    <div key={idx} className="relative flex gap-6">
+                      <div className="z-10 w-10 h-10 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5 text-slate-400" /></div>
+                      <div className="flex-1 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+                        <div className="flex justify-between mb-2">
+                          <span className="text-xs font-black text-slate-900 uppercase">{entry.performedBy} <span className="text-primary">[{entry.role}]</span></span>
+                          <span className="text-[10px] font-bold text-slate-400">{new Date(entry.timestamp).toLocaleString()}</span>
+                        </div>
+                        <p className="text-sm text-slate-700 font-medium italic">"{entry.comment}"</p>
                       </div>
-                      <p className="text-sm text-slate-700 font-medium italic">"{entry.comment}"</p>
                     </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                  <div className="p-4 bg-slate-50 rounded-full">
+                    <History className="w-8 h-8 text-slate-300" />
                   </div>
-                ))}
-              </div>
+                  <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No history recorded for this case.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -89,7 +88,7 @@ export async function getSubmissions(filters?: any) {
 
     return data.map(item => formatKYC(item));
   } catch (error) {
-    console.error("[Submissions Action] Fetch Fault:", error);
+    console.error("[Submissions Action] Fetch Error:", error);
     return [];
   }
 }
@@ -190,6 +189,15 @@ export async function createSubmission(formData: FormData) {
       });
     }
 
+    // Capture initial remarks in the comment history for immediate visibility
+    const initialHistory = validated.remarks ? [{
+      role: 'BRANCH_OFFICER',
+      performedBy: session.email.split('@')[0],
+      timestamp: new Date().toISOString(),
+      comment: validated.remarks,
+      action: "SUBMIT"
+    }] : [];
+
     const kyc = await prisma.kYC.create({
       data: {
         id: validated.id,
@@ -202,7 +210,7 @@ export async function createSubmission(formData: FormData) {
         entityType: validated.entityType,
         remarks: validated.remarks,
         checklistState: {},
-        commentHistory: [],
+        commentHistory: initialHistory,
         memos: { create: memoData }
       }
     });
@@ -434,7 +442,7 @@ export async function getWorkflowCounts(params: { userId: string, branchName?: s
       prisma.kYC.count({ where: { ...branchFilter, isExceptional: true, status: { not: KYC_STATUS.APPROVED }, active: true } })
     ]);
 
-    return { mySubmissions: myCount, actionRequired: 0, reviewQueue, resubmitted, escalated, exceptional, branchNode: 0 };
+    return { mySubmissions: myCount, actionRequired: actionRequired, reviewQueue, resubmitted, escalated, exceptional, branchNode: 0 };
   } catch (error) {
     return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
   }
