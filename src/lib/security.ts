@@ -1,12 +1,20 @@
 import crypto from 'crypto';
 
-const SECRET = process.env.JWT_SECRET || 'institutional_security_hmac_fallback_32_chars';
+/**
+ * Institutional Security Provider.
+ * Enforces strict environment secret verification to prevent insecure fallbacks.
+ */
+const SECRET = process.env.JWT_SECRET;
+
+if (!SECRET || SECRET.length < 32) {
+  throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure (min 32 chars required).");
+}
 
 /**
  * Generates an HMAC-signed token for an ID to prevent IDOR manipulation.
  */
 export function signId(id: string): string {
-  const hmac = crypto.createHmac('sha256', SECRET).update(id).digest('hex');
+  const hmac = crypto.createHmac('sha256', SECRET!).update(id).digest('hex');
   return `${id}.${hmac}`;
 }
 
@@ -17,7 +25,7 @@ export function signId(id: string): string {
 export function signDownloadToken(id: string): string {
   const expires = Date.now() + (15 * 60 * 1000); // 15 mins
   const payload = `${id}:${expires}`;
-  const hmac = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+  const hmac = crypto.createHmac('sha256', SECRET!).update(payload).digest('hex');
   return Buffer.from(`${payload}:${hmac}`).toString('base64url');
 }
 
@@ -32,7 +40,7 @@ export function verifyDownloadToken(token: string): string | null {
     
     const [id, expires, hmac] = parts;
     const payload = `${id}:${expires}`;
-    const expectedHmac = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+    const expectedHmac = crypto.createHmac('sha256', SECRET!).update(payload).digest('hex');
     
     const hmacBuffer = Buffer.from(hmac);
     const expectedBuffer = Buffer.from(expectedHmac);

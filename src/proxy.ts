@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
@@ -60,7 +59,6 @@ export async function proxy(req: NextRequest) {
     const internalOrigin = `${protocol}//${host}`;
 
     if (origin) {
-      // Dynamic validation against trusted production domains
       const isTrusted = ALLOWED_ORIGINS.length > 0 
         ? ALLOWED_ORIGINS.includes(origin) 
         : origin === internalOrigin;
@@ -115,7 +113,11 @@ export async function proxy(req: NextRequest) {
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
+    const secretStr = process.env.JWT_SECRET || "";
+    if (secretStr.length < 32) {
+      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure.");
+    }
+    const secret = new TextEncoder().encode(secretStr);
     const { payload } = await jwtVerify(token, secret);
 
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -161,12 +163,6 @@ export async function proxy(req: NextRequest) {
           headers: requestHeaders,
         },
       });
-      response.headers.set('Content-Security-Policy', cspHeader);
-      return response;
-    }
-
-    if (pathname.startsWith('/admin') && userRole !== 'SUPER_ADMIN') {
-      const response = NextResponse.redirect(new URL('/unauthorized', req.url));
       response.headers.set('Content-Security-Policy', cspHeader);
       return response;
     }

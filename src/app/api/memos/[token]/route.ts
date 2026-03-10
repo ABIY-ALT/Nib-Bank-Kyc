@@ -24,7 +24,11 @@ export async function GET(
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
+    const secretStr = process.env.JWT_SECRET || "";
+    if (secretStr.length < 32) {
+      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure.");
+    }
+    const secret = new TextEncoder().encode(secretStr);
     const { payload } = await jwtVerify(jwtToken, secret);
     const userId = payload.id as string;
 
@@ -36,7 +40,6 @@ export async function GET(
     }
 
     const memo = result.memo!;
-    // memo.fileUrl stores relative path from root, e.g. "uploads/filename"
     const filePath = path.join(process.cwd(), memo.fileUrl);
 
     // Stream the file with security headers
@@ -56,11 +59,10 @@ export async function GET(
           'Content-Disposition': `inline; filename="${fileName}"`,
           'X-Content-Type-Options': 'nosniff',
           'Cache-Control': 'no-store, no-cache, must-revalidate',
-          'Content-Security-Policy': "default-src 'none';", // Isolation for streamed content
+          'Content-Security-Policy': "default-src 'none';",
         },
       });
     } catch (err) {
-      // Rule: Never 404 for unauthorized path probing to prevent metadata leakage
       console.error(`[Memo Gateway] File Access Error at ${filePath}:`, err);
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }

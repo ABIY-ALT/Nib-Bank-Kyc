@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
@@ -64,7 +63,11 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'institutional_default_secret_32_chars_min');
+    const secretStr = process.env.JWT_SECRET || "";
+    if (secretStr.length < 32) {
+      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure.");
+    }
+    const secret = new TextEncoder().encode(secretStr);
     const { payload } = await jwtVerify(token, secret);
 
     const nowSeconds = Math.floor(Date.now() / 1000);
