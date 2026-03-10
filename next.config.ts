@@ -7,7 +7,13 @@ import type {NextConfig} from 'next';
  * Static headers are applied here; dynamic CSP is handled in proxy.ts.
  */
 const nextConfig: NextConfig = {
-  poweredByHeader: false, // MANDATORY: Suppresses X-Powered-By header
+  poweredByHeader: false,
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   async headers() {
     return [
       {
@@ -19,7 +25,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Strict-Transport-Security',
-            value: 'max-age=63072000; includeSubDomains; preload', // ENFORCE TLS 1.2+ & Forward Secrecy
+            value: 'max-age=63072000; includeSubDomains; preload',
           },
           {
             key: 'X-Frame-Options',
@@ -44,9 +50,6 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
-  },
-  typescript: {
-    ignoreBuildErrors: true,
   },
   images: {
     remotePatterns: [

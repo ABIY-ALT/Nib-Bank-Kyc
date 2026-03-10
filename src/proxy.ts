@@ -15,7 +15,7 @@ import crypto from 'crypto';
  */
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: ['*'],
-  KYC_OFFICER: ['/', '/submissions', '/reports', '/performance', '/kyc-fq-reference', '/head-office'],
+  KYC_OFFICER: ['/', '/submissions', '/reports', '/performance', '/kyc-fq-reference', '/head-office', '/admin/storage'],
   BRANCH_OFFICER: ['/', '/submissions', '/reports', '/performance', '/kyc-fq-reference'],
   VIEWER: ['/'],
 };
@@ -176,7 +176,3 @@ export async function proxy(req: NextRequest) {
     return response;
   }
 }
-
-export const config = {
-  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico).*)'],
-};
