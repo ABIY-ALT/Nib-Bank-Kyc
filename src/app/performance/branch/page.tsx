@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
@@ -27,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { getSubmissions } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -79,9 +80,9 @@ export default function BranchPerformancePage() {
         stats[bName] = { name: bName, district: sub.districtName, volume: 0, approved: 0, amended: 0, pending: 0 };
       }
       stats[bName].volume++;
-      if (sub.status === KYCStatus.APPROVED) stats[bName].approved++;
-      if (sub.status === KYCStatus.ACTION_REQUIRED) stats[bName].amended++;
-      if ([KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status as any)) stats[bName].pending++;
+      if (sub.status === KYC_STATUS.APPROVED) stats[bName].approved++;
+      if (sub.status === KYC_STATUS.ACTION_REQUIRED) stats[bName].amended++;
+      if ([KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status)) stats[bName].pending++;
     });
 
     return Object.values(stats)

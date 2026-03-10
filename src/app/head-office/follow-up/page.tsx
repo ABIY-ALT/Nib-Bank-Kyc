@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -30,7 +31,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { getFollowUpVerifications, seedFollowUpPool } from "@/actions/follow-up";
 import { getSubmissions } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 export default function FollowUpDashboard() {
@@ -67,7 +68,7 @@ export default function FollowUpDashboard() {
     setIsSampling(true);
     try {
       const approved = await getSubmissions({
-        status: [KYCStatus.APPROVED],
+        status: [KYC_STATUS.APPROVED],
         limit: 100
       });
 

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from 'react';
@@ -30,7 +31,7 @@ import {
 import { Download, Filter, Loader2, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSubmissions } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { format, startOfMonth, eachMonthOfInterval, isSameMonth, subMonths } from "date-fns";
 
 const COLORS = ['#B89334', '#10B981', '#3F51B5', '#F59E0B', '#EF4444'];
@@ -70,8 +71,8 @@ export default function ReportsPage() {
       const monthSubs = submissions.filter(s => isSameMonth(new Date(s.submittedAt || s.createdAt), m));
       return {
         month: monthLabel,
-        approved: monthSubs.filter(s => s.status === KYCStatus.APPROVED).length,
-        rejected: monthSubs.filter(s => s.status === KYCStatus.REJECTED).length,
+        approved: monthSubs.filter(s => s.status === KYC_STATUS.APPROVED).length,
+        rejected: monthSubs.filter(s => s.status === KYC_STATUS.REJECTED).length,
       };
     });
 
@@ -85,7 +86,7 @@ export default function ReportsPage() {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
-    const totalResolved = submissions.filter(s => [KYCStatus.APPROVED, KYCStatus.REJECTED].length).length;
+    const totalResolved = submissions.filter(s => [KYC_STATUS.APPROVED, KYC_STATUS.REJECTED].includes(s.status)).length;
     
     return { barData, pieData, totalResolved };
   }, [submissions]);

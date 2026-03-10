@@ -1,3 +1,4 @@
+
 "use client"
 
 import { 
@@ -40,7 +41,7 @@ import { format } from "date-fns";
 import JSZip from 'jszip';
 import { useState } from "react";
 import { logBundleDownload, getSubmissionById } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 
 export function SubmissionsPageContent({ submissions }: { submissions: any[] }) {
   const { toast } = useToast();
@@ -60,7 +61,6 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       const branchName = (sub.branch?.name || sub.branchName || "HEADQUARTERS").replace(/\s+/g, '_');
       const bundleName = `${sub.id}_${timestamp}`;
 
-      // 1. Fetch full case details to get document URLs
       const fullSub = await getSubmissionById(sub.id);
       
       const manifest = `NIB BANK INSTITUTIONAL ARCHIVE\n` +
@@ -76,7 +76,6 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       
       let manifestBody = "";
       
-      // 2. Add files to the ZIP
       if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
         const docFolder = zip.folder("Documents");
         for (const doc of fullSub.documents) {
@@ -132,32 +131,32 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       );
     }
 
-    const status = sub.status as KYCStatus;
-    const isResubmitted = sub.isResubmitted && (status === KYCStatus.SUBMITTED || status === KYCStatus.IN_REVIEW);
+    const status = sub.status;
+    const isResubmitted = sub.isResubmitted && (status === KYC_STATUS.SUBMITTED || status === KYC_STATUS.IN_REVIEW);
 
     switch (status) {
-      case KYCStatus.APPROVED: 
+      case KYC_STATUS.APPROVED: 
         return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-[9px] px-3 py-1 uppercase flex items-center gap-1.5">
           <ShieldCheck className="w-3 h-3" /> Successfully Authorized
         </Badge>;
-      case KYCStatus.SUBMITTED: 
-      case KYCStatus.IN_REVIEW:
+      case KYC_STATUS.SUBMITTED: 
+      case KYC_STATUS.IN_REVIEW:
         return isResubmitted ? 
           <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1.5 font-black text-[9px] px-3 py-1 uppercase">
             <History className="w-3 h-3" /> Resubmitted
           </Badge> : 
           <Badge variant="outline" className="text-slate-500 font-black text-[9px] px-3 py-1 flex items-center gap-1.5 uppercase">
-            <Clock className="w-3 h-3" /> {status === KYCStatus.SUBMITTED ? 'Awaiting Specialist' : 'Specialist Analysis'}
+            <Clock className="w-3 h-3" /> {status === KYC_STATUS.SUBMITTED ? 'Awaiting Specialist' : 'Specialist Analysis'}
           </Badge>;
-      case KYCStatus.ACTION_REQUIRED: 
+      case KYC_STATUS.ACTION_REQUIRED: 
         return <Badge className="bg-orange-50 text-orange-700 border-orange-200 flex items-center gap-1.5 font-black text-[9px] px-3 py-1 uppercase animate-pulse">
           <AlertCircle className="w-3 h-3" /> Action Required
         </Badge>;
-      case KYCStatus.REJECTED: 
+      case KYC_STATUS.REJECTED: 
         return <Badge className="bg-red-50 text-red-700 border-red-200 font-black text-[9px] px-3 py-1 uppercase flex items-center gap-1.5">
           <XCircle className="w-3 h-3" /> Risk Rejected
         </Badge>;
-      case KYCStatus.ESCALATED: 
+      case KYC_STATUS.ESCALATED: 
         return <Badge className="bg-purple-50 text-purple-700 border-purple-200 font-black text-[9px] px-3 py-1 uppercase flex items-center gap-1.5">
           <ShieldAlert className="w-3 h-3" /> Senior Assessment
         </Badge>;

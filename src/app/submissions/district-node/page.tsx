@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
@@ -36,7 +37,7 @@ import {
 import { type ChartConfig, ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { SubmissionsPageContent } from "../submissions-content";
 import { getSubmissions } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { format } from "date-fns";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
@@ -100,10 +101,10 @@ export default function DistrictMonitoringPage() {
 
     const stats = {
       total: submissions.length,
-      approved: submissions.filter(s => s.status === KYCStatus.APPROVED).length,
-      pending: submissions.filter(s => [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status)).length,
-      rejected: submissions.filter(s => s.status === KYCStatus.REJECTED).length,
-      amended: submissions.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length,
+      approved: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
+      pending: submissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
+      rejected: submissions.filter(s => s.status === KYC_STATUS.REJECTED).length,
+      amended: submissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
       branches: {} as Record<string, { name: string, total: number, approved: number, pending: number, amended: number }>,
       officers: {} as Record<string, { name: string, total: number, approved: number, amended: number, pending: number, cycles: number }>,
       byStatus: [
@@ -132,19 +133,19 @@ export default function DistrictMonitoringPage() {
       stats.officers[officerKey].total++;
       stats.officers[officerKey].cycles += (sub.amendCycles || 0);
       
-      if (sub.status === KYCStatus.APPROVED) {
+      if (sub.status === KYC_STATUS.APPROVED) {
         stats.branches[bName].approved++;
         stats.officers[officerKey].approved++;
         stats.byStatus[0].value++;
-      } else if (sub.status === KYCStatus.ACTION_REQUIRED) {
+      } else if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
         stats.branches[bName].amended++;
         stats.officers[officerKey].amended++;
         stats.byStatus[2].value++;
-      } else if ([KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status)) {
+      } else if ([KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status)) {
         stats.branches[bName].pending++;
         stats.officers[officerKey].pending++;
         stats.byStatus[1].value++;
-      } else if (sub.status === KYCStatus.REJECTED) {
+      } else if (sub.status === KYC_STATUS.REJECTED) {
         stats.byStatus[3].value++;
       }
 

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from "react"
@@ -44,6 +45,7 @@ import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { usePermissions } from "@/hooks/use-permissions"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 export default function DistrictPerformancePage() {
@@ -99,9 +101,9 @@ export default function DistrictPerformancePage() {
   const analytics = useMemo(() => {
     const stats = {
       total: submissions.length,
-      approved: submissions.filter(s => s.status === 'APPROVED').length,
-      pending: submissions.filter(s => ['SUBMITTED', 'IN_REVIEW'].includes(s.status)).length,
-      amended: submissions.filter(s => s.status === 'ACTION_REQUIRED').length,
+      approved: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
+      pending: submissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
+      amended: submissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
       byBranch: {} as Record<string, { total: number, approved: number, pending: number, amended: number }>
     };
 
@@ -109,9 +111,9 @@ export default function DistrictPerformancePage() {
       const bName = sub.branchName || 'Unmapped Node';
       if (!stats.byBranch[bName]) stats.byBranch[bName] = { total: 0, approved: 0, pending: 0, amended: 0 };
       stats.byBranch[bName].total++;
-      if (sub.status === 'APPROVED') stats.byBranch[bName].approved++;
-      if (sub.status === 'ACTION_REQUIRED') stats.byBranch[bName].amended++;
-      if (['SUBMITTED', 'IN_REVIEW'].includes(sub.status)) stats.byBranch[bName].pending++;
+      if (sub.status === KYC_STATUS.APPROVED) stats.byBranch[bName].approved++;
+      if (sub.status === KYC_STATUS.ACTION_REQUIRED) stats.byBranch[bName].amended++;
+      if ([KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status)) stats.byBranch[bName].pending++;
     });
 
     return stats;

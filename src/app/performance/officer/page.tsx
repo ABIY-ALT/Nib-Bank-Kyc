@@ -51,7 +51,7 @@ import { getDistricts, getBranches } from "@/actions/hierarchy";
 import { getGlobalSettings } from "@/actions/settings";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import Link from "next/link";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import JSZip from 'jszip';
@@ -152,7 +152,7 @@ export default function KYCOperationsMonitoringPage() {
     if (!user) return;
     setIsEscalating(caseId);
     try {
-      await updateSubmissionStatus(caseId, KYCStatus.ESCALATED, user.id, "Strategic escalation triggered by Supervisor via Institutional Oversight.");
+      await updateSubmissionStatus(caseId, KYC_STATUS.ESCALATED, user.id, "Strategic escalation triggered by Supervisor via Institutional Oversight.");
       toast({ title: "Escalation Successful" });
       await loadSubmissions();
     } catch (e) {
@@ -200,8 +200,8 @@ export default function KYCOperationsMonitoringPage() {
   const processedOfficers = useMemo(() => {
     return officers.map(off => {
       const offSubs = submissions.filter(s => s.assignedToId === off.id);
-      const approved = offSubs.filter(s => s.status === KYCStatus.APPROVED).length;
-      const escalated = offSubs.filter(s => s.status === KYCStatus.ESCALATED).length;
+      const approved = offSubs.filter(s => s.status === KYC_STATUS.APPROVED).length;
+      const escalated = offSubs.filter(s => s.status === KYC_STATUS.ESCALATED).length;
       const amended = offSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0);
       const branchesMapped = off.assignedBranches?.length || (off.branchName ? 1 : 0);
       
@@ -229,9 +229,9 @@ export default function KYCOperationsMonitoringPage() {
         name,
         totalFiles: branchSubs.reduce((acc, s) => acc + (s.memos?.length || 0), 0),
         total: branchSubs.length,
-        approved: branchSubs.filter(s => s.status === KYCStatus.APPROVED).length,
+        approved: branchSubs.filter(s => s.status === KYC_STATUS.APPROVED).length,
         amended: branchSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0),
-        pending: branchSubs.filter(s => [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status)).length
+        pending: branchSubs.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length
       };
     });
   }, [selectedOfficer, submissions]);
@@ -610,7 +610,7 @@ export default function KYCOperationsMonitoringPage() {
                     const subTime = new Date(sub.submittedAt || sub.createdAt);
                     const threshold = settings?.escalationHours || 72;
                     const hoursSince = differenceInHours(new Date(), subTime);
-                    const isBreached = hoursSince >= threshold && ![KYCStatus.APPROVED, KYCStatus.REJECTED, KYCStatus.ESCALATED].includes(sub.status);
+                    const isBreached = hoursSince >= threshold && ![KYC_STATUS.APPROVED, KYC_STATUS.REJECTED, KYC_STATUS.ESCALATED].includes(sub.status);
                     
                     return (
                       <TableRow key={sub.id} className={cn("border-b border-slate-100 hover:bg-slate-50/50 transition-colors", isBreached && "bg-red-50/30")}>
@@ -647,7 +647,7 @@ export default function KYCOperationsMonitoringPage() {
                         <TableCell>
                           <Badge variant="outline" className={cn(
                             "font-black text-[9px] uppercase px-3 py-1",
-                            sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'
+                            sub.status === KYC_STATUS.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'
                           )}>
                             {sub.status.replace(/_/g, ' ')}
                           </Badge>

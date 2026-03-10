@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useState } from "react";
@@ -7,7 +8,7 @@ import { Search, Loader2, Inbox, ShieldCheck, MapPin } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { getSubmissions } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export default function ReviewActionPage() {
@@ -25,7 +26,7 @@ export default function ReviewActionPage() {
       const assignedBranches = user.assignedBranches || [];
       
       const data = await getSubmissions({
-        status: [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW],
+        status: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW],
         isExceptional: false,
         isResubmitted: false,
         branches: isSuperAdmin ? undefined : (

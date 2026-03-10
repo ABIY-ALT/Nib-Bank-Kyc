@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -31,7 +32,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { getSubmissions } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 export default function SystemWideReportsPage() {
@@ -66,8 +67,8 @@ export default function SystemWideReportsPage() {
   const stats = useMemo(() => {
     if (!submissions.length) return null;
     const total = submissions.length;
-    const approved = submissions.filter(s => s.status === KYCStatus.APPROVED).length;
-    const pending = submissions.filter(s => [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status)).length;
+    const approved = submissions.filter(s => s.status === KYC_STATUS.APPROVED).length;
+    const pending = submissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length;
     const accuracy = total > 0 ? ((approved / (total - pending || 1)) * 100).toFixed(1) : "0.0";
     const branchMap: Record<string, number> = {};
     submissions.forEach(sub => {
