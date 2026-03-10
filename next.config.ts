@@ -3,14 +3,14 @@ import type {NextConfig} from 'next';
 
 /**
  * Institutional Content Security Policy.
- * Defines a strict allow-list for scripts, styles, and assets.
- * Mitigates XSS and injection vulnerabilities by enforcing origin-based boundaries.
+ * Hardened with domain-specific allow-lists and wildcard suppression.
+ * Restricts assets to 'self' and verified institutional providers only.
  */
 const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-eval' 'unsafe-inline';
     style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data: https://picsum.photos;
+    img-src 'self' https://picsum.photos;
     font-src 'self' https://fonts.gstatic.com;
     object-src 'none';
     base-uri 'self';
@@ -23,7 +23,7 @@ const cspHeader = `
 `.replace(/\s{2,}/g, ' ').trim();
 
 const nextConfig: NextConfig = {
-  poweredByHeader: false, // MANDATORY: Removes X-Powered-By header to prevent technology fingerprinting.
+  poweredByHeader: false, // MANDATORY: Suppresses X-Powered-By header to prevent fingerprinting.
   async headers() {
     return [
       {

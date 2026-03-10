@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react";
@@ -44,10 +45,10 @@ import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picke
 import { format } from "date-fns";
 
 const STATUS_OPTIONS = [
-  { id: KYC_STATUS.APPROVED, label: 'Approved' },
+  { id: KYC_STATUS.APPROVED, label: 'Authorized' },
   { id: KYC_STATUS.SUBMITTED, label: 'Submitted' },
   { id: KYC_STATUS.IN_REVIEW, label: 'In Review' },
-  { id: KYC_STATUS.ACTION_REQUIRED, label: 'Action Required' },
+  { id: KYC_STATUS.ACTION_REQUIRED, label: 'Returned' },
   { id: KYC_STATUS.ESCALATED, label: 'Escalated' },
   { id: KYC_STATUS.REJECTED, label: 'Rejected' }
 ];

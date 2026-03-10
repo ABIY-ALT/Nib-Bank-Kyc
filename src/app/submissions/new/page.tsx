@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -10,7 +11,6 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -184,8 +184,6 @@ export default function NewSubmission() {
       formData.append('entityType', entityType);
       formData.append('branchName', branchName);
       formData.append('districtName', user.districtName || "Central");
-      formData.append('submittedById', user.id);
-      formData.append('submittedByName', user.name);
       formData.append('remarks', remarks);
 
       uploadedFiles.forEach(f => {
@@ -197,7 +195,7 @@ export default function NewSubmission() {
       
       if (result.success) {
         toast({ title: "Successful", description: `Case ${submissionId} dispatched for review.` });
-        // Redirect to My Submissions page as per institutional request
+        // Redirect to My Submissions gallery per institutional requirement
         router.push(`/submissions/my`);
       } else {
         throw new Error(result.error);
