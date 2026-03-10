@@ -81,7 +81,7 @@ export async function getSubmissions(filters?: any) {
         branch: { include: { district: true } },
         memos: true
       },
-      orderBy: { submittedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
       take: filters?.limit || 100,
       skip: filters?.offset || 0,
     });
@@ -190,13 +190,13 @@ export async function createSubmission(formData: FormData) {
     }
 
     // Capture initial remarks in the comment history for immediate visibility
-    const initialHistory = validated.remarks ? [{
+    const initialHistory = [{
       role: 'BRANCH_OFFICER',
       performedBy: session.email.split('@')[0],
       timestamp: new Date().toISOString(),
-      comment: validated.remarks,
+      comment: validated.remarks || "Initial submission dispatched for analysis.",
       action: "SUBMIT"
-    }] : [];
+    }];
 
     const kyc = await prisma.kYC.create({
       data: {
@@ -220,11 +220,12 @@ export async function createSubmission(formData: FormData) {
       userEmail: session.email,
       userName: session.email.split('@')[0],
       action: 'CREATE',
-      details: `Initial submission for ${validated.customerName}.`,
+      details: `Initial submission for ${validated.customerName}. Remarks persisted in history.`,
       kycId: kyc.id
     });
 
     revalidatePath('/');
+    revalidatePath('/submissions/my');
     return { success: true, kyc };
   } catch (error: any) {
     console.error("[Submissions Action] Create Fault:", error);

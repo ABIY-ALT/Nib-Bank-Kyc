@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -195,7 +194,6 @@ export default function NewSubmission() {
       
       if (result.success) {
         toast({ title: "Successful", description: `Case ${submissionId} dispatched for review.` });
-        // Redirect to My Submissions gallery per institutional requirement
         router.push(`/submissions/my`);
       } else {
         throw new Error(result.error);

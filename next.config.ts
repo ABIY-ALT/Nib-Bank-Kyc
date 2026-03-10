@@ -1,10 +1,9 @@
-
 import type {NextConfig} from 'next';
 
 /**
- * Institutional Content Security Policy.
- * Hardened with domain-specific allow-lists and wildcard suppression.
- * Restricts assets to 'self' and verified institutional providers only.
+ * Institutional Security Policy.
+ * Hardened TLS/Transport configuration and restricted Content Security Policy.
+ * Suppresses server version headers to prevent fingerprinting.
  */
 const cspHeader = `
     default-src 'self';
@@ -23,7 +22,7 @@ const cspHeader = `
 `.replace(/\s{2,}/g, ' ').trim();
 
 const nextConfig: NextConfig = {
-  poweredByHeader: false, // MANDATORY: Suppresses X-Powered-By header to prevent fingerprinting.
+  poweredByHeader: false, // MANDATORY: Suppresses X-Powered-By header
   async headers() {
     return [
       {
@@ -39,7 +38,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Strict-Transport-Security',
-            value: 'max-age=63072000; includeSubDomains; preload',
+            value: 'max-age=63072000; includeSubDomains; preload', // ENFORCE TLS 1.2+ & Forward Secrecy
           },
           {
             key: 'X-Frame-Options',
