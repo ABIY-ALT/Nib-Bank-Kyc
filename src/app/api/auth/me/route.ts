@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { cookies, headers } from "next/headers";
@@ -7,7 +8,7 @@ import jwt from "jsonwebtoken";
 /**
  * Session Verification & Rotation Endpoint.
  * Enforces IP binding, token versioning, sliding window rotation, and absolute 8h limit.
- * Exclusively uses HttpOnly cookies for session management.
+ * Exclusively uses HttpOnly cookies with SameSite=Lax for session management.
  */
 export async function GET() {
   try {
@@ -102,7 +103,6 @@ export async function GET() {
     });
 
     // 4. Token Rotation (Sliding window)
-    // Automatic rotation if token has been used for more than 5 minutes
     const iat = payload.iat || 0;
     const rotationThreshold = 5 * 60; 
 

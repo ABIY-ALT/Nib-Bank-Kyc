@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
@@ -10,8 +11,7 @@ import { LoginSchema } from "@/lib/validation";
  * Hardened with:
  * 1. Generic Error Responses (Anti-Enumeration)
  * 2. Adaptive Throttling (Lockout via Audit Logs)
- * 3. Master Admin Recovery Protection
- * 4. Contextual Binding (IP)
+ * 3. CSRF Protection (SameSite=Lax Cookies)
  */
 
 const MAX_FAILED_ATTEMPTS = 5;

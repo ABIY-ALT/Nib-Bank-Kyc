@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -81,7 +82,7 @@ export async function getSubmissions(filters?: any) {
         branch: { include: { district: true } },
         memos: true
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { submittedAt: 'desc' },
       take: filters?.limit || 100,
       skip: filters?.offset || 0,
     });

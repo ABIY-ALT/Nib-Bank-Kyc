@@ -1,9 +1,11 @@
+
 import type {NextConfig} from 'next';
 
 /**
  * Institutional Security Policy.
  * Hardened TLS/Transport configuration and restricted Content Security Policy.
  * Suppresses server version headers to prevent fingerprinting.
+ * Implements strict CSP without wildcards.
  */
 const cspHeader = `
     default-src 'self';

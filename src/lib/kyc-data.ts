@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Institutional Status Registry.
  * Centralized string constants to ensure absolute compatibility across 
