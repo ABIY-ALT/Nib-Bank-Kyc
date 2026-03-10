@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
@@ -6,7 +5,7 @@ import { isValidInternalRedirect } from './lib/url-security';
 
 /**
  * Institutional Security Middleware.
- * Enforces reduced session timeouts, CSRF validation, and IP binding.
+ * Enforces reduced session timeouts, CSRF validation, and IP/UA binding.
  */
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: ['*'],
@@ -71,7 +70,9 @@ export async function middleware(req: NextRequest) {
       return response;
     }
 
-    // 5. Contextual Binding Verification (IP)
+    // 5. Contextual Binding Verification (IP Check)
+    // Note: UA check is performed at /api/auth/me for performance, 
+    // but IP is verified on every request here.
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || '127.0.0.1';
     if (payload.ip && payload.ip !== clientIp) {
       const response = NextResponse.redirect(new URL('/login', req.url));

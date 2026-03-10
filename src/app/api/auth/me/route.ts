@@ -1,13 +1,14 @@
-
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 /**
  * Session Verification & Rotation Endpoint.
  * Reduced rotation window (2m) and shorter session validity (10m).
+ * Enforces Client Context Binding (IP + UserAgent).
  */
 export async function GET() {
   try {
@@ -36,10 +37,13 @@ export async function GET() {
       return response;
     }
 
-    // 2. Contextual Binding Verification (IP Check)
+    // 2. Contextual Binding Verification (IP + UA Check)
     const currentIp = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
-    if (payload.ip !== currentIp) {
-      const response = NextResponse.json({ message: "Session restricted due to network change." }, { status: 401 });
+    const currentUa = headerList.get('user-agent') || 'unknown';
+    const currentUaHash = crypto.createHash('sha256').update(currentUa).digest('hex');
+
+    if (payload.ip !== currentIp || payload.ua !== currentUaHash) {
+      const response = NextResponse.json({ message: "Session restricted due to client context change." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
       return response;
     }
@@ -66,7 +70,7 @@ export async function GET() {
       return response;
     }
 
-    // 3. Token Versioning Verification
+    // 3. Token Versioning Verification (Revocation on Privilege Change)
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) {
       const response = NextResponse.json({ message: "Session revoked due to security update." }, { status: 401 });
@@ -101,6 +105,7 @@ export async function GET() {
     });
 
     // 4. Frequent Token Rotation (Sliding window: 2m)
+    // Atomic replacement invalidates the old token after use in the client session.
     const iat = payload.iat || 0;
     const rotationThreshold = 2 * 60; 
 

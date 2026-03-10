@@ -1,17 +1,17 @@
-
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { LoginSchema } from "@/lib/validation";
+import crypto from "crypto";
 
 /**
  * Institutional Authentication Gateway.
  * Hardened with:
  * 1. Short Session Lifetime (10m)
  * 2. Absolute Lifetime (8h)
- * 3. IP Binding
+ * 3. Client Context Binding (IP + UA Hash)
  */
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -20,6 +20,11 @@ const LOCKOUT_WINDOW_MINUTES = 15;
 export async function POST(req: Request) {
   const headerList = await headers();
   const ipAddress = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
+  const userAgent = headerList.get('user-agent') || 'unknown';
+  
+  // Create a fingerprint of the client context
+  const uaHash = crypto.createHash('sha256').update(userAgent).digest('hex');
+  
   const genericErrorMessage = "Invalid institutional credentials.";
 
   try {
@@ -130,6 +135,7 @@ export async function POST(req: Request) {
         email: user.email,
         role: roleName,
         ip: ipAddress,
+        ua: uaHash, // Contextual binding
         v: versionSeconds,
         abs: absoluteLimit,
         needsPasswordChange: user.needsPasswordChange
