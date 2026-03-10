@@ -10,9 +10,29 @@ import fs from 'fs/promises';
 import path from 'path';
 
 /**
- * Retrieves submissions with PostgreSQL native JSON support.
+ * Format helper to ensure JSON fields are valid and safe.
+ */
+function formatKYC(kyc: any) {
+  return {
+    ...kyc,
+    checklistState: kyc.checklistState || {},
+    commentHistory: Array.isArray(kyc.commentHistory) ? kyc.commentHistory : [],
+    documents: kyc.memos?.map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      type: m.type,
+      url: `/api/memos/${signDownloadToken(m.id)}`
+    })) || []
+  };
+}
+
+/**
+ * Retrieves submissions with PostgreSQL native JSON support and strict jurisdictional filtering.
  */
 export async function getSubmissions(filters?: any) {
+  const session = await getServerSession();
+  if (!session) return [];
+
   try {
     let dateFilter = undefined;
     if (filters?.startDate || filters?.endDate) {
@@ -22,19 +42,41 @@ export async function getSubmissions(filters?: any) {
       dateFilter = { gte: start, lte: end };
     }
 
+    // MANDATORY: Principle of Least Privilege
+    // If not SUPER_ADMIN, we must ensure users can only see records within their branch/district
+    let jurisdictionalFilter: any = {};
+    
+    if (session.role !== 'SUPER_ADMIN') {
+      const user = await prisma.user.findUnique({ where: { id: session.id } });
+      if (!user) return [];
+
+      const assignedBranches = user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [];
+      
+      if (assignedBranches.length > 0) {
+        jurisdictionalFilter.branchName = { in: assignedBranches };
+      } else if (user.branchName) {
+        jurisdictionalFilter.branchName = user.branchName;
+      } else if (filters?.submittedBy && filters.submittedBy === session.id) {
+        // Allow user to see their own regardless of branch (e.g. if they moved)
+        jurisdictionalFilter.createdById = session.id;
+      } else {
+        // Restricted access - no branch assigned
+        return [];
+      }
+    }
+
     const data = await prisma.kYC.findMany({
       where: {
+        ...jurisdictionalFilter,
         status: filters?.status ? { in: filters.status } : undefined,
         branchId: filters?.branchId,
-        createdById: filters?.createdById || filters?.submittedBy,
+        createdById: filters?.submittedBy || filters?.createdById,
         assignedToId: filters?.assignedToId,
         isResubmitted: filters?.isResubmitted,
         isExceptional: filters?.isExceptional,
         entityType: filters?.entityType,
-        branchName: filters?.branches && filters.branches.length > 0 ? { in: filters.branches } : filters?.branch ? { equals: filters.branch } : undefined,
-        branch: (!filters?.branch && !filters?.branches && filters?.district) ? { district: { name: filters.district } } : undefined,
-        active: true,
         submittedAt: dateFilter,
+        active: true,
       },
       include: {
         createdBy: true,
@@ -47,14 +89,60 @@ export async function getSubmissions(filters?: any) {
       skip: filters?.offset || 0,
     });
 
-    return data.map(item => ({
-      ...item,
-      checklistState: item.checklistState || {},
-      commentHistory: Array.isArray(item.commentHistory) ? item.commentHistory : []
-    }));
+    return data.map(item => formatKYC(item));
   } catch (error) {
     console.error("[Submissions Action] Fetch Fault:", error);
     return [];
+  }
+}
+
+/**
+ * Retrieves a single submission with strict ownership and jurisdictional validation.
+ */
+export async function getSubmissionById(id: string) {
+  const session = await getServerSession();
+  if (!session) return null;
+
+  try {
+    const kyc = await prisma.kYC.findUnique({
+      where: { id },
+      include: {
+        createdBy: true,
+        assignedTo: true,
+        branch: { include: { district: true } },
+        memos: true
+      }
+    });
+
+    if (!kyc) return null;
+
+    // RBAC: SUPER_ADMIN bypass
+    if (session.role === 'SUPER_ADMIN') {
+      return formatKYC(kyc);
+    }
+
+    // Ownership Check: Creator or current Assignee
+    if (kyc.createdById === session.id || kyc.assignedToId === session.id) {
+      return formatKYC(kyc);
+    }
+
+    // Jurisdictional Check: Access via branch node
+    const user = await prisma.user.findUnique({ where: { id: session.id } });
+    if (!user) return null;
+
+    const assignedBranches = user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [];
+    const isAtBranch = kyc.branchId === user.branchId;
+    const isInPortfolio = assignedBranches.includes(kyc.branchName);
+
+    if (isAtBranch || isInPortfolio) {
+      return formatKYC(kyc);
+    }
+
+    // Principle of Least Privilege: Access Denied
+    console.warn(`[Security] Unauthorized access attempt to case ${id} by user ${session.email}`);
+    return null;
+  } catch (error) {
+    return null;
   }
 }
 
@@ -146,14 +234,22 @@ export async function createSubmission(formData: FormData) {
 }
 
 export async function updateSubmissionStatus(id: string, status: string, reviewerId: string, remarks?: string) {
+  const session = await getServerSession();
+  if (!session) throw new Error("Unauthorized");
+
   const current = await prisma.kYC.findUnique({ where: { id } });
   if (!current) throw new Error("KYC record not found");
 
+  // Secure validation: Ensure reviewerId matches the session if they are performing the action
+  if (reviewerId !== session.id && session.role !== 'SUPER_ADMIN') {
+    throw new Error("Privilege escalation detected.");
+  }
+
   const history = Array.isArray(current.commentHistory) ? current.commentHistory : [];
-  const reviewer = await prisma.user.findUnique({ where: { id: reviewerId } });
+  const reviewer = await prisma.user.findUnique({ where: { id: session.id } });
 
   const newEntry = {
-    role: 'OFFICER',
+    role: reviewer?.roles?.[0]?.role?.name || 'OFFICER',
     performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
     timestamp: new Date().toISOString(),
     comment: remarks || `Status updated to ${status}`,
@@ -164,7 +260,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     where: { id },
     data: {
       status,
-      assignedToId: reviewerId,
+      assignedToId: session.id,
       updatedAt: new Date(),
       commentHistory: [...history, newEntry],
       isResubmitted: status === KYC_STATUS.SUBMITTED && current.status === KYC_STATUS.ACTION_REQUIRED,
@@ -176,54 +272,18 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   return kyc;
 }
 
-export async function getSubmissionById(id: string) {
-  try {
-    const kyc = await prisma.kYC.findUnique({
-      where: { id },
-      include: {
-        createdBy: true,
-        assignedTo: true,
-        branch: { include: { district: true } },
-        memos: true
-      }
-    });
-    if (!kyc) return null;
-    return {
-      ...kyc,
-      checklistState: kyc.checklistState || {},
-      commentHistory: Array.isArray(kyc.commentHistory) ? kyc.commentHistory : [],
-      documents: kyc.memos.map(m => ({
-        id: m.id,
-        name: m.name,
-        type: m.type,
-        url: `/api/memos/${signDownloadToken(m.id)}`
-      }))
-    };
-  } catch (error) {
-    return null;
-  }
-}
-
-export async function updateSubmissionChecklist(id: string, checklistState: any) {
-  try {
-    return await prisma.kYC.update({ 
-      where: { id }, 
-      data: { checklistState } 
-    });
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
 export async function getWorkflowCounts(params: { userId: string, branchName?: string, branches?: string[], isSuperAdmin: boolean }) {
+  const session = await getServerSession();
+  if (!session) return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
+
   const { branchName, branches, isSuperAdmin } = params;
   
   const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? { branchName: { in: branches } } : { branchName: branchName || "NONE" });
 
   try {
     const [myCount, actionRequired, reviewQueue, resubmitted, escalated, exceptional] = await Promise.all([
-      prisma.kYC.count({ where: { createdById: params.userId, active: true } }),
-      prisma.kYC.count({ where: { createdById: params.userId, status: KYC_STATUS.ACTION_REQUIRED, active: true } }),
+      prisma.kYC.count({ where: { createdById: session.id, active: true } }),
+      prisma.kYC.count({ where: { createdById: session.id, status: KYC_STATUS.ACTION_REQUIRED, active: true } }),
       prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isExceptional: false, isResubmitted: false, active: true } }),
       prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isResubmitted: true, active: true } }),
       prisma.kYC.count({ where: { ...branchFilter, status: KYC_STATUS.ESCALATED, active: true } }),
@@ -237,18 +297,30 @@ export async function getWorkflowCounts(params: { userId: string, branchName?: s
 }
 
 export async function processExceptionalStep(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) throw new Error("Unauthorized");
+
   const id = formData.get('id') as string;
   const nextStatus = formData.get('nextStatus') as string;
   const remarks = formData.get('remarks') as string;
   const actionLabel = formData.get('actionLabel') as string;
 
   const current = await prisma.kYC.findUnique({ where: { id } });
+  if (!current) throw new Error("Case not found");
+
   const history = Array.isArray(current?.commentHistory) ? current.commentHistory : [];
+  const actor = await prisma.user.findUnique({ where: { id: session.id } });
 
   const data: any = { 
     exceptionalStatus: nextStatus, 
     updatedAt: new Date(), 
-    commentHistory: [...history, { role: 'GOVERNANCE', performedBy: 'System', timestamp: new Date().toISOString(), comment: remarks || actionLabel, action: actionLabel }]
+    commentHistory: [...history, { 
+      role: actor?.roles?.[0]?.role?.name || 'GOVERNANCE', 
+      performedBy: `${actor?.firstName} ${actor?.lastName}`, 
+      timestamp: new Date().toISOString(), 
+      comment: remarks || actionLabel, 
+      action: actionLabel 
+    }]
   };
   
   if (nextStatus === EXCEPTIONAL_STATUS.COMPLETED) data.status = KYC_STATUS.APPROVED;
@@ -258,85 +330,19 @@ export async function processExceptionalStep(formData: FormData) {
   return kyc;
 }
 
-export async function resubmitSubmission(formData: FormData) {
-  const id = formData.get('id') as string;
-  const remarks = formData.get('remarks') as string;
-  const files = formData.getAll('files') as File[];
-  const types = formData.getAll('types') as string[];
-
-  const current = await prisma.kYC.findUnique({ where: { id } });
-  const history = Array.isArray(current?.commentHistory) ? current.commentHistory : [];
-  
-  const uploadDir = path.join(process.cwd(), 'uploads');
-  const memoData = [];
-  try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const storedFileName = `resubmit_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    await fs.writeFile(path.join(uploadDir, storedFileName), Buffer.from(await file.arrayBuffer()));
-    memoData.push({ 
-      name: file.name, 
-      type: types[i] || 'OTHER', 
-      fileUrl: `uploads/${storedFileName}`, 
-      uploadedById: 'system' 
-    });
-  }
-
-  const updated = await prisma.kYC.update({
-    where: { id },
-    data: {
-      status: KYC_STATUS.SUBMITTED,
-      isResubmitted: true,
-      updatedAt: new Date(),
-      commentHistory: [...history, { role: 'BRANCH_OFFICER', performedBy: 'Staff', timestamp: new Date().toISOString(), comment: remarks, action: 'RESUBMIT' }],
-      memos: { create: memoData }
-    }
-  });
-
-  revalidatePath(`/submissions/${id}`);
-  return { success: true, kyc: updated };
-}
-
-export async function initiateExceptionalWorkflow(formData: FormData) {
-  const kycId = formData.get('id') as string;
-  const reason = formData.get('reason') as string;
-  const justification = formData.get('justification') as string;
-  const memoFile = formData.get('memo') as File;
-
-  const uploadDir = path.join(process.cwd(), 'uploads');
-  try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-
-  const storedFileName = `init_gov_${Date.now()}_${memoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-  await fs.writeFile(path.join(uploadDir, storedFileName), Buffer.from(await memoFile.arrayBuffer()));
-
-  const current = await prisma.kYC.findUnique({ where: { id: kycId } });
-  const history = Array.isArray(current?.commentHistory) ? current.commentHistory : [];
-  
-  const kyc = await prisma.kYC.update({
-    where: { id: kycId },
-    data: {
-      isExceptional: true,
-      exceptionalStatus: EXCEPTIONAL_STATUS.AWAITING_DISTRICT,
-      updatedAt: new Date(),
-      commentHistory: [...history, { role: 'MANAGER', performedBy: 'Manager', timestamp: new Date().toISOString(), comment: `Exception Initiated: ${reason}`, action: 'INITIATE_EXCEPTION' }],
-      memos: { create: { 
-        name: memoFile.name, 
-        type: 'GOVERNANCE_MEMO', 
-        fileUrl: `uploads/${storedFileName}`, 
-        uploadedById: 'system' 
-      } }
-    }
-  });
-
-  revalidatePath(`/submissions/${kycId}`);
-  return { success: true, kyc };
-}
-
 export async function logBundleDownload(data: any) {
+  const session = await getServerSession();
+  if (!session) return false;
+
   try {
     await prisma.auditLog.create({
-      data: { kycId: data.submissionId, action: 'BUNDLE_DOWNLOAD', details: `Bundle exported: ${data.bundleName}`, userEmail: data.performedBy }
+      data: { 
+        kycId: data.submissionId, 
+        action: 'BUNDLE_DOWNLOAD', 
+        details: `Bundle exported: ${data.bundleName}`, 
+        userEmail: session.email,
+        userName: session.email.split('@')[0]
+      }
     });
     return true;
   } catch {
