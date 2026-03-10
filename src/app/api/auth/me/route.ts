@@ -7,8 +7,7 @@ import jwt from "jsonwebtoken";
 
 /**
  * Session Verification & Rotation Endpoint.
- * Enforces IP binding, token versioning, sliding window rotation, and absolute 8h limit.
- * Exclusively uses HttpOnly cookies with SameSite=Lax for session management.
+ * Reduced rotation window (2m) and shorter session validity (10m).
  */
 export async function GET() {
   try {
@@ -40,7 +39,6 @@ export async function GET() {
     // 2. Contextual Binding Verification (IP Check)
     const currentIp = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
     if (payload.ip !== currentIp) {
-      console.warn(`[SECURITY] Contextual binding violation detected. User: ${payload.email}`);
       const response = NextResponse.json({ message: "Session restricted due to network change." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
       return response;
@@ -102,9 +100,9 @@ export async function GET() {
       }
     });
 
-    // 4. Token Rotation (Sliding window)
+    // 4. Frequent Token Rotation (Sliding window: 2m)
     const iat = payload.iat || 0;
-    const rotationThreshold = 5 * 60; 
+    const rotationThreshold = 2 * 60; 
 
     if (nowSeconds - iat > rotationThreshold) {
       const newToken = jwt.sign(
@@ -113,14 +111,14 @@ export async function GET() {
           iat: nowSeconds
         },
         secretStr,
-        { expiresIn: "15m" }
+        { expiresIn: "10m" }
       );
 
       response.cookies.set('nib-auth-token', newToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 60 * 15,
+        maxAge: 60 * 10,
         path: '/',
       });
     }

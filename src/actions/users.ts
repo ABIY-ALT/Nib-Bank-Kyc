@@ -6,31 +6,21 @@ import { UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
 import { generateSecurePassword } from '@/lib/security';
-import { getServerSession } from './auth-server';
+import { getServerSession, verifySensitiveSession } from './auth-server';
 import { createAuditLog } from './audit';
 import { CreateUserSchema } from '@/lib/validation';
 
 /**
  * Robust Authorization Helper.
- * Performs a real-time database fallback for Master Admins to prevent stale token rejection.
  */
 async function verifyAdminClearance() {
   const session = await getServerSession();
   if (!session) return false;
-
-  // Level 1: JWT Session Check
   if (session.role === 'SUPER_ADMIN') return true;
 
-  // Level 2: Database Fallback (Ensures promoted admins have instant access)
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    include: { 
-      roles: { 
-        include: { 
-          role: true 
-        } 
-      } 
-    }
+    include: { roles: { include: { role: true } } }
   });
 
   return user?.roles.some(ur => ur.role.name === 'SUPER_ADMIN') || false;
@@ -57,7 +47,7 @@ export async function getAllUsers() {
 
 /**
  * Institutional Provisioning Action.
- * Re-engineered to separate create/update logic to resolve the "password missing" error.
+ * Enforces a Sensitive Session Check (session must be fresh < 5m).
  */
 export async function provisionUser(data: {
   id?: string;
@@ -74,6 +64,11 @@ export async function provisionUser(data: {
     return { success: false, error: 'Unauthorized: Administrative clearance required.' };
   }
 
+  // SENSITIVE ACTION GUARD: Requires fresh session context
+  if (!(await verifySensitiveSession())) {
+    return { success: false, error: 'Security Protocol: Session too old for personnel modification. Please refresh or re-login.' };
+  }
+
   try {
     const validated = CreateUserSchema.parse(data);
     const isUpdate = !!data.id;
@@ -88,7 +83,6 @@ export async function provisionUser(data: {
       let user;
 
       if (isUpdate) {
-        // UPDATE PATH: Preserve existing password if not provided
         let updateData: any = {
           firstName: validated.firstName,
           lastName: validated.lastName,
@@ -111,7 +105,6 @@ export async function provisionUser(data: {
           data: updateData
         });
       } else {
-        // CREATE PATH: Generate credentials
         if (!tempPass) tempPass = generateSecurePassword(10);
         const hashedPassword = await bcrypt.hash(tempPass, 10);
 
@@ -131,7 +124,6 @@ export async function provisionUser(data: {
         });
       }
 
-      // 2. Synchronize Role
       const role = await tx.role.findUnique({ where: { name: validated.role } });
       if (role) {
         await tx.userRole.deleteMany({ where: { userId: user.id } });
@@ -154,7 +146,6 @@ export async function provisionUser(data: {
     revalidatePath('/admin/users');
     return { success: true, user: result, tempPassword: !isUpdate ? tempPass : (data.password ? tempPass : null) };
   } catch (error: any) {
-    console.error('[Personnel Provisioning] Action Error:', error);
     return { success: false, error: error.message };
   }
 }
@@ -162,6 +153,11 @@ export async function provisionUser(data: {
 export async function resetUserPassword(email: string, authorizerId: string) {
   if (!(await verifyAdminClearance())) {
     return { success: false, error: 'Unauthorized.' };
+  }
+
+  // SENSITIVE ACTION GUARD
+  if (!(await verifySensitiveSession())) {
+    return { success: false, error: 'Security Protocol: Session too old for credential reset. Please re-authenticate.' };
   }
 
   try {
@@ -185,6 +181,8 @@ export async function resetUserPassword(email: string, authorizerId: string) {
 
 export async function updateUserStatus(userId: string, status: UserStatus) {
   if (!(await verifyAdminClearance())) throw new Error('Unauthorized');
+  if (!(await verifySensitiveSession())) throw new Error('Security Protocol Violation: Session too old.');
+  
   return await prisma.user.update({
     where: { id: userId },
     data: { status, updatedAt: new Date() }
@@ -193,6 +191,8 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
 
 export async function updateUserPortfolio(userId: string, branches: string[]) {
   if (!(await verifyAdminClearance())) throw new Error('Unauthorized');
+  if (!(await verifySensitiveSession())) throw new Error('Security Protocol Violation: Session too old.');
+
   return await prisma.user.update({
     where: { id: userId },
     data: { assignedBranches: branches.join(','), updatedAt: new Date() }

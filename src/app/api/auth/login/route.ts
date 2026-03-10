@@ -9,9 +9,9 @@ import { LoginSchema } from "@/lib/validation";
 /**
  * Institutional Authentication Gateway.
  * Hardened with:
- * 1. Generic Error Responses (Anti-Enumeration)
- * 2. Adaptive Throttling (Lockout via Audit Logs)
- * 3. CSRF Protection (SameSite=Lax Cookies)
+ * 1. Short Session Lifetime (10m)
+ * 2. Absolute Lifetime (8h)
+ * 3. IP Binding
  */
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -33,7 +33,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid request format." }, { status: 400 });
     }
 
-    // 1. INPUT VALIDATION
     const validation = LoginSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json({ message: genericErrorMessage }, { status: 400 });
@@ -42,7 +41,6 @@ export async function POST(req: Request) {
     const { email, password } = validation.data;
     const userEmail = email.toLowerCase().trim();
 
-    // 2. ADAPTIVE THROTTLING (LOCKOUT CHECK)
     const recentFailures = await prisma.auditLog.count({
       where: {
         userEmail,
@@ -67,7 +65,6 @@ export async function POST(req: Request) {
       }, { status: 429 });
     }
 
-    // 3. IDENTITY VERIFICATION
     const user = await prisma.user.findUnique({
       where: { email: userEmail },
       include: {
@@ -99,7 +96,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: genericErrorMessage }, { status: 401 });
     }
 
-    // 4. SESSION PREPARATION & VERSIONING
     const versionSeconds = Math.floor(user.updatedAt.getTime() / 1000);
     const secret = process.env.JWT_SECRET;
     
@@ -126,7 +122,7 @@ export async function POST(req: Request) {
       : (serializableRoles[0]?.role.name || 'VIEWER');
 
     const nowSeconds = Math.floor(Date.now() / 1000);
-    const absoluteLimit = nowSeconds + (8 * 60 * 60); // 8 Hours Max
+    const absoluteLimit = nowSeconds + (8 * 60 * 60);
 
     const token = jwt.sign(
       { 
@@ -139,7 +135,7 @@ export async function POST(req: Request) {
         needsPasswordChange: user.needsPasswordChange
       },
       secret,
-      { expiresIn: "15m" }
+      { expiresIn: "10m" }
     );
 
     await prisma.auditLog.create({
@@ -174,17 +170,12 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 15,
+      maxAge: 60 * 10,
       path: '/',
     });
 
     return response;
   } catch (error: any) {
-    console.error("[Auth API] Gateway Error:", {
-      message: error.message,
-      ip: ipAddress,
-      timestamp: new Date().toISOString()
-    });
     return NextResponse.json({ message: "Internal security service error." }, { status: 500 });
   }
 }
@@ -199,7 +190,5 @@ async function logFailure(email: string, ip: string, reason: string) {
         details: `Failed authentication attempt. Reason: ${reason}`
       }
     });
-  } catch (e) {
-    console.error("Audit log failed during failure record");
-  }
+  } catch (e) {}
 }
