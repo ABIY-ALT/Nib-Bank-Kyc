@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -225,7 +224,6 @@ export default function StaffRolesPage() {
       <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
         <CardHeader className="bg-primary text-white border-b py-6">
           <CardTitle className="text-xl font-black">Personnel Designations</CardTitle>
-          <CardDescription className="text-white/70 font-medium">RBAC matrix is active and synchronized with PostgreSQL.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
