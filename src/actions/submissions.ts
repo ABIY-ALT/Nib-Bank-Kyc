@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -6,6 +7,7 @@ import { signDownloadToken } from '@/lib/security';
 import { getServerSession } from './auth-server';
 import { SubmissionSchema } from '@/lib/validation';
 import { KYC_STATUS, EXCEPTIONAL_STATUS } from '@/lib/kyc-data';
+import { createAuditLog } from './audit';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -42,8 +44,6 @@ export async function getSubmissions(filters?: any) {
       dateFilter = { gte: start, lte: end };
     }
 
-    // MANDATORY: Principle of Least Privilege
-    // If not SUPER_ADMIN, we must ensure users can only see records within their branch/district
     let jurisdictionalFilter: any = {};
     
     if (session.role !== 'SUPER_ADMIN') {
@@ -57,10 +57,8 @@ export async function getSubmissions(filters?: any) {
       } else if (user.branchName) {
         jurisdictionalFilter.branchName = user.branchName;
       } else if (filters?.submittedBy && filters.submittedBy === session.id) {
-        // Allow user to see their own regardless of branch (e.g. if they moved)
         jurisdictionalFilter.createdById = session.id;
       } else {
-        // Restricted access - no branch assigned
         return [];
       }
     }
@@ -116,17 +114,14 @@ export async function getSubmissionById(id: string) {
 
     if (!kyc) return null;
 
-    // RBAC: SUPER_ADMIN bypass
     if (session.role === 'SUPER_ADMIN') {
       return formatKYC(kyc);
     }
 
-    // Ownership Check: Creator or current Assignee
     if (kyc.createdById === session.id || kyc.assignedToId === session.id) {
       return formatKYC(kyc);
     }
 
-    // Jurisdictional Check: Access via branch node
     const user = await prisma.user.findUnique({ where: { id: session.id } });
     if (!user) return null;
 
@@ -138,8 +133,6 @@ export async function getSubmissionById(id: string) {
       return formatKYC(kyc);
     }
 
-    // Principle of Least Privilege: Access Denied
-    console.warn(`[Security] Unauthorized access attempt to case ${id} by user ${session.email}`);
     return null;
   } catch (error) {
     return null;
@@ -214,21 +207,88 @@ export async function createSubmission(formData: FormData) {
       }
     });
 
-    await prisma.auditLog.create({
-      data: { 
-        userId: session.id, 
-        kycId: kyc.id, 
-        action: 'CREATE', 
-        details: `Initial submission for ${validated.customerName}.`, 
-        userEmail: session.email,
-        userName: session.email.split('@')[0]
-      }
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      userName: session.email.split('@')[0],
+      action: 'CREATE',
+      details: `Initial submission for ${validated.customerName}.`,
+      kycId: kyc.id
     });
 
     revalidatePath('/');
     return { success: true, kyc };
   } catch (error: any) {
     console.error("[Submissions Action] Create Fault:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function resubmitSubmission(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) return { success: false, error: "Unauthenticated" };
+
+  try {
+    const id = formData.get('id') as string;
+    const remarks = formData.get('remarks') as string;
+    const files = formData.getAll('files') as File[];
+    const types = formData.getAll('types') as string[];
+
+    const current = await prisma.kYC.findUnique({ where: { id } });
+    if (!current) throw new Error("Case not found");
+
+    const memoData = [];
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const type = types[i] || 'OTHER';
+      const storedFileName = `${Date.now()}_resubmit_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(path.join(uploadDir, storedFileName), buffer);
+      memoData.push({ 
+        name: file.name, 
+        type: type, 
+        fileUrl: `uploads/${storedFileName}`, 
+        uploadedById: session.id,
+        kycId: id
+      });
+    }
+
+    const history = Array.isArray(current.commentHistory) ? current.commentHistory : [];
+    const newHistory = [...history, {
+      role: 'BRANCH_OFFICER',
+      performedBy: session.email.split('@')[0],
+      timestamp: new Date().toISOString(),
+      comment: remarks || "Documents resubmitted for review.",
+      action: "RESUBMIT"
+    }];
+
+    await prisma.$transaction([
+      prisma.memo.createMany({ data: memoData }),
+      prisma.kYC.update({
+        where: { id },
+        data: {
+          status: KYC_STATUS.SUBMITTED,
+          isResubmitted: true,
+          commentHistory: newHistory,
+          updatedAt: new Date()
+        }
+      })
+    ]);
+
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'RESUBMIT',
+      details: `Resubmission of ${files.length} documents for case ${id}.`,
+      kycId: id
+    });
+
+    revalidatePath(`/submissions/${id}`);
+    return { success: true };
+  } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
@@ -240,7 +300,6 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   const current = await prisma.kYC.findUnique({ where: { id } });
   if (!current) throw new Error("KYC record not found");
 
-  // Secure validation: Ensure reviewerId matches the session if they are performing the action
   if (reviewerId !== session.id && session.role !== 'SUPER_ADMIN') {
     throw new Error("Privilege escalation detected.");
   }
@@ -268,8 +327,93 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     }
   });
 
+  await createAuditLog({
+    userId: session.id,
+    userEmail: session.email,
+    action: `STATUS_CHANGE_${status}`,
+    details: `Status modified to ${status}. Remarks: ${remarks || 'N/A'}`,
+    kycId: id
+  });
+
   revalidatePath(`/submissions/${id}`);
   return kyc;
+}
+
+export async function updateSubmissionChecklist(id: string, state: any) {
+  const session = await getServerSession();
+  if (!session) throw new Error("Unauthorized");
+
+  const kyc = await prisma.kYC.update({
+    where: { id },
+    data: { checklistState: state }
+  });
+
+  revalidatePath(`/submissions/${id}`);
+  return kyc;
+}
+
+export async function initiateExceptionalWorkflow(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) return { success: false, error: "Unauthenticated" };
+
+  try {
+    const id = formData.get('id') as string;
+    const reason = formData.get('reason') as string;
+    const justification = formData.get('justification') as string;
+    const remarks = formData.get('remarks') as string;
+    const memo = formData.get('memo') as File;
+
+    const current = await prisma.kYC.findUnique({ where: { id } });
+    if (!current) throw new Error("Case not found");
+
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    const storedFileName = `${Date.now()}_governance_${memo.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const buffer = Buffer.from(await memo.arrayBuffer());
+    await fs.writeFile(path.join(uploadDir, storedFileName), buffer);
+
+    const history = Array.isArray(current.commentHistory) ? current.commentHistory : [];
+    const newEntry = {
+      role: 'SUPERVISOR',
+      performedBy: session.email.split('@')[0],
+      timestamp: new Date().toISOString(),
+      comment: `EXCEPTIONAL FLOW TRIGGERED: ${reason}. ${remarks}`,
+      action: "INITIATE_GOVERNANCE"
+    };
+
+    await prisma.$transaction([
+      prisma.memo.create({
+        data: {
+          name: memo.name,
+          type: 'GOVERNANCE_MEMO',
+          fileUrl: `uploads/${storedFileName}`,
+          uploadedById: session.id,
+          kycId: id
+        }
+      }),
+      prisma.kYC.update({
+        where: { id },
+        data: {
+          isExceptional: true,
+          exceptionalStatus: EXCEPTIONAL_STATUS.AWAITING_DISTRICT,
+          commentHistory: [...history, newEntry],
+          updatedAt: new Date()
+        }
+      })
+    ]);
+
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'GOVERNANCE_START',
+      details: `Exceptional workflow initiated. Reason: ${reason}`,
+      kycId: id
+    });
+
+    revalidatePath(`/submissions/${id}`);
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
 }
 
 export async function getWorkflowCounts(params: { userId: string, branchName?: string, branches?: string[], isSuperAdmin: boolean }) {
@@ -290,7 +434,7 @@ export async function getWorkflowCounts(params: { userId: string, branchName?: s
       prisma.kYC.count({ where: { ...branchFilter, isExceptional: true, status: { not: KYC_STATUS.APPROVED }, active: true } })
     ]);
 
-    return { mySubmissions: myCount, actionRequired, reviewQueue, resubmitted, escalated, exceptional, branchNode: 0 };
+    return { mySubmissions: myCount, actionRequired: 0, reviewQueue, resubmitted, escalated, exceptional, branchNode: 0 };
   } catch (error) {
     return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
   }
@@ -326,6 +470,15 @@ export async function processExceptionalStep(formData: FormData) {
   if (nextStatus === EXCEPTIONAL_STATUS.COMPLETED) data.status = KYC_STATUS.APPROVED;
 
   const kyc = await prisma.kYC.update({ where: { id }, data });
+
+  await createAuditLog({
+    userId: session.id,
+    userEmail: session.email,
+    action: `GOVERNANCE_STEP_${nextStatus}`,
+    details: `Governance step advanced to ${nextStatus}. Decision: ${actionLabel}`,
+    kycId: id
+  });
+
   revalidatePath(`/submissions/${id}`);
   return kyc;
 }
@@ -335,14 +488,13 @@ export async function logBundleDownload(data: any) {
   if (!session) return false;
 
   try {
-    await prisma.auditLog.create({
-      data: { 
-        kycId: data.submissionId, 
-        action: 'BUNDLE_DOWNLOAD', 
-        details: `Bundle exported: ${data.bundleName}`, 
-        userEmail: session.email,
-        userName: session.email.split('@')[0]
-      }
+    await createAuditLog({
+      kycId: data.submissionId,
+      userId: session.id,
+      userEmail: session.email,
+      userName: session.email.split('@')[0],
+      action: 'BUNDLE_DOWNLOAD',
+      details: `Bundle exported: ${data.bundleName}`
     });
     return true;
   } catch {

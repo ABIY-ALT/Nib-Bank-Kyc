@@ -87,12 +87,10 @@ export default function NewSubmission() {
     loadConfig();
   }, []);
 
-  // MANDATORY: Document types are derived exclusively from configuration
   const documentTypes = useMemo(() => {
     return settings?.documentTypes || [];
   }, [settings]);
 
-  // MANDATORY: Entity types are derived exclusively from configuration
   const entityClassifications = useMemo(() => {
     return settings?.entityTypes || [];
   }, [settings]);
@@ -200,7 +198,8 @@ export default function NewSubmission() {
       
       if (result.success) {
         toast({ title: "Successful", description: `Case ${submissionId} dispatched for review.` });
-        router.push('/submissions/my');
+        // Redirect directly to the case detail page so they see it automatically
+        router.push(`/submissions/${submissionId}`);
       } else {
         throw new Error(result.error);
       }
