@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
  * Institutional Session Resolver.
  * Hardened with database-backed token versioning and status verification.
  * Does not trust role claims without server-side validation.
+ * STRICT: Returns null on any validation failure or tampering detection.
  */
 export async function getServerSession() {
   try {
@@ -19,7 +20,15 @@ export async function getServerSession() {
     if (secretStr.length < 32) return null;
 
     const secret = new TextEncoder().encode(secretStr);
-    const { payload }: any = await jwtVerify(token, secret);
+    
+    let payload: any;
+    try {
+      const { payload: verifiedPayload }: any = await jwtVerify(token, secret);
+      payload = verifiedPayload;
+    } catch (e) {
+      // STRICT: DETECTED TAMPERING OR SIGNATURE MISMATCH
+      return null;
+    }
     
     const nowSeconds = Math.floor(Date.now() / 1000);
 
@@ -56,7 +65,7 @@ export async function getServerSession() {
     return {
       ...payload,
       role: masterRole
-    } as { id: string, email: string, role: string, v: number, abs: number, iat: number, ip: string };
+    } as { id: string, email: string, role: string, v: number, abs: number, iat: number, ip: string, ua: string };
   } catch {
     return null;
   }

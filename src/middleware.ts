@@ -10,6 +10,7 @@ import { isValidInternalRedirect } from './lib/url-security';
  * 2. Short idle timeouts (10m)
  * 3. Network origin binding (IP validation)
  * 4. CSRF protection for state-changing routes
+ * 5. Strict token validation failure handling with immediate logout (cookie clearing)
  */
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: ['*'],
@@ -70,7 +71,7 @@ export async function middleware(req: NextRequest) {
     // 4. ABSOLUTE SESSION LIFETIME ENFORCEMENT
     if (payload.abs && typeof payload.abs === 'number' && nowSeconds > payload.abs) {
       const response = NextResponse.redirect(new URL('/login?reason=abs_timeout', req.url));
-      response.cookies.delete('nib-auth-token');
+      response.cookies.delete('nib-auth-token'); // STRICT: Invalidate expired session
       return response;
     }
 
@@ -78,7 +79,7 @@ export async function middleware(req: NextRequest) {
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || '127.0.0.1';
     if (payload.ip && payload.ip !== clientIp) {
       const response = NextResponse.redirect(new URL('/login?reason=security_context', req.url));
-      response.cookies.delete('nib-auth-token');
+      response.cookies.delete('nib-auth-token'); // STRICT: Clear tampered token on context shift
       return response;
     }
 
@@ -111,6 +112,7 @@ export async function middleware(req: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
+    // STRICT: Detection of tampering or invalid signatures results in immediate logout
     const response = NextResponse.redirect(new URL('/login?reason=session_invalid', req.url));
     response.cookies.delete('nib-auth-token');
     return response;

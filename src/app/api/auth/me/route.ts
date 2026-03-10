@@ -11,6 +11,7 @@ import crypto from "crypto";
  * 1. Absolute session lifetime (8h)
  * 2. Idle Timeout via 2m sliding window rotation
  * 3. Client Context Binding (IP + UA Hash)
+ * 4. Strict Token Validation failure handling with immediate cookie purging
  */
 export async function GET() {
   try {
@@ -28,11 +29,21 @@ export async function GET() {
     }
 
     const secret = new TextEncoder().encode(secretStr);
-    const { payload }: any = await jwtVerify(token, secret);
+    
+    let payload: any;
+    try {
+      const result = await jwtVerify(token, secret);
+      payload = result.payload;
+    } catch (e) {
+      // STRICT: DETECTION OF TAMPERING OR SIGNATURE MISMATCH
+      const response = NextResponse.json({ message: "Security Alert: Invalid token signature." }, { status: 401 });
+      response.cookies.delete('nib-auth-token');
+      return response;
+    }
 
     const nowSeconds = Math.floor(Date.now() / 1000);
 
-    // 1. ABSOLUTE LIFETIME ENFORCEMENT (Regulatory Standard)
+    // 1. ABSOLUTE LIFETIME ENFORCEMENT
     if (payload.abs && nowSeconds > payload.abs) {
       const response = NextResponse.json({ message: "Absolute session lifetime limit exceeded." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
@@ -72,7 +83,7 @@ export async function GET() {
       return response;
     }
 
-    // 3. TOKEN VERSIONING (Instant revocation on privilege change)
+    // 3. TOKEN VERSIONING
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) {
       const response = NextResponse.json({ message: "Session revoked due to institutional profile update." }, { status: 401 });
@@ -106,8 +117,7 @@ export async function GET() {
       }
     });
 
-    // 4. FREQUENT ROTATION (Sliding Window: 2m)
-    // Acts as Activity Tracker. Inactivity > 10m results in exp-based invalidation.
+    // 4. FREQUENT ROTATION
     const iat = payload.iat || 0;
     const rotationThreshold = 2 * 60; 
 
@@ -115,10 +125,10 @@ export async function GET() {
       const newToken = jwt.sign(
         { 
           ...payload,
-          iat: nowSeconds // Refresh issued-at
+          iat: nowSeconds 
         },
         secretStr,
-        { expiresIn: "10m" } // Reset 10m idle clock
+        { expiresIn: "10m" } 
       );
 
       response.cookies.set('nib-auth-token', newToken, {
@@ -132,6 +142,8 @@ export async function GET() {
 
     return response;
   } catch (error) {
-    return NextResponse.json({ message: "Invalid session." }, { status: 401 });
+    const response = NextResponse.json({ message: "Invalid session." }, { status: 401 });
+    response.cookies.delete('nib-auth-token');
+    return response;
   }
 }
