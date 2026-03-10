@@ -1,3 +1,5 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -39,17 +41,16 @@ model User {
   branchId            String?
   branchName          String?
   districtName        String?
-  assignedBranches    String?    // Comma-separated list for multi-branch specialists
+  assignedBranches    String?    // Comma separated list for specialists
   needsPasswordChange Boolean    @default(true)
-  createdAt           Date       @default(now())
-  updatedAt           Date       @updatedAt
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
   branch              Branch?    @relation(fields: [branchId], references: [id])
   roles               UserRole[]
-  auditLogs           AuditLog[]
-  submissions         KYC[]      @relation("CreatedBy")
-  assignedCases       KYC[]      @relation("AssignedTo")
-  uploadedMemos       Memo[]
+  submissionsCreated  KYC[]      @relation("CreatedBy")
+  submissionsAssigned KYC[]      @relation("AssignedTo")
+  memosUploaded       Memo[]
 }
 
 model Role {
@@ -59,15 +60,19 @@ model Role {
   active      Boolean          @default(true)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
-  permissions RolePermission[]
+  
   users       UserRole[]
+  permissions RolePermission[]
 }
 
 model Permission {
   id        String           @id @default(cuid())
   slug      String           @unique
   name      String
-  group     String
+  group     String           @default("SYSTEM")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  
   roles     RolePermission[]
 }
 
@@ -89,32 +94,55 @@ model RolePermission {
   @@id([roleId, permissionId])
 }
 
+model District {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  branches  Branch[]
+}
+
+model Branch {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  code       String?  @unique
+  districtId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  users      User[]
+  kycs       KYC[]
+}
+
 model KYC {
-  id                String   @id // Formatted ID: BRANCH-KYC-RANDOM
+  id                String   @id
+  customerId        String?
   customerName      String
   branchId          String
   branchName        String
-  districtName      String?
+  districtName      String
   createdById       String
   assignedToId      String?
+  submittedAt       DateTime @default(now())
   status            String   @default("SUBMITTED")
-  entityType        String?
-  remarks           String?
   isExceptional     Boolean  @default(false)
   exceptionalStatus String   @default("None")
+  entityType        String?
   amendCycles       Int      @default(0)
   isResubmitted     Boolean  @default(false)
-  checklistState    Json?    @default("{}")
-  commentHistory    Json?    @default("[]")
+  checklistState    Json     @default("{}")
+  commentHistory    Json     @default("[]")
+  remarks           String?  @db.Text
   active            Boolean  @default(true)
-  submittedAt       DateTime @default(now())
+  createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   createdBy         User     @relation("CreatedBy", fields: [createdById], references: [id])
   assignedTo        User?    @relation("AssignedTo", fields: [assignedToId], references: [id])
   branch            Branch   @relation(fields: [branchId], references: [id])
   memos             Memo[]
-  auditLogs         AuditLog[]
 }
 
 model Memo {
@@ -130,55 +158,37 @@ model Memo {
   uploadedBy   User     @relation(fields: [uploadedById], references: [id])
 }
 
-model District {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  branches  Branch[]
-}
-
-model Branch {
-  id         String   @id @default(cuid())
-  name       String   @unique
-  code       String?  @unique
-  districtId String
-  district   District @relation(fields: [districtId], references: [id])
-  users      User[]
-  kycCases   KYC[]
-}
-
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String?
-  kycId     String?
   userEmail String
   userName  String?
   action    String
-  details   String
+  details   String   @db.Text
+  kycId     String?
   ipAddress String?
   timestamp DateTime @default(now())
-
-  user      User?    @relation(fields: [userId], references: [id])
-  kyc       KYC?     @relation(fields: [kycId], references: [id])
 }
 
 model Finding {
   id           String          @id @default(cuid())
   code         String          @unique
   title        String
-  description  String
-  category     FindingCategory
-  severity     FindingSeverity
-  applicableTo String[]        // String array for account types
+  description  String          @db.Text
+  category     FindingCategory @default(DOCUMENTATION)
+  severity     FindingSeverity @default(LOW)
+  applicableTo String[]        // Array of account types
   active       Boolean         @default(true)
   source       String          @default("manual")
   createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
 
 model GlobalSetting {
   id              String   @id @default("global")
-  entityTypes     Json?    @default("[]")
-  documentTypes   Json?    @default("[]")
-  guidelines      Json?    @default("[]")
+  entityTypes     Json     @default("[]")
+  documentTypes   Json     @default("[]")
+  guidelines      Json     @default("[]")
   autoEscalation  Boolean  @default(true)
   escalationHours Int      @default(72)
   lastUpdated     DateTime @default(now())
@@ -193,7 +203,7 @@ model FollowUpVerification {
   accountType  String
   verifiedBy   String?
   verifiedAt   DateTime @default(now())
-  result       String?  // 'Correct' | 'Discrepancy'
-  remarks      String?
-  status       String   @default("PENDING") // 'PENDING' | 'COMPLETED'
+  result       String?  // "Correct" or "Discrepancy"
+  remarks      String?  @db.Text
+  status       String   @default("PENDING") // "PENDING" or "COMPLETED"
 }
