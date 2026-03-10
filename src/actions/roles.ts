@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -8,7 +7,6 @@ import { getServerSession } from './auth-server';
 
 /**
  * Institutional Capability Registry.
- * Defines every granular action within the Nib Bank perimeter.
  */
 const SYSTEM_CAPABILITIES = [
   // DASHBOARD
@@ -56,7 +54,6 @@ const SYSTEM_CAPABILITIES = [
 
 /**
  * Silent Internal Provisioner.
- * Automatically ensures that the database matches the application code capabilities.
  */
 async function internalSeedPermissions() {
   try {
@@ -68,7 +65,6 @@ async function internalSeedPermissions() {
       });
     }
 
-    // Automatically link all permissions to SUPER_ADMIN if it exists
     const superAdminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
     if (superAdminRole) {
       const allPerms = await prisma.permission.findMany();
@@ -91,7 +87,6 @@ export async function getAllPermissions() {
       orderBy: [{ group: 'asc' }, { name: 'asc' }]
     });
 
-    // AUTO-PROVISION: If table is empty, trigger silent seed
     if (permissions.length === 0) {
       await internalSeedPermissions();
       return await prisma.permission.findMany({
@@ -128,7 +123,7 @@ export async function seedInstitutionalPermissions() {
       userId: session.id,
       userEmail: session.email,
       action: 'PERMISSION_REGISTRY_SYNC',
-      details: 'Master permission slugs synchronized via manual trigger.',
+      details: 'Master permission slugs synchronized.',
       severity: 'MEDIUM'
     });
     revalidatePath('/admin/roles');
@@ -158,7 +153,8 @@ export async function upsertRole(data: { id?: string, name: string, description:
         });
       }
 
-      // Rotate user update timestamps to force session refresh
+      // MANDATORY REVOCATION: Rotate update timestamps for all users with this role
+      // This forces session version mismatch and re-authentication
       await tx.user.updateMany({
         where: { roles: { some: { roleId: r.id } } },
         data: { updatedAt: new Date() }
@@ -171,7 +167,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
       userId: session.id,
       userEmail: session.email,
       action: 'ROLE_MODIFICATION',
-      details: `Role "${data.name}" updated. Sessions marked for rotation.`,
+      details: `Role "${data.name}" updated. Affected user sessions invalidated.`,
       severity: 'HIGH'
     });
 
@@ -190,6 +186,12 @@ export async function toggleRoleStatus(id: string, currentStatus: boolean) {
     const role = await prisma.role.update({
       where: { id },
       data: { active: !currentStatus, updatedAt: new Date() }
+    });
+
+    // Revoke sessions for all users belonging to this role
+    await prisma.user.updateMany({
+      where: { roles: { some: { roleId: id } } },
+      data: { updatedAt: new Date() }
     });
 
     revalidatePath('/admin/roles');

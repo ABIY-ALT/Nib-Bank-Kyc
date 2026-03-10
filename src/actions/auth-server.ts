@@ -1,4 +1,3 @@
-
 'use server';
 
 import { cookies } from 'next/headers';
@@ -7,7 +6,8 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * Institutional Session Resolver.
- * Hardened with token versioning and short session awareness.
+ * Hardened with database-backed token versioning and status verification.
+ * Does not trust role claims without server-side validation.
  */
 export async function getServerSession() {
   try {
@@ -23,21 +23,39 @@ export async function getServerSession() {
     
     const nowSeconds = Math.floor(Date.now() / 1000);
 
+    // 1. ABSOLUTE LIFETIME ENFORCEMENT
     if (payload.abs && nowSeconds > payload.abs) return null;
 
+    // 2. SERVER-SIDE BINDING & ROLE VALIDATION
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
-      select: { updatedAt: true, status: true, roles: { include: { role: true } } }
+      select: { 
+        updatedAt: true, 
+        status: true, 
+        roles: { 
+          include: { 
+            role: {
+              select: { name: true, active: true }
+            } 
+          } 
+        } 
+      }
     });
 
+    // RULE: Account must be active and role must be valid
     if (!user || user.status !== 'ACTIVE') return null;
 
+    // 3. TOKEN VERSIONING (Revocation on password/role change)
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) return null;
     
+    // Resolve master role for permissions
+    const activeRoles = user.roles.filter(ur => ur.role.active).map(ur => ur.role.name);
+    const masterRole = activeRoles.includes('SUPER_ADMIN') ? 'SUPER_ADMIN' : (activeRoles[0] || 'VIEWER');
+
     return {
       ...payload,
-      role: user.roles.some(ur => ur.role.name === 'SUPER_ADMIN') ? 'SUPER_ADMIN' : payload.role
+      role: masterRole
     } as { id: string, email: string, role: string, v: number, abs: number, iat: number, ip: string };
   } catch {
     return null;
@@ -46,8 +64,7 @@ export async function getServerSession() {
 
 /**
  * Sensitive Action Guard.
- * Requires that the session was issued or refreshed within the last 5 minutes.
- * This satisfies the "Require re-authentication for sensitive actions" requirement programmatically.
+ * Requires that the session was issued or rotated within the last 5 minutes.
  */
 export async function verifySensitiveSession() {
   const session = await getServerSession();
@@ -56,14 +73,19 @@ export async function verifySensitiveSession() {
   const nowSeconds = Math.floor(Date.now() / 1000);
   const sessionAgeSeconds = nowSeconds - session.iat;
 
-  // Rule: Action is rejected if session age exceeds 5 minutes
+  // Rule: High-risk actions are rejected if rotation age exceeds 5 minutes
   return sessionAgeSeconds <= 5 * 60;
 }
 
+/**
+ * Granular Permission Guard.
+ * Re-validates the entire permission chain from the database.
+ */
 export async function verifyPermission(slug: string) {
   const session = await getServerSession();
   if (!session) return false;
 
+  // Super Admin Bypass
   if (session.role === 'SUPER_ADMIN') return true;
 
   const user = await prisma.user.findUnique({
@@ -85,10 +107,9 @@ export async function verifyPermission(slug: string) {
     }
   });
 
-  if (!user) return false;
-  if (user.roles.some(ur => ur.role.name === 'SUPER_ADMIN')) return true;
+  if (!user || user.status !== 'ACTIVE') return false;
 
   return user.roles.some(ur => 
-    ur.role.permissions.some(rp => rp.permission.slug === slug)
+    ur.role.active && ur.role.permissions.some(rp => rp.permission.slug === slug)
   );
 }
