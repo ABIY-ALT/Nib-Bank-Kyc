@@ -36,7 +36,7 @@ import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { getSubmissions } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export default function Dashboard() {
@@ -54,7 +54,7 @@ export default function Dashboard() {
         const isDirector = user.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
         const isSpecialist = user.roles?.some(ur => ['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST_OFFICER'].includes(ur.role.name));
         
-        let filters: any = { limit: 100 }; // Fetch a larger sample for stats, even if only 10 are shown in the stream
+        let filters: any = { limit: 100 };
 
         if (!isSuperAdmin) {
           if (isDirector && user.districtName) {
@@ -128,11 +128,10 @@ export default function Dashboard() {
     const scopeLabel = dashboardContext.scope;
     if (!recentSubmissions) return [];
 
-    const authorizedCount = recentSubmissions.filter(s => s.status === KYCStatus.APPROVED).length;
-    const actionCount = recentSubmissions.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length;
+    const authorizedCount = recentSubmissions.filter(s => s.status === KYC_STATUS.APPROVED).length;
+    const actionCount = recentSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length;
     const totalCount = recentSubmissions.length;
 
-    // Methodology Index Calculation: % of cases not requiring amendments
     const methodologyScore = totalCount > 0 
       ? Math.round(((totalCount - actionCount) / totalCount) * 100) 
       : 100;
@@ -243,11 +242,11 @@ export default function Dashboard() {
                     <div className="flex items-center gap-4">
                       <Badge variant="outline" className={cn(
                         "font-black text-[9px] uppercase px-3 py-1 border-2",
-                        sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-                        sub.status === KYCStatus.ACTION_REQUIRED ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                        sub.status === KYC_STATUS.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                        sub.status === KYC_STATUS.ACTION_REQUIRED ? 'bg-orange-50 text-orange-700 border-orange-100' :
                         'bg-blue-50 text-blue-700 border-blue-100'
                       )}>
-                        {sub.status === KYCStatus.APPROVED ? 'SUCCESSFULLY AUTHORIZED' : sub.status?.replace(/_/g, ' ')}
+                        {sub.status === KYC_STATUS.APPROVED ? 'SUCCESSFULLY AUTHORIZED' : sub.status?.replace(/_/g, ' ')}
                       </Badge>
                       <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/10 text-primary">
                         <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>

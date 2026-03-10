@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Institutional Status Registry.
  * Centralized string constants to ensure absolute compatibility across 
@@ -12,6 +11,12 @@ export const KYC_STATUS = {
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
   ESCALATED: 'ESCALATED'
+};
+
+export const USER_STATUS = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+  SUSPENDED: 'SUSPENDED'
 };
 
 export const EXCEPTIONAL_STATUS = {

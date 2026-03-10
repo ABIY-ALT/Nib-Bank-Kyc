@@ -61,7 +61,7 @@ import { useAuth } from "@/lib/auth";
 import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
-import { UserStatus } from '@prisma/client';
+import { USER_STATUS } from '@/lib/kyc-data';
 import { usePermissions } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
 import { tempPasswordRegistry } from '@/lib/temp-password-registry';
@@ -93,7 +93,7 @@ export default function UserManagementPage() {
     email: '',
     phoneNumber: '',
     role: '',
-    status: UserStatus.ACTIVE,
+    status: USER_STATUS.ACTIVE,
     branchId: ''
   });
 
@@ -157,7 +157,7 @@ export default function UserManagementPage() {
         email: user.email || '',
         phoneNumber: user.phoneNumber || '',
         role: currentRole,
-        status: user.status || UserStatus.ACTIVE,
+        status: user.status || USER_STATUS.ACTIVE,
         branchId: user.branch?.id || 'none'
       });
     } else {
@@ -168,7 +168,7 @@ export default function UserManagementPage() {
         email: '', 
         phoneNumber: '',
         role: roleDefinitions[0]?.name || '', 
-        status: UserStatus.ACTIVE, 
+        status: USER_STATUS.ACTIVE, 
         branchId: 'none' 
       });
     }
@@ -189,8 +189,7 @@ export default function UserManagementPage() {
       const res = await provisionUser({ 
         ...formData, 
         id: editingUser?.id, 
-        branchId: finalBranchId,
-        authorizingAdminId: currentUser?.id 
+        branchId: finalBranchId
       });
       
       if (res.success) {
@@ -218,7 +217,7 @@ export default function UserManagementPage() {
   };
 
   const handleToggleStatus = async (user: any) => {
-    const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.INACTIVE : UserStatus.ACTIVE;
+    const newStatus = user.status === USER_STATUS.ACTIVE ? USER_STATUS.INACTIVE : USER_STATUS.ACTIVE;
     try {
       await updateUserStatus(user.id, newStatus);
       toast({ title: "Successful", description: `Account is now ${newStatus}.` });
@@ -257,7 +256,7 @@ export default function UserManagementPage() {
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
-                setCurrentPage(1); // Reset to page 1 on new search intent
+                setCurrentPage(1);
               }}
               className="pl-10 h-11 bg-white border-slate-200 rounded-xl font-medium"
             />
@@ -362,7 +361,7 @@ export default function UserManagementPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={user.status === UserStatus.ACTIVE ? 'text-green-600 border-green-200 bg-green-50 font-black text-[9px]' : 'text-slate-400 border-slate-200 bg-slate-50 font-black text-[9px]'}>
+                    <Badge variant="outline" className={user.status === USER_STATUS.ACTIVE ? 'text-green-600 border-green-200 bg-green-50 font-black text-[9px]' : 'text-slate-400 border-slate-200 bg-slate-50 font-black text-[9px]'}>
                       {user.status}
                     </Badge>
                   </TableCell>
@@ -372,7 +371,7 @@ export default function UserManagementPage() {
                         <Settings2 className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5 transition-colors">
-                        {user.status === UserStatus.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                        {user.status === USER_STATUS.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                       </Button>
                     </div>
                   </TableCell>
@@ -382,7 +381,6 @@ export default function UserManagementPage() {
           </TableBody>
         </Table>
 
-        {/* INSTITUTIONAL PAGINATION CONTROLS */}
         <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
           <div className="space-y-0.5">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
