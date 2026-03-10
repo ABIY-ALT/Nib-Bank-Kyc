@@ -6,9 +6,11 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 
 /**
- * Session Verification & Rotation Endpoint.
- * Reduced rotation window (2m) and shorter session validity (10m).
- * Enforces Client Context Binding (IP + UserAgent).
+ * Session Verification & Heartbeat Endpoint.
+ * Enforces:
+ * 1. Absolute session lifetime (8h)
+ * 2. Idle Timeout via 2m sliding window rotation
+ * 3. Client Context Binding (IP + UA Hash)
  */
 export async function GET() {
   try {
@@ -30,20 +32,20 @@ export async function GET() {
 
     const nowSeconds = Math.floor(Date.now() / 1000);
 
-    // 1. Absolute Lifetime Verification (8h limit)
+    // 1. ABSOLUTE LIFETIME ENFORCEMENT (Regulatory Standard)
     if (payload.abs && nowSeconds > payload.abs) {
-      const response = NextResponse.json({ message: "Absolute session lifetime reached." }, { status: 401 });
+      const response = NextResponse.json({ message: "Absolute session lifetime limit exceeded." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
       return response;
     }
 
-    // 2. Contextual Binding Verification (IP + UA Check)
+    // 2. CONTEXTUAL BINDING VERIFICATION
     const currentIp = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
     const currentUa = headerList.get('user-agent') || 'unknown';
     const currentUaHash = crypto.createHash('sha256').update(currentUa).digest('hex');
 
     if (payload.ip !== currentIp || payload.ua !== currentUaHash) {
-      const response = NextResponse.json({ message: "Session restricted due to client context change." }, { status: 401 });
+      const response = NextResponse.json({ message: "Security Alert: Session restricted due to client context change." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
       return response;
     }
@@ -70,10 +72,10 @@ export async function GET() {
       return response;
     }
 
-    // 3. Token Versioning Verification (Revocation on Privilege Change)
+    // 3. TOKEN VERSIONING (Instant revocation on privilege change)
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) {
-      const response = NextResponse.json({ message: "Session revoked due to security update." }, { status: 401 });
+      const response = NextResponse.json({ message: "Session revoked due to institutional profile update." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
       return response;
     }
@@ -104,8 +106,8 @@ export async function GET() {
       }
     });
 
-    // 4. Frequent Token Rotation (Sliding window: 2m)
-    // Atomic replacement invalidates the old token after use in the client session.
+    // 4. FREQUENT ROTATION (Sliding Window: 2m)
+    // Acts as Activity Tracker. Inactivity > 10m results in exp-based invalidation.
     const iat = payload.iat || 0;
     const rotationThreshold = 2 * 60; 
 
@@ -113,10 +115,10 @@ export async function GET() {
       const newToken = jwt.sign(
         { 
           ...payload,
-          iat: nowSeconds
+          iat: nowSeconds // Refresh issued-at
         },
         secretStr,
-        { expiresIn: "10m" }
+        { expiresIn: "10m" } // Reset 10m idle clock
       );
 
       response.cookies.set('nib-auth-token', newToken, {

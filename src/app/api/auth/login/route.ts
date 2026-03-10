@@ -9,8 +9,8 @@ import crypto from "crypto";
 /**
  * Institutional Authentication Gateway.
  * Hardened with:
- * 1. Short Session Lifetime (10m)
- * 2. Absolute Lifetime (8h)
+ * 1. Short Session Lifetime (10m) - Server-side Idle Timeout Enforcement
+ * 2. Absolute Lifetime (8h) - Forced Re-authentication limit
  * 3. Client Context Binding (IP + UA Hash)
  */
 
@@ -127,6 +127,7 @@ export async function POST(req: Request) {
       : (serializableRoles[0]?.role.name || 'VIEWER');
 
     const nowSeconds = Math.floor(Date.now() / 1000);
+    // ABSOLUTE LIFETIME: 8 Hours (Banking Security Standard)
     const absoluteLimit = nowSeconds + (8 * 60 * 60);
 
     const token = jwt.sign(
@@ -135,13 +136,13 @@ export async function POST(req: Request) {
         email: user.email,
         role: roleName,
         ip: ipAddress,
-        ua: uaHash, // Contextual binding
+        ua: uaHash,
         v: versionSeconds,
-        abs: absoluteLimit,
+        abs: absoluteLimit, // Institutional Cap
         needsPasswordChange: user.needsPasswordChange
       },
       secret,
-      { expiresIn: "10m" }
+      { expiresIn: "10m" } // IDLE TIMEOUT: 10 Minutes
     );
 
     await prisma.auditLog.create({

@@ -5,7 +5,11 @@ import { isValidInternalRedirect } from './lib/url-security';
 
 /**
  * Institutional Security Middleware.
- * Enforces reduced session timeouts, CSRF validation, and IP/UA binding.
+ * Enforces:
+ * 1. Absolute session caps (8h)
+ * 2. Short idle timeouts (10m)
+ * 3. Network origin binding (IP validation)
+ * 4. CSRF protection for state-changing routes
  */
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: ['*'],
@@ -27,12 +31,12 @@ export async function middleware(req: NextRequest) {
     if (origin) {
       const originUrl = new URL(origin);
       if (originUrl.host !== host) {
-        return new NextResponse('CSRF Violation', { status: 403 });
+        return new NextResponse('CSRF Violation: Origin Mismatch', { status: 403 });
       }
     } else if (referer) {
       const refererUrl = new URL(referer);
       if (refererUrl.host !== host) {
-        return new NextResponse('CSRF Violation', { status: 403 });
+        return new NextResponse('CSRF Violation: Referer Mismatch', { status: 403 });
       }
     }
   }
@@ -63,19 +67,17 @@ export async function middleware(req: NextRequest) {
 
     const nowSeconds = Math.floor(Date.now() / 1000);
 
-    // 4. Inactivity & Absolute Timeout Enforcement
+    // 4. ABSOLUTE SESSION LIFETIME ENFORCEMENT
     if (payload.abs && typeof payload.abs === 'number' && nowSeconds > payload.abs) {
-      const response = NextResponse.redirect(new URL('/login', req.url));
+      const response = NextResponse.redirect(new URL('/login?reason=abs_timeout', req.url));
       response.cookies.delete('nib-auth-token');
       return response;
     }
 
-    // 5. Contextual Binding Verification (IP Check)
-    // Note: UA check is performed at /api/auth/me for performance, 
-    // but IP is verified on every request here.
+    // 5. CONTEXTUAL IP BINDING
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || '127.0.0.1';
     if (payload.ip && payload.ip !== clientIp) {
-      const response = NextResponse.redirect(new URL('/login', req.url));
+      const response = NextResponse.redirect(new URL('/login?reason=security_context', req.url));
       response.cookies.delete('nib-auth-token');
       return response;
     }
@@ -109,7 +111,7 @@ export async function middleware(req: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
-    const response = NextResponse.redirect(new URL('/login', req.url));
+    const response = NextResponse.redirect(new URL('/login?reason=session_invalid', req.url));
     response.cookies.delete('nib-auth-token');
     return response;
   }
