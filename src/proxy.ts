@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
@@ -11,8 +12,11 @@ import crypto from 'crypto';
  * 2. Absolute session caps (8h)
  * 3. Short idle timeouts (10m)
  * 4. Client Context Binding (IP + UA Hash)
- * 5. CSRF protection for state-changing routes
+ * 5. CSRF protection with Dynamic Origin Validation
  */
+
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || [];
+
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: ['*'],
   KYC_OFFICER: ['/', '/submissions', '/reports', '/performance', '/kyc-fq-reference', '/head-office', '/admin/storage'],
@@ -27,7 +31,6 @@ export async function proxy(req: NextRequest) {
   // 1. GENERATE CRYPTOGRAPHIC NONCE FOR CSP
   const nonce = Buffer.from(crypto.randomBytes(16)).toString('base64');
   
-  // Construct Strict CSP with Nonce support
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval';
@@ -48,21 +51,37 @@ export async function proxy(req: NextRequest) {
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('Content-Security-Policy', cspHeader);
 
-  // 2. CSRF VALIDATION (Origin/Referer Check)
+  // 2. DYNAMIC CSRF VALIDATION (Origin & Referer)
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     const origin = req.headers.get('origin');
     const referer = req.headers.get('referer');
     const host = req.headers.get('host');
+    const protocol = req.nextUrl.protocol;
+    const internalOrigin = `${protocol}//${host}`;
 
     if (origin) {
-      const originUrl = new URL(origin);
-      if (originUrl.host !== host) {
-        return new NextResponse('CSRF Violation: Origin Mismatch', { status: 403 });
+      // Dynamic validation against trusted production domains
+      const isTrusted = ALLOWED_ORIGINS.length > 0 
+        ? ALLOWED_ORIGINS.includes(origin) 
+        : origin === internalOrigin;
+
+      if (!isTrusted) {
+        console.error(`[SECURITY_ALERT] CSRF Violation: Untrusted Origin Attempt: ${origin}`);
+        return new NextResponse('CSRF Violation: Untrusted Origin', { status: 403 });
       }
     } else if (referer) {
-      const refererUrl = new URL(referer);
-      if (refererUrl.host !== host) {
-        return new NextResponse('CSRF Violation: Referer Mismatch', { status: 403 });
+      try {
+        const refererUrl = new URL(referer);
+        const refererOrigin = refererUrl.origin;
+        const isTrustedReferer = ALLOWED_ORIGINS.length > 0
+          ? ALLOWED_ORIGINS.includes(refererOrigin)
+          : refererOrigin === internalOrigin;
+
+        if (!isTrustedReferer) {
+          return new NextResponse('CSRF Violation: Untrusted Referer', { status: 403 });
+        }
+      } catch {
+        return new NextResponse('CSRF Violation: Malformed Referer', { status: 403 });
       }
     }
   }
@@ -115,6 +134,7 @@ export async function proxy(req: NextRequest) {
     const currentUaHash = crypto.createHash('sha256').update(userAgent).digest('hex');
 
     if (payload.ip !== clientIp || payload.ua !== currentUaHash) {
+      console.warn(`[SECURITY_ALERT] Session Restricted: Client context changed. IP: ${clientIp}`);
       const response = NextResponse.redirect(new URL('/login?reason=security_context', req.url));
       response.cookies.delete('nib-auth-token');
       response.headers.set('Content-Security-Policy', cspHeader);
