@@ -242,7 +242,7 @@ export default function MasterBundleDownloadPage() {
                   <SelectTrigger className="h-11 bg-white">
                     <SelectValue placeholder="All Regions" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl shadow-2xl border-none">
                     <SelectItem value="all">Global (All Regions)</SelectItem>
                     {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
                   </SelectContent>
@@ -255,7 +255,7 @@ export default function MasterBundleDownloadPage() {
                   <SelectTrigger className="h-11 bg-white">
                     <SelectValue placeholder="All Branches" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl shadow-2xl border-none">
                     <SelectItem value="all">All Branches in {selectedDistrict}</SelectItem>
                     {branches?.filter(b => selectedDistrict === 'all' || b.district?.name === selectedDistrict).map(b => (
                       <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>

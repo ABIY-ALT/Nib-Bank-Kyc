@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export default function EscalatedCasesPage() {
@@ -24,7 +24,7 @@ export default function EscalatedCasesPage() {
       if (!user) return;
       setLoading(true);
       const data = await getSubmissions({
-        status: [KYCStatus.ESCALATED],
+        status: [KYC_STATUS.ESCALATED],
         branch: (!isAdmin && user.branchName) ? user.branchName : undefined
       });
       setSubmissions(data);

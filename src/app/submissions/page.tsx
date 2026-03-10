@@ -169,7 +169,7 @@ export default function CaseArchivePage() {
                 Filter
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuContent align="end" className="w-64 rounded-xl shadow-2xl">
               <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400">Institutional Filter</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuSub>

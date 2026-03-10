@@ -242,10 +242,10 @@ export default function ManagementReportingPage() {
           <div className="space-y-1.5">
             <Label className="text-[9px] font-black uppercase text-slate-400">Regional District</Label>
             <Select value={selectedDistrict} onValueChange={setSelectedDistrict} disabled={!isSuperAdmin}>
-              <SelectTrigger className="h-10 text-xs font-bold">
+              <SelectTrigger className="h-10 text-xs font-bold rounded-xl">
                 <SelectValue placeholder="All Regions" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-xl border-none shadow-2xl">
                 <SelectItem value="all">Global Network</SelectItem>
                 {districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
               </SelectContent>
@@ -254,10 +254,10 @@ export default function ManagementReportingPage() {
           <div className="space-y-1.5">
             <Label className="text-[9px] font-black uppercase text-slate-400">Risk Level</Label>
             <Select value={selectedRisk} onValueChange={setSelectedRisk}>
-              <SelectTrigger className="h-10 text-xs font-bold">
+              <SelectTrigger className="h-10 text-xs font-bold rounded-xl">
                 <SelectValue placeholder="All Risks" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-xl border-none shadow-2xl">
                 <SelectItem value="all">All Profiles</SelectItem>
                 <SelectItem value="LOW">Standard / Low</SelectItem>
                 <SelectItem value="HIGH">High Risk</SelectItem>
@@ -267,10 +267,10 @@ export default function ManagementReportingPage() {
           <div className="space-y-1.5">
             <Label className="text-[9px] font-black uppercase text-slate-400">Workflow Status</Label>
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="h-10 text-xs font-bold">
+              <SelectTrigger className="h-10 text-xs font-bold rounded-xl">
                 <SelectValue placeholder="All Stages" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-xl border-none shadow-2xl">
                 <SelectItem value="all">All Stages</SelectItem>
                 {Object.values(KYC_STATUS).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
               </SelectContent>
@@ -291,7 +291,7 @@ export default function ManagementReportingPage() {
           { label: 'Authorized', value: stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white' },
           { label: 'Methodology Gaps', value: stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white' },
         ].map((item, i) => (
-          <Card key={i} className={cn("shadow-lg border-slate-200 overflow-hidden group hover:scale-[1.02] transition-all", item.bg)}>
+          <Card key={i} className={cn("shadow-lg border-slate-200 overflow-hidden group hover:scale-[1.02] transition-all rounded-2xl", item.bg)}>
             <CardHeader className="p-4 pb-2 border-b bg-slate-50/50">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">{item.label}</span>

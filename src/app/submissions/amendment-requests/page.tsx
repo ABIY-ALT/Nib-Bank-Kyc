@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { getSubmissions } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export default function ReturnedCasesPage() {
@@ -24,7 +24,7 @@ export default function ReturnedCasesPage() {
       if (!user) return;
       setLoading(true);
       const data = await getSubmissions({
-        status: [KYCStatus.ACTION_REQUIRED],
+        status: [KYC_STATUS.ACTION_REQUIRED],
         createdById: isAdmin ? undefined : user.id
       });
       setSubmissions(data);
@@ -46,7 +46,7 @@ export default function ReturnedCasesPage() {
   if (permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
