@@ -11,13 +11,13 @@ export const KYC_STATUS = {
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
   ESCALATED: 'ESCALATED'
-};
+} as const;
 
 export const USER_STATUS = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
   SUSPENDED: 'SUSPENDED'
-};
+} as const;
 
 export const EXCEPTIONAL_STATUS = {
   NONE: 'None',
@@ -29,7 +29,7 @@ export const EXCEPTIONAL_STATUS = {
   COMPLETED: 'COMPLETED',
   REJECTED: 'REJECTED',
   CLARIFICATION_REQUIRED: 'CLARIFICATION_REQUIRED'
-};
+} as const;
 
 export type SubmissionStatus = keyof typeof KYC_STATUS;
 export type ExceptionalStatus = keyof typeof EXCEPTIONAL_STATUS;

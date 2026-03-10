@@ -50,7 +50,7 @@ export async function getSubmissions(filters?: any) {
     return data.map(item => ({
       ...item,
       checklistState: item.checklistState || {},
-      commentHistory: item.commentHistory || []
+      commentHistory: Array.isArray(item.commentHistory) ? item.commentHistory : []
     }));
   } catch (error) {
     console.error("[Submissions Action] Fetch Fault:", error);
@@ -115,6 +115,7 @@ export async function createSubmission(formData: FormData) {
         customerName: validated.customerName,
         branchId: branch.id,
         branchName: validated.branchName,
+        districtName: validated.districtName,
         createdById: session.id,
         status: KYC_STATUS.SUBMITTED,
         entityType: validated.entityType,
@@ -148,7 +149,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   const current = await prisma.kYC.findUnique({ where: { id } });
   if (!current) throw new Error("KYC record not found");
 
-  const history = (current.commentHistory as any[]) || [];
+  const history = Array.isArray(current.commentHistory) ? current.commentHistory : [];
   const reviewer = await prisma.user.findUnique({ where: { id: reviewerId } });
 
   const newEntry = {
@@ -190,7 +191,7 @@ export async function getSubmissionById(id: string) {
     return {
       ...kyc,
       checklistState: kyc.checklistState || {},
-      commentHistory: kyc.commentHistory || [],
+      commentHistory: Array.isArray(kyc.commentHistory) ? kyc.commentHistory : [],
       documents: kyc.memos.map(m => ({
         id: m.id,
         name: m.name,
@@ -242,7 +243,7 @@ export async function processExceptionalStep(formData: FormData) {
   const actionLabel = formData.get('actionLabel') as string;
 
   const current = await prisma.kYC.findUnique({ where: { id } });
-  const history = (current?.commentHistory as any[]) || [];
+  const history = Array.isArray(current?.commentHistory) ? current.commentHistory : [];
 
   const data: any = { 
     exceptionalStatus: nextStatus, 
@@ -264,7 +265,7 @@ export async function resubmitSubmission(formData: FormData) {
   const types = formData.getAll('types') as string[];
 
   const current = await prisma.kYC.findUnique({ where: { id } });
-  const history = (current?.commentHistory as any[]) || [];
+  const history = Array.isArray(current?.commentHistory) ? current.commentHistory : [];
   
   const uploadDir = path.join(process.cwd(), 'uploads');
   const memoData = [];
@@ -310,7 +311,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
   await fs.writeFile(path.join(uploadDir, storedFileName), Buffer.from(await memoFile.arrayBuffer()));
 
   const current = await prisma.kYC.findUnique({ where: { id: kycId } });
-  const history = (current?.commentHistory as any[]) || [];
+  const history = Array.isArray(current?.commentHistory) ? current.commentHistory : [];
   
   const kyc = await prisma.kYC.update({
     where: { id: kycId },

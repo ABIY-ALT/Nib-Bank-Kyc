@@ -39,17 +39,17 @@ import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSubmissions } from "@/actions/submissions";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import { format } from "date-fns";
 
 const STATUS_OPTIONS = [
-  { id: KYCStatus.APPROVED, label: 'Approved' },
-  { id: KYCStatus.SUBMITTED, label: 'Submitted' },
-  { id: KYCStatus.IN_REVIEW, label: 'In Review' },
-  { id: KYCStatus.ACTION_REQUIRED, label: 'Action Required' },
-  { id: KYCStatus.ESCALATED, label: 'Escalated' },
-  { id: KYCStatus.REJECTED, label: 'Rejected' }
+  { id: KYC_STATUS.APPROVED, label: 'Approved' },
+  { id: KYC_STATUS.SUBMITTED, label: 'Submitted' },
+  { id: KYC_STATUS.IN_REVIEW, label: 'In Review' },
+  { id: KYC_STATUS.ACTION_REQUIRED, label: 'Action Required' },
+  { id: KYC_STATUS.ESCALATED, label: 'Escalated' },
+  { id: KYC_STATUS.REJECTED, label: 'Rejected' }
 ];
 
 export default function CaseArchivePage() {
@@ -133,14 +133,14 @@ export default function CaseArchivePage() {
   };
 
   const getStatusBadge = (sub: any) => {
-    const status = sub.status as KYCStatus;
+    const status = sub.status;
     switch (status) {
-      case KYCStatus.APPROVED: return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 font-bold px-3 py-1">Authorized</Badge>;
-      case KYCStatus.SUBMITTED: 
-      case KYCStatus.IN_REVIEW: return <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Analysis</Badge>;
-      case KYCStatus.ACTION_REQUIRED: return <Badge className="bg-orange-100 text-orange-800 border-orange-200 font-bold px-3 py-1">Returned</Badge>;
-      case KYCStatus.REJECTED: return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 font-bold px-3 py-1">Risk Rejected</Badge>;
-      case KYCStatus.ESCALATED: return <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-bold px-3 py-1">Escalated</Badge>;
+      case KYC_STATUS.APPROVED: return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 font-bold px-3 py-1">Authorized</Badge>;
+      case KYC_STATUS.SUBMITTED: 
+      case KYC_STATUS.IN_REVIEW: return <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Analysis</Badge>;
+      case KYC_STATUS.ACTION_REQUIRED: return <Badge className="bg-orange-100 text-orange-800 border-orange-200 font-bold px-3 py-1">Returned</Badge>;
+      case KYC_STATUS.REJECTED: return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 font-bold px-3 py-1">Risk Rejected</Badge>;
+      case KYC_STATUS.ESCALATED: return <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-bold px-3 py-1">Escalated</Badge>;
       default: return <Badge variant="secondary" className="font-bold px-3 py-1">{status}</Badge>;
     }
   };
