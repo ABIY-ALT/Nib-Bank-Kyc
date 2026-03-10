@@ -5,7 +5,7 @@ import { isValidInternalRedirect } from './lib/url-security';
 import crypto from 'crypto';
 
 /**
- * Institutional Security Proxy (Replacement for middleware.ts).
+ * Institutional Security Proxy.
  * Enforces:
  * 1. Absolute session caps (8h)
  * 2. Short idle timeouts (10m)

@@ -195,6 +195,7 @@ export default function NewSubmission() {
       
       if (result.success) {
         toast({ title: "Successful", description: `Case ${submissionId} dispatched for review.` });
+        // RULE: Redirect to "My Submissions" gallery instead of detail
         router.push(`/submissions/my`);
       } else {
         throw new Error(result.error);
