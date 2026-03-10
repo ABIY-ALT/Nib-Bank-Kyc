@@ -347,7 +347,6 @@ export default function StaffRolesPage() {
                                     <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>
                                       {p.name}
                                     </span>
-                                    <span className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-2">Permit access to {p.name.toLowerCase()} capabilities.</span>
                                   </div>
                                 </div>
                                 <div className="z-10 mt-0.5">
