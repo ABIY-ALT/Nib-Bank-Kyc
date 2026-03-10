@@ -1,13 +1,12 @@
-
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ShieldAlert, RotateCcw } from 'lucide-react';
 
 /**
  * Institutional Error Boundary.
- * Displays a generic, secure error interface without exposing stack traces or technical metadata.
+ * Displays a generic, secure error interface without exposing stack traces.
  */
 export default function Error({
   error,
@@ -16,8 +15,12 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [traceId, setTraceId] = useState("");
+
   useEffect(() => {
-    // Log the error to internal console for server-side monitoring
+    // Technical stack trace is logged server-side by Next.js by default.
+    // Client-side, we capture the digest or generate a local reference.
+    setTraceId(error.digest || `ERR_${Math.random().toString(36).substring(2, 8).toUpperCase()}`);
     console.error('[Institutional Service Fault]:', error);
   }, [error]);
 
@@ -36,9 +39,11 @@ export default function Error({
         <Button onClick={() => reset()} className="bg-primary hover:bg-primary/90 text-white font-black h-12 px-10 rounded-xl shadow-xl gap-2 transition-all active:scale-95">
           <RotateCcw className="w-4 h-4" /> Attempt Recovery
         </Button>
-        <p className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest mt-2">
-          Event Hash: {error.digest || 'ERR_PROTOCOL_VIOLATION'}
-        </p>
+        {traceId && (
+          <p className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest mt-2">
+            Reference ID: {traceId}
+          </p>
+        )}
       </div>
     </div>
   );

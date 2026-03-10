@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -9,6 +8,7 @@ import { generateSecurePassword } from '@/lib/security';
 import { getServerSession, verifySensitiveSession } from './auth-server';
 import { createAuditLog } from './audit';
 import { CreateUserSchema } from '@/lib/validation';
+import { logInstitutionalError } from '@/lib/logger';
 
 /**
  * Robust Authorization Helper.
@@ -41,6 +41,7 @@ export async function getAllUsers() {
       assignedBranches: u.assignedBranches ? u.assignedBranches.split(',').filter(Boolean) : []
     }));
   } catch (error) {
+    logInstitutionalError(error, 'DB_FETCH_USERS');
     return [];
   }
 }
@@ -146,7 +147,8 @@ export async function provisionUser(data: {
     revalidatePath('/admin/users');
     return { success: true, user: result, tempPassword: !isUpdate ? tempPass : (data.password ? tempPass : null) };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    const { message } = logInstitutionalError(error, 'DB_PROVISION_USER');
+    return { success: false, error: message };
   }
 }
 
@@ -175,7 +177,8 @@ export async function resetUserPassword(email: string, authorizerId: string) {
 
     return { success: true, tempPassword: tempPass, userName: `${user.firstName} ${user.lastName}` };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    const { message } = logInstitutionalError(error, 'DB_RESET_PASSWORD');
+    return { success: false, error: message };
   }
 }
 
@@ -183,18 +186,28 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
   if (!(await verifyAdminClearance())) throw new Error('Unauthorized');
   if (!(await verifySensitiveSession())) throw new Error('Security Protocol Violation: Session too old.');
   
-  return await prisma.user.update({
-    where: { id: userId },
-    data: { status, updatedAt: new Date() }
-  });
+  try {
+    return await prisma.user.update({
+      where: { id: userId },
+      data: { status, updatedAt: new Date() }
+    });
+  } catch (error) {
+    logInstitutionalError(error, 'DB_UPDATE_STATUS');
+    throw new Error('Institutional database fault.');
+  }
 }
 
 export async function updateUserPortfolio(userId: string, branches: string[]) {
   if (!(await verifyAdminClearance())) throw new Error('Unauthorized');
   if (!(await verifySensitiveSession())) throw new Error('Security Protocol Violation: Session too old.');
 
-  return await prisma.user.update({
-    where: { id: userId },
-    data: { assignedBranches: branches.join(','), updatedAt: new Date() }
-  });
+  try {
+    return await prisma.user.update({
+      where: { id: userId },
+      data: { assignedBranches: branches.join(','), updatedAt: new Date() }
+    });
+  } catch (error) {
+    logInstitutionalError(error, 'DB_UPDATE_PORTFOLIO');
+    throw new Error('Institutional database fault.');
+  }
 }

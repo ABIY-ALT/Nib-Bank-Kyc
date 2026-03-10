@@ -7,6 +7,7 @@ import { getServerSession } from './auth-server';
 import { SubmissionSchema } from '@/lib/validation';
 import { KYC_STATUS, EXCEPTIONAL_STATUS } from '@/lib/kyc-data';
 import { createAuditLog } from './audit';
+import { logInstitutionalError } from '@/lib/logger';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -88,7 +89,7 @@ export async function getSubmissions(filters?: any) {
 
     return data.map(item => formatKYC(item));
   } catch (error) {
-    console.error("[Submissions Action] Fetch Error:", error);
+    logInstitutionalError(error, 'DB_QUERY_SUBMISSIONS');
     return [];
   }
 }
@@ -134,6 +135,7 @@ export async function getSubmissionById(id: string) {
 
     return null;
   } catch (error) {
+    logInstitutionalError(error, 'DB_GET_SUBMISSION');
     return null;
   }
 }
@@ -191,7 +193,7 @@ export async function createSubmission(formData: FormData) {
 
     // Capture initial remarks in the comment history for immediate visibility
     const initialHistory = [{
-      role: 'BRANCH_OFFICER',
+      role: session.role || 'OFFICER',
       performedBy: session.email.split('@')[0],
       timestamp: new Date().toISOString(),
       comment: validated.remarks || "Initial submission dispatched for analysis.",
@@ -228,8 +230,8 @@ export async function createSubmission(formData: FormData) {
     revalidatePath('/submissions/my');
     return { success: true, kyc };
   } catch (error: any) {
-    console.error("[Submissions Action] Create Fault:", error);
-    return { success: false, error: error.message };
+    const { message } = logInstitutionalError(error, 'DB_CREATE_SUBMISSION');
+    return { success: false, error: message };
   }
 }
 
@@ -267,7 +269,7 @@ export async function resubmitSubmission(formData: FormData) {
 
     const history = Array.isArray(current.commentHistory) ? current.commentHistory : [];
     const newHistory = [...history, {
-      role: 'BRANCH_OFFICER',
+      role: session.role || 'BRANCH_OFFICER',
       performedBy: session.email.split('@')[0],
       timestamp: new Date().toISOString(),
       comment: remarks || "Documents resubmitted for review.",
@@ -298,7 +300,8 @@ export async function resubmitSubmission(formData: FormData) {
     revalidatePath(`/submissions/${id}`);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    const { message } = logInstitutionalError(error, 'DB_RESUBMIT_SUBMISSION');
+    return { success: false, error: message };
   }
 }
 
@@ -317,7 +320,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   const reviewer = await prisma.user.findUnique({ where: { id: session.id } });
 
   const newEntry = {
-    role: reviewer?.roles?.[0]?.role?.name || 'OFFICER',
+    role: session.role || 'OFFICER',
     performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
     timestamp: new Date().toISOString(),
     comment: remarks || `Status updated to ${status}`,
@@ -352,13 +355,18 @@ export async function updateSubmissionChecklist(id: string, state: any) {
   const session = await getServerSession();
   if (!session) throw new Error("Unauthorized");
 
-  const kyc = await prisma.kYC.update({
-    where: { id },
-    data: { checklistState: state }
-  });
+  try {
+    const kyc = await prisma.kYC.update({
+      where: { id },
+      data: { checklistState: state }
+    });
 
-  revalidatePath(`/submissions/${id}`);
-  return kyc;
+    revalidatePath(`/submissions/${id}`);
+    return kyc;
+  } catch (error) {
+    logInstitutionalError(error, 'DB_UPDATE_CHECKLIST');
+    throw new Error("Institutional database fault.");
+  }
 }
 
 export async function initiateExceptionalWorkflow(formData: FormData) {
@@ -382,7 +390,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
 
     const history = Array.isArray(current.commentHistory) ? current.commentHistory : [];
     const newEntry = {
-      role: 'SUPERVISOR',
+      role: session.role || 'SUPERVISOR',
       performedBy: session.email.split('@')[0],
       timestamp: new Date().toISOString(),
       comment: `EXCEPTIONAL FLOW TRIGGERED: ${reason}. ${remarks}`,
@@ -421,7 +429,8 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     revalidatePath(`/submissions/${id}`);
     return { success: true };
   } catch (e: any) {
-    return { success: false, error: e.message };
+    const { message } = logInstitutionalError(e, 'DB_INITIATE_EXCEPTIONAL');
+    return { success: false, error: message };
   }
 }
 
@@ -453,43 +462,48 @@ export async function processExceptionalStep(formData: FormData) {
   const session = await getServerSession();
   if (!session) throw new Error("Unauthorized");
 
-  const id = formData.get('id') as string;
-  const nextStatus = formData.get('nextStatus') as string;
-  const remarks = formData.get('remarks') as string;
-  const actionLabel = formData.get('actionLabel') as string;
+  try {
+    const id = formData.get('id') as string;
+    const nextStatus = formData.get('nextStatus') as string;
+    const remarks = formData.get('remarks') as string;
+    const actionLabel = formData.get('actionLabel') as string;
 
-  const current = await prisma.kYC.findUnique({ where: { id } });
-  if (!current) throw new Error("Case not found");
+    const current = await prisma.kYC.findUnique({ where: { id } });
+    if (!current) throw new Error("Case not found");
 
-  const history = Array.isArray(current?.commentHistory) ? current.commentHistory : [];
-  const actor = await prisma.user.findUnique({ where: { id: session.id } });
+    const history = Array.isArray(current?.commentHistory) ? current.commentHistory : [];
+    const actor = await prisma.user.findUnique({ where: { id: session.id } });
 
-  const data: any = { 
-    exceptionalStatus: nextStatus, 
-    updatedAt: new Date(), 
-    commentHistory: [...history, { 
-      role: actor?.roles?.[0]?.role?.name || 'GOVERNANCE', 
-      performedBy: `${actor?.firstName} ${actor?.lastName}`, 
-      timestamp: new Date().toISOString(), 
-      comment: remarks || actionLabel, 
-      action: actionLabel 
-    }]
-  };
-  
-  if (nextStatus === EXCEPTIONAL_STATUS.COMPLETED) data.status = KYC_STATUS.APPROVED;
+    const data: any = { 
+      exceptionalStatus: nextStatus, 
+      updatedAt: new Date(), 
+      commentHistory: [...history, { 
+        role: session.role || 'GOVERNANCE', 
+        performedBy: `${actor?.firstName} ${actor?.lastName}`, 
+        timestamp: new Date().toISOString(), 
+        comment: remarks || actionLabel, 
+        action: actionLabel 
+      }]
+    };
+    
+    if (nextStatus === EXCEPTIONAL_STATUS.COMPLETED) data.status = KYC_STATUS.APPROVED;
 
-  const kyc = await prisma.kYC.update({ where: { id }, data });
+    const kyc = await prisma.kYC.update({ where: { id }, data });
 
-  await createAuditLog({
-    userId: session.id,
-    userEmail: session.email,
-    action: `GOVERNANCE_STEP_${nextStatus}`,
-    details: `Governance step advanced to ${nextStatus}. Decision: ${actionLabel}`,
-    kycId: id
-  });
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: `GOVERNANCE_STEP_${nextStatus}`,
+      details: `Governance step advanced to ${nextStatus}. Decision: ${actionLabel}`,
+      kycId: id
+    });
 
-  revalidatePath(`/submissions/${id}`);
-  return kyc;
+    revalidatePath(`/submissions/${id}`);
+    return kyc;
+  } catch (error) {
+    logInstitutionalError(error, 'DB_PROCESS_EXCEPTIONAL');
+    throw new Error("Institutional database fault.");
+  }
 }
 
 export async function logBundleDownload(data: any) {

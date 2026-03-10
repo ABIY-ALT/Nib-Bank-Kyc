@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { LoginSchema } from "@/lib/validation";
+import { logInstitutionalError } from "@/lib/logger";
 import crypto from "crypto";
 
 /**
@@ -173,14 +174,15 @@ export async function POST(req: Request) {
     response.cookies.set('nib-auth-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict', // ALIGNED: Forced to Strict for maximum CSRF protection
+      sameSite: 'strict',
       maxAge: 60 * 10,
       path: '/',
     });
 
     return response;
   } catch (error: any) {
-    return NextResponse.json({ message: "Internal security service error." }, { status: 500 });
+    const { message } = logInstitutionalError(error, 'AUTH_GATEWAY');
+    return NextResponse.json({ message }, { status: 500 });
   }
 }
 

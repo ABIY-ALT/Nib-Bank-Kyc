@@ -1,12 +1,12 @@
-
 'use client';
 
 import { Button } from '@/components/ui/button';
 import { ShieldAlert, Landmark } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 /**
  * Critical Gateway Error Page.
- * Standardized fallback for root-level failures.
+ * Standardized fallback for root-level failures with no disclosure.
  */
 export default function GlobalError({
   error,
@@ -15,6 +15,12 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [traceId, setTraceId] = useState("");
+
+  useEffect(() => {
+    setTraceId(error.digest || `FATAL_${Math.random().toString(36).substring(2, 8).toUpperCase()}`);
+  }, [error]);
+
   return (
     <html lang="en">
       <body className="font-sans antialiased bg-[#FCFAF7]">
@@ -39,11 +45,13 @@ export default function GlobalError({
               Initialize System Reset
             </Button>
 
-            <div className="mt-10 pt-6 border-t border-slate-50">
-              <p className="text-[10px] font-mono font-bold text-slate-300 uppercase tracking-tighter">
-                Ref ID: {error.digest || 'FATAL_CORE_DISRUPTION'}
-              </p>
-            </div>
+            {traceId && (
+              <div className="mt-10 pt-6 border-t border-slate-50">
+                <p className="text-[10px] font-mono font-bold text-slate-300 uppercase tracking-tighter">
+                  Support Ref: {traceId}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </body>
