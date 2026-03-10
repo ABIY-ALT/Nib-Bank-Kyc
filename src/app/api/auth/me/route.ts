@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken";
 /**
  * Session Verification & Rotation Endpoint.
  * Enforces IP binding, token versioning, sliding window rotation, and absolute 8h limit.
+ * Exclusively uses HttpOnly cookies for session management.
  */
 export async function GET() {
   try {
@@ -66,7 +67,7 @@ export async function GET() {
       return response;
     }
 
-    // 3. Token Versioning Verification (Password change / Profile update invalidation)
+    // 3. Token Versioning Verification
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) {
       const response = NextResponse.json({ message: "Session revoked due to security update." }, { status: 401 });
@@ -101,8 +102,9 @@ export async function GET() {
     });
 
     // 4. Token Rotation (Sliding window)
+    // Automatic rotation if token has been used for more than 5 minutes
     const iat = payload.iat || 0;
-    const rotationThreshold = 5 * 60; // Rotate every 5 minutes
+    const rotationThreshold = 5 * 60; 
 
     if (nowSeconds - iat > rotationThreshold) {
       const newToken = jwt.sign(

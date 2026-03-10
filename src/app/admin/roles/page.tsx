@@ -282,9 +282,6 @@ export default function StaffRolesPage() {
                     <DialogTitle className="text-2xl font-black tracking-tight text-white">
                       {selectedRole ? 'Modify Designation Rights' : 'Define New Designation'}
                     </DialogTitle>
-                    <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-0.5">
-                      Aligning functional rights to organizational nodes
-                    </DialogDescription>
                   </div>
                 </div>
               </div>
