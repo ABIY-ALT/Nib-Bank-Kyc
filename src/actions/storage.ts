@@ -86,8 +86,8 @@ export async function deleteInstitutionalFile(memoId: string) {
 
     if (!memo) throw new Error("File record not found in the Institutional Vault.");
 
-    // 1. Delete from physical storage (public/uploads)
-    const filePath = path.join(process.cwd(), 'public', memo.fileUrl);
+    // 1. Delete from physical storage (root/uploads)
+    const filePath = path.join(process.cwd(), memo.fileUrl);
     try {
       await fs.unlink(filePath);
     } catch (err) {

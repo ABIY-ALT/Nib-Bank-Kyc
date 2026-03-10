@@ -8,6 +8,7 @@ import path from 'path';
 /**
  * Institutional Memo Gateway.
  * Provides secure file streaming with IDOR protection, expiration, and audit logging.
+ * Reads files from the root-level 'uploads' directory.
  */
 export async function GET(
   req: Request,
@@ -35,7 +36,8 @@ export async function GET(
     }
 
     const memo = result.memo!;
-    const filePath = path.join(process.cwd(), 'public', memo.fileUrl);
+    // memo.fileUrl stores relative path from root, e.g. "uploads/filename"
+    const filePath = path.join(process.cwd(), memo.fileUrl);
 
     // Stream the file with security headers
     try {
@@ -59,6 +61,7 @@ export async function GET(
       });
     } catch (err) {
       // Rule: Never 404 for unauthorized path probing to prevent metadata leakage
+      console.error(`[Memo Gateway] File Access Error at ${filePath}:`, err);
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
   } catch (e) {

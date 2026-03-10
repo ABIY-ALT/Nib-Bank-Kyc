@@ -1,4 +1,3 @@
-
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -48,7 +47,6 @@ export async function getSubmissions(filters?: any) {
       skip: filters?.offset || 0,
     });
 
-    // In PostgreSQL with Json columns, Prisma returns objects directly
     return data.map(item => ({
       ...item,
       checklistState: item.checklistState || {},
@@ -94,7 +92,7 @@ export async function createSubmission(formData: FormData) {
     });
 
     const memoData = [];
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    const uploadDir = path.join(process.cwd(), 'uploads');
     try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
 
     for (let i = 0; i < files.length; i++) {
@@ -103,7 +101,12 @@ export async function createSubmission(formData: FormData) {
       const storedFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
       const buffer = Buffer.from(await file.arrayBuffer());
       await fs.writeFile(path.join(uploadDir, storedFileName), buffer);
-      memoData.push({ name: file.name, type: type, fileUrl: `/uploads/${storedFileName}`, uploadedById: session.id });
+      memoData.push({ 
+        name: file.name, 
+        type: type, 
+        fileUrl: `uploads/${storedFileName}`, 
+        uploadedById: session.id 
+      });
     }
 
     const kyc = await prisma.kYC.create({
@@ -116,8 +119,8 @@ export async function createSubmission(formData: FormData) {
         status: KYC_STATUS.SUBMITTED,
         entityType: validated.entityType,
         remarks: validated.remarks,
-        checklistState: {}, // Native JSON object for PostgreSQL
-        commentHistory: [], // Native JSON object for PostgreSQL
+        checklistState: {},
+        commentHistory: [],
         memos: { create: memoData }
       }
     });
@@ -263,13 +266,20 @@ export async function resubmitSubmission(formData: FormData) {
   const current = await prisma.kYC.findUnique({ where: { id } });
   const history = (current?.commentHistory as any[]) || [];
   
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+  const uploadDir = path.join(process.cwd(), 'uploads');
   const memoData = [];
+  try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
+
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const storedFileName = `resubmit_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
     await fs.writeFile(path.join(uploadDir, storedFileName), Buffer.from(await file.arrayBuffer()));
-    memoData.push({ name: file.name, type: types[i] || 'OTHER', fileUrl: `/uploads/${storedFileName}`, uploadedById: 'system' });
+    memoData.push({ 
+      name: file.name, 
+      type: types[i] || 'OTHER', 
+      fileUrl: `uploads/${storedFileName}`, 
+      uploadedById: 'system' 
+    });
   }
 
   const updated = await prisma.kYC.update({
@@ -293,7 +303,9 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
   const justification = formData.get('justification') as string;
   const memoFile = formData.get('memo') as File;
 
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+  const uploadDir = path.join(process.cwd(), 'uploads');
+  try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
+
   const storedFileName = `init_gov_${Date.now()}_${memoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
   await fs.writeFile(path.join(uploadDir, storedFileName), Buffer.from(await memoFile.arrayBuffer()));
 
@@ -307,7 +319,12 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       exceptionalStatus: EXCEPTIONAL_STATUS.AWAITING_DISTRICT,
       updatedAt: new Date(),
       commentHistory: [...history, { role: 'MANAGER', performedBy: 'Manager', timestamp: new Date().toISOString(), comment: `Exception Initiated: ${reason}`, action: 'INITIATE_EXCEPTION' }],
-      memos: { create: { name: memoFile.name, type: 'GOVERNANCE_MEMO', fileUrl: `/uploads/${storedFileName}`, uploadedById: 'system' } }
+      memos: { create: { 
+        name: memoFile.name, 
+        type: 'GOVERNANCE_MEMO', 
+        fileUrl: `uploads/${storedFileName}`, 
+        uploadedById: 'system' 
+      } }
     }
   });
 
