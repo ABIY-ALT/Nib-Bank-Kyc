@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -198,8 +197,8 @@ export default function NewSubmission() {
       
       if (result.success) {
         toast({ title: "Successful", description: `Case ${submissionId} dispatched for review.` });
-        // Redirect directly to the case detail page so they see it automatically
-        router.push(`/submissions/${submissionId}`);
+        // Redirect to My Submissions page as per institutional request
+        router.push(`/submissions/my`);
       } else {
         throw new Error(result.error);
       }

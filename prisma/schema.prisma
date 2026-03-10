@@ -1,11 +1,10 @@
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-generator client {
-  provider = "prisma-client-js"
 }
 
 enum UserStatus {
@@ -30,24 +29,24 @@ enum FindingSeverity {
 
 model User {
   id                  String     @id @default(cuid())
-  firstName           String
-  lastName            String
   email               String     @unique
   password            String
+  firstName           String
+  lastName            String
   phoneNumber         String?
   status              UserStatus @default(ACTIVE)
   branchId            String?
   branchName          String?
   districtName        String?
-  assignedBranches    String?    // Comma-separated list
+  assignedBranches    String?    // Comma separated list for multi-branch specialists
   needsPasswordChange Boolean    @default(true)
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
   branch              Branch?    @relation(fields: [branchId], references: [id])
   roles               UserRole[]
-  submissions         KYC[]      @relation("CreatedBy")
-  assignments         KYC[]      @relation("AssignedTo")
+  createdSubmissions  KYC[]      @relation("CreatedBy")
+  assignedSubmissions KYC[]      @relation("AssignedTo")
   memos               Memo[]
 }
 
@@ -58,16 +57,9 @@ model Role {
   active      Boolean          @default(true)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  
   users       UserRole[]
   permissions RolePermission[]
-}
-
-model Permission {
-  id        String           @id @default(cuid())
-  slug      String           @unique
-  name      String
-  group     String
-  roles     RolePermission[]
 }
 
 model UserRole {
@@ -79,6 +71,15 @@ model UserRole {
   @@id([userId, roleId])
 }
 
+model Permission {
+  id    String @id @default(cuid())
+  name  String
+  slug  String @unique
+  group String // Grouping for UI organization
+  
+  roles RolePermission[]
+}
+
 model RolePermission {
   roleId       String
   permissionId String
@@ -86,6 +87,12 @@ model RolePermission {
   permission   Permission @relation(fields: [permissionId], references: [id])
 
   @@id([roleId, permissionId])
+}
+
+model District {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  branches  Branch[]
 }
 
 model Branch {
@@ -98,37 +105,28 @@ model Branch {
   kycs       KYC[]
 }
 
-model District {
-  id       String   @id @default(cuid())
-  name     String   @unique
-  branches Branch[]
-}
-
 model KYC {
-  id                String   @id
-  customerId        String?
+  id                String   @id // Format: BRANCH-KYC-RANDOM
   customerName      String
+  status            String   // Enum-like string from KYC_STATUS constants
+  entityType        String?
   branchId          String?
-  branchName        String
-  districtName      String
+  branchName        String?
+  districtName      String?
   createdById       String
   assignedToId      String?
-  status            String   @default("SUBMITTED")
   submittedAt       DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  active            Boolean  @default(true)
-  entityType        String?
-  remarks           String?
-  amendCycles       Int      @default(0)
   isResubmitted     Boolean  @default(false)
   isExceptional     Boolean  @default(false)
   exceptionalStatus String   @default("None")
-  
-  checklistState    Json?    // Native JSON for PostgreSQL
-  commentHistory    Json?    // Native JSON for PostgreSQL
-  exceptionalData   Json?
+  remarks           String?
+  checklistState    Json?    // Native JSON for flexibility
+  commentHistory    Json?    // Native JSON for history
+  amendCycles       Int      @default(0)
+  active            Boolean  @default(true)
 
-  createdBy         User     @relation("CreatedBy", fields: [createdById], references: [id])
+  createdBy         User?    @relation("CreatedBy", fields: [createdById], references: [id])
   assignedTo        User?    @relation("AssignedTo", fields: [assignedToId], references: [id])
   branch            Branch?  @relation(fields: [branchId], references: [id])
   memos             Memo[]
@@ -138,20 +136,33 @@ model Memo {
   id           String   @id @default(cuid())
   name         String
   type         String
-  fileUrl      String
-  kycId        String
-  uploadedById String
+  fileUrl      String   // Path relative to root, e.g., "uploads/filename"
   createdAt    DateTime @default(now())
+  uploadedById String
+  kycId        String
 
-  kyc          KYC      @relation(fields: [kycId], references: [id])
   uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  kyc          KYC      @relation(fields: [kycId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userEmail String
+  userName  String?
+  action    String
+  details   String
+  ipAddress String
+  timestamp DateTime @default(now())
+  kycId     String?
+  metadata  Json?
 }
 
 model GlobalSetting {
   id              String   @id @default("global")
-  entityTypes     Json?
-  documentTypes   Json?
-  guidelines      Json?
+  entityTypes     Json
+  documentTypes   Json
+  guidelines      Json
   autoEscalation  Boolean  @default(true)
   escalationHours Int      @default(72)
   lastUpdated     DateTime @default(now())
@@ -164,35 +175,9 @@ model Finding {
   description  String
   category     FindingCategory
   severity     FindingSeverity
-  applicableTo String[]
+  applicableTo String[]        // Array of account types
   active       Boolean         @default(true)
-  source       String?         @default("manual")
+  source       String          @default("manual") // manual or ai
   createdAt    DateTime        @default(now())
-}
-
-model FollowUpVerification {
-  id           String   @id @default(cuid())
-  submissionId String
-  customerName String
-  branch       String
-  officer      String
-  accountType  String
-  verifiedBy   String?
-  verifiedAt   DateTime @default(now())
-  result       String?  
-  remarks      String?
-  status       String   @default("PENDING")
-}
-
-model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  userEmail String
-  userName  String?
-  action    String
-  details   String
-  ipAddress String
-  kycId     String?
-  timestamp DateTime @default(now())
-  metadata  Json?
+  updatedAt    DateTime        @updatedAt
 }
