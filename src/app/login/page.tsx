@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { 
-  ShieldCheck, 
   Mail, 
   Lock, 
   Loader2, 
@@ -21,16 +20,11 @@ import {
   Building2,
   ChevronRight,
   Eye,
-  EyeOff,
-  Landmark
+  EyeOff
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import Image from 'next/image';
 import { isValidInternalRedirect } from '@/lib/url-security';
 
-/**
- * Institutional Authentication Gateway.
- * Wrapped in Suspense to handle search parameter hydration in Next.js 15.
- */
 export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#FCFAF7] flex flex-col items-center justify-center p-4">
@@ -85,18 +79,17 @@ function LoginContent() {
 
   return (
     <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in-95 duration-500">
-      {/* INSTITUTIONAL LOGO SECTION */}
       <div className="flex flex-col items-center text-center space-y-4 mb-2">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-primary text-white rounded-2xl shadow-xl">
-            <Landmark className="w-8 h-8" />
-          </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">NIB BANK <span className="text-primary">KYC</span></h1>
+        <div className="relative w-24 h-24 shadow-2xl rounded-3xl overflow-hidden border-4 border-white bg-primary p-2">
+          <Image src="/logo.svg" alt="Nib Bank Logo" fill className="object-contain p-2" />
         </div>
-        <p className="text-slate-500 text-lg font-medium">Secure institutional access portal.</p>
+        <div className="space-y-1">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">NIB BANK <span className="text-primary">KYC</span></h1>
+          <p className="text-slate-500 text-lg font-medium">Secure institutional access portal.</p>
+        </div>
       </div>
 
-      <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-2xl bg-white">
+      <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
         <CardHeader className="bg-white border-b p-8 py-6">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl font-black flex items-center gap-2 text-slate-800">
@@ -127,8 +120,8 @@ function LoginContent() {
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input 
                   type="email" 
-                  placeholder="admin.user@nibbank.com.et" 
-                  className="pl-12 h-14 bg-[#EBF2FF] border-slate-100 font-black text-slate-900 rounded-xl focus-visible:ring-[#B89334]/20 transition-all shadow-inner"
+                  placeholder="name.surname@nibbank.com.et" 
+                  className="pl-12 h-14 bg-slate-50 border-slate-100 font-black text-slate-900 rounded-xl focus-visible:ring-[#B89334]/20 transition-all shadow-inner"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -143,7 +136,7 @@ function LoginContent() {
                 <Input 
                   type={showPassword ? "text" : "password"} 
                   placeholder="••••••••" 
-                  className="pl-12 pr-12 h-14 bg-white border-2 border-[#B89334]/40 focus:border-[#B89334] font-black text-slate-900 rounded-xl focus-visible:ring-[#B89334]/20 transition-all"
+                  className="pl-12 pr-12 h-14 bg-white border-2 border-slate-100 focus:border-[#B89334] font-black text-slate-900 rounded-xl focus-visible:ring-[#B89334]/20 transition-all"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
