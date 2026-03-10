@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from "@/lib/auth";
@@ -13,11 +14,8 @@ export function usePermissions() {
   const isSuperAdmin = useMemo(() => {
     if (!user) return false;
     
-    // Check direct role string from JWT payload
-    if ((user as any).role === 'SUPER_ADMIN') return true;
-
-    // Check serializable roles array
-    return user.roles?.some((ur: any) => {
+    // Check direct role string from JWT payload or serializable roles array
+    return (user as any).role === 'SUPER_ADMIN' || user.roles?.some((ur: any) => {
       const name = ur.role?.name || ur.name;
       return name === 'SUPER_ADMIN';
     });
@@ -65,8 +63,7 @@ export function usePermissions() {
     hasPermission, 
     hasAnyInGroup, 
     isSuperAdmin,
-    loading: authLoading,
-    canManageFindings: isSuperAdmin || permissionsSlugs.has('VIEW_FQ_LIBRARY')
+    loading: authLoading
   };
 }
 

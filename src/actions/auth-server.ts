@@ -1,3 +1,4 @@
+
 'use server';
 
 import { cookies } from 'next/headers';
@@ -28,15 +29,19 @@ export async function getServerSession() {
     // 2. Versioning Check (DB Verification)
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
-      select: { updatedAt: true, status: true }
+      select: { updatedAt: true, status: true, roles: { include: { role: true } } }
     });
 
     if (!user || user.status !== 'ACTIVE') return null;
 
+    // Token rotation check
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) return null;
     
-    return payload as { id: string, email: string, role: string, v: number, abs: number, ip: string };
+    return {
+      ...payload,
+      role: user.roles.some(ur => ur.role.name === 'SUPER_ADMIN') ? 'SUPER_ADMIN' : payload.role
+    } as { id: string, email: string, role: string, v: number, abs: number, ip: string };
   } catch {
     return null;
   }
@@ -50,8 +55,10 @@ export async function verifyPermission(slug: string) {
   const session = await getServerSession();
   if (!session) return false;
 
+  // Level 1: JWT Role Bypass
   if (session.role === 'SUPER_ADMIN') return true;
 
+  // Level 2: Database Role Verification
   const user = await prisma.user.findUnique({
     where: { id: session.id },
     include: {

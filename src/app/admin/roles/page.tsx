@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -12,30 +13,16 @@ import {
   Settings2,
   Check,
   CheckCircle2,
-  Zap,
   RefreshCcw,
   UserX,
   UserCheck,
   LayoutDashboard,
   FileText,
-  Building2,
   HardDrive,
-  Folders,
   BookOpen,
   FileBarChart,
   Settings,
-  X,
-  Search,
-  History,
-  AlertCircle,
-  ShieldAlert,
-  Inbox,
-  PlusCircle,
-  BarChart3,
-  Map,
-  FileArchive,
-  Monitor,
-  AlertTriangle
+  BarChart3
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -52,11 +39,10 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { usePermissions } from '@/hooks/use-permissions';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const SIDEBAR_GROUPS = [
   { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'CASE_MANAGEMENT', label: 'Case Management', icon: FileText },
+  { id: 'WORKFLOWS', label: 'KYC Operations', icon: FileText },
   { id: 'MONITORING', label: 'Monitoring', icon: BarChart3 },
   { id: 'INFRASTRUCTURE', label: 'Infrastructure', icon: HardDrive },
   { id: 'REFERENCE', label: 'KYC F&Q Reference', icon: BookOpen },
@@ -163,10 +149,7 @@ export default function StaffRolesPage() {
     try {
       const res = await toggleRoleStatus(role.id, role.active);
       if (res.success) {
-        toast({ 
-          title: "Successful", 
-          description: `Role is now ${role.active ? 'Inactive' : 'Active'} in the Vault.`
-        });
+        toast({ title: "Successful" });
         await loadData();
       }
     } finally {
@@ -183,7 +166,7 @@ export default function StaffRolesPage() {
   const groupedPermissions = useMemo(() => {
     const groups: Record<string, any[]> = {
       'DASHBOARD': [],
-      'CASE_MANAGEMENT': [],
+      'WORKFLOWS': [],
       'MONITORING': [],
       'INFRASTRUCTURE': [],
       'REFERENCE': [],
@@ -192,22 +175,10 @@ export default function StaffRolesPage() {
     };
 
     allPermissions.forEach(p => {
-      const slug = p.slug;
-      
-      if (slug === 'DASHBOARD_VIEW' || slug === 'DASHBOARD_VIEW_SYSTEM') {
-        groups['DASHBOARD'].push({ ...p, desc: "Permit view of general oversight dashboard", icon: LayoutDashboard });
-      } else if (slug === 'CASE_VIEW_BRANCH' || slug === 'DASHBOARD_VIEW_DISTRICT' || slug === 'DASHBOARD_VIEW_DISTRICT_NODE' || slug === 'DASHBOARD_VIEW_BRANCH') {
-        groups['MONITORING'].push({ ...p, desc: "Permit operational monitoring at authorized branch", icon: BarChart3 });
-      } else if (slug === 'CASE_SUBMIT' || slug === 'CASE_VIEW_OWN' || slug === 'KYC_VIEW_QUEUE' || slug === 'VIEW_AMENDMENT_QUEUE' || slug === 'CASE_VIEW_ACTION_REQUIRED' || slug === 'VIEW_ESCALATED_CASES' || slug === 'VIEW_GOVERNANCE_QUEUE' || slug === 'TRIGGER_GOVERNANCE_FLOW') {
-        groups['CASE_MANAGEMENT'].push({ ...p, desc: p.name, icon: FileText });
-      } else if (p.group === 'INFRASTRUCTURE' || slug === 'MANAGE_VAULT_STORAGE' || slug === 'VIEW_ARCHIVED_CASE' || slug === 'EXPORT_CASE_ZIP') {
-        groups['INFRASTRUCTURE'].push({ ...p, desc: p.name, icon: HardDrive });
-      } else if (p.group === 'REFERENCE') {
-        groups['REFERENCE'].push({ ...p, desc: "Permit management of the standardized findings knowledge base", icon: BookOpen });
-      } else if (p.group === 'REPORTING') {
-        groups['REPORTING'].push({ ...p, desc: "Permit generation of reports", icon: FileBarChart });
+      if (groups[p.group]) {
+        groups[p.group].push(p);
       } else {
-        groups['SYSTEM'].push({ ...p, desc: p.name, icon: Settings });
+        groups['SYSTEM'].push(p);
       }
     });
 
@@ -236,14 +207,14 @@ export default function StaffRolesPage() {
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Roles</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Staff Roles</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Define authorities precisely aligned with operational requirements.</p>
+          <p className="text-muted-foreground text-lg font-medium">Define operational authorities exactly as per banking requirements.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleSyncPermissions} disabled={isSyncing} className="border-primary/20 text-primary font-black gap-2 h-11">
             {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
-            Provision Registry
+            Sync Registry
           </Button>
           <Button onClick={handleOpenAdd} className="bg-primary shadow-xl font-black h-11 px-8 text-white hover:bg-primary/90 rounded-xl">
             <Plus className="w-4 h-4 mr-2" /> Define New Role
@@ -251,28 +222,18 @@ export default function StaffRolesPage() {
         </div>
       </div>
 
-      {allPermissions.length === 0 && (
-        <Alert className="bg-amber-50 border-amber-200 text-amber-900 rounded-3xl p-6 shadow-lg animate-pulse">
-          <AlertTriangle className="h-6 w-6 text-amber-600" />
-          <div className="ml-4 space-y-2">
-            <p className="font-black text-lg uppercase tracking-tight">Institutional Registry Empty</p>
-            <p className="text-sm font-medium">The capability registry must be provisioned before roles can be defined. Please click <strong>"Provision Registry"</strong> above to initialize standard system permissions.</p>
-          </div>
-        </Alert>
-      )}
-
       <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
         <CardHeader className="bg-primary text-white border-b py-6">
           <CardTitle className="text-xl font-black">Personnel Designations</CardTitle>
-          <CardDescription className="text-white/70 font-medium">Manage jurisdictional and operational authority levels.</CardDescription>
+          <CardDescription className="text-white/70 font-medium">RBAC matrix is active and synchronized with PostgreSQL.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80">
-                <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Role Name</TableHead>
+                <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Designation Name</TableHead>
                 <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
-                <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Capability Authority</TableHead>
+                <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Authority Count</TableHead>
                 <TableHead className="text-right font-black pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -321,10 +282,10 @@ export default function StaffRolesPage() {
                   </div>
                   <div>
                     <DialogTitle className="text-2xl font-black tracking-tight text-white">
-                      {selectedRole ? 'Update Role Rights' : 'Define New Role'}
+                      {selectedRole ? 'Modify Designation Rights' : 'Define New Designation'}
                     </DialogTitle>
                     <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-0.5">
-                      Aligning rights to operational nodes
+                      Aligning functional rights to organizational nodes
                     </DialogDescription>
                   </div>
                 </div>
@@ -343,91 +304,77 @@ export default function StaffRolesPage() {
               </div>
 
               <ScrollArea className="flex-1 pr-4">
-                {allPermissions.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-                    <div className="p-6 bg-slate-50 rounded-full">
-                      <Search className="w-12 h-12 text-slate-200" />
-                    </div>
-                    <p className="font-black text-slate-900">No capabilities discovered in vault.</p>
-                    <Button onClick={handleSyncPermissions} disabled={isSyncing} className="bg-primary text-white font-bold h-11 px-8">
-                      {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCcw className="w-4 h-4 mr-2" />}
-                      Sync System capabilities
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-12 pb-10">
-                    {SIDEBAR_GROUPS.map((section) => {
-                      const perms = groupedPermissions[section.id] || [];
-                      if (perms.length === 0) return null;
+                <div className="space-y-12 pb-10">
+                  {SIDEBAR_GROUPS.map((section) => {
+                    const perms = groupedPermissions[section.id] || [];
+                    if (perms.length === 0) return null;
 
-                      const groupIds = perms.map(p => p.id);
-                      const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
-                      const SectionIcon = section.icon;
-                      
-                      return (
-                        <div key={section.id} className="space-y-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 flex-1">
-                              <div className="p-2 bg-primary/5 rounded-lg text-primary">
-                                <SectionIcon className="w-4 h-4" />
-                              </div>
-                              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900 whitespace-nowrap">{section.label}</span>
-                              <div className="h-px flex-1 bg-slate-100" />
+                    const groupIds = perms.map(p => p.id);
+                    const allSelectedInGroup = groupIds.every(id => permissionsForm.includes(id));
+                    const SectionIcon = section.icon;
+                    
+                    return (
+                      <div key={section.id} className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className="p-2 bg-primary/5 rounded-lg text-primary">
+                              <SectionIcon className="w-4 h-4" />
                             </div>
-                            <Button variant="ghost" size="sm" onClick={() => handleToggleGroup(section.id)} className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-black text-[10px] uppercase tracking-wider gap-2">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> 
-                              {allSelectedInGroup ? "Deselect Section" : "Grant All in Section"}
-                            </Button>
+                            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900 whitespace-nowrap">{section.label}</span>
+                            <div className="h-px flex-1 bg-slate-100" />
                           </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {perms.map((p: any) => {
-                              const isSelected = permissionsForm.includes(p.id);
-                              const PermIcon = p.icon || SectionIcon;
-                              return (
-                                <div 
-                                  key={p.id} 
-                                  onClick={() => handleTogglePermission(p.id)}
-                                  className={cn(
-                                    "flex items-start justify-between p-5 rounded-2xl border transition-all cursor-pointer group relative overflow-hidden",
-                                    isSelected ? "bg-[#FCFAF7] border-primary shadow-[0_0_0_1px_rgba(184,147,52,1)]" : "bg-white border-slate-100 hover:border-slate-200"
-                                  )}
-                                >
-                                  <div className="flex gap-4 z-10">
-                                    <div className={cn("p-2 rounded-xl h-fit transition-all", isSelected ? "bg-primary text-white" : "bg-slate-50 text-slate-400")}>
-                                      <PermIcon className="w-4 h-4" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                      <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>
-                                        {p.name}
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-2">{p.desc}</span>
-                                    </div>
+                          <Button variant="ghost" size="sm" onClick={() => handleToggleGroup(section.id)} className="ml-4 h-8 px-3 rounded-lg hover:bg-primary/5 text-primary font-black text-[10px] uppercase tracking-wider gap-2">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> 
+                            {allSelectedInGroup ? "Deselect Section" : "Grant All in Section"}
+                          </Button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {perms.map((p: any) => {
+                            const isSelected = permissionsForm.includes(p.id);
+                            return (
+                              <div 
+                                key={p.id} 
+                                onClick={() => handleTogglePermission(p.id)}
+                                className={cn(
+                                  "flex items-start justify-between p-5 rounded-2xl border transition-all cursor-pointer group relative overflow-hidden",
+                                  isSelected ? "bg-[#FCFAF7] border-primary shadow-[0_0_0_1px_rgba(184,147,52,1)]" : "bg-white border-slate-100 hover:border-slate-200"
+                                )}
+                              >
+                                <div className="flex gap-4 z-10">
+                                  <div className={cn("p-2 rounded-xl h-fit transition-all", isSelected ? "bg-primary text-white" : "bg-slate-50 text-slate-400")}>
+                                    <ShieldCheck className="w-4 h-4" />
                                   </div>
-                                  <div className="z-10 mt-0.5">
-                                    {isSelected ? (
-                                      <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg"><Check className="w-3.5 h-3.5 text-white stroke-[4px]" /></div>
-                                    ) : (
-                                      <div className="w-6 h-6 rounded-full border-2 border-slate-100 group-hover:border-primary/20" />
-                                    )}
+                                  <div className="flex flex-col">
+                                    <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>
+                                      {p.name}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-2">Permit access to {p.name.toLowerCase()} capabilities.</span>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </div>
+                                <div className="z-10 mt-0.5">
+                                  {isSelected ? (
+                                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg"><Check className="w-3.5 h-3.5 text-white stroke-[4px]" /></div>
+                                  ) : (
+                                    <div className="w-6 h-6 rounded-full border-2 border-slate-100 group-hover:border-primary/20" />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      </div>
+                    );
+                  })}
+                </div>
               </ScrollArea>
             </div>
 
             <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row justify-end items-center gap-6 rounded-b-3xl shrink-0">
               <button onClick={() => setIsDialogOpen(false)} className="text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors">Discard Changes</button>
-              <Button onClick={handleSave} disabled={isSaving || allPermissions.length === 0} className="h-14 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-2xl">
+              <Button onClick={handleSave} disabled={isSaving} className="h-14 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-2xl">
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Commit Authority Map
+                Commit Rights Map
               </Button>
             </DialogFooter>
           </div>

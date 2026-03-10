@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -6,83 +7,60 @@ import { createAuditLog } from './audit';
 import { getServerSession } from './auth-server';
 
 /**
- * Robust Authorization Helper.
- * Performs a real-time database fallback for Master Admins to prevent stale token rejection.
+ * Institutional Capability Registry.
+ * Defines every granular action within the Nib Bank perimeter.
  */
-async function isAuthorizedAdmin() {
-  const session = await getServerSession();
-  if (!session) return false;
+const SYSTEM_CAPABILITIES = [
+  // DASHBOARD
+  { slug: 'DASHBOARD_VIEW', name: 'View General Dashboard', group: 'DASHBOARD' },
+  { slug: 'DASHBOARD_VIEW_SYSTEM', name: 'View System-wide Command Dashboard', group: 'DASHBOARD' },
 
-  // Level 1: JWT Session Check
-  if (session.role === 'SUPER_ADMIN') return true;
+  // WORKFLOWS - KYC Operations
+  { slug: 'CASE_SUBMIT', name: 'Create New Submission', group: 'WORKFLOWS' },
+  { slug: 'CASE_VIEW_OWN', name: 'View My Submissions', group: 'WORKFLOWS' },
+  { slug: 'KYC_VIEW_QUEUE', name: 'Access Review & Action', group: 'WORKFLOWS' },
+  { slug: 'VIEW_AMENDMENT_QUEUE', name: 'Access Amendment Review', group: 'WORKFLOWS' },
+  { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Returned Cases', group: 'WORKFLOWS' },
+  { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
+  { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'WORKFLOWS' },
+  { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
+  
+  // MONITORING
+  { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },
+  { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'Access District Monitoring', group: 'MONITORING' },
+  
+  // INFRASTRUCTURE
+  { slug: 'MANAGE_VAULT_STORAGE', name: 'Manage Vault Storage', group: 'INFRASTRUCTURE' },
+  { slug: 'VIEW_ARCHIVED_CASE', name: 'Access Case Archive', group: 'INFRASTRUCTURE' },
+  { slug: 'EXPORT_CASE_ZIP', name: 'Download Case Bundle', group: 'INFRASTRUCTURE' },
 
-  // Level 2: Database Fallback (Ensures promoted admins have instant access)
-  const user = await prisma.user.findUnique({
-    where: { id: session.id },
-    include: { 
-      roles: { 
-        include: { 
-          role: true 
-        } 
-      } 
-    }
-  });
+  // REFERENCE
+  { slug: 'VIEW_FQ_LIBRARY', name: 'View F&Q Library', group: 'REFERENCE' },
+  { slug: 'CREATE_FQ_ENTRY', name: 'Create F&Q Entry', group: 'REFERENCE' },
+  
+  // REPORTING
+  { slug: 'VIEW_SPECIALIST_PRODUCTIVITY', name: 'View Ops Monitoring', group: 'REPORTING' },
+  { slug: 'REPORT_VIEW_SYSTEM', name: 'View System-wide Reports', group: 'REPORTING' },
+  { slug: 'VIEW_AUDIT_POOL', name: 'Access Follow-up Audit', group: 'REPORTING' },
+  { slug: 'VIEW_AUDIT_LOGS', name: 'View Audit Reports', group: 'REPORTING' },
+  { slug: 'DOWNLOAD_MASTER_ARCHIVE', name: 'Download Master Archive', group: 'REPORTING' },
 
-  return user?.roles.some(ur => ur.role.name === 'SUPER_ADMIN') || false;
-}
+  // SYSTEM
+  { slug: 'USER_CREATE', name: 'Manage User Access', group: 'SYSTEM' },
+  { slug: 'ROLE_CREATE', name: 'Manage Assign Roles', group: 'SYSTEM' },
+  { slug: 'MAP_USERS_TO_BRANCH', name: 'Manage Portfolio Mapping', group: 'SYSTEM' },
+  { slug: 'MANAGE_BRANCHES', name: 'Manage Hierarchy', group: 'SYSTEM' },
+  { slug: 'EDIT_SLA_POLICY', name: 'Modify System Configuration', group: 'SYSTEM' },
+  { slug: 'VIEW_SYSTEM_AUDIT', name: 'View System Audit Logs', group: 'SYSTEM' },
+];
 
-export async function seedInstitutionalPermissions() {
-  const session = await getServerSession();
-  if (!(await isAuthorizedAdmin())) {
-    return { success: false, error: 'Unauthorized' };
-  }
-
-  const permissions = [
-    // DASHBOARD
-    { slug: 'DASHBOARD_VIEW', name: 'View General Dashboard', group: 'DASHBOARD' },
-    { slug: 'DASHBOARD_VIEW_SYSTEM', name: 'View System-wide Command Dashboard', group: 'DASHBOARD' },
-
-    // WORKFLOWS - KYC Operations
-    { slug: 'CASE_SUBMIT', name: 'Create New Submission', group: 'WORKFLOWS' },
-    { slug: 'CASE_VIEW_OWN', name: 'View My Submissions', group: 'WORKFLOWS' },
-    { slug: 'KYC_VIEW_QUEUE', name: 'Access Review & Action', group: 'WORKFLOWS' },
-    { slug: 'VIEW_AMENDMENT_QUEUE', name: 'Access Amendment Review', group: 'WORKFLOWS' },
-    { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Returned Cases', group: 'WORKFLOWS' },
-    { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
-    { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'WORKFLOWS' },
-    { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
-    
-    // WORKFLOWS - Monitoring
-    { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },
-    { slug: 'DASHBOARD_VIEW_DISTRICT', name: 'Access District Monitoring', group: 'MONITORING' },
-    
-    // INFRASTRUCTURE
-    { slug: 'MANAGE_VAULT_STORAGE', name: 'Manage Vault Storage', group: 'INFRASTRUCTURE' },
-    { slug: 'VIEW_ARCHIVED_CASE', name: 'Access Case Archive', group: 'INFRASTRUCTURE' },
-    { slug: 'EXPORT_CASE_ZIP', name: 'Download Case Bundle', group: 'INFRASTRUCTURE' },
-
-    // REFERENCE
-    { slug: 'VIEW_FQ_LIBRARY', name: 'View F&Q Library', group: 'REFERENCE' },
-    { slug: 'CREATE_FQ_ENTRY', name: 'Create F&Q Entry', group: 'REFERENCE' },
-    
-    // REPORTING
-    { slug: 'VIEW_SPECIALIST_PRODUCTIVITY', name: 'View Ops Monitoring', group: 'REPORTING' },
-    { slug: 'REPORT_VIEW_SYSTEM', name: 'View System-wide Reports', group: 'REPORTING' },
-    { slug: 'VIEW_AUDIT_POOL', name: 'Access Follow-up Audit', group: 'REPORTING' },
-    { slug: 'VIEW_AUDIT_LOGS', name: 'View Audit Reports', group: 'REPORTING' },
-    { slug: 'DOWNLOAD_MASTER_ARCHIVE', name: 'Download Master Archive', group: 'REPORTING' },
-
-    // SYSTEM
-    { slug: 'USER_CREATE', name: 'Manage User Access', group: 'SYSTEM' },
-    { slug: 'ROLE_CREATE', name: 'Manage Assign Roles', group: 'SYSTEM' },
-    { slug: 'MAP_USERS_TO_BRANCH', name: 'Manage Portfolio Mapping', group: 'SYSTEM' },
-    { slug: 'MANAGE_BRANCHES', name: 'Manage Hierarchy', group: 'SYSTEM' },
-    { slug: 'EDIT_SLA_POLICY', name: 'Modify System Configuration', group: 'SYSTEM' },
-    { slug: 'VIEW_SYSTEM_AUDIT', name: 'View System Audit Logs', group: 'SYSTEM' },
-  ];
-
+/**
+ * Silent Internal Provisioner.
+ * Automatically ensures that the database matches the application code capabilities.
+ */
+async function internalSeedPermissions() {
   try {
-    for (const p of permissions) {
+    for (const p of SYSTEM_CAPABILITIES) {
       await prisma.permission.upsert({
         where: { slug: p.slug },
         update: { name: p.name, group: p.group },
@@ -90,18 +68,40 @@ export async function seedInstitutionalPermissions() {
       });
     }
 
-    await createAuditLog({
-      userId: session!.id,
-      userEmail: session!.email,
-      action: 'PERMISSION_REGISTRY_SYNC',
-      details: 'Master permission slugs synchronized with the institutional blueprint.',
-      severity: 'MEDIUM'
+    // Automatically link all permissions to SUPER_ADMIN if it exists
+    const superAdminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
+    if (superAdminRole) {
+      const allPerms = await prisma.permission.findMany();
+      await prisma.rolePermission.deleteMany({ where: { roleId: superAdminRole.id } });
+      await prisma.rolePermission.createMany({
+        data: allPerms.map(p => ({ roleId: superAdminRole.id, permissionId: p.id }))
+      });
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('[RBAC Engine] Silent Provisioning Fault:', error);
+    return false;
+  }
+}
+
+export async function getAllPermissions() {
+  try {
+    const permissions = await prisma.permission.findMany({
+      orderBy: [{ group: 'asc' }, { name: 'asc' }]
     });
 
-    revalidatePath('/admin/roles');
-    return { success: true };
-  } catch (error) {
-    return { success: false };
+    // AUTO-PROVISION: If table is empty, trigger silent seed
+    if (permissions.length === 0) {
+      await internalSeedPermissions();
+      return await prisma.permission.findMany({
+        orderBy: [{ group: 'asc' }, { name: 'asc' }]
+      });
+    }
+
+    return permissions;
+  } catch (e) {
+    return [];
   }
 }
 
@@ -116,20 +116,30 @@ export async function getRoleDefinitions() {
   }
 }
 
-export async function getAllPermissions() {
-  try {
-    return await prisma.permission.findMany({
-      orderBy: [{ group: 'asc' }, { name: 'asc' }]
-    });
-  } catch (e) {
-    return [];
+export async function seedInstitutionalPermissions() {
+  const session = await getServerSession();
+  if (!session || session.role !== 'SUPER_ADMIN') {
+    return { success: false, error: 'Unauthorized' };
   }
+
+  const success = await internalSeedPermissions();
+  if (success) {
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'PERMISSION_REGISTRY_SYNC',
+      details: 'Master permission slugs synchronized via manual trigger.',
+      severity: 'MEDIUM'
+    });
+    revalidatePath('/admin/roles');
+    return { success: true };
+  }
+  return { success: false };
 }
 
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
   const session = await getServerSession();
-  
-  if (!(await isAuthorizedAdmin())) {
+  if (!session || session.role !== 'SUPER_ADMIN') {
     return { success: false, error: 'Unauthorized' };
   }
 
@@ -158,11 +168,11 @@ export async function upsertRole(data: { id?: string, name: string, description:
     });
 
     await createAuditLog({
-      userId: session!.id,
-      userEmail: session!.email,
+      userId: session.id,
+      userEmail: session.email,
       action: 'ROLE_MODIFICATION',
-      details: `Role "${data.name}" updated. Associated personnel sessions marked for rotation.`,
-      severity: 'CRITICAL'
+      details: `Role "${data.name}" updated. Sessions marked for rotation.`,
+      severity: 'HIGH'
     });
 
     revalidatePath('/admin/roles');
@@ -173,7 +183,8 @@ export async function upsertRole(data: { id?: string, name: string, description:
 }
 
 export async function toggleRoleStatus(id: string, currentStatus: boolean) {
-  if (!(await isAuthorizedAdmin())) return { success: false, error: 'Unauthorized' };
+  const session = await getServerSession();
+  if (!session || session.role !== 'SUPER_ADMIN') return { success: false };
 
   try {
     const role = await prisma.role.update({
