@@ -5,7 +5,6 @@ import type {NextConfig} from 'next';
  * Institutional Content Security Policy.
  * Defines a strict allow-list for scripts, styles, and assets.
  * Mitigates XSS and injection vulnerabilities by enforcing origin-based boundaries.
- * Path segments (e.g., /auth) are strictly excluded per CSP specifications.
  */
 const cspHeader = `
     default-src 'self';
@@ -57,6 +56,10 @@ const nextConfig: NextConfig = {
           {
             key: 'X-XSS-Protection',
             value: '1; mode=block',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate',
           }
         ],
       },
@@ -68,7 +71,6 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  outputFileTracingRoot: process.cwd(),
   images: {
     remotePatterns: [
       {
