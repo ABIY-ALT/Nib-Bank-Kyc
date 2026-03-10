@@ -1,16 +1,17 @@
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 import { isValidInternalRedirect } from './lib/url-security';
+import crypto from 'crypto';
 
 /**
  * Institutional Security Middleware.
  * Enforces:
  * 1. Absolute session caps (8h)
  * 2. Short idle timeouts (10m)
- * 3. Network origin binding (IP validation)
+ * 3. Client Context Binding (IP + UA Hash)
  * 4. CSRF protection for state-changing routes
- * 5. Strict token validation failure handling with immediate logout (cookie clearing)
  */
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: ['*'],
@@ -23,7 +24,7 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get('nib-auth-token')?.value;
 
-  // 1. CSRF VALIDATION
+  // 1. CSRF VALIDATION (Origin/Referer Check)
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     const origin = req.headers.get('origin');
     const referer = req.headers.get('referer');
@@ -71,15 +72,18 @@ export async function middleware(req: NextRequest) {
     // 4. ABSOLUTE SESSION LIFETIME ENFORCEMENT
     if (payload.abs && typeof payload.abs === 'number' && nowSeconds > payload.abs) {
       const response = NextResponse.redirect(new URL('/login?reason=abs_timeout', req.url));
-      response.cookies.delete('nib-auth-token'); // STRICT: Invalidate expired session
+      response.cookies.delete('nib-auth-token');
       return response;
     }
 
-    // 5. CONTEXTUAL IP BINDING
+    // 5. CLIENT CONTEXT BINDING (IP + UA Hash)
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || '127.0.0.1';
-    if (payload.ip && payload.ip !== clientIp) {
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+    const currentUaHash = crypto.createHash('sha256').update(userAgent).digest('hex');
+
+    if (payload.ip !== clientIp || payload.ua !== currentUaHash) {
       const response = NextResponse.redirect(new URL('/login?reason=security_context', req.url));
-      response.cookies.delete('nib-auth-token'); // STRICT: Clear tampered token on context shift
+      response.cookies.delete('nib-auth-token');
       return response;
     }
 
@@ -112,7 +116,6 @@ export async function middleware(req: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
-    // STRICT: Detection of tampering or invalid signatures results in immediate logout
     const response = NextResponse.redirect(new URL('/login?reason=session_invalid', req.url));
     response.cookies.delete('nib-auth-token');
     return response;
