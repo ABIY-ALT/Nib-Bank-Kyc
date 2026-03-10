@@ -63,11 +63,10 @@ import {
   RotateCcw,
   ShieldAlert
 } from "lucide-react";
-import { format, differenceInDays, startOfMonth, eachMonthOfInterval, isSameMonth, subDays } from "date-fns";
+import { format, startOfMonth, eachMonthOfInterval, isSameMonth, subDays } from "date-fns";
 import { getSubmissions } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
-import { createAuditLog } from "@/actions/audit";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { cn } from "@/lib/utils";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
@@ -135,10 +134,10 @@ export default function ManagementReportingPage() {
 
   const stats = useMemo(() => {
     const total = filteredData.length;
-    const approved = filteredData.filter(s => s.status === KYCStatus.APPROVED).length;
-    const pending = filteredData.filter(s => [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(s.status)).length;
-    const rejected = filteredData.filter(s => s.status === KYCStatus.REJECTED).length;
-    const returned = filteredData.filter(s => s.status === KYCStatus.ACTION_REQUIRED).length;
+    const approved = filteredData.filter(s => s.status === KYC_STATUS.APPROVED).length;
+    const pending = filteredData.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length;
+    const rejected = filteredData.filter(s => s.status === KYC_STATUS.REJECTED).length;
+    const returned = filteredData.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length;
     
     const branchBreakdown: Record<string, number> = {};
     filteredData.forEach(s => {
@@ -273,7 +272,7 @@ export default function ManagementReportingPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Stages</SelectItem>
-                {Object.values(KYCStatus).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
+                {Object.values(KYC_STATUS).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

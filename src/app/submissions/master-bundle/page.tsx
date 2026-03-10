@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -41,15 +40,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from "@/lib/utils";
 import { getSubmissions, getSubmissionById } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
-import { KYCStatus } from "@prisma/client";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 const STATUS_OPTIONS = [
-  { id: KYCStatus.APPROVED, label: 'Approved' },
-  { id: KYCStatus.SUBMITTED, label: 'Submitted / In Review' },
-  { id: KYCStatus.ACTION_REQUIRED, label: 'Action Required' },
-  { id: KYCStatus.REJECTED, label: 'Rejected' },
-  { id: KYCStatus.ESCALATED, label: 'Escalated' }
+  { id: KYC_STATUS.APPROVED, label: 'Approved' },
+  { id: KYC_STATUS.SUBMITTED, label: 'Submitted / In Review' },
+  { id: KYC_STATUS.ACTION_REQUIRED, label: 'Action Required' },
+  { id: KYC_STATUS.REJECTED, label: 'Rejected' },
+  { id: KYC_STATUS.ESCALATED, label: 'Escalated' }
 ];
 
 export default function MasterBundleDownloadPage() {
@@ -103,7 +102,7 @@ export default function MasterBundleDownloadPage() {
     
     return allSubmissions.filter(sub => {
       const matchesStatus = selectedStatuses.length === 0 || 
-                           (selectedStatuses.includes(KYCStatus.SUBMITTED) ? [KYCStatus.SUBMITTED, KYCStatus.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
+                           (selectedStatuses.includes(KYC_STATUS.SUBMITTED) ? [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
       const matchesDistrict = selectedDistrict === 'all' || sub.branch?.district?.name === selectedDistrict;
       const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
 
@@ -312,8 +311,8 @@ export default function MasterBundleDownloadPage() {
                     <div key={sub.id} className="p-5 hover:bg-slate-50 transition-colors group">
                       <div className="flex items-center justify-between">
                         <div className="flex items-start gap-4">
-                          <div className={cn("p-2 rounded-lg", sub.status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/5 text-primary')}>
-                            {sub.status === KYCStatus.APPROVED ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                          <div className={cn("p-2 rounded-lg", sub.status === KYC_STATUS.APPROVED ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/5 text-primary')}>
+                            {sub.status === KYC_STATUS.APPROVED ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
