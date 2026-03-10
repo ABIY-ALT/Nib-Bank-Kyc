@@ -36,7 +36,6 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Atomic Update: Changing password updates 'updatedAt', which rotates the token version 'v'
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -46,7 +45,6 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
       }
     });
 
-    // Re-issue token for current user session continuity
     if (session.id === userId) {
       const secret = process.env.JWT_SECRET || "";
       const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
@@ -59,15 +57,15 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
           needsPasswordChange: false
         },
         secret,
-        { expiresIn: "15m" }
+        { expiresIn: "10m" }
       );
 
       const cookieStore = await cookies();
       cookieStore.set('nib-auth-token', newToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 15,
+        sameSite: 'strict', // ALIGNED: Strict policy applied during credential rotation
+        maxAge: 60 * 10,
         path: '/',
       });
     }

@@ -24,11 +24,11 @@ export async function POST() {
 
   const response = NextResponse.json({ success: true });
   
-  // Clear the secure cookie
+  // Clear the secure cookie with Strict alignment
   response.cookies.set('nib-auth-token', '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: 'strict', // ALIGNED: Strict policy applied during deletion
     expires: new Date(0),
     path: '/',
   });

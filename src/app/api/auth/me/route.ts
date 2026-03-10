@@ -9,9 +9,8 @@ import crypto from "crypto";
  * Session Verification & Heartbeat Endpoint.
  * Enforces:
  * 1. Absolute session lifetime (8h)
- * 2. Idle Timeout via 2m sliding window rotation
+ * 2. Strict SameSite=Strict Cookie Policy
  * 3. Client Context Binding (IP + UA Hash)
- * 4. Strict Token Validation failure handling with immediate cookie purging
  */
 export async function GET() {
   try {
@@ -35,7 +34,6 @@ export async function GET() {
       const result = await jwtVerify(token, secret);
       payload = result.payload;
     } catch (e) {
-      // STRICT: DETECTION OF TAMPERING OR SIGNATURE MISMATCH
       const response = NextResponse.json({ message: "Security Alert: Invalid token signature." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
       return response;
@@ -43,14 +41,12 @@ export async function GET() {
 
     const nowSeconds = Math.floor(Date.now() / 1000);
 
-    // 1. ABSOLUTE LIFETIME ENFORCEMENT
     if (payload.abs && nowSeconds > payload.abs) {
       const response = NextResponse.json({ message: "Absolute session lifetime limit exceeded." }, { status: 401 });
       response.cookies.delete('nib-auth-token');
       return response;
     }
 
-    // 2. CONTEXTUAL BINDING VERIFICATION
     const currentIp = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
     const currentUa = headerList.get('user-agent') || 'unknown';
     const currentUaHash = crypto.createHash('sha256').update(currentUa).digest('hex');
@@ -83,7 +79,6 @@ export async function GET() {
       return response;
     }
 
-    // 3. TOKEN VERSIONING
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
     if (payload.v !== currentVersion) {
       const response = NextResponse.json({ message: "Session revoked due to institutional profile update." }, { status: 401 });
@@ -117,7 +112,6 @@ export async function GET() {
       }
     });
 
-    // 4. FREQUENT ROTATION
     const iat = payload.iat || 0;
     const rotationThreshold = 2 * 60; 
 
@@ -134,7 +128,7 @@ export async function GET() {
       response.cookies.set('nib-auth-token', newToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: 'strict', // ALIGNED: Consistent Strict policy for rotations
         maxAge: 60 * 10,
         path: '/',
       });

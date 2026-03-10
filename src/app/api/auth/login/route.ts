@@ -9,8 +9,8 @@ import crypto from "crypto";
 /**
  * Institutional Authentication Gateway.
  * Hardened with:
- * 1. Short Session Lifetime (10m) - Server-side Idle Timeout Enforcement
- * 2. Absolute Lifetime (8h) - Forced Re-authentication limit
+ * 1. Short Session Lifetime (10m)
+ * 2. Strict SameSite=Strict Cookie
  * 3. Client Context Binding (IP + UA Hash)
  */
 
@@ -22,9 +22,7 @@ export async function POST(req: Request) {
   const ipAddress = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
   const userAgent = headerList.get('user-agent') || 'unknown';
   
-  // Create a fingerprint of the client context
   const uaHash = crypto.createHash('sha256').update(userAgent).digest('hex');
-  
   const genericErrorMessage = "Invalid institutional credentials.";
 
   try {
@@ -105,7 +103,7 @@ export async function POST(req: Request) {
     const secret = process.env.JWT_SECRET;
     
     if (!secret || secret.length < 32) {
-      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure (<32 chars).");
+      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure.");
     }
 
     const serializableRoles = (user.roles ?? []).map(ur => ({
@@ -127,7 +125,6 @@ export async function POST(req: Request) {
       : (serializableRoles[0]?.role.name || 'VIEWER');
 
     const nowSeconds = Math.floor(Date.now() / 1000);
-    // ABSOLUTE LIFETIME: 8 Hours (Banking Security Standard)
     const absoluteLimit = nowSeconds + (8 * 60 * 60);
 
     const token = jwt.sign(
@@ -138,11 +135,11 @@ export async function POST(req: Request) {
         ip: ipAddress,
         ua: uaHash,
         v: versionSeconds,
-        abs: absoluteLimit, // Institutional Cap
+        abs: absoluteLimit,
         needsPasswordChange: user.needsPasswordChange
       },
       secret,
-      { expiresIn: "10m" } // IDLE TIMEOUT: 10 Minutes
+      { expiresIn: "10m" }
     );
 
     await prisma.auditLog.create({
@@ -176,7 +173,7 @@ export async function POST(req: Request) {
     response.cookies.set('nib-auth-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict', // ALIGNED: Forced to Strict for maximum CSRF protection
       maxAge: 60 * 10,
       path: '/',
     });
