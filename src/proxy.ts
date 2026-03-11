@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
@@ -5,7 +6,7 @@ import { isValidInternalRedirect } from './lib/url-security';
 
 /**
  * Institutional Security Proxy (Edge Optimized).
- * Hardened with Nonce-based CSP and Client Context Binding.
+ * Hardened with Nonce-based CSP, strict origin validation, and client context binding.
  */
 
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || [];
@@ -18,18 +19,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 /**
- * Generates a SHA-256 hash using the Web Crypto API.
- */
-async function hashString(input: string) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * Generates a high-entropy CSP nonce using Web Crypto.
+ * Generates a high-entropy CSP nonce using Web Crypto API.
+ * Satisfaction of Edge Runtime constraints.
  */
 function generateNonce() {
   const array = new Uint8Array(16);
@@ -41,14 +32,28 @@ function generateNonce() {
   return btoa(binary);
 }
 
+/**
+ * Institutional Hash Generator.
+ */
+async function hashString(input: string) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get('nib-auth-token')?.value;
 
-  // 1. GENERATE CRYPTOGRAPHIC NONCE FOR CSP
+  // 1. GENERATE CRYPTOGRAPHIC NONCE
   const nonce = generateNonce();
   
-  // REFINED: Added 'unsafe-inline' and 'https:' as fallbacks for strict-dynamic compatibility
+  // 2. CONSTRUCT STRICT CONTENT SECURITY POLICY
+  // - No unsafe-inline for scripts (uses nonce)
+  // - Allows Google Fonts explicitly
+  // - Uses strict-dynamic for framework scripts
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline' https:;
@@ -69,7 +74,7 @@ export async function proxy(req: NextRequest) {
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('Content-Security-Policy', cspHeader);
 
-  // 2. DYNAMIC CSRF VALIDATION
+  // 3. DYNAMIC ORIGIN & CSRF VALIDATION
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     const origin = req.headers.get('origin');
     const host = req.headers.get('host');
@@ -87,7 +92,7 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // 3. Allow Public Assets
+  // 4. ALLOW PUBLIC ASSETS
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth') ||
@@ -97,15 +102,13 @@ export async function proxy(req: NextRequest) {
     pathname === '/logo.svg'
   ) {
     const response = NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
+      request: { headers: requestHeaders },
     });
     response.headers.set('Content-Security-Policy', cspHeader);
     return response;
   }
 
-  // 4. Redirect Unauthenticated
+  // 5. REDIRECT UNAUTHENTICATED
   if (!token) {
     const loginUrl = new URL('/login', req.url);
     if (pathname !== '/' && pathname !== '/login' && isValidInternalRedirect(pathname)) {
@@ -126,7 +129,7 @@ export async function proxy(req: NextRequest) {
 
     const nowSeconds = Math.floor(Date.now() / 1000);
 
-    // 5. ABSOLUTE SESSION LIFETIME ENFORCEMENT
+    // 6. ABSOLUTE SESSION LIFETIME ENFORCEMENT
     if (payload.abs && typeof payload.abs === 'number' && nowSeconds > payload.abs) {
       const response = NextResponse.redirect(new URL('/login?reason=abs_timeout', req.url));
       response.cookies.delete('nib-auth-token');
@@ -134,7 +137,7 @@ export async function proxy(req: NextRequest) {
       return response;
     }
 
-    // 6. CLIENT CONTEXT BINDING
+    // 7. CLIENT CONTEXT BINDING
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || '127.0.0.1';
     const userAgent = req.headers.get('user-agent') || 'unknown';
     const currentUaHash = await hashString(userAgent);
@@ -146,6 +149,7 @@ export async function proxy(req: NextRequest) {
       return response;
     }
 
+    // 8. ROLE-BASED ACCESS CONTROL (ROUTING)
     const userRole = (payload.role as string) || 'VIEWER';
     if (pathname === '/login') {
       const response = NextResponse.redirect(new URL('/', req.url));

@@ -1,3 +1,4 @@
+
 'use server';
 
 import { prisma } from '@/lib/prisma';
@@ -59,7 +60,6 @@ export async function getSubmissions(filters?: any) {
       } else if (filters?.submittedBy && filters.submittedBy === session.id) {
         jurisdictionalFilter.createdById = session.id;
       } else {
-        // Fallback for restricted access
         if (filters?.branches) {
           jurisdictionalFilter.branchName = { in: filters.branches };
         } else if (filters?.branch) {
@@ -291,7 +291,7 @@ export async function resubmitSubmission(formData: FormData) {
           status: KYC_STATUS.SUBMITTED,
           isResubmitted: true,
           commentHistory: newHistory,
-          updatedAt: new DateTime()
+          updatedAt: new Date()
         }
       })
     ]);
