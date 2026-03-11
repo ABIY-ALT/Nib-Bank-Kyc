@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
@@ -20,16 +19,11 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 
 /**
  * Generates a high-entropy CSP nonce using Web Crypto API.
- * Satisfaction of Edge Runtime constraints.
  */
 function generateNonce() {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
-  let binary = '';
-  for (let i = 0; i < array.length; i++) {
-    binary += String.fromCharCode(array[i]);
-  }
-  return btoa(binary);
+  return btoa(Array.from(array, (byte) => String.fromCharCode(byte)).join(''));
 }
 
 /**
@@ -51,15 +45,15 @@ export async function proxy(req: NextRequest) {
   const nonce = generateNonce();
   
   // 2. CONSTRUCT STRICT CONTENT SECURITY POLICY
-  // - No unsafe-inline for scripts (uses nonce)
-  // - Allows Google Fonts explicitly
-  // - Uses strict-dynamic for framework scripts
+  // Aligned with Next.js 15 strict requirements:
+  // - script-src uses 'strict-dynamic' with nonce
+  // - style-src allows Google Fonts and nonced blocks
   const cspHeader = `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline' https:;
-    style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com;
-    img-src 'self' blob: data: https://picsum.photos;
+    script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
+    style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' blob: data: https://picsum.photos;
     object-src 'none';
     base-uri 'self';
     form-action 'self';
