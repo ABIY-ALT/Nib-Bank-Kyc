@@ -5,6 +5,13 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AuthGuard } from '@/components/auth-guard';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { headers } from 'next/headers';
+import { Inter } from 'next/font/google';
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'Nib Bank KYC - Secure Identity Verification',
@@ -21,18 +28,8 @@ export default async function RootLayout({
   const nonce = headerList.get('x-nonce') || undefined;
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* Manually authorize the font stylesheet with the cryptographic nonce */}
-        <link 
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" 
-          rel="stylesheet" 
-          nonce={nonce} 
-        />
-      </head>
-      <body className="font-body antialiased bg-background">
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body className="font-body antialiased bg-background" suppressHydrationWarning>
         <AuthProvider>
           <ThemeProvider
             attribute="class"
