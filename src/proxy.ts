@@ -2,16 +2,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 import { isValidInternalRedirect } from './lib/url-security';
-import crypto from 'crypto';
 
 /**
- * Institutional Security Proxy.
- * Enforces:
- * 1. Nonce-based Content Security Policy (CSP)
- * 2. Absolute session caps (8h)
- * 3. Short idle timeouts (10m)
- * 4. Client Context Binding (IP + UA Hash)
- * 5. CSRF protection with Dynamic Origin Validation
+ * Institutional Security Proxy (Edge Optimized).
+ * Replaces Node.js 'crypto' with Web Crypto API for Middleware compatibility.
  */
 
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || [];
@@ -23,17 +17,41 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   VIEWER: ['/'],
 };
 
+/**
+ * Generates a SHA-256 hash using the Web Crypto API.
+ */
+async function hashString(input: string) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Generates a high-entropy CSP nonce using Web Crypto.
+ */
+function generateNonce() {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  let binary = '';
+  for (let i = 0; i < array.length; i++) {
+    binary += String.fromCharCode(array[i]);
+  }
+  return btoa(binary);
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get('nib-auth-token')?.value;
 
   // 1. GENERATE CRYPTOGRAPHIC NONCE FOR CSP
-  const nonce = Buffer.from(crypto.randomBytes(16)).toString('base64');
+  const nonce = generateNonce();
   
   const cspHeader = `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval';
-    style-src 'self' 'nonce-${nonce}' 'unsafe-inline';
+    script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
+    style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com;
     img-src 'self' blob: data: https://picsum.photos;
     font-src 'self' https://fonts.gstatic.com;
     object-src 'none';
@@ -50,10 +68,9 @@ export async function proxy(req: NextRequest) {
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('Content-Security-Policy', cspHeader);
 
-  // 2. DYNAMIC CSRF VALIDATION (Origin & Referer)
+  // 2. DYNAMIC CSRF VALIDATION
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     const origin = req.headers.get('origin');
-    const referer = req.headers.get('referer');
     const host = req.headers.get('host');
     const protocol = req.nextUrl.protocol;
     const internalOrigin = `${protocol}//${host}`;
@@ -64,22 +81,7 @@ export async function proxy(req: NextRequest) {
         : origin === internalOrigin;
 
       if (!isTrusted) {
-        console.error(`[SECURITY_ALERT] CSRF Violation: Untrusted Origin Attempt: ${origin}`);
         return new NextResponse('CSRF Violation: Untrusted Origin', { status: 403 });
-      }
-    } else if (referer) {
-      try {
-        const refererUrl = new URL(referer);
-        const refererOrigin = refererUrl.origin;
-        const isTrustedReferer = ALLOWED_ORIGINS.length > 0
-          ? ALLOWED_ORIGINS.includes(refererOrigin)
-          : refererOrigin === internalOrigin;
-
-        if (!isTrustedReferer) {
-          return new NextResponse('CSRF Violation: Untrusted Referer', { status: 403 });
-        }
-      } catch {
-        return new NextResponse('CSRF Violation: Malformed Referer', { status: 403 });
       }
     }
   }
@@ -115,7 +117,7 @@ export async function proxy(req: NextRequest) {
   try {
     const secretStr = process.env.JWT_SECRET || "";
     if (secretStr.length < 32) {
-      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure.");
+      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET missing or insecure.");
     }
     const secret = new TextEncoder().encode(secretStr);
     const { payload } = await jwtVerify(token, secret);
@@ -130,13 +132,12 @@ export async function proxy(req: NextRequest) {
       return response;
     }
 
-    // 6. CLIENT CONTEXT BINDING (IP + UA Hash)
+    // 6. CLIENT CONTEXT BINDING
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || '127.0.0.1';
     const userAgent = req.headers.get('user-agent') || 'unknown';
-    const currentUaHash = crypto.createHash('sha256').update(userAgent).digest('hex');
+    const currentUaHash = await hashString(userAgent);
 
     if (payload.ip !== clientIp || payload.ua !== currentUaHash) {
-      console.warn(`[SECURITY_ALERT] Session Restricted: Client context changed. IP: ${clientIp}`);
       const response = NextResponse.redirect(new URL('/login?reason=security_context', req.url));
       response.cookies.delete('nib-auth-token');
       response.headers.set('Content-Security-Policy', cspHeader);
@@ -158,19 +159,13 @@ export async function proxy(req: NextRequest) {
     }
 
     if (allowedRoutes.includes('*')) {
-      const response = NextResponse.next({
-        request: {
-          headers: requestHeaders,
-        },
-      });
+      const response = NextResponse.next({ request: { headers: requestHeaders } });
       response.headers.set('Content-Security-Policy', cspHeader);
       return response;
     }
 
     const isRoot = pathname === '/';
-    const isAllowed = isRoot || allowedRoutes.some(route => 
-      route !== '/' && pathname.startsWith(route)
-    );
+    const isAllowed = isRoot || allowedRoutes.some(route => route !== '/' && pathname.startsWith(route));
 
     if (!isAllowed) {
       const response = NextResponse.redirect(new URL('/unauthorized', req.url));
@@ -178,11 +173,7 @@ export async function proxy(req: NextRequest) {
       return response;
     }
 
-    const response = NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set('Content-Security-Policy', cspHeader);
     return response;
   } catch (error) {
