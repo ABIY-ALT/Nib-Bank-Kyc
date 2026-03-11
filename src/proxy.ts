@@ -5,7 +5,7 @@ import { isValidInternalRedirect } from './lib/url-security';
 
 /**
  * Institutional Security Proxy (Edge Optimized).
- * Replaces Node.js 'crypto' with Web Crypto API for Middleware compatibility.
+ * Hardened with Nonce-based CSP and Client Context Binding.
  */
 
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || [];
@@ -48,10 +48,11 @@ export async function proxy(req: NextRequest) {
   // 1. GENERATE CRYPTOGRAPHIC NONCE FOR CSP
   const nonce = generateNonce();
   
+  // REFINED: Added 'unsafe-inline' and 'https:' as fallbacks for strict-dynamic compatibility
   const cspHeader = `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
-    style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com;
+    script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline' https:;
+    style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' blob: data: https://picsum.photos;
     font-src 'self' https://fonts.gstatic.com;
     object-src 'none';
@@ -92,7 +93,8 @@ export async function proxy(req: NextRequest) {
     pathname.startsWith('/api/auth') ||
     pathname === '/favicon.ico' ||
     pathname === '/login' ||
-    pathname === '/unauthorized'
+    pathname === '/unauthorized' ||
+    pathname === '/logo.svg'
   ) {
     const response = NextResponse.next({
       request: {

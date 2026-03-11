@@ -59,7 +59,14 @@ export async function getSubmissions(filters?: any) {
       } else if (filters?.submittedBy && filters.submittedBy === session.id) {
         jurisdictionalFilter.createdById = session.id;
       } else {
-        return [];
+        // Fallback for restricted access
+        if (filters?.branches) {
+          jurisdictionalFilter.branchName = { in: filters.branches };
+        } else if (filters?.branch) {
+          jurisdictionalFilter.branchName = filters.branch;
+        } else {
+          return [];
+        }
       }
     }
 
@@ -267,7 +274,7 @@ export async function resubmitSubmission(formData: FormData) {
       });
     }
 
-    const history = Array.isArray(current.commentHistory) ? current.commentHistory : [];
+    const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
     const newHistory = [...history, {
       role: session.role || 'BRANCH_OFFICER',
       performedBy: session.email.split('@')[0],
@@ -284,7 +291,7 @@ export async function resubmitSubmission(formData: FormData) {
           status: KYC_STATUS.SUBMITTED,
           isResubmitted: true,
           commentHistory: newHistory,
-          updatedAt: new Date()
+          updatedAt: new DateTime()
         }
       })
     ]);
@@ -316,7 +323,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     throw new Error("Privilege escalation detected.");
   }
 
-  const history = Array.isArray(current.commentHistory) ? current.commentHistory : [];
+  const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
   const reviewer = await prisma.user.findUnique({ where: { id: session.id } });
 
   const newEntry = {
@@ -388,7 +395,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     const buffer = Buffer.from(await memo.arrayBuffer());
     await fs.writeFile(path.join(uploadDir, storedFileName), buffer);
 
-    const history = Array.isArray(current.commentHistory) ? current.commentHistory : [];
+    const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
     const newEntry = {
       role: session.role || 'SUPERVISOR',
       performedBy: session.email.split('@')[0],
@@ -471,7 +478,7 @@ export async function processExceptionalStep(formData: FormData) {
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
-    const history = Array.isArray(current?.commentHistory) ? current.commentHistory : [];
+    const history = Array.isArray(current?.commentHistory) ? (current.commentHistory as any[]) : [];
     const actor = await prisma.user.findUnique({ where: { id: session.id } });
 
     const data: any = { 

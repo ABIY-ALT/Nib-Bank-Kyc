@@ -16,43 +16,40 @@ enum UserStatus {
   SUSPENDED
 }
 
-enum FindingCategory {
-  IDENTITY
-  DOCUMENTATION
-  COMPLIANCE
-  ACCOUNT_VALIDATION
-}
-
-enum FindingSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
+enum KYCStatus {
+  SUBMITTED
+  IN_REVIEW
+  ACTION_REQUIRED
+  APPROVED
+  REJECTED
+  ESCALATED
 }
 
 model User {
-  id                  String      @id @default(cuid())
-  email               String      @unique
+  id                  String     @id @default(cuid())
+  email               String     @unique
   password            String
   firstName           String
   lastName            String
   phoneNumber         String?
-  status              UserStatus  @default(ACTIVE)
-  branchId            String?
-  branch              Branch?     @relation(fields: [branchId], references: [id])
-  branchName          String?
-  districtName        String?
-  assignedBranches    String?     @db.Text // Comma separated list for specialists
-  needsPasswordChange Boolean     @default(false)
+  status              UserStatus @default(ACTIVE)
+  needsPasswordChange Boolean    @default(true)
   
+  // Organizational Mapping
+  branchId            String?
+  branch              Branch?    @relation(fields: [branchId], references: [id])
+  branchName          String?    
+  districtName        String?    
+  assignedBranches    String?    // Comma-separated list for specialists
+  
+  // RBAC & Workflow
   roles               UserRole[]
-  submissions         KYC[]       @relation("CreatedBy")
-  assignments         KYC[]       @relation("AssignedTo")
-  auditLogs           AuditLog[]
+  createdKYC          KYC[]      @relation("CreatedBy")
+  assignedKYC         KYC[]      @relation("AssignedTo")
   memos               Memo[]
   
-  updatedAt           DateTime    @updatedAt
-  createdAt           DateTime    @default(now())
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 }
 
 model Role {
@@ -60,19 +57,18 @@ model Role {
   name        String           @unique
   description String?
   active      Boolean          @default(true)
-  permissions RolePermission[]
   users       UserRole[]
-  
-  updatedAt   DateTime         @updatedAt
+  permissions RolePermission[]
   createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model Permission {
-  id    String           @id @default(cuid())
-  slug  String           @unique
-  name  String
-  group String
-  roles RolePermission[]
+  id        String           @id @default(cuid())
+  slug      String           @unique
+  name      String
+  group     String
+  roles     RolePermission[]
 }
 
 model UserRole {
@@ -94,9 +90,9 @@ model RolePermission {
 }
 
 model District {
-  id       String   @id @default(cuid())
-  name     String   @unique
-  branches Branch[]
+  id        String   @id @default(cuid())
+  name      String   @unique
+  branches  Branch[]
 }
 
 model Branch {
@@ -104,49 +100,54 @@ model Branch {
   name        String   @unique
   code        String?  @unique
   districtId  String
-  district    District @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  
+  district    District @relation(fields: [districtId], references: [id])
   submissions KYC[]
   users       User[]
 }
 
 model KYC {
-  id                String   @id // Formatted Branch-KYC-ID
+  id                String   @id
   customerName      String
-  entityType        String
-  status            String
-  isResubmitted     Boolean  @default(false)
-  amendCycles       Int      @default(0)
+  status            String   @default("SUBMITTED")
+  entityType        String?
+  remarks           String?
   
-  isExceptional     Boolean  @default(false)
-  exceptionalStatus String   @default("None")
-  
-  remarks           String?  @db.Text
-  checklistState    Json     @default("{}")
-  commentHistory    Json     @default("[]")
-  
+  // Jurisdiction
   branchId          String
   branch            Branch   @relation(fields: [branchId], references: [id])
   branchName        String
   districtName      String
   
-  createdById       String
-  createdBy         User     @relation("CreatedBy", fields: [createdById], references: [id])
-  
-  assignedToId      String?
-  assignedTo        User?    @relation("AssignedTo", fields: [assignedToId], references: [id])
-  
-  memos             Memo[]
+  // Logic States
+  isResubmitted     Boolean  @default(false)
+  isExceptional     Boolean  @default(false)
+  exceptionalStatus String   @default("None")
+  amendCycles       Int      @default(0)
   active            Boolean  @default(true)
   
-  updatedAt         DateTime @updatedAt
+  // Data Persistence (Native JSON)
+  checklistState    Json?
+  commentHistory    Json?
+  
+  // Relations
+  createdById       String
+  createdBy         User     @relation("CreatedBy", fields: [createdById], references: [id])
+  assignedToId      String?
+  assignedTo        User?    @relation("AssignedTo", fields: [assignedToId], references: [id])
+  memos             Memo[]
+  
   submittedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([status])
+  @@index([createdById])
 }
 
 model Memo {
   id           String   @id @default(cuid())
   name         String
-  type         String
+  type         String   @default("OTHER")
   fileUrl      String
   
   kycId        String
@@ -158,28 +159,26 @@ model Memo {
   createdAt    DateTime @default(now())
 }
 
-model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  userEmail String
-  userName  String?
-  action    String
-  details   String   @db.Text
-  ipAddress String?
-  kycId     String?
-  metadata  Json?
-  timestamp DateTime @default(now())
+model GlobalSetting {
+  id               String   @id @default("global")
+  entityTypes      Json
+  documentTypes    Json
+  guidelines       Json
+  autoEscalation   Boolean  @default(true)
+  escalationHours  Int      @default(72)
+  lastUpdated      DateTime @default(now())
 }
 
-model GlobalSetting {
-  id              String   @id @default("global")
-  entityTypes     Json     @default("[]")
-  documentTypes   Json     @default("[]")
-  guidelines      Json     @default("[]")
-  autoEscalation  Boolean  @default(true)
-  escalationHours Int      @default(72)
-  lastUpdated     DateTime @updatedAt
+model Finding {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  title        String
+  description  String
+  category     String
+  severity     String
+  applicableTo Json?
+  active       Boolean  @default(true)
+  source       String   @default("manual")
 }
 
 model FollowUpVerification {
@@ -192,19 +191,18 @@ model FollowUpVerification {
   verifiedBy   String?
   verifiedAt   DateTime @default(now())
   result       String?  // "Correct" | "Discrepancy"
-  remarks      String?  @db.Text
+  remarks      String?
   status       String   @default("PENDING")
 }
 
-model Finding {
-  id           String          @id @default(cuid())
-  code         String          @unique
-  title        String
-  description  String          @db.Text
-  category     FindingCategory
-  severity     FindingSeverity
-  applicableTo String[]        // List of entityTypes
-  active       Boolean         @default(true)
-  source       String          @default("manual")
-  updatedAt    DateTime        @updatedAt
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userEmail String
+  userName  String?
+  action    String
+  details   String
+  ipAddress String
+  timestamp DateTime @default(now())
+  kycId     String?
 }
