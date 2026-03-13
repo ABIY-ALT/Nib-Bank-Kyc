@@ -29,7 +29,10 @@ import {
   KeyRound,
   X,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  MoreVertical,
+  Edit3,
+  RefreshCw
 } from "lucide-react";
 import { 
   Dialog, 
@@ -39,6 +42,30 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
@@ -69,12 +96,14 @@ export default function UserManagementPage() {
   const [roleDefinitions, setRoleDefinitions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Dialog States
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  const [isResetResultOpen, setIsResetResultOpen] = useState(false);
-  const [resetResult, setResetResult] = useState<{ pass: string, name: string } | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [userToReset, setUserToReset] = useState<any | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -179,8 +208,6 @@ export default function UserManagementPage() {
       
       if (res.success) {
         if (res.tempPassword) {
-          setResetResult({ pass: res.tempPassword, name: `${formData.firstName} ${formData.lastName}` });
-          setIsResetResultOpen(true);
           tempPasswordRegistry.add(formData.email, res.tempPassword);
         }
         setIsDialogOpen(false);
@@ -207,23 +234,31 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleResetPassword = async (user: any) => {
+  const handleInitiateReset = (user: any) => {
+    setUserToReset(user);
+    setIsResetConfirmOpen(true);
+  };
+
+  const handleConfirmReset = async () => {
+    if (!userToReset || !currentUser) return;
+    setIsResetting(true);
     try {
-      const res = await resetUserPassword(user.email, currentUser!.id);
+      const res = await resetUserPassword(userToReset.email, currentUser.id);
       if (res.success) {
-        setResetResult({ pass: res.tempPassword!, name: `${user.firstName} ${user.lastName}` });
-        setIsResetResultOpen(true);
-        tempPasswordRegistry.add(user.email, res.tempPassword!);
-        toast({ title: "Credential Rotated" });
+        tempPasswordRegistry.add(userToReset.email, res.tempPassword!);
+        toast({ 
+          title: "Credential Rotated", 
+          description: `Hover over ${userToReset.firstName}'s name to view the new password.` 
+        });
+        loadData();
       }
     } catch (e) {
       toast({ variant: "destructive", title: "Reset Failed" });
+    } finally {
+      setIsResetting(false);
+      setIsResetConfirmOpen(false);
+      setUserToReset(null);
     }
-  };
-
-  const handleCopyPassword = (pass: string) => {
-    navigator.clipboard.writeText(pass);
-    toast({ title: "Copied to Clipboard" });
   };
 
   if (loading || permissionsLoading) return <div className="py-48 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
@@ -252,87 +287,127 @@ export default function UserManagementPage() {
       </div>
 
       <div className="border-y bg-white overflow-hidden">
-        <Table>
-          <TableHeader className="hidden">
-            <TableRow>
-              <TableHead>Identity</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Node</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paginatedUsers.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">No personnel records discovered.</TableCell></TableRow>
-            ) : paginatedUsers.map((u) => (
-              <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
-                <TableCell className="py-6 pl-8 w-[350px]">
-                  <div className="flex items-center gap-5">
-                    <div className="w-12 h-12 rounded-full bg-[#FAF7F2] text-[#B89334] flex items-center justify-center font-black text-lg shadow-inner">
-                      {u.firstName.charAt(0)}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-black text-slate-900 text-lg leading-none">{u.firstName} {u.lastName}</span>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Mail className="w-3.5 h-3.5 text-slate-300" />
-                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-tight">{u.email}</span>
-                      </div>
-                    </div>
-                  </div>
-                </TableCell>
-                
-                <TableCell className="text-center">
-                  <div className="inline-flex h-8 items-center px-4 rounded-full bg-[#FAF7F2] border border-[#B89334]/10">
-                    <span className="text-[10px] font-black uppercase text-[#B89334] tracking-widest whitespace-nowrap">
-                      {u.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell className="w-[200px]">
-                  <div className="flex items-center gap-3 text-slate-600">
-                    <Building2 className="w-4 h-4 text-slate-300" />
-                    <span className="text-sm font-bold truncate">{u.branch?.name || "HQ / Central"}</span>
-                  </div>
-                </TableCell>
-
-                <TableCell>
-                  <div className={cn(
-                    "inline-flex h-8 items-center px-5 rounded-full font-black text-[10px] uppercase tracking-widest",
-                    u.status === USER_STATUS.ACTIVE ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
-                  )}>
-                    {u.status}
-                  </div>
-                </TableCell>
-
-                <TableCell className="text-right pr-8">
-                  <div className="flex justify-end gap-4">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => handleOpenDialog(u)} 
-                      className="h-10 w-10 text-slate-400 hover:text-primary transition-colors rounded-full"
-                    >
-                      <Settings2 className="w-5 h-5" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => handleToggleStatus(u)} 
-                      className={cn(
-                        "h-10 w-10 transition-colors rounded-full",
-                        u.status === USER_STATUS.ACTIVE ? "text-red-500 hover:bg-red-50" : "text-emerald-500 hover:bg-emerald-50"
-                      )}
-                    >
-                      {u.status === USER_STATUS.ACTIVE ? <UserX className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
-                    </Button>
-                  </div>
-                </TableCell>
+        <TooltipProvider>
+          <Table>
+            <TableHeader className="hidden">
+              <TableRow>
+                <TableHead>Identity</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Node</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {paginatedUsers.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">No personnel records discovered.</TableCell></TableRow>
+              ) : paginatedUsers.map((u) => {
+                const tempPass = tempPasswordRegistry.get(u.email);
+                return (
+                  <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
+                    <TableCell className="py-6 pl-8 w-[350px]">
+                      <div className="flex items-center gap-5">
+                        <div className="w-12 h-12 rounded-full bg-[#FAF7F2] text-[#B89334] flex items-center justify-center font-black text-lg shadow-inner">
+                          {u.firstName.charAt(0)}
+                        </div>
+                        <div className="flex flex-col">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className={cn(
+                                "font-black text-slate-900 text-lg leading-none cursor-help transition-colors",
+                                tempPass && "text-primary underline decoration-dotted decoration-primary/30"
+                              )}>
+                                {u.firstName} {u.lastName}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="p-4 bg-slate-900 border-none shadow-2xl rounded-xl">
+                              {tempPass ? (
+                                <div className="space-y-2">
+                                  <p className="text-[9px] font-black uppercase text-primary tracking-widest">Active Temporary Credential</p>
+                                  <div className="flex items-center gap-3">
+                                    <code className="text-xl font-mono font-black text-white tracking-widest">{tempPass}</code>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(tempPass);
+                                        toast({ title: "Credential Copied" });
+                                      }}
+                                      className="h-8 w-8 text-primary hover:bg-white/10"
+                                    >
+                                      <Copy className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-xs font-bold text-slate-300">Staff Identity Record</p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Mail className="w-3.5 h-3.5 text-slate-300" />
+                            <span className="text-[11px] font-black text-slate-400 uppercase tracking-tight">{u.email}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell className="text-center">
+                      <div className="inline-flex h-8 items-center px-4 rounded-full bg-[#FAF7F2] border border-[#B89334]/10">
+                        <span className="text-[10px] font-black uppercase text-[#B89334] tracking-widest whitespace-nowrap">
+                          {u.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
+                        </span>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="w-[200px]">
+                      <div className="flex items-center gap-3 text-slate-600">
+                        <Building2 className="w-4 h-4 text-slate-300" />
+                        <span className="text-sm font-bold truncate">{u.branch?.name || "HQ / Central"}</span>
+                      </div>
+                    </TableCell>
+
+                    <TableCell>
+                      <div className={cn(
+                        "inline-flex h-8 items-center px-5 rounded-full font-black text-[10px] uppercase tracking-widest",
+                        u.status === USER_STATUS.ACTIVE ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                      )}>
+                        {u.status}
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="text-right pr-8">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-primary transition-colors rounded-full">
+                            <MoreVertical className="w-5 h-5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-2xl">
+                          <DropdownMenuLabel className="text-[10px] font-black uppercase text-slate-400 px-4 py-2 border-b">Administrative Hub</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleOpenDialog(u)} className="py-3 font-bold cursor-pointer gap-3">
+                            <Edit3 className="w-4 h-4 text-primary" /> Edit Profile
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleInitiateReset(u)} className="py-3 font-bold cursor-pointer gap-3">
+                            <KeyRound className="w-4 h-4 text-primary" /> Reset Password
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleToggleStatus(u)} className={cn("py-3 font-bold cursor-pointer gap-3", u.status === USER_STATUS.ACTIVE ? "text-red-600" : "text-emerald-600")}>
+                            {u.status === USER_STATUS.ACTIVE ? (
+                              <><UserX className="w-4 h-4" /> Deactivate User</>
+                            ) : (
+                              <><UserCheck className="w-4 h-4" /> Activate User</>
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TooltipProvider>
 
         <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -392,31 +467,38 @@ export default function UserManagementPage() {
         </DialogContent>
       </Dialog>
 
-      {/* CREDENTIAL RESULT DIALOG */}
-      <Dialog open={isResetResultOpen} onOpenChange={setIsResetResultOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-          <div className="p-8 bg-emerald-50 space-y-6">
-            <div className="flex items-center gap-4 text-emerald-700">
-              <div className="p-3 bg-emerald-500 text-white rounded-2xl"><CheckCircle2 className="w-6 h-6" /></div>
-              <div><p className="text-[10px] font-black uppercase tracking-widest">Protocol Success</p><p className="text-xl font-black">{resetResult?.name}</p></div>
-            </div>
-            <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Temporary Credential</Label>
-              <div className="flex items-center gap-3 bg-white p-5 rounded-2xl border-2 border-emerald-100 border-dashed">
-                <code className="text-3xl font-mono font-black text-emerald-600 flex-1 text-center tracking-widest">{resetResult?.pass}</code>
-                <Button variant="ghost" size="icon" onClick={() => handleCopyPassword(resetResult?.pass || "")} className="h-12 w-12 text-emerald-600 hover:bg-emerald-50"><Copy className="w-5 h-5" /></Button>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-4 bg-white/50 rounded-xl">
-              <AlertCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] font-bold text-emerald-800 leading-relaxed italic">
-                Inform the user they must rotate this credential upon first gateway entry. This value will expire in 15 minutes.
-              </p>
-            </div>
-            <Button onClick={() => setIsResetResultOpen(false)} className="w-full h-14 bg-emerald-600 text-white font-black rounded-2xl shadow-xl shadow-emerald-200">Close Disclosure</Button>
+      {/* BESPOKE RESET CONFIRMATION DIALOG */}
+      <AlertDialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
+        <AlertDialogContent className="max-w-[440px] rounded-xl p-0 overflow-hidden border-none shadow-2xl bg-[#FCFAF7]">
+          <div className="p-8 space-y-6">
+            <AlertDialogHeader className="space-y-4">
+              <AlertDialogTitle className="text-[28px] font-black text-[#0F172A] leading-tight tracking-tight">
+                Are you sure?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-lg text-[#334155] leading-relaxed font-medium">
+                This will reset the password for <span className="font-bold text-[#0F172A]">{userToReset?.firstName} {userToReset?.lastName}</span>. They will be forced to change it upon their next login.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex flex-row items-center justify-end gap-3 pt-4">
+              <AlertDialogCancel asChild>
+                <Button variant="ghost" className="h-12 px-8 font-bold text-[#475569] hover:bg-black/5 hover:text-[#0F172A] rounded-lg">
+                  Cancel
+                </Button>
+              </AlertDialogCancel>
+              <AlertDialogAction asChild>
+                <Button 
+                  onClick={(e) => { e.preventDefault(); handleConfirmReset(); }}
+                  disabled={isResetting}
+                  className="h-12 px-8 bg-[#B89334] hover:bg-[#A6822D] text-white font-black text-base rounded-lg shadow-xl shadow-[#B89334]/20"
+                >
+                  {isResetting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Confirm reset
+                </Button>
+              </AlertDialogAction>
+            </AlertDialogFooter>
           </div>
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
