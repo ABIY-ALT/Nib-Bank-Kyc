@@ -287,7 +287,7 @@ export default function UserManagementPage() {
       </div>
 
       <div className="border-y bg-white overflow-hidden">
-        <TooltipProvider>
+        <TooltipProvider delayDuration={0}>
           <Table>
             <TableHeader className="hidden">
               <TableRow>
@@ -320,27 +320,37 @@ export default function UserManagementPage() {
                                 {u.firstName} {u.lastName}
                               </span>
                             </TooltipTrigger>
-                            <TooltipContent side="right" className="p-4 bg-slate-900 border-none shadow-2xl rounded-xl">
+                            <TooltipContent side="top" align="start" className="p-5 bg-slate-900 border-none shadow-2xl rounded-2xl min-w-[240px] z-[100]">
                               {tempPass ? (
-                                <div className="space-y-2">
-                                  <p className="text-[9px] font-black uppercase text-primary tracking-widest">Active Temporary Credential</p>
-                                  <div className="flex items-center gap-3">
-                                    <code className="text-xl font-mono font-black text-white tracking-widest">{tempPass}</code>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                                    <p className="text-[10px] font-black uppercase text-primary tracking-widest">Active Temporary Credential</p>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-4 bg-white/5 p-3 rounded-xl border border-white/10">
+                                    <code className="text-2xl font-mono font-black text-white tracking-widest">{tempPass}</code>
                                     <Button 
                                       variant="ghost" 
                                       size="icon" 
-                                      onClick={() => {
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         navigator.clipboard.writeText(tempPass);
                                         toast({ title: "Credential Copied" });
                                       }}
-                                      className="h-8 w-8 text-primary hover:bg-white/10"
+                                      className="h-10 w-10 text-primary hover:bg-white/10 hover:text-primary rounded-lg"
                                     >
-                                      <Copy className="w-4 h-4" />
+                                      <Copy className="w-5 h-5" />
                                     </Button>
                                   </div>
+                                  <p className="text-[9px] text-slate-400 font-medium leading-relaxed italic">
+                                    Valid for next login attempt. Change forced on entry.
+                                  </p>
                                 </div>
                               ) : (
-                                <p className="text-xs font-bold text-slate-300">Staff Identity Record</p>
+                                <div className="flex items-center gap-2">
+                                  <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+                                  <p className="text-xs font-bold text-slate-300">Staff Identity Record</p>
+                                </div>
                               )}
                             </TooltipContent>
                           </Tooltip>
