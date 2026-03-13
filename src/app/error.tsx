@@ -30,7 +30,7 @@ export default function Error({
         <ShieldAlert className="w-16 h-16 text-red-600" />
       </div>
       <div className="space-y-2">
-        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Institutional Service Fault</h2>
+        <h2 className="text-2xl font-black text-foreground tracking-tight">Institutional Service Fault</h2>
         <p className="text-muted-foreground font-medium max-w-sm mx-auto leading-relaxed">
           An unexpected technical exception has occurred within this node. The event has been cryptographically logged for security review.
         </p>
@@ -40,7 +40,7 @@ export default function Error({
           <RotateCcw className="w-4 h-4" /> Attempt Recovery
         </Button>
         {traceId && (
-          <p className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest mt-2">
+          <p className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-widest mt-2">
             Reference ID: {traceId}
           </p>
         )}

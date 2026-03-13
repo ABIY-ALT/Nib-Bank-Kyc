@@ -167,7 +167,7 @@ export default function Dashboard() {
               <Icon className="w-8 h-8" />
             </div>
             <div>
-              <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
+              <h1 className="text-4xl font-extrabold tracking-tight text-foreground font-headline">
                 {dashboardContext.title}
               </h1>
               <p className="text-muted-foreground text-lg font-medium">{dashboardContext.subtitle}</p>
@@ -190,7 +190,7 @@ export default function Dashboard() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.label} className="shadow-lg border-slate-200 overflow-hidden group hover:border-primary/40 transition-all rounded-2xl bg-white">
+          <Card key={stat.label} className="shadow-lg border overflow-hidden group hover:border-primary/40 transition-all rounded-2xl bg-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50 border-b">
               <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{stat.label}</CardTitle>
               <stat.icon className={cn("h-4 w-4 transition-transform group-hover:scale-125", stat.color)} />

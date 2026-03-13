@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 @layer base {
+  /* Light Mode (Default) */
   :root {
     /* Main Background: Light Tan (#FCFAF7) */
     --background: 36 33% 98%;
@@ -56,26 +57,71 @@
     --chart-5: 27 87% 67%;
   }
 
+  /* Dark Mode */
   .dark {
+    /* Dark background: Very dark blue-gray (#0F172A) */
     --background: 222.2 84% 4.9%;
+    /* Light foreground: Off-white (#F8FAFC) */
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    
+    /* Cards: Dark with slight elevation */
+    --card: 217.2 32.6% 17.5%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    
+    /* Popovers: Same as cards */
+    --popover: 217.2 32.6% 17.5%;
     --popover-foreground: 210 40% 98%;
+    
+    /* Primary remains gold/mustard for consistency */
     --primary: 43 56% 46%;
     --primary-foreground: 222.2 47.4% 11.2%;
+    
+    /* Secondary: Slightly lighter than background */
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
+    
+    /* Muted: For disabled/secondary elements */
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
+    
+    /* Accent: Gold/mustard */
     --accent: 43 56% 46%;
     --accent-foreground: 210 40% 98%;
+    
+    /* Destructive: Red with light foreground */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
+    
+    /* Borders and inputs: Slightly lighter than background */
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 43 56% 46%;
+    
+    /* Sidebar Palette for Dark Mode */
+    --sidebar-background: 222.2 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 43 56% 46%;
+    --sidebar-primary-foreground: 222.2 47.4% 11.2%;
+    --sidebar-accent: 43 56% 46%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 43 56% 46%;
+
+    /* Charts for Dark Mode */
+    --chart-1: 43 56% 46%;
+    --chart-2: 43 74% 66%;
+    --chart-3: 27 87% 67%;
+    --chart-4: 194 97% 40%;
+    --chart-5: 279 84% 67%;
+  }
+  
+  /* Ensure HTML and body respect the theme */
+  html.dark {
+    color-scheme: dark;
+  }
+  
+  html {
+    color-scheme: light;
   }
 }
 

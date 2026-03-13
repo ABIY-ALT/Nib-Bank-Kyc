@@ -52,7 +52,7 @@ const MonthDropdown = ({ value, onChange }: { value: number; onChange: (m: numbe
       <select
         value={value}
         onChange={(e) => onChange(parseInt(e.target.value))}
-        className="appearance-none bg-white border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-[11px] font-black uppercase tracking-widest text-slate-700 cursor-pointer hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
+        className="appearance-none bg-card border rounded-lg px-3 py-1.5 pr-8 text-[11px] font-black uppercase tracking-widest text-foreground cursor-pointer hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
       >
         {months.map((m, i) => (
           <option key={m} value={i}>{m}</option>
@@ -71,7 +71,7 @@ const YearDropdown = ({ value, onChange }: { value: number; onChange: (y: number
       <select
         value={value}
         onChange={(e) => onChange(parseInt(e.target.value))}
-        className="appearance-none bg-white border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-[11px] font-black tracking-widest text-slate-700 cursor-pointer hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
+        className="appearance-none bg-card border rounded-lg px-3 py-1.5 pr-8 text-[11px] font-black tracking-widest text-foreground cursor-pointer hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
       >
         {years.map((y) => (
           <option key={y} value={y}>{y}</option>
@@ -122,9 +122,9 @@ const DayCell = ({
       onMouseEnter={() => onMouseEnter(day)}
       className={cn(
         "h-9 w-full relative flex items-center justify-center text-sm transition-all duration-200 rounded-lg",
-        !isDayInCurrentMonth && "text-slate-200 pointer-events-none opacity-0",
-        isDayInCurrentMonth && !isSelectedFrom && !isSelectedTo && !isInRange && "text-slate-600 hover:bg-slate-100",
-        isToday && !isSelectedFrom && !isSelectedTo && "bg-slate-100 font-bold border border-slate-200",
+        !isDayInCurrentMonth && "text-muted pointer-events-none opacity-0",
+        isDayInCurrentMonth && !isSelectedFrom && !isSelectedTo && !isInRange && "text-muted-foreground hover:bg-muted",
+        isToday && !isSelectedFrom && !isSelectedTo && "bg-muted font-bold border",
         isInRange && !isSelectedFrom && !isSelectedTo && "bg-[#a36224]/10 text-[#a36224] font-semibold rounded-none",
         isSelectedFrom && "bg-[#a36224] text-white font-bold shadow-lg z-10 scale-110",
         isSelectedTo && "bg-[#a36224] text-white font-bold shadow-lg z-10 scale-110",

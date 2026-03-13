@@ -82,7 +82,7 @@ export default function AdminPasswordResetPage() {
     <div className="max-w-5xl mx-auto space-y-0 animate-in fade-in duration-500 pb-20 pt-10 px-4 md:px-0">
       {/* NAVIGATION HEADER */}
       <div className="mb-8">
-        <Button asChild variant="ghost" className="h-10 px-4 -ml-4 text-slate-400 hover:text-primary font-bold gap-2 group transition-all">
+        <Button asChild variant="ghost" className="h-10 px-4 -ml-4 text-muted-foreground hover:text-primary font-bold gap-2 group transition-all">
           <Link href="/admin/users">
             <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
             Back to Personnel Directory
@@ -102,17 +102,17 @@ export default function AdminPasswordResetPage() {
       </div>
 
       {/* ACTION CARD */}
-      <Card className="border-none shadow-2xl shadow-black/10 bg-white rounded-b-[2.5rem] overflow-hidden -mt-8">
+      <Card className="border-none shadow-2xl shadow-black/10 bg-card rounded-b-[2.5rem] overflow-hidden -mt-8">
         <CardContent className="p-12 space-y-10">
           <form onSubmit={handleReset} className="space-y-6">
             <div className="space-y-4">
-              <Label className="text-lg font-bold text-slate-800 pl-1">User's Bank Email</Label>
+              <Label className="text-lg font-bold text-foreground pl-1">User's Bank Email</Label>
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
-                  <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                  <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input 
                     placeholder="Enter outlook or bank email..." 
-                    className="h-16 pl-14 bg-[#FCFAF7] border-slate-100 font-bold text-lg rounded-2xl focus-visible:ring-[#B89334]/20 transition-all shadow-inner"
+                    className="h-16 pl-14 bg-background border font-bold text-lg rounded-2xl focus-visible:ring-[#B89334]/20 transition-all shadow-inner"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -126,7 +126,7 @@ export default function AdminPasswordResetPage() {
                   {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Find User"}
                 </Button>
               </div>
-              <p className="text-sm text-slate-400 font-medium pl-1">
+              <p className="text-sm text-muted-foreground font-medium pl-1">
                 Enter the official bank email tied to the user's account. A temporary password will be set.
               </p>
             </div>
@@ -141,7 +141,7 @@ export default function AdminPasswordResetPage() {
                 </div>
                 <div>
                   <p className="text-[11px] font-black uppercase text-emerald-600 tracking-widest leading-none">Discovery Successful</p>
-                  <p className="text-2xl font-black text-slate-900 mt-1">{result.name}</p>
+                  <p className="text-2xl font-black text-foreground mt-1">{result.name}</p>
                 </div>
               </div>
 

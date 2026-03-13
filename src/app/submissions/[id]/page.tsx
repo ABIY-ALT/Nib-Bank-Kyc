@@ -334,7 +334,7 @@ export default function SubmissionDetails() {
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-primary/5 text-primary"><ArrowLeft className="w-5 h-5" /></Button>
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-3xl font-black font-headline text-slate-900 tracking-tight">{submission.id}</h1>
+              <h1 className="text-3xl font-black font-headline text-foreground tracking-tight">{submission.id}</h1>
               <Badge variant="outline" className={cn(
                 "font-black px-3 py-1 uppercase text-[10px] tracking-widest",
                 submission.status === KYC_STATUS.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-200',

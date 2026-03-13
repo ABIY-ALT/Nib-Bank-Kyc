@@ -4,6 +4,7 @@ import { AuthProvider } from '@/lib/auth';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthGuard } from '@/components/auth-guard';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
+import { NonceProvider } from '@/lib/nonce-context';
 import { headers } from 'next/headers';
 import { Inter } from 'next/font/google';
 
@@ -30,20 +31,23 @@ export default async function RootLayout({
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="font-body antialiased bg-background" suppressHydrationWarning>
-        <AuthProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <AuthGuard>
-              <DashboardShell>
-                {children}
-              </DashboardShell>
-            </AuthGuard>
-          </ThemeProvider>
-        </AuthProvider>
+        <NonceProvider nonce={nonce}>
+          <AuthProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="light"
+              enableSystem
+              disableTransitionOnChange
+              nonce={nonce}
+            >
+              <AuthGuard>
+                <DashboardShell>
+                  {children}
+                </DashboardShell>
+              </AuthGuard>
+            </ThemeProvider>
+          </AuthProvider>
+        </NonceProvider>
       </body>
     </html>
   );

@@ -1,0 +1,210 @@
+/**
+ * Logo Image Component
+ * ====================
+ * Production-ready logo component following Next.js Image best practices.
+ * Handles both fixed-size and responsive use cases.
+ *
+ * Features:
+ * ✅ Proper Next.js Image configuration
+ * ✅ Error boundary and fallback
+ * ✅ Responsive sizing options
+ * ✅ Optimized for performance
+ * ✅ TypeScript support
+ */
+
+'use client';
+
+import Image from 'next/image';
+import { ImgHTMLAttributes, useState } from 'react';
+import { AlertCircle } from 'lucide-react';
+
+interface LogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt'> {
+  /**
+   * Display mode: 'fixed' for sidebar/header, 'responsive' for page hero
+   * @default 'responsive'
+   */
+  variant?: 'fixed' | 'responsive' | 'small';
+  
+  /**
+   * Show error fallback if image fails to load
+   * @default true
+   */
+  showFallback?: boolean;
+  
+  /**
+   * Custom error handler
+   */
+  onError?: () => void;
+  
+  /**
+   * Custom load handler
+   */
+  onLoad?: () => void;
+}
+
+/**
+ * Fixed-size logo (Sidebar)
+ * Perfect for header/sidebar logos with defined dimensions
+ */
+export function LogoFixed() {
+  return (
+    <div className="w-10 h-10 rounded-lg shadow-sm shrink-0 flex items-center justify-center bg-transparent p-0 relative">
+      <Image
+        src="/logo.png"
+        alt="Nib Bank Logo"
+        width={40}
+        height={40}
+        priority
+        className="object-contain"
+        quality={85}
+      />
+    </div>
+  );
+}
+
+/**
+ * Responsive logo (Hero/Login page)
+ * Uses fill layout for responsive sizing
+ */
+export function LogoResponsive() {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50 rounded-lg">
+        <div className="text-center">
+          <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-xs text-muted-foreground font-medium">Logo unavailable</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-32 h-24 shadow-2xl rounded-2xl overflow-hidden border-0 bg-transparent">
+      <Image
+        src="/logo.png"
+        alt="Nib Bank Logo"
+        fill
+        priority
+        className="object-contain"
+        quality={90}
+        onError={() => setError(true)}
+      />
+    </div>
+  );
+}
+
+/**
+ * Small logo (Navigation, tabs, etc.)
+ * Compact size for navigation elements
+ */
+export function LogoSmall() {
+  return (
+    <div className="w-6 h-6 relative flex-shrink-0">
+      <Image
+        src="/logo.png"
+        alt="Nib Bank"
+        width={24}
+        height={24}
+        priority
+        className="object-contain"
+        quality={80}
+      />
+    </div>
+  );
+}
+
+/**
+ * Generic Logo component with variant support
+ */
+export function Logo({
+  variant = 'responsive',
+  showFallback = true,
+  onError,
+  onLoad,
+  className,
+  ...props
+}: LogoProps) {
+  const [error, setError] = useState(false);
+
+  const handleError = () => {
+    setError(true);
+    onError?.();
+  };
+
+  const handleLoad = () => {
+    onLoad?.();
+  };
+
+  // Fallback for error state
+  if (error && showFallback) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-gradient-to-br from-muted to-muted/50 rounded-lg ${className || ''}`}
+      >
+        <div className="text-center">
+          <AlertCircle className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
+          <p className="text-xs text-muted-foreground font-medium">Logo</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'fixed') {
+    return (
+      <div className={`w-10 h-10 rounded-lg shadow-sm flex items-center justify-center bg-transparent relative ${className || ''}`}>
+        <Image
+          src="/logo.png"
+          alt="Nib Bank Logo"
+          width={40}
+          height={40}
+          priority
+          className="object-contain"
+          quality={85}
+          onError={handleError}
+          onLoad={handleLoad}
+          {...props}
+        />
+      </div>
+    );
+  }
+
+  if (variant === 'small') {
+    return (
+      <div className={`w-6 h-6 relative flex-shrink-0 ${className || ''}`}>
+        <Image
+          src="/logo.png"
+          alt="Nib Bank"
+          width={24}
+          height={24}
+          priority
+          className="object-contain"
+          quality={80}
+          onError={handleError}
+          onLoad={handleLoad}
+          {...props}
+        />
+      </div>
+    );
+  }
+
+  // Default: responsive variant
+  return (
+    <div className={`relative w-32 h-24 shadow-2xl rounded-2xl overflow-hidden border-0 bg-transparent ${className || ''}`}>
+      <Image
+        src="/logo.png"
+        alt="Nib Bank Logo"
+        fill
+        priority
+        className="object-contain"
+        quality={90}
+        onError={handleError}
+        onLoad={handleLoad}
+        {...props}
+      />
+    </div>
+  );
+}
+
+export default Logo;

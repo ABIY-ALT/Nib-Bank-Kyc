@@ -10,9 +10,10 @@ import { createAuditLog } from './audit';
 
 /**
  * Institutional Security: Resets user password.
+ * REQUIRES current password verification for security.
  * Triggers session versioning rotation via updatedAt update.
  */
-export async function updateInstitutionalPassword(userId: string, newPassword: string) {
+export async function updateInstitutionalPassword(userId: string, newPassword: string, currentPassword: string) {
   try {
     const session = await getServerSession();
     if (!session) {
@@ -28,6 +29,34 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
         severity: 'CRITICAL'
       });
       return { success: false, error: 'Authorization violation.' };
+    }
+
+    // For non-admin users, verify current password
+    if (session.role !== 'SUPER_ADMIN') {
+      if (!currentPassword) {
+        return { success: false, error: 'Current password is required.' };
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { password: true }
+      });
+
+      if (!user) {
+        return { success: false, error: 'User not found.' };
+      }
+
+      const passwordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!passwordValid) {
+        await createAuditLog({
+          userId: session.id,
+          userEmail: session.email,
+          action: 'SECURITY_ALERT_INVALID_PASSWORD',
+          details: `Invalid current password provided during change attempt`,
+          severity: 'HIGH'
+        });
+        return { success: false, error: 'Current password is incorrect.' };
+      }
     }
 
     if (!newPassword || newPassword.length < 8) {
@@ -63,7 +92,7 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
       const cookieStore = await cookies();
       cookieStore.set('nib-auth-token', newToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: true,
         sameSite: 'strict', // ALIGNED: Strict policy applied during credential rotation
         maxAge: 60 * 10,
         path: '/',

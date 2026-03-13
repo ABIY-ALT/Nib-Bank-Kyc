@@ -1,0 +1,209 @@
+/**
+ * Example API Route: Submissions Data (Protected List)
+ * =================================================
+ * Demonstrates CORS handling for paginated data endpoints
+ *
+ * File location: src/app/api/submissions/route.ts
+ * Usage: GET /api/submissions?page=1&limit=20
+ * Requires: Valid authentication token
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { corsMiddleware, getCORSConfig } from '@/lib/cors-security';
+
+/**
+ * Query parameter validation
+ */
+interface QueryParams {
+  page: number;
+  limit: number;
+  sort?: string;
+  filter?: string;
+}
+
+/**
+ * Parse and validate query parameters
+ */
+function parseQueryParams(request: NextRequest): QueryParams {
+  const { searchParams } = request.nextUrl;
+
+  return {
+    page: Math.max(1, parseInt(searchParams.get('page') || '1', 10)),
+    limit: Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10))),
+    sort: searchParams.get('sort') || 'created_at',
+    filter: searchParams.get('filter') || '',
+  };
+}
+
+/**
+ * GET: Retrieve paginated submissions list
+ * Protected endpoint - requires authentication
+ * CORS: Allows configured origins
+ * Response includes pagination headers
+ */
+export async function GET(request: NextRequest) {
+  return corsMiddleware(request, async () => {
+    try {
+      // Verify token
+      const token = request.cookies.get('nib-auth-token')?.value;
+      if (!token) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+
+      // Parse and validate query parameters
+      const params = parseQueryParams(request);
+
+      // TODO: Fetch submissions from database with pagination
+      const totalCount = 150; // Example
+      const submissions = [
+        // TODO: Query with limit and offset
+        // {
+        //   id: '1',
+        //   status: 'PENDING_REVIEW',
+        //   createdAt: new Date().toISOString(),
+        // },
+      ];
+
+      const response = NextResponse.json(submissions, { status: 200 });
+
+      // Add pagination headers (exposed via CORS if configured)
+      response.headers.set('X-Total-Count', totalCount.toString());
+      response.headers.set('X-Page-Number', params.page.toString());
+      response.headers.set('X-Page-Size', params.limit.toString());
+      response.headers.set('X-Total-Pages', Math.ceil(totalCount / params.limit).toString());
+
+      return response;
+    } catch (error) {
+      console.error('[API] Get submissions error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
+}
+
+/**
+ * POST: Create new submission
+ * Protected endpoint - requires authentication
+ * State-changing - CORS origin validation essential
+ * CORS: Only allows validated origins (no wildcard)
+ */
+export async function POST(request: NextRequest) {
+  return corsMiddleware(request, async () => {
+    try {
+      // Verify token
+      const token = request.cookies.get('nib-auth-token')?.value;
+      if (!token) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+
+      // Parse request body
+      const body = await request.json();
+
+      // Validate required fields
+      if (!body.title || !body.content) {
+        return NextResponse.json(
+          { error: 'Title and content are required' },
+          { status: 400 }
+        );
+      }
+
+      // TODO: Validate input against schema
+      // TODO: Create submission in database
+      // TODO: Audit log creation
+      // TODO: Trigger workflows if needed
+
+      const newSubmission = {
+        id: 'sub-' + Date.now(),
+        title: body.title,
+        content: body.content,
+        status: 'DRAFT',
+        createdAt: new Date().toISOString(),
+      };
+
+      return NextResponse.json(newSubmission, { status: 201 });
+    } catch (error) {
+      console.error('[API] Create submission error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
+}
+
+/**
+ * DELETE: Bulk delete submissions
+ * Protected endpoint - requires authentication + specific role
+ * CORS: Validates origin strictly for state-changing operation
+ */
+export async function DELETE(request: NextRequest) {
+  return corsMiddleware(request, async () => {
+    try {
+      // Verify token
+      const token = request.cookies.get('nib-auth-token')?.value;
+      if (!token) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+
+      // TODO: Verify user role (e.g., ADMIN only)
+      // TODO: Parse IDs from request body
+      // TODO: Delete submissions from database
+      // TODO: Audit log deletion
+      // TODO: Trigger any cleanup workflows
+
+      const body = await request.json();
+      const { ids = [] } = body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return NextResponse.json(
+          { error: 'Invalid or empty submission IDs' },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          deleted: ids.length,
+          message: `Deleted ${ids.length} submission(s)`,
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      console.error('[API] Delete submissions error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
+}
+
+/**
+ * OPTIONS: CORS preflight handling
+ * Handled automatically by middleware and corsMiddleware
+ */
+export async function OPTIONS(request: NextRequest) {
+  const config = getCORSConfig();
+
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Methods': config.allowedMethods.join(', '),
+      'Access-Control-Allow-Headers': config.allowedHeaders.join(', '),
+      'Access-Control-Expose-Headers': config.exposedHeaders.join(', '),
+      'Access-Control-Max-Age': config.maxAge.toString(),
+    },
+  });
+}

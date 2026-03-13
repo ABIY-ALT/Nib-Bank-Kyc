@@ -19,6 +19,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
   const isLoginPage = pathname === '/login';
+  const isAdminPage = pathname.startsWith('/admin');
 
   // Render clean layout for the gateway entry point
   if (isLoginPage) {
@@ -30,7 +31,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const showForceChange = !!user?.needsPasswordChange;
+  // Don't show force password change modal on admin pages
+  const showForceChange = !!user?.needsPasswordChange && !isAdminPage;
 
   return (
     <SidebarProvider defaultOpen={true}>

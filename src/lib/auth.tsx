@@ -126,10 +126,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     toast({ title: 'Logged Out', description: `Session terminated: ${reason}` });
   };
 
-  const changePassword = async (newPass: string) => {
+  const changePassword = async (newPass: string, currentPass: string) => {
     if (!user) throw new Error("No active session discovered.");
 
-    const res = await updateInstitutionalPassword(user.id, newPass);
+    const res = await updateInstitutionalPassword(user.id, newPass, currentPass);
     if (res.success) {
       setUser({ ...user, needsPasswordChange: false });
     } else {

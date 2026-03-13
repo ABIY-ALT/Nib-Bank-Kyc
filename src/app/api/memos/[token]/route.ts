@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { getSecureMemo } from '@/actions/memos';
+import { applySecurityHeaders, unauthorizedResponse, forbiddenResponse, internalErrorResponse } from '@/lib/api-security';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -18,9 +19,9 @@ export async function GET(
   const cookieStore = await cookies();
   const jwtToken = cookieStore.get('nib-auth-token')?.value;
 
-  // RULE: Unauthenticated -> 401
+  // Require authentication
   if (!jwtToken) {
-    return NextResponse.json({ message: 'Unauthenticated' }, { status: 401 });
+    return unauthorizedResponse('Authentication required');
   }
 
   try {
@@ -36,7 +37,10 @@ export async function GET(
     const result = await getSecureMemo(token, userId);
 
     if (result.error) {
-      return NextResponse.json({ message: result.error }, { status: result.status });
+      if (result.status === 403) {
+        return forbiddenResponse(result.error);
+      }
+      return unauthorizedResponse(result.error);
     }
 
     const memo = result.memo!;
@@ -53,7 +57,7 @@ export async function GET(
       else if (['.jpg', '.jpeg'].includes(extension)) contentType = 'image/jpeg';
       else if (extension === '.png') contentType = 'image/png';
 
-      return new Response(fileBuffer, {
+      const response = new Response(fileBuffer, {
         headers: {
           'Content-Type': contentType,
           'Content-Disposition': `inline; filename="${fileName}"`,
@@ -62,12 +66,14 @@ export async function GET(
           'Content-Security-Policy': "default-src 'none';",
         },
       });
+
+      return response;
     } catch (err) {
       console.error(`[Memo Gateway] File Access Error at ${filePath}:`, err);
-      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+      return forbiddenResponse('File access denied');
     }
   } catch (e) {
     console.error('[Memo API] Security Gateway Fault:', e);
-    return NextResponse.json({ message: 'Internal Security Error' }, { status: 500 });
+    return internalErrorResponse('Session validation failed');
   }
 }

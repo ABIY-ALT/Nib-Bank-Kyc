@@ -1,0 +1,3 @@
+@@index([userEmail])  -- Audit searches
+@@index([action])     -- Event type filtering
+@@index([timestamp])  -- Time-range queries

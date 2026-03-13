@@ -4,6 +4,13 @@ import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { 
+  verifyAuthentication, 
+  applySecurityHeaders, 
+  unauthorizedResponse,
+  successResponse,
+  getClientIp 
+} from "@/lib/api-security";
 
 /**
  * Session Verification & Heartbeat Endpoint.
@@ -12,54 +19,38 @@ import crypto from "crypto";
  * 2. Strict SameSite=Strict Cookie Policy
  * 3. Client Context Binding (IP + UA Hash)
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    // Verify authentication
+    const session = await verifyAuthentication(req);
+    if (!session) {
+      return unauthorizedResponse('Invalid or expired session');
+    }
+
     const cookieStore = await cookies();
     const headerList = await headers();
-    const token = cookieStore.get("nib-auth-token")?.value;
 
-    if (!token) {
-      return NextResponse.json({ message: "No active session." }, { status: 401 });
-    }
-
-    const secretStr = process.env.JWT_SECRET || "";
-    if (!secretStr || secretStr.length < 32) {
-      return NextResponse.json({ message: "System configuration fault." }, { status: 500 });
-    }
-
-    const secret = new TextEncoder().encode(secretStr);
-    
-    let payload: any;
-    try {
-      const result = await jwtVerify(token, secret);
-      payload = result.payload;
-    } catch (e) {
-      const response = NextResponse.json({ message: "Security Alert: Invalid token signature." }, { status: 401 });
-      response.cookies.delete('nib-auth-token');
-      return response;
-    }
-
-    const nowSeconds = Math.floor(Date.now() / 1000);
-
-    if (payload.abs && nowSeconds > payload.abs) {
-      const response = NextResponse.json({ message: "Absolute session lifetime limit exceeded." }, { status: 401 });
-      response.cookies.delete('nib-auth-token');
-      return response;
-    }
-
-    const currentIp = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
+    // Verify client context (IP + User Agent)
+    const clientIp = getClientIp(req);
     const currentUa = headerList.get('user-agent') || 'unknown';
     const currentUaHash = crypto.createHash('sha256').update(currentUa).digest('hex');
 
-    if (payload.ip !== currentIp || payload.ua !== currentUaHash) {
-      const response = NextResponse.json({ message: "Security Alert: Session restricted due to client context change." }, { status: 401 });
-      response.cookies.delete('nib-auth-token');
-      return response;
+    if (session.ip !== clientIp || session.ua !== currentUaHash) {
+      return unauthorizedResponse('Session context violation detected');
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: payload.id },
-      include: {
+      where: { id: session.id },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        status: true,
+        branchId: true,
+        updatedAt: true,
+        needsPasswordChange: true,
+        assignedBranches: true,
         branch: { include: { district: true } },
         roles: { 
           include: { 
@@ -74,16 +65,13 @@ export async function GET() {
     });
 
     if (!user || user.status !== 'ACTIVE') {
-      const response = NextResponse.json({ message: "Account restricted." }, { status: 401 });
-      response.cookies.delete('nib-auth-token');
-      return response;
+      return unauthorizedResponse('Account is not active');
     }
 
+    // Verify token version hasn't changed
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
-    if (payload.v !== currentVersion) {
-      const response = NextResponse.json({ message: "Session revoked due to institutional profile update." }, { status: 401 });
-      response.cookies.delete('nib-auth-token');
-      return response;
+    if (session.v !== currentVersion) {
+      return unauthorizedResponse('Session invalidated');
     }
 
     const serializableRoles = user.roles.map(ur => ({
@@ -96,7 +84,12 @@ export async function GET() {
       }
     }));
 
-    const response = NextResponse.json({
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const iat = session.iat || 0;
+    const rotationThreshold = 2 * 60;
+
+    const secret = process.env.JWT_SECRET || '';
+    let response = successResponse({
       user: {
         id: user.id,
         firstName: user.firstName,
@@ -112,23 +105,21 @@ export async function GET() {
       }
     });
 
-    const iat = payload.iat || 0;
-    const rotationThreshold = 2 * 60; 
-
+    // Token rotation every 2 minutes
     if (nowSeconds - iat > rotationThreshold) {
       const newToken = jwt.sign(
         { 
-          ...payload,
+          ...session,
           iat: nowSeconds 
         },
-        secretStr,
+        secret,
         { expiresIn: "10m" } 
       );
 
       response.cookies.set('nib-auth-token', newToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict', // ALIGNED: Consistent Strict policy for rotations
+        secure: true,
+        sameSite: 'strict',
         maxAge: 60 * 10,
         path: '/',
       });
@@ -136,8 +127,7 @@ export async function GET() {
 
     return response;
   } catch (error) {
-    const response = NextResponse.json({ message: "Invalid session." }, { status: 401 });
-    response.cookies.delete('nib-auth-token');
-    return response;
+    console.error('[Session Verification] Error:', error);
+    return unauthorizedResponse('Session validation failed');
   }
 }

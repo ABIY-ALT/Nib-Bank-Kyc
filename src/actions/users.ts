@@ -20,7 +20,11 @@ async function verifyAdminClearance() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    include: { roles: { include: { role: true } } }
+    select: {
+      roles: { 
+        include: { role: { select: { name: true } } } 
+      }
+    }
   });
 
   return user?.roles.some(ur => ur.role.name === 'SUPER_ADMIN') || false;
@@ -29,7 +33,20 @@ async function verifyAdminClearance() {
 export async function getAllUsers() {
   try {
     const users = await prisma.user.findMany({
-      include: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phoneNumber: true,
+        status: true,
+        branchId: true,
+        branchName: true,
+        districtName: true,
+        assignedBranches: true,
+        createdAt: true,
+        updatedAt: true,
+        needsPasswordChange: true,
         branch: { include: { district: true } },
         roles: { include: { role: true } }
       },
@@ -37,8 +54,21 @@ export async function getAllUsers() {
     });
 
     return users.map(u => ({
-      ...u,
-      assignedBranches: u.assignedBranches ? u.assignedBranches.split(',').filter(Boolean) : []
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+      phoneNumber: u.phoneNumber,
+      status: u.status,
+      branchId: u.branchId,
+      branchName: u.branchName,
+      districtName: u.districtName,
+      assignedBranches: u.assignedBranches ? u.assignedBranches.split(',').filter(Boolean) : [],
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+      needsPasswordChange: u.needsPasswordChange,
+      branch: u.branch,
+      roles: u.roles
     }));
   } catch (error) {
     logInstitutionalError(error, 'DB_FETCH_USERS');
@@ -145,7 +175,24 @@ export async function provisionUser(data: {
     });
 
     revalidatePath('/admin/users');
-    return { success: true, user: result, tempPassword: !isUpdate ? tempPass : (data.password ? tempPass : null) };
+    
+    // Return user without password hash
+    return { 
+      success: true, 
+      user: {
+        id: result.id,
+        firstName: result.firstName,
+        lastName: result.lastName,
+        email: result.email,
+        phoneNumber: result.phoneNumber,
+        status: result.status,
+        branchId: result.branchId,
+        branchName: result.branchName,
+        districtName: result.districtName,
+        needsPasswordChange: result.needsPasswordChange
+      }, 
+      tempPassword: !isUpdate ? tempPass : (data.password ? tempPass : null) 
+    };
   } catch (error: any) {
     const { message } = logInstitutionalError(error, 'DB_PROVISION_USER');
     return { success: false, error: message };
@@ -164,7 +211,10 @@ export async function resetUserPassword(email: string, authorizerId: string) {
 
   try {
     const normalizedEmail = email.toLowerCase().trim();
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const user = await prisma.user.findUnique({ 
+      where: { email: normalizedEmail },
+      select: { id: true, firstName: true, lastName: true }
+    });
     if (!user) throw new Error("Personnel record not found.");
 
     const tempPass = generateSecurePassword(10);
@@ -187,10 +237,22 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
   if (!(await verifySensitiveSession())) throw new Error('Security Protocol Violation: Session too old.');
   
   try {
-    return await prisma.user.update({
+    const result = await prisma.user.update({
       where: { id: userId },
-      data: { status, updatedAt: new Date() }
+      data: { status, updatedAt: new Date() },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        status: true,
+        branchId: true,
+        branchName: true,
+        districtName: true,
+        needsPasswordChange: true
+      }
     });
+    return result;
   } catch (error) {
     logInstitutionalError(error, 'DB_UPDATE_STATUS');
     throw new Error('Institutional database fault.');
@@ -202,10 +264,22 @@ export async function updateUserPortfolio(userId: string, branches: string[]) {
   if (!(await verifySensitiveSession())) throw new Error('Security Protocol Violation: Session too old.');
 
   try {
-    return await prisma.user.update({
+    const result = await prisma.user.update({
       where: { id: userId },
-      data: { assignedBranches: branches.join(','), updatedAt: new Date() }
+      data: { assignedBranches: branches.join(','), updatedAt: new Date() },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        assignedBranches: true,
+        branchId: true,
+        branchName: true,
+        districtName: true,
+        needsPasswordChange: true
+      }
     });
+    return result;
   } catch (error) {
     logInstitutionalError(error, 'DB_UPDATE_PORTFOLIO');
     throw new Error('Institutional database fault.');

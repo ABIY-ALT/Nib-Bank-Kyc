@@ -1,0 +1,177 @@
+/**
+ * Example API Route: Get User Profile (Protected)
+ * ==============================================
+ * Demonstrates CORS handling for authenticated endpoints
+ *
+ * File location: src/app/api/auth/me/route.ts
+ * Usage: GET /api/auth/me
+ * Requires: Valid authentication token in httpOnly cookie
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { corsMiddleware } from '@/lib/cors-security';
+
+/**
+ * Verify user authentication from request
+ */
+function verifyAuth(request: NextRequest): { authenticated: boolean; userId?: string } {
+  const token = request.cookies.get('nib-auth-token')?.value;
+
+  if (!token) {
+    return { authenticated: false };
+  }
+
+  // TODO: Validate JWT token
+  // TODO: Check token expiration
+  // TODO: Verify token signature
+
+  // For example, decode token and extract user ID
+  const userId = 'user-123';
+  return { authenticated: true, userId };
+}
+
+/**
+ * GET: Retrieve current user profile
+ * Protected endpoint - requires authentication
+ * CORS: Allows configured origins with credentials if enabled
+ */
+export async function GET(request: NextRequest) {
+  return corsMiddleware(request, async () => {
+    try {
+      // Verify authentication first
+      const auth = verifyAuth(request);
+
+      if (!auth.authenticated) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Authentication required' },
+          {
+            status: 401,
+            headers: {
+              'WWW-Authenticate': 'Bearer realm="API"',
+            },
+          }
+        );
+      }
+
+      // TODO: Fetch user data from database
+      const userData = {
+        id: auth.userId,
+        email: 'user@example.com',
+        role: 'KYC_OFFICER',
+        name: 'John Doe',
+        // Never expose sensitive fields like:
+        // - password hash
+        // - tokens
+        // - internal IDs
+        // - IP addresses
+      };
+
+      return NextResponse.json(userData, { status: 200 });
+    } catch (error) {
+      console.error('[API] Get user error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
+}
+
+/**
+ * PUT: Update user profile
+ * Protected endpoint - requires authentication
+ * State-changing operation - CORS validation critical
+ */
+export async function PUT(request: NextRequest) {
+  return corsMiddleware(request, async () => {
+    try {
+      // Verify authentication
+      const auth = verifyAuth(request);
+
+      if (!auth.authenticated) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Authentication required' },
+          { status: 401 }
+        );
+      }
+
+      const body = await request.json();
+
+      // Validate input
+      if (!body.name || !body.email) {
+        return NextResponse.json(
+          { error: 'Name and email are required' },
+          { status: 400 }
+        );
+      }
+
+      // TODO: Update user in database
+      // TODO: Audit log this change
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Profile updated',
+          user: {
+            id: auth.userId,
+            email: body.email,
+            name: body.name,
+          },
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      console.error('[API] Update user error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
+}
+
+/**
+ * DELETE: Logout / Revoke session
+ * Protected endpoint - requires authentication
+ * Side-effect: Invalidates token
+ */
+export async function DELETE(request: NextRequest) {
+  return corsMiddleware(request, async () => {
+    try {
+      const auth = verifyAuth(request);
+
+      if (!auth.authenticated) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+
+      // TODO: Invalidate token in database
+      // TODO: Clear session cache
+      // TODO: Audit log logout
+
+      const response = NextResponse.json(
+        { success: true, message: 'Logged out' },
+        { status: 200 }
+      );
+
+      // Clear authentication cookie
+      response.cookies.set('nib-auth-token', '', {
+        maxAge: 0, // Immediately expires
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/',
+      });
+
+      return response;
+    } catch (error) {
+      console.error('[API] Logout error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
+}

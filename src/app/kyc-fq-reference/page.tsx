@@ -52,6 +52,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { KYCFinding } from '@/lib/kyc-data';
 import { getFindings, upsertFinding, deleteFinding, seedFindings } from '@/actions/findings';
+import { getGlobalSettings } from '@/actions/settings';
 import { FindingCategory, FindingSeverity } from '@prisma/client';
 import { usePermissions } from '@/hooks/use-permissions';
 
@@ -72,14 +73,6 @@ const SEVERITY_ICONS: Record<string, any> = {
 const CATEGORY_OPTIONS = ["IDENTITY", "DOCUMENTATION", "COMPLIANCE", "ACCOUNT_VALIDATION"];
 const SEVERITY_OPTIONS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
-const ACCOUNT_TYPES = [
-  { id: "INDIVIDUAL", label: "Individual" },
-  { id: "COMPANY", label: "Company" },
-  { id: "ASSOCIATION", label: "Association" },
-  { id: "FOREIGN NGO", label: "Foreign NGO" },
-  { id: "FOREIGN EMPLOYMENT AGENCY", label: "Foreign Employment Agency" },
-];
-
 const EXAMPLE_FINDINGS: Partial<KYCFinding>[] = [
   {
     code: "FQ-001",
@@ -87,7 +80,7 @@ const EXAMPLE_FINDINGS: Partial<KYCFinding>[] = [
     description: "The provided National ID has expired or will expire within 30 days. Please request a renewed identification document.",
     category: "IDENTITY",
     severity: "HIGH",
-    applicableTo: ["INDIVIDUAL", "ASSOCIATION"],
+    applicableTo: ["individual", "association"],
   },
   {
     code: "FQ-002",
@@ -95,7 +88,7 @@ const EXAMPLE_FINDINGS: Partial<KYCFinding>[] = [
     description: "The business trade license is not renewed for the current Ethiopian fiscal year.",
     category: "DOCUMENTATION",
     severity: "CRITICAL",
-    applicableTo: ["COMPANY"],
+    applicableTo: ["company"],
   }
 ];
 
@@ -104,6 +97,7 @@ export default function KYCFFQReferencePage() {
   const { permissions, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   const [findings, setFindings] = useState<any[]>([]);
+  const [accountTypes, setAccountTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -127,9 +121,21 @@ export default function KYCFFQReferencePage() {
 
   const loadData = async () => {
     setLoading(true);
-    const data = await getFindings();
-    setFindings(data);
-    setLoading(false);
+    try {
+      const [findingsData, settingsData] = await Promise.all([
+        getFindings(),
+        getGlobalSettings()
+      ]);
+      setFindings(findingsData);
+      if (settingsData?.entityTypes) {
+        setAccountTypes(settingsData.entityTypes);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({ variant: "destructive", title: "Error loading data" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const canManageFindings = permissions.has('VIEW_FQ_LIBRARY');
@@ -211,7 +217,7 @@ export default function KYCFFQReferencePage() {
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
               <BookOpen className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC F&amp;Q Reference</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground font-headline">KYC F&Q Reference</h1>
           </div>
           <p className="text-muted-foreground text-lg">Institutional knowledge base for compliance queries.</p>
         </div>
@@ -235,7 +241,7 @@ export default function KYCFFQReferencePage() {
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase">Search</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input placeholder="Code or keyword..." className="pl-9 h-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
             </div>
@@ -279,9 +285,9 @@ export default function KYCFFQReferencePage() {
               <p className="font-bold text-muted-foreground">Syncing registry...</p>
             </div>
           ) : filteredFindings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed rounded-3xl text-center">
-              <BookOpen className="w-12 h-12 text-slate-200 mb-4" />
-              <p className="font-bold text-slate-900 text-xl">No Findings Found</p>
+            <div className="flex flex-col items-center justify-center py-32 bg-muted border-2 border-dashed rounded-3xl text-center">
+              <BookOpen className="w-12 h-12 text-muted mb-4" />
+              <p className="font-bold text-foreground text-xl">No Findings Found</p>
               {canManageFindings && findings.length === 0 && (
                 <Button variant="outline" onClick={handleSeedLibrary} className="mt-4 gap-2">
                   <Plus className="w-4 h-4" /> Seed Finding Library
@@ -293,7 +299,7 @@ export default function KYCFFQReferencePage() {
               {filteredFindings.map((finding) => {
                 const SeverityIcon = SEVERITY_ICONS[finding.severity] || Info;
                 return (
-                  <Card key={finding.id} className="group hover:border-primary/40 transition-all flex flex-col bg-white overflow-hidden border-slate-200">
+                  <Card key={finding.id} className="group hover:border-primary/40 transition-all flex flex-col bg-card overflow-hidden border">
                     <CardHeader className="bg-primary text-white border-b pb-4 pt-5 px-6">
                       <div className="flex justify-between items-start">
                         <div className="space-y-1">
@@ -306,7 +312,7 @@ export default function KYCFFQReferencePage() {
                       </div>
                     </CardHeader>
                     <CardContent className="pt-6 px-6 flex-1">
-                      <p className="text-sm text-slate-600 italic">"{finding.description}"</p>
+                      <p className="text-sm text-muted-foreground italic">\"{finding.description}\"</p>
                       <div className="flex flex-wrap gap-1.5 mt-4">
                         <Badge variant="secondary" className="text-[10px] font-bold">{finding.category}</Badge>
                         {finding.applicableTo?.map((type: string) => (
@@ -314,8 +320,8 @@ export default function KYCFFQReferencePage() {
                         ))}
                       </div>
                     </CardContent>
-                    <CardFooter className="bg-slate-50/30 border-t p-4 flex justify-between items-center">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase">Institutional Archive</span>
+                    <CardFooter className="bg-muted/50 border-t p-4 flex justify-between items-center">
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase">Institutional Archive</span>
                       <div className="flex gap-2">
                         {canManageFindings && (
                           <Button variant="ghost" size="icon" onClick={() => handleDelete(finding.id)} className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
@@ -336,14 +342,14 @@ export default function KYCFFQReferencePage() {
       </div>
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-xl p-0 overflow-hidden rounded-3xl border-none">
-          <DialogHeader className="p-8 bg-primary text-white">
+        <DialogContent className="max-w-xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-3xl border-none">
+          <DialogHeader className="p-8 bg-primary text-white shrink-0">
             <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-white">
               <ShieldCheck className="w-6 h-6 text-white" /> Register Finding
             </DialogTitle>
           </DialogHeader>
           
-          <div className="p-8 space-y-6">
+          <div className="overflow-y-auto flex-1 p-8 space-y-6">
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase">Code</Label>
@@ -373,12 +379,16 @@ export default function KYCFFQReferencePage() {
             <div className="space-y-4 pt-2 border-t">
               <Label className="text-[10px] font-black uppercase">Applicability</Label>
               <div className="grid grid-cols-2 gap-3">
-                {ACCOUNT_TYPES.map((type) => (
-                  <div key={type.id} className="flex items-center space-x-3 p-3 rounded-lg border border-slate-100">
-                    <Checkbox id={`type-${type.id}`} checked={findingForm.applicableTo?.includes(type.id)} onCheckedChange={() => toggleApplicability(type.id)} />
-                    <label htmlFor={`type-${type.id}`} className="text-xs font-bold text-slate-700 cursor-pointer">{type.label}</label>
-                  </div>
-                ))}
+                {accountTypes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground col-span-2">Loading account types...</p>
+                ) : (
+                  accountTypes.map((type) => (
+                    <div key={type.id} className="flex items-center space-x-3 p-3 rounded-lg border">
+                      <Checkbox id={`type-${type.id}`} checked={findingForm.applicableTo?.includes(type.id)} onCheckedChange={() => toggleApplicability(type.id)} />
+                      <label htmlFor={`type-${type.id}`} className="text-xs font-bold text-foreground cursor-pointer">{type.label}</label>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -393,7 +403,7 @@ export default function KYCFFQReferencePage() {
             </div>
           </div>
 
-          <DialogFooter className="p-8 bg-slate-50 border-t">
+          <DialogFooter className="p-8 bg-muted border-t shrink-0">
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="px-6 font-bold h-11">Cancel</Button>
             <Button onClick={handleSaveFinding} className="bg-primary font-black shadow-lg text-white h-11 px-10">Register Finding</Button>
           </DialogFooter>

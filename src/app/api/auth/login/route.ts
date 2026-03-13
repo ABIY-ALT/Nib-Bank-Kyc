@@ -6,6 +6,14 @@ import jwt from "jsonwebtoken";
 import { LoginSchema } from "@/lib/validation";
 import { logInstitutionalError } from "@/lib/logger";
 import crypto from "crypto";
+import { 
+  applySecurityHeaders, 
+  badRequestResponse,
+  successResponse,
+  getClientIp,
+  unauthorizedResponse,
+  internalErrorResponse
+} from "@/lib/api-security";
 
 /**
  * Institutional Authentication Gateway.
@@ -20,7 +28,7 @@ const LOCKOUT_WINDOW_MINUTES = 15;
 
 export async function POST(req: Request) {
   const headerList = await headers();
-  const ipAddress = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1';
+  const ipAddress = getClientIp(req);
   const userAgent = headerList.get('user-agent') || 'unknown';
   
   const uaHash = crypto.createHash('sha256').update(userAgent).digest('hex');
@@ -28,18 +36,18 @@ export async function POST(req: Request) {
 
   try {
     const text = await req.text();
-    if (!text) return NextResponse.json({ message: genericErrorMessage }, { status: 400 });
+    if (!text) return badRequestResponse(genericErrorMessage);
 
     let body;
     try {
       body = JSON.parse(text);
     } catch (e) {
-      return NextResponse.json({ message: "Invalid request format." }, { status: 400 });
+      return badRequestResponse("Invalid request format");
     }
 
     const validation = LoginSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json({ message: genericErrorMessage }, { status: 400 });
+      return badRequestResponse(genericErrorMessage);
     }
 
     const { email, password } = validation.data;
@@ -64,14 +72,25 @@ export async function POST(req: Request) {
           details: `Account temporarily locked due to ${recentFailures} failed attempts.`
         }
       });
-      return NextResponse.json({ 
-        message: "Maximum login attempts reached. Access is temporarily throttled for security." 
+      const response = NextResponse.json({ 
+        error: "Maximum login attempts reached. Access is temporarily throttled for security." 
       }, { status: 429 });
+      return applySecurityHeaders(response);
     }
 
     const user = await prisma.user.findUnique({
       where: { email: userEmail },
-      include: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        status: true,
+        password: true,
+        updatedAt: true,
+        needsPasswordChange: true,
+        assignedBranches: true,
+        branchId: true,
         roles: { 
           include: { 
             role: { 
@@ -91,13 +110,13 @@ export async function POST(req: Request) {
 
     if (!user || user.status !== 'ACTIVE') {
       await logFailure(userEmail, ipAddress, "Identity mismatch or account inactive");
-      return NextResponse.json({ message: genericErrorMessage }, { status: 401 });
+      return unauthorizedResponse(genericErrorMessage);
     }
 
     const isMatch = await bcrypt.compare(password.trim(), user.password);
     if (!isMatch) {
       await logFailure(userEmail, ipAddress, "Credential mismatch");
-      return NextResponse.json({ message: genericErrorMessage }, { status: 401 });
+      return unauthorizedResponse(genericErrorMessage);
     }
 
     const versionSeconds = Math.floor(user.updatedAt.getTime() / 1000);
@@ -154,7 +173,7 @@ export async function POST(req: Request) {
       }
     });
 
-    const response = NextResponse.json({
+    const response = successResponse({
       success: true,
       user: {
         id: user.id,
@@ -173,7 +192,7 @@ export async function POST(req: Request) {
 
     response.cookies.set('nib-auth-token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'strict',
       maxAge: 60 * 10,
       path: '/',
@@ -182,7 +201,7 @@ export async function POST(req: Request) {
     return response;
   } catch (error: any) {
     const { message } = logInstitutionalError(error, 'AUTH_GATEWAY');
-    return NextResponse.json({ message }, { status: 500 });
+    return internalErrorResponse(message);
   }
 }
 

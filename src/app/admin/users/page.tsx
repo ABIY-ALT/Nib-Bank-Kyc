@@ -31,7 +31,10 @@ import {
   X,
   Copy,
   KeyRound,
-  AlertCircle
+  AlertCircle,
+  MoreVertical,
+  Lock,
+  Trash2
 } from "lucide-react";
 import { 
   Dialog, 
@@ -41,6 +44,13 @@ import {
   DialogFooter,
   DialogDescription
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { 
   Tooltip,
   TooltipContent,
@@ -58,7 +68,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
+import { getAllUsers, updateUserStatus, provisionUser, resetUserPassword } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
 import { USER_STATUS } from '@/lib/kyc-data';
@@ -80,6 +90,9 @@ export default function UserManagementPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
+  const [userForPasswordReset, setUserForPasswordReset] = useState<any | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   
   const [registryVersion, setRegistryVersion] = useState(0);
   
@@ -139,7 +152,7 @@ export default function UserManagementPage() {
         const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
         return nameA.localeCompare(nameB);
       });
-  }, [users, searchTerm]);
+  }, [users, searchTerm, registryVersion]);
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = useMemo(() => {
@@ -232,6 +245,37 @@ export default function UserManagementPage() {
     toast({ title: "Successful", description: "Temporary password saved to clipboard." });
   };
 
+  const handleResetPassword = async () => {
+    if (!userForPasswordReset) return;
+    
+    setIsResettingPassword(true);
+    try {
+      const result = await resetUserPassword(userForPasswordReset.email, currentUser?.id || '');
+      if (result.success) {
+        // Store temporary password in registry for tooltip display
+        tempPasswordRegistry.add(userForPasswordReset.email, result.tempPassword);
+        setRegistryVersion(v => v + 1);
+        toast({ 
+          title: "Successful", 
+          description: `Temporary password generated for ${result.userName}.` 
+        });
+        setIsResetPasswordDialogOpen(false);
+        setUserForPasswordReset(null);
+        loadData();
+      } else {
+        throw new Error(result.error || 'Failed to reset password');
+      }
+    } catch (error: any) {
+      toast({ 
+        variant: "destructive", 
+        title: "Action Failed", 
+        description: error.message 
+      });
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   const isBranchSpecificRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
 
   if (loading || permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" /></div>;
@@ -258,7 +302,7 @@ export default function UserManagementPage() {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="pl-10 h-11 bg-white border-slate-200 rounded-xl font-medium"
+              className="pl-10 h-11 bg-card border rounded-xl font-medium text-foreground"
             />
           </div>
           <Button asChild variant="outline" className="h-11 px-4 border-primary/30 text-primary hover:bg-primary/5 rounded-xl shadow-sm gap-2">
@@ -274,7 +318,7 @@ export default function UserManagementPage() {
         </div>
       </div>
 
-      <div className="border rounded-2xl bg-card shadow-xl overflow-hidden border-slate-200 bg-white">
+      <div className="border rounded-2xl bg-card shadow-xl overflow-x-auto">
         <Table>
           <TableHeader className="bg-slate-50/50">
             <TableRow>
@@ -285,7 +329,7 @@ export default function UserManagementPage() {
               <TableHead className="text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody className="relative">
             {paginatedUsers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="py-32 text-center">
@@ -321,7 +365,7 @@ export default function UserManagementPage() {
                               </span>
                             </TooltipTrigger>
                             {tempPass && (
-                              <TooltipContent className="bg-slate-900 text-white border-none p-5 rounded-2xl shadow-2xl w-72 animate-in zoom-in-95">
+                              <TooltipContent side="right" align="center" className="bg-slate-900 text-white border-none p-5 rounded-2xl shadow-2xl w-72 animate-in zoom-in-95 z-50">
                                 <div className="space-y-4">
                                   <div className="flex items-center gap-2">
                                     <KeyRound className="w-4 h-4 text-primary" />
@@ -366,14 +410,37 @@ export default function UserManagementPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right pr-8">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-slate-400 rounded-full h-9 w-9 hover:bg-primary/5 hover:text-primary transition-colors">
-                        <Settings2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5 transition-colors">
-                        {user.status === USER_STATUS.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                      </Button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-slate-400 rounded-full h-9 w-9 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={() => handleOpenDialog(user)} className="cursor-pointer gap-2">
+                          <Settings2 className="w-4 h-4" />
+                          <span>Edit Assignments</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setUserForPasswordReset(user);
+                            setIsResetPasswordDialogOpen(true);
+                          }}
+                          className="cursor-pointer gap-2"
+                        >
+                          <Lock className="w-4 h-4" />
+                          <span>Reset Password</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => handleToggleStatus(user)}
+                          className="cursor-pointer gap-2 text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>{user.status === USER_STATUS.ACTIVE ? 'Deactivate User' : 'Reactivate User'}</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );
@@ -396,11 +463,11 @@ export default function UserManagementPage() {
               size="sm" 
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary transition-all shadow-sm active:scale-95"
+              className="h-9 px-4 rounded-xl border bg-card font-bold text-foreground hover:text-primary transition-all shadow-sm active:scale-95"
             >
               <ChevronLeft className="w-4 h-4 mr-2" /> Previous
             </Button>
-            <div className="h-9 min-w-[36px] px-3 flex items-center justify-center bg-white border border-primary/20 rounded-xl font-black text-sm text-primary shadow-sm">
+            <div className="h-9 min-w-[36px] px-3 flex items-center justify-center bg-card border border-primary/20 rounded-xl font-black text-sm text-primary shadow-sm">
               {currentPage}
             </div>
             <Button 
@@ -408,7 +475,7 @@ export default function UserManagementPage() {
               size="sm" 
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
-              className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary transition-all shadow-sm active:scale-95"
+              className="h-9 px-4 rounded-xl border bg-card font-bold text-foreground hover:text-primary transition-all shadow-sm active:scale-95"
             >
               Next <ChevronRight className="w-4 h-4 ml-2" />
             </Button>
@@ -526,6 +593,64 @@ export default function UserManagementPage() {
             >
               {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {editingUser ? 'Update User' : 'Add User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+        <DialogContent className="max-w-sm animate-in zoom-in-95 duration-300">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-destructive/10 rounded-lg">
+                <Lock className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <DialogTitle>Reset Password</DialogTitle>
+                <DialogDescription>Are you sure?</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          
+          {userForPasswordReset && (
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 rounded-xl border">
+                <p className="text-sm font-medium text-slate-900">
+                  You are about to issue a temporary password for <span className="font-bold text-primary">{userForPasswordReset.firstName} {userForPasswordReset.lastName}</span>.
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  The user will receive a temporary password that must be changed upon their next login.
+                </p>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter className="flex gap-3">
+            <Button 
+              variant="outline"
+              onClick={() => {
+                setIsResetPasswordDialogOpen(false);
+                setUserForPasswordReset(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleResetPassword}
+              disabled={isResettingPassword}
+              className="bg-destructive hover:bg-destructive/90 text-white"
+            >
+              {isResettingPassword ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Resetting...
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4 mr-2" />
+                  Reset Password
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

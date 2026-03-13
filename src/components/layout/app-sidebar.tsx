@@ -27,9 +27,9 @@ import {
   History,
   Activity,
   TrendingUp,
-  Monitor
+  Monitor,
+  Search
 } from "lucide-react"
-import Image from "next/image"
 
 import {
   Sidebar,
@@ -58,6 +58,7 @@ import { usePathname } from "next/navigation"
 import { useSidebarCounts } from "@/hooks/use-sidebar-counts"
 import { usePermissions } from "@/hooks/use-permissions"
 import { UserProfileDialog } from "@/components/auth/user-profile-dialog"
+import { LogoFixed } from "@/components/logo"
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -75,9 +76,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0 shadow-2xl">
       <SidebarHeader className="border-b h-16 flex items-center px-4 bg-sidebar-background">
         <div className="flex items-center gap-3 font-bold overflow-hidden">
-          <div className="w-8 h-8 rounded-lg shadow-sm shrink-0 flex items-center justify-center bg-white p-1">
-            <Image src="/logo.svg" alt="Nib Bank Logo" width={32} height={32} />
-          </div>
+          <LogoFixed />
           <span className="group-data-[collapsible=icon]:hidden truncate text-white font-headline tracking-tight text-lg">Nib Bank KYC</span>
         </div>
       </SidebarHeader>

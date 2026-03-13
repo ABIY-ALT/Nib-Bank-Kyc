@@ -1,0 +1,73 @@
+/**
+ * Example API Route: Login (Public)
+ * =================================
+ * Demonstrates CORS handling for public endpoints
+ *
+ * File location: src/app/api/auth/login/route.ts
+ * Usage: POST /api/auth/login
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { corsMiddleware, getCORSConfig } from '@/lib/cors-security';
+
+/**
+ * POST: Handle user login
+ * Public endpoint - no authentication required
+ * CORS: Allows configured origins
+ */
+export async function POST(request: NextRequest) {
+  return corsMiddleware(request, async () => {
+    try {
+      const body = await request.json();
+      const { email, password } = body;
+
+      // Validate input
+      if (!email || !password) {
+        return NextResponse.json(
+          { error: 'Email and password required' },
+          { status: 400 }
+        );
+      }
+
+      // TODO: Verify credentials with database
+      // TODO: Set secure httpOnly cookie with token
+      // TODO: Return user data (never password hash)
+
+      return NextResponse.json(
+        {
+          success: true,
+          user: {
+            email,
+            role: 'USER',
+          },
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      console.error('[API] Login error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
+}
+
+/**
+ * OPTIONS: Handle CORS preflight
+ * Automatically handled by corsMiddleware in POST handler
+ * This handler is optional if middleware is configured
+ */
+export async function OPTIONS(request: NextRequest) {
+  const config = getCORSConfig();
+  
+  // Middleware will handle this, but you can add specific logic here if needed
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Methods': config.allowedMethods.join(', '),
+      'Access-Control-Allow-Headers': config.allowedHeaders.join(', '),
+      'Access-Control-Max-Age': config.maxAge.toString(),
+    },
+  });
+}

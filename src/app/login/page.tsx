@@ -22,16 +22,16 @@ import {
   Eye,
   EyeOff
 } from "lucide-react";
-import Image from 'next/image';
 import { isValidInternalRedirect } from '@/lib/url-security';
+import { LogoResponsive } from '@/components/logo';
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-[#FCFAF7] flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <Suspense fallback={
         <div className="flex flex-col items-center space-y-4">
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Synchronizing Gateway...</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Synchronizing Gateway...</p>
         </div>
       }>
         <LoginContent />
@@ -80,23 +80,21 @@ function LoginContent() {
   return (
     <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in-95 duration-500">
       <div className="flex flex-col items-center text-center space-y-4 mb-2">
-        <div className="relative w-24 h-24 shadow-2xl rounded-3xl overflow-hidden border-4 border-white bg-primary p-2">
-          <Image src="/logo.svg" alt="Nib Bank Logo" fill className="object-contain p-2" />
-        </div>
+        <LogoResponsive />
         <div className="space-y-1">
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">NIB BANK <span className="text-primary">KYC</span></h1>
-          <p className="text-slate-500 text-lg font-medium">Secure institutional access portal.</p>
+          <h1 className="text-4xl font-black text-foreground tracking-tighter">NIB BANK <span className="text-primary">KYC</span></h1>
+          <p className="text-muted-foreground text-lg font-medium">Secure institutional access portal.</p>
         </div>
       </div>
 
-      <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
-        <CardHeader className="bg-white border-b p-8 py-6">
+      <Card className="shadow-2xl border overflow-hidden rounded-3xl bg-card">
+        <CardHeader className="bg-card border-b p-8 py-6">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-xl font-black flex items-center gap-2 text-slate-800">
+            <CardTitle className="text-xl font-black flex items-center gap-2 text-foreground">
               <Building2 className="w-5 h-5 text-[#B89334]" />
               Staff Login
             </CardTitle>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">SECURE</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">SECURE</span>
           </div>
         </CardHeader>
         <CardContent className="pt-8 px-8 pb-10 space-y-8">
@@ -104,7 +102,7 @@ function LoginContent() {
             {error && (
               <div className="animate-in slide-in-from-top-2">
                 <div className="flex items-start gap-4 p-5 rounded-2xl border border-red-200 bg-red-50/30">
-                  <div className="p-2 bg-white rounded-full shadow-sm mt-0.5">
+                <div className="p-2 bg-card rounded-full shadow-sm mt-0.5">
                     <AlertCircle className="h-5 w-5 text-red-500 shrink-0" />
                   </div>
                   <span className="text-sm font-bold text-red-600 leading-relaxed">
@@ -115,13 +113,13 @@ function LoginContent() {
             )}
 
             <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Official Bank Email</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Official Bank Email</Label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input 
                   type="email" 
                   placeholder="name.surname@nibbank.com.et" 
-                  className="pl-12 h-14 bg-slate-50 border-slate-100 font-black text-slate-900 rounded-xl focus-visible:ring-[#B89334]/20 transition-all shadow-inner"
+                  className="pl-12 h-14 bg-background border font-black text-foreground rounded-xl focus-visible:ring-[#B89334]/20 transition-all shadow-inner"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -130,13 +128,13 @@ function LoginContent() {
             </div>
 
             <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Password</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Password</Label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input 
                   type={showPassword ? "text" : "password"} 
                   placeholder="••••••••" 
-                  className="pl-12 pr-12 h-14 bg-white border-2 border-slate-100 focus:border-[#B89334] font-black text-slate-900 rounded-xl focus-visible:ring-[#B89334]/20 transition-all"
+                  className="pl-12 pr-12 h-14 bg-background border-2 focus:border-[#B89334] font-black text-foreground rounded-xl focus-visible:ring-[#B89334]/20 transition-all"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -144,7 +142,7 @@ function LoginContent() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
