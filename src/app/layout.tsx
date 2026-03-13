@@ -7,6 +7,7 @@ import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { NonceProvider } from '@/lib/nonce-context';
 import { headers } from 'next/headers';
 import { Inter } from 'next/font/google';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -40,11 +41,13 @@ export default async function RootLayout({
               disableTransitionOnChange
               nonce={nonce}
             >
-              <AuthGuard>
-                <DashboardShell>
-                  {children}
-                </DashboardShell>
-              </AuthGuard>
+              <TooltipProvider delayDuration={0}>
+                <AuthGuard>
+                  <DashboardShell>
+                    {children}
+                  </DashboardShell>
+                </AuthGuard>
+              </TooltipProvider>
             </ThemeProvider>
           </AuthProvider>
         </NonceProvider>

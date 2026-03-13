@@ -63,7 +63,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
@@ -287,137 +286,144 @@ export default function UserManagementPage() {
       </div>
 
       <div className="border-y bg-white overflow-hidden">
-        <TooltipProvider delayDuration={0}>
-          <Table>
-            <TableHeader className="hidden">
-              <TableRow>
-                <TableHead>Identity</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Node</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedUsers.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">No personnel records discovered.</TableCell></TableRow>
-              ) : paginatedUsers.map((u) => {
-                const tempPass = tempPasswordRegistry.get(u.email);
-                return (
-                  <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
-                    <TableCell className="py-6 pl-8 w-[350px]">
-                      <div className="flex items-center gap-5">
-                        <div className="w-12 h-12 rounded-full bg-[#FAF7F2] text-[#B89334] flex items-center justify-center font-black text-lg shadow-inner">
-                          {u.firstName.charAt(0)}
-                        </div>
-                        <div className="flex flex-col">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className={cn(
-                                "font-black text-slate-900 text-lg leading-none cursor-help transition-colors",
-                                tempPass && "text-primary underline decoration-dotted decoration-primary/30"
-                              )}>
-                                {u.firstName} {u.lastName}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" align="start" className="p-5 bg-slate-900 border-none shadow-2xl rounded-2xl min-w-[240px] z-[100]">
-                              {tempPass ? (
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2">
-                                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-                                    <p className="text-[10px] font-black uppercase text-primary tracking-widest">Active Temporary Credential</p>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-4 bg-white/5 p-3 rounded-xl border border-white/10">
-                                    <code className="text-2xl font-mono font-black text-white tracking-widest">{tempPass}</code>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigator.clipboard.writeText(tempPass);
-                                        toast({ title: "Credential Copied" });
-                                      }}
-                                      className="h-10 w-10 text-primary hover:bg-white/10 hover:text-primary rounded-lg"
-                                    >
-                                      <Copy className="w-5 h-5" />
-                                    </Button>
-                                  </div>
-                                  <p className="text-[9px] text-slate-400 font-medium leading-relaxed italic">
-                                    Valid for next login attempt. Change forced on entry.
-                                  </p>
-                                </div>
-                              ) : (
+        <Table>
+          <TableHeader className="hidden">
+            <TableRow>
+              <TableHead>Identity</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Node</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paginatedUsers.length === 0 ? (
+              <TableRow><TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">No personnel records discovered.</TableCell></TableRow>
+            ) : paginatedUsers.map((u) => {
+              const tempPass = tempPasswordRegistry.get(u.email);
+              return (
+                <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
+                  <TableCell className="py-6 pl-8 w-[350px]">
+                    <div className="flex items-center gap-5">
+                      <div className="w-12 h-12 rounded-full bg-[#FAF7F2] text-[#B89334] flex items-center justify-center font-black text-lg shadow-inner">
+                        {u.firstName.charAt(0)}
+                      </div>
+                      <div className="flex flex-col">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className={cn(
+                              "font-black text-slate-900 text-lg leading-none cursor-help transition-colors",
+                              tempPass && "text-[#B89334] underline decoration-dotted decoration-[#B89334]/50"
+                            )}>
+                              {u.firstName} {u.lastName}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="start" className="p-5 bg-slate-900 border-none shadow-2xl rounded-2xl min-w-[240px]">
+                            {tempPass ? (
+                              <div className="space-y-3">
                                 <div className="flex items-center gap-2">
-                                  <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
-                                  <p className="text-xs font-bold text-slate-300">Staff Identity Record</p>
+                                  <ShieldCheck className="w-3.5 h-3.5 text-[#B89334]" />
+                                  <p className="text-[10px] font-black uppercase text-[#B89334] tracking-widest">Active Temporary Credential</p>
                                 </div>
-                              )}
-                            </TooltipContent>
-                          </Tooltip>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Mail className="w-3.5 h-3.5 text-slate-300" />
-                            <span className="text-[11px] font-black text-slate-400 uppercase tracking-tight">{u.email}</span>
-                          </div>
+                                <div className="flex items-center justify-between gap-4 bg-white/5 p-3 rounded-xl border border-white/10">
+                                  <code className="text-2xl font-mono font-black text-white tracking-widest">{tempPass}</code>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(tempPass);
+                                      toast({ title: "Credential Copied" });
+                                    }}
+                                    className="h-10 w-10 text-[#B89334] hover:bg-white/10 hover:text-[#B89334] rounded-lg"
+                                  >
+                                    <Copy className="w-5 h-5" />
+                                  </Button>
+                                </div>
+                                <p className="text-[9px] text-slate-400 font-medium leading-relaxed italic">
+                                  Valid for next login attempt. Change forced on entry.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+                                <p className="text-xs font-bold text-slate-300">Staff Identity Record</p>
+                              </div>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Mail className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="text-[11px] font-black text-slate-400 uppercase tracking-tight">{u.email}</span>
                         </div>
                       </div>
-                    </TableCell>
-                    
-                    <TableCell className="text-center">
-                      <div className="inline-flex h-8 items-center px-4 rounded-full bg-[#FAF7F2] border border-[#B89334]/10">
-                        <span className="text-[10px] font-black uppercase text-[#B89334] tracking-widest whitespace-nowrap">
-                          {u.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
-                        </span>
-                      </div>
-                    </TableCell>
+                    </div>
+                  </TableCell>
+                  
+                  <TableCell className="text-center">
+                    <div className="inline-flex h-8 items-center px-4 rounded-full bg-[#FAF7F2] border border-[#B89334]/10">
+                      <span className="text-[10px] font-black uppercase text-[#B89334] tracking-widest whitespace-nowrap">
+                        {u.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
+                      </span>
+                    </div>
+                  </TableCell>
 
-                    <TableCell className="w-[200px]">
-                      <div className="flex items-center gap-3 text-slate-600">
-                        <Building2 className="w-4 h-4 text-slate-300" />
-                        <span className="text-sm font-bold truncate">{u.branch?.name || "HQ / Central"}</span>
-                      </div>
-                    </TableCell>
+                  <TableCell className="w-[200px]">
+                    <div className="flex items-center gap-3 text-slate-600">
+                      <Building2 className="w-4 h-4 text-slate-300" />
+                      <span className="text-sm font-bold truncate">{u.branch?.name || "HQ / Central"}</span>
+                    </div>
+                  </TableCell>
 
-                    <TableCell>
-                      <div className={cn(
-                        "inline-flex h-8 items-center px-5 rounded-full font-black text-[10px] uppercase tracking-widest",
-                        u.status === USER_STATUS.ACTIVE ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
-                      )}>
-                        {u.status}
-                      </div>
-                    </TableCell>
+                  <TableCell>
+                    <div className={cn(
+                      "inline-flex h-8 items-center px-5 rounded-full font-black text-[10px] uppercase tracking-widest",
+                      u.status === USER_STATUS.ACTIVE ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                    )}>
+                      {u.status}
+                    </div>
+                  </TableCell>
 
-                    <TableCell className="text-right pr-8">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-primary transition-colors rounded-full">
-                            <MoreVertical className="w-5 h-5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-2xl">
-                          <DropdownMenuLabel className="text-[10px] font-black uppercase text-slate-400 px-4 py-2 border-b">Administrative Hub</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleOpenDialog(u)} className="py-3 font-bold cursor-pointer gap-3">
-                            <Edit3 className="w-4 h-4 text-primary" /> Edit Profile
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleInitiateReset(u)} className="py-3 font-bold cursor-pointer gap-3">
-                            <KeyRound className="w-4 h-4 text-primary" /> Reset Password
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleToggleStatus(u)} className={cn("py-3 font-bold cursor-pointer gap-3", u.status === USER_STATUS.ACTIVE ? "text-red-600" : "text-emerald-600")}>
-                            {u.status === USER_STATUS.ACTIVE ? (
-                              <><UserX className="w-4 h-4" /> Deactivate User</>
-                            ) : (
-                              <><UserCheck className="w-4 h-4" /> Activate User</>
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TooltipProvider>
+                  <TableCell className="text-right pr-8">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-primary transition-colors rounded-full">
+                          <MoreVertical className="w-5 h-5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-2xl">
+                        <DropdownMenuLabel className="text-[10px] font-black uppercase text-slate-400 px-4 py-2 border-b">Administrative Hub</DropdownMenuLabel>
+                        <DropdownMenuItem 
+                          onSelect={(e) => { e.preventDefault(); handleOpenDialog(u); }}
+                          className="py-3 font-bold cursor-pointer gap-3"
+                        >
+                          <Edit3 className="w-4 h-4 text-[#B89334]" /> Edit Profile
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onSelect={(e) => { e.preventDefault(); handleInitiateReset(u); }}
+                          className="py-3 font-bold cursor-pointer gap-3"
+                        >
+                          <KeyRound className="w-4 h-4 text-[#B89334]" /> Reset Password
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onSelect={(e) => { e.preventDefault(); handleToggleStatus(u); }}
+                          className={cn("py-3 font-bold cursor-pointer gap-3", u.status === USER_STATUS.ACTIVE ? "text-red-600" : "text-emerald-600")}
+                        >
+                          {u.status === USER_STATUS.ACTIVE ? (
+                            <><UserX className="w-4 h-4" /> Deactivate User</>
+                          ) : (
+                            <><UserCheck className="w-4 h-4" /> Activate User</>
+                          )}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
 
         <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
