@@ -31,7 +31,8 @@ import {
   X,
   Copy,
   KeyRound,
-  AlertCircle
+  AlertCircle,
+  MoreVertical
 } from "lucide-react";
 import { 
   Dialog, 
@@ -39,8 +40,17 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogFooter,
-  DialogDescription
+  DialogDescription,
+  DialogClose
 } from "@/components/ui/dialog";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   Tooltip,
   TooltipContent,
@@ -58,7 +68,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { getAllUsers, updateUserStatus, provisionUser } from '@/actions/users';
+import { getAllUsers, updateUserStatus, provisionUser, resetUserPassword } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
 import { USER_STATUS } from '@/lib/kyc-data';
@@ -80,6 +90,10 @@ export default function UserManagementPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  // Reset Result Modal State
+  const [resetResult, setResetResult] = useState<{ pass: string, name: string } | null>(null);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   
   const [registryVersion, setRegistryVersion] = useState(0);
   
@@ -196,6 +210,9 @@ export default function UserManagementPage() {
         if (res.tempPassword) {
           tempPasswordRegistry.add(formData.email, res.tempPassword);
           setRegistryVersion(v => v + 1);
+          // Show the result modal if it's a new user
+          setResetResult({ pass: res.tempPassword, name: `${formData.firstName} ${formData.lastName}` });
+          setIsResetDialogOpen(true);
         }
         
         toast({ 
@@ -224,6 +241,26 @@ export default function UserManagementPage() {
       loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Action Failed" });
+    }
+  };
+
+  const handleDirectReset = async (user: any) => {
+    setLoading(true);
+    try {
+      const res = await resetUserPassword(user.email, currentUser!.id);
+      if (res.success) {
+        setResetResult({ pass: res.tempPassword!, name: `${user.firstName} ${user.lastName}` });
+        setIsResetDialogOpen(true);
+        tempPasswordRegistry.add(user.email, res.tempPassword!);
+        setRegistryVersion(v => v + 1);
+        toast({ title: "Successful", description: `Credential rotated for ${user.firstName}.` });
+      } else {
+        toast({ variant: "destructive", title: "Reset Denied", description: res.error });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "System Fault" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -261,12 +298,6 @@ export default function UserManagementPage() {
               className="pl-10 h-11 bg-white border-slate-200 rounded-xl font-medium"
             />
           </div>
-          <Button asChild variant="outline" className="h-11 px-4 border-primary/30 text-primary hover:bg-primary/5 rounded-xl shadow-sm gap-2">
-            <Link href="/admin/password-reset">
-              <KeyRound className="w-4 h-4" />
-              <span className="hidden md:inline">Reset Credential</span>
-            </Link>
-          </Button>
           <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90 rounded-xl">
             <UserPlus className="w-4 h-4" />
             Add User
@@ -333,12 +364,6 @@ export default function UserManagementPage() {
                                       <Copy className="w-4 h-4" />
                                     </Button>
                                   </div>
-                                  <div className="flex gap-2">
-                                    <AlertCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                                    <p className="text-[9px] font-bold text-slate-500 leading-relaxed uppercase">
-                                      The staff member must change this password upon first login.
-                                    </p>
-                                  </div>
                                 </div>
                               </TooltipContent>
                             )}
@@ -366,14 +391,38 @@ export default function UserManagementPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right pr-8">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-slate-400 rounded-full h-9 w-9 hover:bg-primary/5 hover:text-primary transition-colors">
-                        <Settings2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5 transition-colors">
-                        {user.status === USER_STATUS.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                      </Button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-primary/5 transition-colors">
+                          <MoreVertical className="h-4 w-4 text-slate-400" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-2xl">
+                        <DropdownMenuLabel className="text-[10px] font-black uppercase text-slate-400 px-4 py-2 border-b">Management Menu</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleOpenDialog(user)} className="py-3 font-bold cursor-pointer hover:bg-primary/5 transition-colors">
+                          <Settings2 className="mr-3 h-4 w-4 text-slate-400" /> Edit Profile
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild className="py-3 font-bold cursor-pointer hover:bg-primary/5 transition-colors">
+                          <Link href="/admin/assignments" className="flex items-center">
+                            <ArrowRightLeft className="mr-3 h-4 w-4 text-slate-400" /> Edit Assignments
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => handleDirectReset(user)} 
+                          className="py-3 font-bold cursor-pointer text-primary hover:bg-primary/5 transition-colors"
+                        >
+                          <KeyRound className="mr-3 h-4 w-4" /> Reset Password
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleToggleStatus(user)} 
+                          className={cn("py-3 font-bold cursor-pointer transition-colors", user.status === USER_STATUS.ACTIVE ? "text-destructive hover:bg-red-50" : "text-emerald-600 hover:bg-emerald-50")}
+                        >
+                          {user.status === USER_STATUS.ACTIVE ? <UserX className="mr-3 h-4 w-4" /> : <UserCheck className="mr-3 h-4 w-4" />}
+                          {user.status === USER_STATUS.ACTIVE ? "Deactivate Account" : "Activate Account"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );
@@ -501,15 +550,6 @@ export default function UserManagementPage() {
                 </div>
               )}
             </div>
-
-            {editingUser && isBranchSpecificRole && formData.branchId !== (editingUser.branch?.id || 'none') && (
-              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex gap-3 animate-in zoom-in-95">
-                <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-amber-800 font-bold leading-relaxed uppercase">
-                  <strong>Branch Transfer:</strong> Moving this staff member will re-route future tasks. Historical records remain under their previous node for audit integrity.
-                </p>
-              </div>
-            )}
           </div>
 
           <DialogFooter className="p-8 bg-slate-50 border-t flex items-center justify-end gap-6">
@@ -528,6 +568,58 @@ export default function UserManagementPage() {
               {editingUser ? 'Update User' : 'Add User'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* RESET RESULT MODAL */}
+      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <DialogContent className="max-w-md rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-white">
+            <DialogHeader className="p-8 bg-primary text-white border-b border-white/5">
+              <div className="flex items-center gap-5">
+                <div className="p-4 bg-white/10 rounded-2xl shadow-inner ring-1 ring-white/20">
+                  <KeyRound className="w-10 h-10 text-white" />
+                </div>
+                <div>
+                  <DialogTitle className="text-2xl font-black text-white tracking-tight">Temporary Credential</DialogTitle>
+                  <p className="text-white/60 font-bold text-[10px] uppercase tracking-widest mt-1">Generated Successfully</p>
+                </div>
+              </div>
+            </DialogHeader>
+            <div className="p-8 space-y-8 text-center">
+              <div className="space-y-2">
+                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Personnel Authorized</p>
+                <p className="text-xl font-black text-slate-900">{resetResult?.name}</p>
+              </div>
+
+              <div className="space-y-4">
+                <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Master Password</Label>
+                <div className="flex items-center gap-3 bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-primary/20 shadow-inner group">
+                  <code className="text-3xl font-mono font-black text-primary tracking-[0.2em] flex-1">{resetResult?.pass}</code>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => handleCopyPassword(resetResult?.pass || "")}
+                    className="h-12 w-12 hover:bg-primary/10 text-primary rounded-xl transition-all"
+                  >
+                    <Copy className="w-6 h-6" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100 flex gap-4 text-left">
+                <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
+                <p className="text-xs text-amber-800 font-bold leading-relaxed uppercase">
+                  Policy: This credential expires after first use. The staff member will be forced to rotate it upon login.
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="p-8 bg-slate-50 border-t flex flex-row items-center justify-center">
+              <Button onClick={() => setIsResetDialogOpen(false)} className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-black transition-all">
+                Dismiss and Return
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
