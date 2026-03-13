@@ -250,6 +250,8 @@ export default function UserManagementPage() {
           description: `Hover over ${userToReset.firstName}'s name to view the new password.` 
         });
         loadData();
+      } else {
+        toast({ variant: "destructive", title: "Reset Failed", description: res.error });
       }
     } catch (e) {
       toast({ variant: "destructive", title: "Reset Failed" });
@@ -285,15 +287,15 @@ export default function UserManagementPage() {
         </div>
       </div>
 
-      <div className="border-y bg-white overflow-hidden">
+      <div className="border rounded-2xl bg-white shadow-xl overflow-hidden border-slate-200">
         <Table>
-          <TableHeader className="hidden">
-            <TableRow>
-              <TableHead>Identity</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Node</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
+          <TableHeader>
+            <TableRow className="bg-slate-50 border-b border-slate-100">
+              <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest py-5 pl-8">Identity</TableHead>
+              <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest text-center">Role</TableHead>
+              <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Node</TableHead>
+              <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Status</TableHead>
+              <TableHead className="text-right font-black text-slate-500 text-[11px] uppercase tracking-widest pr-8">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -303,13 +305,13 @@ export default function UserManagementPage() {
               const tempPass = tempPasswordRegistry.get(u.email);
               return (
                 <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
-                  <TableCell className="py-6 pl-8 w-[350px]">
+                  <TableCell className="py-6 pl-8">
                     <div className="flex items-center gap-5">
                       <div className="w-12 h-12 rounded-full bg-[#FAF7F2] text-[#B89334] flex items-center justify-center font-black text-lg shadow-inner">
                         {u.firstName.charAt(0)}
                       </div>
                       <div className="flex flex-col">
-                        <Tooltip>
+                        <Tooltip delayDuration={0}>
                           <TooltipTrigger asChild>
                             <span className={cn(
                               "font-black text-slate-900 text-lg leading-none cursor-help transition-colors",
@@ -483,7 +485,7 @@ export default function UserManagementPage() {
         </DialogContent>
       </Dialog>
 
-      {/* BESPOKE RESET CONFIRMATION DIALOG */}
+      {/* RESET CONFIRMATION ALERT DIALOG */}
       <AlertDialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
         <AlertDialogContent className="max-w-[440px] rounded-xl p-0 overflow-hidden border-none shadow-2xl bg-[#FCFAF7]">
           <div className="p-8 space-y-6">
