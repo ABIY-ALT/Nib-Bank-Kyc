@@ -31,10 +31,7 @@ import {
   X,
   Copy,
   KeyRound,
-  AlertCircle,
-  MoreVertical,
-  Lock,
-  Trash2
+  AlertCircle
 } from "lucide-react";
 import { 
   Dialog, 
@@ -42,15 +39,9 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogFooter,
-  DialogDescription
+  DialogDescription,
+  DialogClose
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { 
   Tooltip,
   TooltipContent,
@@ -90,9 +81,6 @@ export default function UserManagementPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
-  const [userForPasswordReset, setUserForPasswordReset] = useState<any | null>(null);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
   
   const [registryVersion, setRegistryVersion] = useState(0);
   
@@ -209,6 +197,9 @@ export default function UserManagementPage() {
         if (res.tempPassword) {
           tempPasswordRegistry.add(formData.email, res.tempPassword);
           setRegistryVersion(v => v + 1);
+          // Show the result modal if it's a new user
+          setResetResult({ pass: res.tempPassword, name: `${formData.firstName} ${formData.lastName}` });
+          setIsResetDialogOpen(true);
         }
         
         toast({ 
@@ -237,6 +228,26 @@ export default function UserManagementPage() {
       loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Action Failed" });
+    }
+  };
+
+  const handleDirectReset = async (user: any) => {
+    setLoading(true);
+    try {
+      const res = await resetUserPassword(user.email, currentUser!.id);
+      if (res.success) {
+        setResetResult({ pass: res.tempPassword!, name: `${user.firstName} ${user.lastName}` });
+        setIsResetDialogOpen(true);
+        tempPasswordRegistry.add(user.email, res.tempPassword!);
+        setRegistryVersion(v => v + 1);
+        toast({ title: "Successful", description: `Credential rotated for ${user.firstName}.` });
+      } else {
+        toast({ variant: "destructive", title: "Reset Denied", description: res.error });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "System Fault" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -305,12 +316,6 @@ export default function UserManagementPage() {
               className="pl-10 h-11 bg-card border rounded-xl font-medium text-foreground"
             />
           </div>
-          <Button asChild variant="outline" className="h-11 px-4 border-primary/30 text-primary hover:bg-primary/5 rounded-xl shadow-sm gap-2">
-            <Link href="/admin/password-reset">
-              <KeyRound className="w-4 h-4" />
-              <span className="hidden md:inline">Reset Credential</span>
-            </Link>
-          </Button>
           <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90 rounded-xl">
             <UserPlus className="w-4 h-4" />
             Add User
@@ -377,12 +382,6 @@ export default function UserManagementPage() {
                                       <Copy className="w-4 h-4" />
                                     </Button>
                                   </div>
-                                  <div className="flex gap-2">
-                                    <AlertCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                                    <p className="text-[9px] font-bold text-slate-500 leading-relaxed uppercase">
-                                      The staff member must change this password upon first login.
-                                    </p>
-                                  </div>
                                 </div>
                               </TooltipContent>
                             )}
@@ -410,37 +409,14 @@ export default function UserManagementPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right pr-8">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-slate-400 rounded-full h-9 w-9 hover:bg-slate-100 hover:text-slate-600 transition-colors">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={() => handleOpenDialog(user)} className="cursor-pointer gap-2">
-                          <Settings2 className="w-4 h-4" />
-                          <span>Edit Assignments</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setUserForPasswordReset(user);
-                            setIsResetPasswordDialogOpen(true);
-                          }}
-                          className="cursor-pointer gap-2"
-                        >
-                          <Lock className="w-4 h-4" />
-                          <span>Reset Password</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => handleToggleStatus(user)}
-                          className="cursor-pointer gap-2 text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span>{user.status === USER_STATUS.ACTIVE ? 'Deactivate User' : 'Reactivate User'}</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-slate-400 rounded-full h-9 w-9 hover:bg-primary/5 hover:text-primary transition-colors">
+                        <Settings2 className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5 transition-colors">
+                        {user.status === USER_STATUS.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -568,15 +544,6 @@ export default function UserManagementPage() {
                 </div>
               )}
             </div>
-
-            {editingUser && isBranchSpecificRole && formData.branchId !== (editingUser.branch?.id || 'none') && (
-              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex gap-3 animate-in zoom-in-95">
-                <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-amber-800 font-bold leading-relaxed uppercase">
-                  <strong>Branch Transfer:</strong> Moving this staff member will re-route future tasks. Historical records remain under their previous node for audit integrity.
-                </p>
-              </div>
-            )}
           </div>
 
           <DialogFooter className="p-8 bg-slate-50 border-t flex items-center justify-end gap-6">
@@ -593,64 +560,6 @@ export default function UserManagementPage() {
             >
               {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {editingUser ? 'Update User' : 'Add User'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
-        <DialogContent className="max-w-sm animate-in zoom-in-95 duration-300">
-          <DialogHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-destructive/10 rounded-lg">
-                <Lock className="w-5 h-5 text-destructive" />
-              </div>
-              <div>
-                <DialogTitle>Reset Password</DialogTitle>
-                <DialogDescription>Are you sure?</DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-          
-          {userForPasswordReset && (
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 rounded-xl border">
-                <p className="text-sm font-medium text-slate-900">
-                  You are about to issue a temporary password for <span className="font-bold text-primary">{userForPasswordReset.firstName} {userForPasswordReset.lastName}</span>.
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  The user will receive a temporary password that must be changed upon their next login.
-                </p>
-              </div>
-            </div>
-          )}
-          
-          <DialogFooter className="flex gap-3">
-            <Button 
-              variant="outline"
-              onClick={() => {
-                setIsResetPasswordDialogOpen(false);
-                setUserForPasswordReset(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleResetPassword}
-              disabled={isResettingPassword}
-              className="bg-destructive hover:bg-destructive/90 text-white"
-            >
-              {isResettingPassword ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Resetting...
-                </>
-              ) : (
-                <>
-                  <Lock className="w-4 h-4 mr-2" />
-                  Reset Password
-                </>
-              )}
             </Button>
           </DialogFooter>
         </DialogContent>
