@@ -18,19 +18,17 @@ import {
   Loader2,
   Building2,
   Settings2,
-  UserCheck,
   UserX,
-  ShieldCheck,
-  Phone,
+  UserCheck,
   Search,
   ChevronLeft,
   ChevronRight,
-  ShieldAlert,
-  ArrowRightLeft,
-  Users,
-  X,
+  ShieldCheck,
+  Phone,
   Copy,
   KeyRound,
+  X,
+  CheckCircle2,
   AlertCircle
 } from "lucide-react";
 import { 
@@ -40,14 +38,7 @@ import {
   DialogTitle, 
   DialogFooter,
   DialogDescription,
-  DialogClose
 } from "@/components/ui/dialog";
-import { 
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
@@ -66,7 +57,6 @@ import { USER_STATUS } from '@/lib/kyc-data';
 import { usePermissions } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
 import { tempPasswordRegistry } from '@/lib/temp-password-registry';
-import Link from 'next/link';
 
 export default function UserManagementPage() {
   const router = useRouter();
@@ -78,11 +68,13 @@ export default function UserManagementPage() {
   const [branches, setBranches] = useState<any[]>([]);
   const [roleDefinitions, setRoleDefinitions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  const [registryVersion, setRegistryVersion] = useState(0);
+  const [isResetResultOpen, setIsResetResultOpen] = useState(false);
+  const [resetResult, setResetResult] = useState<{ pass: string, name: string } | null>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -100,10 +92,9 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('USER_CREATE')) {
-      toast({ variant: "destructive", title: "Access Restricted", description: "You do not have administrative clearance for this branch." });
       router.push('/');
     }
-  }, [hasPermission, permissionsLoading, router, toast]);
+  }, [hasPermission, permissionsLoading, router]);
 
   useEffect(() => {
     loadData();
@@ -120,7 +111,6 @@ export default function UserManagementPage() {
       setUsers(u);
       setBranches(b);
       setRoleDefinitions(r);
-      setRegistryVersion(v => v + 1);
     } catch (error) {
       toast({ variant: "destructive", title: "Sync failed" });
     } finally {
@@ -135,12 +125,8 @@ export default function UserManagementPage() {
         `${user.firstName} ${user.lastName}`.toLowerCase().includes(term) ||
         user.email.toLowerCase().includes(term)
       )
-      .sort((a, b) => {
-        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
-        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
-  }, [users, searchTerm, registryVersion]);
+      .sort((a, b) => a.firstName.localeCompare(b.firstName));
+  }, [users, searchTerm]);
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = useMemo(() => {
@@ -178,38 +164,28 @@ export default function UserManagementPage() {
 
   const handleSave = async () => {
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.role) {
-      toast({ variant: "destructive", title: "Information Required", description: "First Name, Last Name, Email, and Role are mandatory." });
+      toast({ variant: "destructive", title: "Information Required" });
       return;
     }
 
-    const isBranchRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
-    const finalBranchId = (isBranchRole && formData.branchId !== 'none') ? formData.branchId : null;
-
     setIsSyncing(true);
     try {
+      const isBranchRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
       const res = await provisionUser({ 
         ...formData, 
         id: editingUser?.id, 
-        branchId: finalBranchId
+        branchId: (isBranchRole && formData.branchId !== 'none') ? formData.branchId : null
       });
       
       if (res.success) {
         if (res.tempPassword) {
-          tempPasswordRegistry.add(formData.email, res.tempPassword);
-          setRegistryVersion(v => v + 1);
-          // Show the result modal if it's a new user
           setResetResult({ pass: res.tempPassword, name: `${formData.firstName} ${formData.lastName}` });
-          setIsResetDialogOpen(true);
+          setIsResetResultOpen(true);
+          tempPasswordRegistry.add(formData.email, res.tempPassword);
         }
-        
-        toast({ 
-          title: "Successful", 
-          description: res.tempPassword 
-            ? `New user added. Temporary password generated.` 
-            : "User records and branch mappings have been updated." 
-        });
         setIsDialogOpen(false);
         loadData();
+        toast({ title: "Successful" });
       } else {
         throw new Error(res.error);
       }
@@ -224,84 +200,40 @@ export default function UserManagementPage() {
     const newStatus = user.status === USER_STATUS.ACTIVE ? USER_STATUS.INACTIVE : USER_STATUS.ACTIVE;
     try {
       await updateUserStatus(user.id, newStatus);
-      toast({ title: "Successful", description: `Account is now ${newStatus}.` });
+      toast({ title: "Successful", description: `Status set to ${newStatus}` });
       loadData();
-    } catch (e: any) {
+    } catch (e) {
       toast({ variant: "destructive", title: "Action Failed" });
     }
   };
 
-  const handleDirectReset = async (user: any) => {
-    setLoading(true);
+  const handleResetPassword = async (user: any) => {
     try {
       const res = await resetUserPassword(user.email, currentUser!.id);
       if (res.success) {
         setResetResult({ pass: res.tempPassword!, name: `${user.firstName} ${user.lastName}` });
-        setIsResetDialogOpen(true);
+        setIsResetResultOpen(true);
         tempPasswordRegistry.add(user.email, res.tempPassword!);
-        setRegistryVersion(v => v + 1);
-        toast({ title: "Successful", description: `Credential rotated for ${user.firstName}.` });
-      } else {
-        toast({ variant: "destructive", title: "Reset Denied", description: res.error });
+        toast({ title: "Credential Rotated" });
       }
     } catch (e) {
-      toast({ variant: "destructive", title: "System Fault" });
-    } finally {
-      setLoading(false);
+      toast({ variant: "destructive", title: "Reset Failed" });
     }
   };
 
   const handleCopyPassword = (pass: string) => {
     navigator.clipboard.writeText(pass);
-    toast({ title: "Successful", description: "Temporary password saved to clipboard." });
+    toast({ title: "Copied to Clipboard" });
   };
 
-  const handleResetPassword = async () => {
-    if (!userForPasswordReset) return;
-    
-    setIsResettingPassword(true);
-    try {
-      const result = await resetUserPassword(userForPasswordReset.email, currentUser?.id || '');
-      if (result.success) {
-        // Store temporary password in registry for tooltip display
-        tempPasswordRegistry.add(userForPasswordReset.email, result.tempPassword);
-        setRegistryVersion(v => v + 1);
-        toast({ 
-          title: "Successful", 
-          description: `Temporary password generated for ${result.userName}.` 
-        });
-        setIsResetPasswordDialogOpen(false);
-        setUserForPasswordReset(null);
-        loadData();
-      } else {
-        throw new Error(result.error || 'Failed to reset password');
-      }
-    } catch (error: any) {
-      toast({ 
-        variant: "destructive", 
-        title: "Action Failed", 
-        description: error.message 
-      });
-    } finally {
-      setIsResettingPassword(false);
-    }
-  };
-
-  const isBranchSpecificRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
-
-  if (loading || permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" /></div>;
+  if (loading || permissionsLoading) return <div className="py-48 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
-              <Users className="w-6 h-6" />
-            </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Personnel Directory</h1>
-          </div>
-          <p className="text-muted-foreground text-lg font-medium">Manage staff identities and branch assignments.</p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Personnel Directory</h1>
+          <p className="text-muted-foreground text-lg font-medium">Manage institutional staff and node assignments.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
@@ -309,259 +241,180 @@ export default function UserManagementPage() {
             <Input 
               placeholder="Search staff..." 
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="pl-10 h-11 bg-card border rounded-xl font-medium text-foreground"
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-11 bg-white border rounded-xl font-medium"
             />
           </div>
           <Button onClick={() => handleOpenDialog()} className="gap-2 bg-primary shadow-xl font-bold h-11 px-6 text-white hover:bg-primary/90 rounded-xl">
-            <UserPlus className="w-4 h-4" />
-            Add User
+            <UserPlus className="w-4 h-4" /> Add User
           </Button>
         </div>
       </div>
 
-      <div className="border rounded-2xl bg-card shadow-xl overflow-x-auto">
+      <div className="border-y bg-white overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-50/50">
+          <TableHeader className="hidden">
             <TableRow>
-              <TableHead className="font-bold py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Identity</TableHead>
-              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Role</TableHead>
-              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead>
-              <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
-              <TableHead className="text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
+              <TableHead>Identity</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Node</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody className="relative">
+          <TableBody>
             {paginatedUsers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-32 text-center">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="p-6 bg-slate-50 rounded-full">
-                      <Users className="w-12 h-12 text-slate-200" />
+              <TableRow><TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">No personnel records discovered.</TableCell></TableRow>
+            ) : paginatedUsers.map((u) => (
+              <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
+                <TableCell className="py-6 pl-8 w-[350px]">
+                  <div className="flex items-center gap-5">
+                    <div className="w-12 h-12 rounded-full bg-[#FAF7F2] text-[#B89334] flex items-center justify-center font-black text-lg shadow-inner">
+                      {u.firstName.charAt(0)}
                     </div>
-                    <div className="space-y-1">
-                      <p className="font-bold text-slate-900 text-lg">No records discovered</p>
-                      <p className="text-sm text-muted-foreground">Adjust filters or search criteria.</p>
+                    <div className="flex flex-col">
+                      <span className="font-black text-slate-900 text-lg leading-none">{u.firstName} {u.lastName}</span>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Mail className="w-3.5 h-3.5 text-slate-300" />
+                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-tight">{u.email}</span>
+                      </div>
                     </div>
                   </div>
                 </TableCell>
+                
+                <TableCell className="text-center">
+                  <div className="inline-flex h-8 items-center px-4 rounded-full bg-[#FAF7F2] border border-[#B89334]/10">
+                    <span className="text-[10px] font-black uppercase text-[#B89334] tracking-widest whitespace-nowrap">
+                      {u.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
+                    </span>
+                  </div>
+                </TableCell>
+
+                <TableCell className="w-[200px]">
+                  <div className="flex items-center gap-3 text-slate-600">
+                    <Building2 className="w-4 h-4 text-slate-300" />
+                    <span className="text-sm font-bold truncate">{u.branch?.name || "HQ / Central"}</span>
+                  </div>
+                </TableCell>
+
+                <TableCell>
+                  <div className={cn(
+                    "inline-flex h-8 items-center px-5 rounded-full font-black text-[10px] uppercase tracking-widest",
+                    u.status === USER_STATUS.ACTIVE ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                  )}>
+                    {u.status}
+                  </div>
+                </TableCell>
+
+                <TableCell className="text-right pr-8">
+                  <div className="flex justify-end gap-4">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleOpenDialog(u)} 
+                      className="h-10 w-10 text-slate-400 hover:text-primary transition-colors rounded-full"
+                    >
+                      <Settings2 className="w-5 h-5" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleToggleStatus(u)} 
+                      className={cn(
+                        "h-10 w-10 transition-colors rounded-full",
+                        u.status === USER_STATUS.ACTIVE ? "text-red-500 hover:bg-red-50" : "text-emerald-500 hover:bg-emerald-50"
+                      )}
+                    >
+                      {u.status === USER_STATUS.ACTIVE ? <UserX className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
+                    </Button>
+                  </div>
+                </TableCell>
               </TableRow>
-            ) : paginatedUsers.map((user) => {
-              const tempPass = tempPasswordRegistry.get(user.email);
-              return (
-                <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <TableCell className="pl-8 py-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black shadow-sm group-hover:scale-110 transition-transform">
-                        {user.firstName?.charAt(0)}
-                      </div>
-                      <div className="flex flex-col">
-                        <TooltipProvider>
-                          <Tooltip delayDuration={0}>
-                            <TooltipTrigger asChild>
-                              <span className={cn(
-                                "font-black text-slate-900 leading-tight cursor-default", 
-                                tempPass && "underline decoration-dotted decoration-primary/60 underline-offset-4 cursor-help"
-                              )}>
-                                {user.firstName} {user.lastName}
-                              </span>
-                            </TooltipTrigger>
-                            {tempPass && (
-                              <TooltipContent side="right" align="center" className="bg-slate-900 text-white border-none p-5 rounded-2xl shadow-2xl w-72 animate-in zoom-in-95 z-50">
-                                <div className="space-y-4">
-                                  <div className="flex items-center gap-2">
-                                    <KeyRound className="w-4 h-4 text-primary" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Temporary Credential Issued</span>
-                                  </div>
-                                  <div className="flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/10 group">
-                                    <code className="text-xl font-mono font-black text-primary flex-1 text-center tracking-wider">{tempPass}</code>
-                                    <Button size="icon" variant="ghost" className="h-9 w-9 hover:bg-white/10 text-white" onClick={() => handleCopyPassword(tempPass)}>
-                                      <Copy className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        </TooltipProvider>
-                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase mt-0.5">
-                          <Mail className="w-3 h-3 text-slate-300" /> {user.email}
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10 font-black uppercase text-[9px] px-3 py-1">
-                      {user.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-slate-400" /> {user.branch?.name || "HQ / Central"}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={user.status === USER_STATUS.ACTIVE ? 'text-green-600 border-green-200 bg-green-50 font-black text-[9px]' : 'text-slate-400 border-slate-200 bg-slate-50 font-black text-[9px]'}>
-                      {user.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right pr-8">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)} className="text-slate-400 rounded-full h-9 w-9 hover:bg-primary/5 hover:text-primary transition-colors">
-                        <Settings2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} className="text-destructive rounded-full h-9 w-9 hover:bg-destructive/5 transition-colors">
-                        {user.status === USER_STATUS.ACTIVE ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            ))}
           </TableBody>
         </Table>
 
         <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
-          <div className="space-y-0.5">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-              Page {currentPage} of {totalPages}
-            </p>
-            <p className="text-[9px] font-bold text-primary uppercase">
-              Displaying {Math.min(filteredUsers.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} Staff Records
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="h-9 px-4 rounded-xl border bg-card font-bold text-foreground hover:text-primary transition-all shadow-sm active:scale-95"
-            >
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Page {currentPage} of {totalPages} &bull; {filteredUsers.length} Entries
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-9 px-4 rounded-xl border-slate-200">
               <ChevronLeft className="w-4 h-4 mr-2" /> Previous
             </Button>
-            <div className="h-9 min-w-[36px] px-3 flex items-center justify-center bg-card border border-primary/20 rounded-xl font-black text-sm text-primary shadow-sm">
-              {currentPage}
-            </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages}
-              className="h-9 px-4 rounded-xl border bg-card font-bold text-foreground hover:text-primary transition-all shadow-sm active:scale-95"
-            >
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages} className="h-9 px-4 rounded-xl border-slate-200">
               Next <ChevronRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
         </div>
       </div>
 
+      {/* PROVISIONING DIALOG */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="p-8 bg-primary text-white space-y-1 relative">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-xl">
-                  <ShieldCheck className="w-6 h-6 text-white" />
-                </div>
-                <DialogTitle className="text-2xl font-black tracking-tight text-white">User Profile</DialogTitle>
-              </div>
+          <DialogHeader className="p-8 bg-primary text-white">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-2xl"><ShieldCheck className="w-6 h-6 text-white" /></div>
+              <DialogTitle className="text-2xl font-black tracking-tight">{editingUser ? 'Update Profile' : 'New Personnel'}</DialogTitle>
             </div>
-            <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest pl-11">
-              {editingUser ? 'MANAGING BRANCH MAPPING' : 'ADDING NEW STAFF'}
-            </DialogDescription>
           </DialogHeader>
           
           <div className="p-8 space-y-6">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">FIRST NAME</Label>
-                <Input value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="h-11 rounded-xl font-bold bg-slate-50/50" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">LAST NAME</Label>
-                <Input value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="h-11 rounded-xl font-bold bg-slate-50/50" />
-              </div>
+              <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-500">First Name</Label><Input value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="h-11 rounded-xl font-bold" /></div>
+              <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-500">Last Name</Label><Input value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="h-11 rounded-xl font-bold" /></div>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">OFFICIAL EMAIL (@NIBBANK.COM.ET)</Label>
-                <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl font-black bg-slate-50/50" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">PHONE NUMBER</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <Input 
-                    value={formData.phoneNumber} 
-                    onChange={e => setFormData({...formData, phoneNumber: e.target.value})} 
-                    placeholder="+251 ..."
-                    className="h-11 rounded-xl font-black bg-slate-50/50 pl-10" 
-                  />
-                </div>
-              </div>
-            </div>
-
+            <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-500">Bank Email</Label><Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl font-bold" /></div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-primary tracking-widest">ROLE</Label>
+                <Label className="text-[10px] font-black uppercase text-slate-500">Role</Label>
                 <Select value={formData.role} onValueChange={val => setFormData({...formData, role: val})}>
                   <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Select Role" /></SelectTrigger>
-                  <SelectContent>
-                    {roleDefinitions.map(role => (
-                      <SelectItem key={role.id} value={role.name}>{role.name.replace(/_/g, ' ')}</SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectContent>{roleDefinitions.map(r => <SelectItem key={r.id} value={r.name}>{r.name.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              
-              {isBranchSpecificRole ? (
-                <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                  <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-1.5">
-                    <ArrowRightLeft className="w-3 h-3" /> BRANCH
-                  </Label>
-                  <Select value={formData.branchId || "none"} onValueChange={val => setFormData({...formData, branchId: val})}>
-                    <SelectTrigger className="h-11 rounded-xl font-black text-primary border-primary/20 bg-primary/5">
-                      <SelectValue placeholder="Map to node..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">HQ / Central</SelectItem>
-                      {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="space-y-2 opacity-60">
-                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">BRANCH</Label>
-                  <div className="h-11 rounded-xl border border-slate-100 bg-slate-50 flex items-center px-3 gap-2">
-                    <ShieldAlert className="w-3.5 h-3.5 text-slate-300" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase">HQ / Central Level</span>
-                  </div>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">Branch Node</Label>
+                <Select value={formData.branchId || "none"} onValueChange={val => setFormData({...formData, branchId: val})}>
+                  <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">HQ / Central</SelectItem>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
-          <DialogFooter className="p-8 bg-slate-50 border-t flex items-center justify-end gap-6">
-            <button 
-              onClick={() => setIsDialogOpen(false)} 
-              className="text-sm font-bold text-primary hover:underline transition-colors"
-            >
-              Discard
-            </button>
-            <Button 
-              onClick={handleSave} 
-              disabled={isSyncing} 
-              className="bg-primary hover:bg-primary/90 text-white font-black rounded-xl px-10 shadow-xl shadow-primary/20 h-12"
-            >
-              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              {editingUser ? 'Update User' : 'Add User'}
+          <DialogFooter className="p-8 bg-slate-50 border-t flex gap-4">
+            <button onClick={() => setIsDialogOpen(false)} className="text-sm font-bold text-slate-400">Cancel</button>
+            <Button onClick={handleSave} disabled={isSyncing} className="bg-primary hover:bg-primary/90 text-white font-black rounded-xl px-10 h-12 shadow-xl">
+              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Commit
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CREDENTIAL RESULT DIALOG */}
+      <Dialog open={isResetResultOpen} onOpenChange={setIsResetResultOpen}>
+        <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <div className="p-8 bg-emerald-50 space-y-6">
+            <div className="flex items-center gap-4 text-emerald-700">
+              <div className="p-3 bg-emerald-500 text-white rounded-2xl"><CheckCircle2 className="w-6 h-6" /></div>
+              <div><p className="text-[10px] font-black uppercase tracking-widest">Protocol Success</p><p className="text-xl font-black">{resetResult?.name}</p></div>
+            </div>
+            <div className="space-y-3">
+              <Label className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Temporary Credential</Label>
+              <div className="flex items-center gap-3 bg-white p-5 rounded-2xl border-2 border-emerald-100 border-dashed">
+                <code className="text-3xl font-mono font-black text-emerald-600 flex-1 text-center tracking-widest">{resetResult?.pass}</code>
+                <Button variant="ghost" size="icon" onClick={() => handleCopyPassword(resetResult?.pass || "")} className="h-12 w-12 text-emerald-600 hover:bg-emerald-50"><Copy className="w-5 h-5" /></Button>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-4 bg-white/50 rounded-xl">
+              <AlertCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] font-bold text-emerald-800 leading-relaxed italic">
+                Inform the user they must rotate this credential upon first gateway entry. This value will expire in 15 minutes.
+              </p>
+            </div>
+            <Button onClick={() => setIsResetResultOpen(false)} className="w-full h-14 bg-emerald-600 text-white font-black rounded-2xl shadow-xl shadow-emerald-200">Close Disclosure</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
