@@ -415,7 +415,7 @@ export default function StorageVaultPage() {
 
                 <div className="flex items-center gap-8 md:pr-4">
                   <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Origin Node</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Origin Branch</span>
                     <div className="flex items-center gap-2 mt-1">
                       <Building2 className="w-4 h-4 text-slate-300" />
                       <span className="font-black text-slate-700 text-sm">{caseItem.branchName}</span>

@@ -283,8 +283,14 @@ export async function resubmitSubmission(formData: FormData) {
       action: "RESUBMIT"
     }];
 
-    await prisma.$transaction([
-      prisma.memo.createMany({ data: memoData }),
+    const operations: any[] = [];
+
+    // Allow comment-only resubmissions (no files attached) without throwing.
+    if (memoData.length > 0) {
+      operations.push(prisma.memo.createMany({ data: memoData }));
+    }
+
+    operations.push(
       prisma.kYC.update({
         where: { id },
         data: {
@@ -294,7 +300,9 @@ export async function resubmitSubmission(formData: FormData) {
           updatedAt: new Date()
         }
       })
-    ]);
+    );
+
+    await prisma.$transaction(operations);
 
     await createAuditLog({
       userId: session.id,

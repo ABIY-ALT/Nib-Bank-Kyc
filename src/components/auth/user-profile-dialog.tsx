@@ -33,6 +33,7 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -40,6 +41,10 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentPassword) {
+      toast({ variant: "destructive", title: "Update Failed", description: "Current password is required." });
+      return;
+    }
     if (newPassword !== confirmPassword) {
       toast({ variant: "destructive", title: "Update Failed", description: "Passwords do not match." });
       return;
@@ -51,9 +56,10 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     try {
-      await changePassword(newPassword);
+      await changePassword(newPassword, currentPassword);
       toast({ title: "Successful", description: "Your new institutional credential has been established." });
       setIsChangingPassword(false);
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (e: any) {
@@ -66,6 +72,7 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
   const openSecurityConsole = () => {
     setNewPassword("");
     setConfirmPassword("");
+    setCurrentPassword("");
     setIsChangingPassword(true);
   };
 
@@ -78,6 +85,7 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
       setOpen(val);
       if (!val) {
         setIsChangingPassword(false);
+        setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
       }
@@ -134,7 +142,7 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
 
               <div className="space-y-1.5">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2">
-                  <Building2 className="w-3.5 h-3.5 text-primary/60" /> Jurisdiction Node
+                  <Building2 className="w-3.5 h-3.5 text-primary/60" /> Jurisdiction Branch
                 </Label>
                 <p className="text-sm font-black text-slate-700">{user.branchName || 'Institutional Headquarters'}</p>
               </div>
@@ -153,7 +161,26 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
           ) : (
             <form onSubmit={handlePasswordUpdate} className="space-y-6 animate-in slide-in-from-top-4 duration-300">
               <div className="h-px bg-border" />
-              
+
+              <div className="space-y-2.5">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Current Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input 
+                    type={showPassword ? "text" : "password"} 
+                    className="pl-11 pr-12 h-14 bg-card border font-bold rounded-2xl focus-visible:ring-primary/20 transition-all"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    required
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
               <div className="space-y-2.5">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">New Password</Label>
                 <div className="relative">

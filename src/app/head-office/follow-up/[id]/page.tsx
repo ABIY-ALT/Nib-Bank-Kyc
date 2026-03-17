@@ -92,7 +92,7 @@ export default function FollowUpVerificationDetail() {
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ArrowLeft className="w-5 h-5" /></Button>
           <div>
             <h1 className="text-3xl font-black font-headline text-slate-900 tracking-tight">Audit Session: {submission.id}</h1>
-            <p className="text-muted-foreground font-medium flex items-center gap-2"><Building2 className="w-4 h-4" /> {submission.branchName} Node</p>
+            <p className="text-muted-foreground font-medium flex items-center gap-2"><Building2 className="w-4 h-4" /> {submission.branchName?.toLowerCase().includes('branch') ? submission.branchName : `${submission.branchName} Branch`}</p>
           </div>
         </div>
       </div>

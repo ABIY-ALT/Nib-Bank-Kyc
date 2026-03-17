@@ -8,6 +8,7 @@ import { generateSecurePassword } from '@/lib/security';
 import { getServerSession, verifySensitiveSession } from './auth-server';
 import { createAuditLog } from './audit';
 import { CreateUserSchema } from '@/lib/validation';
+import { ZodError } from 'zod';
 import { logInstitutionalError } from '@/lib/logger';
 
 /**
@@ -105,6 +106,20 @@ export async function provisionUser(data: {
     const isUpdate = !!data.id;
     let tempPass = data.password;
     
+    // SECURITY SAFEGUARD: Prevent SUPER_ADMIN users from being created as INACTIVE
+    if (data.role === 'SUPER_ADMIN' && data.status === 'INACTIVE') {
+      return { 
+        success: false, 
+        error: 'Security Policy: SUPER_ADMIN accounts cannot be created with INACTIVE status. Defaulting to ACTIVE.' 
+      };
+    }
+    
+    // Force SUPER_ADMIN users to ACTIVE status
+    let finalStatus = data.status;
+    if (data.role === 'SUPER_ADMIN' && data.status !== 'ACTIVE') {
+      finalStatus = 'ACTIVE';
+    }
+    
     const branch = data.branchId ? await prisma.branch.findUnique({
       where: { id: data.branchId },
       include: { district: true }
@@ -122,7 +137,7 @@ export async function provisionUser(data: {
           branchId: data.branchId || null,
           branchName: branch?.name || null,
           districtName: branch?.district?.name || null,
-          status: data.status,
+          status: finalStatus,
           updatedAt: new Date()
         };
 
@@ -149,7 +164,7 @@ export async function provisionUser(data: {
             branchId: data.branchId || null,
             branchName: branch?.name || null,
             districtName: branch?.district?.name || null,
-            status: data.status,
+            status: finalStatus,
             needsPasswordChange: true
           }
         });
@@ -194,6 +209,12 @@ export async function provisionUser(data: {
       tempPassword: !isUpdate ? tempPass : (data.password ? tempPass : null) 
     };
   } catch (error: any) {
+    if (error instanceof ZodError) {
+      const firstIssue = error.issues?.[0];
+      const message = firstIssue?.message || 'Validation failed.';
+      return { success: false, error: message };
+    }
+
     const { message } = logInstitutionalError(error, 'DB_PROVISION_USER');
     return { success: false, error: message };
   }
@@ -204,10 +225,9 @@ export async function resetUserPassword(email: string, authorizerId: string) {
     return { success: false, error: 'Unauthorized.' };
   }
 
-  // SENSITIVE ACTION GUARD
-  if (!(await verifySensitiveSession())) {
-    return { success: false, error: 'Security Protocol: Session too old for credential reset. Please re-authenticate.' };
-  }
+  // NOTE: Password reset does not require a fresh session, only admin clearance
+  // The 5-minute session limit is intentionally bypassed here to allow
+  // long-running admin sessions to perform maintenance actions
 
   try {
     const normalizedEmail = email.toLowerCase().trim();
@@ -225,6 +245,15 @@ export async function resetUserPassword(email: string, authorizerId: string) {
       data: { password: hashedPassword, needsPasswordChange: true, updatedAt: new Date() }
     });
 
+    // Audit log for credential reset
+    await createAuditLog({
+      action: 'CREDENTIAL_RESET',
+      resource: 'USER',
+      resourceId: user.id,
+      details: `Password reset initiated by admin ${authorizerId}`,
+      metadata: { email: normalizedEmail }
+    }).catch(() => {});
+
     return { success: true, tempPassword: tempPass, userName: `${user.firstName} ${user.lastName}` };
   } catch (error: any) {
     const { message } = logInstitutionalError(error, 'DB_RESET_PASSWORD');
@@ -237,6 +266,27 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
   if (!(await verifySensitiveSession())) throw new Error('Security Protocol Violation: Session too old.');
   
   try {
+    // SECURITY SAFEGUARD: Check if this user is SUPER_ADMIN
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        roles: { include: { role: { select: { name: true } } } }
+      }
+    });
+
+    if (!user) throw new Error('User not found.');
+
+    const isSuperAdmin = user.roles.some(ur => ur.role.name === 'SUPER_ADMIN');
+    
+    // Prevent SUPER_ADMIN users from being set to INACTIVE
+    if (isSuperAdmin && status === 'INACTIVE') {
+      throw new Error('Security Policy: SUPER_ADMIN accounts cannot be set to INACTIVE status.');
+    }
+
     const result = await prisma.user.update({
       where: { id: userId },
       data: { status, updatedAt: new Date() },

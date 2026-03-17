@@ -167,7 +167,7 @@ export default function MyCasesPerformancePage() {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Querying Specialist Node...</p>
+        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Querying Specialist Branch...</p>
       </div>
     );
   }
@@ -333,7 +333,7 @@ export default function MyCasesPerformancePage() {
                       <TableRow>
                         <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Case Identifier</TableHead>
                         <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Customer Entity</TableHead>
-                        <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Node</TableHead>
+                        <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead>
                         <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Workflow Status</TableHead>
                         <TableHead className="text-right pr-8 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
                       </TableRow>

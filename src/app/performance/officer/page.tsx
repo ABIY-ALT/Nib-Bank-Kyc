@@ -335,7 +335,7 @@ export default function KYCOperationsMonitoringPage() {
 
           {/* BRANCH SEARCHABLE */}
           <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Branch Node</Label>
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Branch</Label>
             <Popover open={branchOpen} onOpenChange={setBranchOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" role="combobox" className="w-full justify-between h-12 rounded-xl border-slate-200 bg-slate-50/50 font-bold">
@@ -450,7 +450,7 @@ export default function KYCOperationsMonitoringPage() {
               variant="secondary" 
               className="h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest bg-primary text-white shadow-lg"
             >
-              Node Audit: {selectedBranch}
+              Branch Audit: {selectedBranch}
             </Button>
           </>
         )}
@@ -530,10 +530,10 @@ export default function KYCOperationsMonitoringPage() {
                   <Table>
                     <TableHeader className="bg-slate-50 border-b">
                       <TableRow>
-                        <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch Node</TableHead>
+                        <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead>
                         <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Inflight Files</TableHead>
                         <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amend Cycles</TableHead>
-                        <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Node SLA Health</TableHead>
+                        <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch SLA Health</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

@@ -72,7 +72,7 @@ export default function SystemWideReportsPage() {
     const accuracy = total > 0 ? ((approved / (total - pending || 1)) * 100).toFixed(1) : "0.0";
     const branchMap: Record<string, number> = {};
     submissions.forEach(sub => {
-      const bName = sub.branchName || "Unknown Node";
+      const bName = sub.branchName || "Unknown Branch";
       branchMap[bName] = (branchMap[bName] || 0) + 1;
     });
     const branches = Object.entries(branchMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
@@ -150,7 +150,7 @@ export default function SystemWideReportsPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/80">
-                    <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Jurisdiction Node</TableHead>
+                    <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Jurisdiction Branch</TableHead>
                     <TableHead className="font-black text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Throughput</TableHead>
                   </TableRow>
                 </TableHeader>

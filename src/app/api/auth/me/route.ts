@@ -107,9 +107,11 @@ export async function GET(req: Request) {
 
     // Token rotation every 2 minutes
     if (nowSeconds - iat > rotationThreshold) {
+      const { exp, nbf, iat: _oldIat, ...sessionPayload } = session as any;
       const newToken = jwt.sign(
         { 
-          ...session,
+          ...sessionPayload,
+          needsPasswordChange: user.needsPasswordChange,
           iat: nowSeconds 
         },
         secret,

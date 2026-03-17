@@ -26,7 +26,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   logout: (reason?: string) => void;
-  changePassword: (newPass: string) => Promise<void>;
+  changePassword: (newPass: string, currentPass: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!res.ok) {
-      throw new Error(data?.message || "Authentication failed. Invalid institutional credentials.");
+      throw new Error(data?.message || "Incorrect email or password.");
     }
 
     if (!data || !data.user) {

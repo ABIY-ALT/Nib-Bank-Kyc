@@ -36,10 +36,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="flex h-screen w-full overflow-hidden bg-background">
+      <div 
+        className="flex h-screen w-full overflow-hidden bg-background"
+        inert={showForceChange ? true : undefined}
+      >
         <AppSidebar />
         
-        <SidebarInset className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background">
+        <SidebarInset 
+          className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background"
+          inert={showForceChange ? true : undefined}
+        >
           {/* STICKY INSTITUTIONAL HEADER */}
           <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-6 bg-background/80 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">

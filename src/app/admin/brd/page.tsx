@@ -215,7 +215,7 @@ export default function SystemBRDPage() {
               <div className="flex gap-4">
                 <Badge variant="outline" className="bg-primary text-white font-black shrink-0 h-fit">METRIC-B</Badge>
                 <div>
-                  <p className="font-bold text-slate-900">Branch Node Velocity</p>
+                  <p className="font-bold text-slate-900">Branch Velocity</p>
                   <p className="text-sm text-slate-500">Aggregates regional district performance and SLA compliance health.</p>
                 </div>
               </div>

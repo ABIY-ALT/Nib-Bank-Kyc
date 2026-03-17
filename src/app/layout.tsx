@@ -41,7 +41,7 @@ export default async function RootLayout({
               disableTransitionOnChange
               nonce={nonce}
             >
-              <TooltipProvider delayDuration={0}>
+              <TooltipProvider delayDuration={200}>
                 <AuthGuard>
                   <DashboardShell>
                     {children}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { validatePassword, type PasswordValidation } from '@/lib/password-validation';
 import { 
@@ -29,6 +29,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 export function ForcePasswordChangeModal() {
   const { user, changePassword, logout } = useAuth();
   const { toast } = useToast();
+  const currentPasswordInputRef = useRef<HTMLInputElement>(null);
+  
   const [passwordValidation, setPasswordValidation] = useState<PasswordValidation>({
     isValid: false,
     requirements: {
@@ -46,6 +48,18 @@ export function ForcePasswordChangeModal() {
   const [showPasswords, setShowPasswords] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Ensure focus is properly moved to the dialog content to avoid aria-hidden conflicts
+  useEffect(() => {
+    // Small delay to ensure DOM is ready after dialog animation starts
+    const timer = setTimeout(() => {
+      if (currentPasswordInputRef.current) {
+        currentPasswordInputRef.current.focus();
+      }
+    }, 0);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +105,7 @@ export function ForcePasswordChangeModal() {
         className="max-w-md p-0 overflow-hidden border-none shadow-2xl animate-in zoom-in-95 duration-300"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
+        inert={false}
       >
         <div className="bg-card">
           <DialogHeader className="bg-muted border-b p-8 space-y-0">
@@ -121,13 +136,13 @@ export function ForcePasswordChangeModal() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
+                    ref={currentPasswordInputRef}
                     type={showPasswords ? "text" : "password"} 
                     placeholder="••••••••" 
                     className="pl-10 pr-10 h-12 bg-slate-50/50 border-slate-200 font-bold"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     required
-                    autoFocus
                   />
                   <button
                     type="button"

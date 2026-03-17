@@ -33,6 +33,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   VIEWER: ['/'],
 };
 
+const PUBLIC_IMAGE_ASSET = /\.(png|jpg|jpeg|svg|webp|avif|ico)$/i;
+
 /**
  * Validate origin against whitelist
  * Returns validated origin or null if invalid
@@ -171,7 +173,7 @@ export async function proxy(req: NextRequest) {
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-inline'" : ""};
-    style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com${isDevelopment ? " 'unsafe-inline'" : ""};
+    style-src 'self' https://fonts.googleapis.com${isDevelopment ? " 'unsafe-inline'" : ""};
     font-src 'self' https://fonts.gstatic.com;
     img-src * data: blob:;
     object-src 'none';
@@ -212,13 +214,14 @@ export async function proxy(req: NextRequest) {
   }
 
   // 4. ALLOW PUBLIC ASSETS
+  const isPublicImageAsset = PUBLIC_IMAGE_ASSET.test(pathname);
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth') ||
     pathname === '/favicon.ico' ||
     pathname === '/login' ||
     pathname === '/unauthorized' ||
-    pathname === '/logo.svg'
+    isPublicImageAsset
   ) {
     const response = NextResponse.next({
       request: { headers: requestHeaders },

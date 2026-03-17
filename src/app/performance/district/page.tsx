@@ -108,7 +108,7 @@ export default function DistrictPerformancePage() {
     };
 
     submissions.forEach(sub => {
-      const bName = sub.branchName || 'Unmapped Node';
+      const bName = sub.branchName || 'Unmapped Branch';
       if (!stats.byBranch[bName]) stats.byBranch[bName] = { total: 0, approved: 0, pending: 0, amended: 0 };
       stats.byBranch[bName].total++;
       if (sub.status === KYC_STATUS.APPROVED) stats.byBranch[bName].approved++;

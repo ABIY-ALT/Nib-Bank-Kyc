@@ -66,7 +66,7 @@ export default function ReviewActionPage() {
             ) : user?.assignedBranches && user.assignedBranches.length > 0 && (
               <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
                 <MapPin className="w-3 h-3" />
-                {user.assignedBranches.length} Node Portfolio
+                {user.assignedBranches.length} Branch Portfolio
               </Badge>
             )}
           </div>

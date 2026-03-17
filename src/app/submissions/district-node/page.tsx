@@ -119,7 +119,7 @@ export default function DistrictMonitoringPage() {
     const dateMap: Record<string, number> = {};
 
     submissions.forEach(sub => {
-      const bName = sub.branch?.name || sub.branchName || "Unknown Node";
+      const bName = sub.branch?.name || sub.branchName || "Unknown Branch";
       if (!stats.branches[bName]) {
         stats.branches[bName] = { name: bName, total: 0, approved: 0, pending: 0, amended: 0 };
       }
@@ -292,7 +292,7 @@ export default function DistrictMonitoringPage() {
                   <Table>
                     <TableHeader className="bg-slate-50/80">
                       <TableRow>
-                        <TableHead className="font-bold py-4 pl-8">Branch Node</TableHead>
+                        <TableHead className="font-bold py-4 pl-8">Branch</TableHead>
                         <TableHead className="font-bold text-center">Case Volume</TableHead>
                         <TableHead className="font-bold text-center text-emerald-600">Authorized</TableHead>
                         <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>

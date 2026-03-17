@@ -85,6 +85,13 @@ const KYC_CHECKLIST_ITEMS = [
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+interface ResubmitFile {
+  id: string;
+  file: File;
+  type: string;
+  previewUrl: string;
+}
+
 export default function SubmissionDetails() {
   const params = useParams();
   const router = useRouter();
@@ -101,7 +108,7 @@ export default function SubmissionDetails() {
   const [isActioning, setIsActioning] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
 
-  const [resubmitFiles, setResubmitFiles] = useState<{file: File, type: string, id: string}[]>([]);
+  const [resubmitFiles, setResubmitFiles] = useState<ResubmitFile[]>([]);
   const resubmitInputRef = useRef<HTMLInputElement>(null);
 
   const [govMemo, setGovMemo] = useState<File | null>(null);
@@ -141,6 +148,10 @@ export default function SubmissionDetails() {
     }
     setChecklist(state || {});
   }, [submission]);
+
+  const documentTypes = useMemo(() => {
+    return settings?.documentTypes || [];
+  }, [settings]);
 
   const isCreator = user?.id === submission?.createdById;
   
@@ -191,8 +202,17 @@ export default function SubmissionDetails() {
 
   const handleResubmit = async () => {
     if (!submission || !user || isActioning) return;
-    if (resubmitFiles.length === 0) {
-      toast({ variant: "destructive", title: "Assets Required", description: "Please attach corrected documents." });
+
+    const hasFiles = resubmitFiles.length > 0;
+    const hasRemarks = !!remarks.trim();
+
+    if (!hasFiles && !hasRemarks) {
+      toast({ variant: "destructive", title: "Response Required", description: "Attach documents or provide a comment." });
+      return;
+    }
+
+    if (hasFiles && resubmitFiles.some(f => !f.type)) {
+      toast({ variant: "destructive", title: "Document Types Required", description: "Select a type for each attached document." });
       return;
     }
     
@@ -212,7 +232,10 @@ export default function SubmissionDetails() {
         const updated = await getSubmissionById(submission.id);
         setSubmission(updated);
         setRemarks("");
-        setResubmitFiles([]);
+        setResubmitFiles(prev => {
+          prev.forEach(p => URL.revokeObjectURL(p.previewUrl));
+          return [];
+        });
       } else {
         throw new Error(res.error);
       }
@@ -226,7 +249,7 @@ export default function SubmissionDetails() {
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
-      const valid: {file: File, type: string, id: string}[] = [];
+      const valid: ResubmitFile[] = [];
       for (const f of files) {
         if (f.size > MAX_FILE_SIZE) {
           toast({ variant: "destructive", title: "File Too Large", description: f.name });
@@ -236,10 +259,25 @@ export default function SubmissionDetails() {
           toast({ variant: "destructive", title: "Invalid Type", description: f.name });
           continue;
         }
-        valid.push({ file: f, type: "", id: crypto.randomUUID() });
+        valid.push({ file: f, type: "", id: crypto.randomUUID(), previewUrl: URL.createObjectURL(f) });
       }
       setResubmitFiles(prev => [...prev, ...valid]);
     }
+
+    // Allow picking the same file again after removal.
+    e.target.value = "";
+  };
+
+  const removeResubmitFile = (id: string) => {
+    setResubmitFiles(prev => {
+      const removed = prev.find(f => f.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter(f => f.id !== id);
+    });
+  };
+
+  const handleResubmitTypeChange = (id: string, type: string) => {
+    setResubmitFiles(prev => prev.map(f => f.id === id ? { ...f, type } : f));
   };
 
   const handleExceptionalStep = async (nextStatus: string, actionLabel: string) => {
@@ -326,6 +364,12 @@ export default function SubmissionDetails() {
 
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
   if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
+
+  const canRespondToAmendment =
+    isCreator &&
+    !submission.isExceptional &&
+    !isTerminal &&
+    submission.status === KYC_STATUS.ACTION_REQUIRED;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-20">
@@ -453,6 +497,123 @@ export default function SubmissionDetails() {
                     {checklist[item.id] && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] h-4 uppercase font-black">Verified</Badge>}
                   </div>
                 ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {canRespondToAmendment && (
+            <Card className="border-orange-200 shadow-2xl rounded-3xl overflow-hidden bg-white">
+              <CardHeader className="bg-orange-600 text-white border-b py-5">
+                <CardTitle className="text-lg font-black text-white">Amendment Response</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-6 px-6 pb-8">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Comment to KYC Officer</Label>
+                  <Textarea
+                    placeholder="Explain what you corrected and what changed..."
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    className="min-h-[140px] rounded-2xl bg-slate-50/50 font-medium"
+                  />
+                </div>
+
+                <input
+                  ref={resubmitInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,image/*"
+                  className="hidden"
+                  onChange={handleFileSelection}
+                />
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => resubmitInputRef.current?.click()}
+                  className="w-full h-12 font-black rounded-xl border-orange-300 text-orange-700 hover:bg-orange-50"
+                  disabled={!!isActioning}
+                >
+                  <Upload className="w-5 h-5 mr-2" />
+                  Attach Corrected Documents
+                </Button>
+
+                {resubmitFiles.length > 0 && (
+                  <div className="space-y-3">
+                    {resubmitFiles.map((item) => (
+                      <div key={item.id} className="flex flex-col gap-3 p-4 rounded-2xl border border-slate-100 bg-white">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100 shrink-0">
+                              <FileText className="w-5 h-5 text-slate-400" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-black text-slate-900 truncate">{item.file.name}</p>
+                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest truncate">
+                                {(item.file.size / 1024 / 1024).toFixed(2)}MB
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeResubmitFile(item.id)}
+                            className="h-10 w-10 text-red-500 hover:bg-red-50 rounded-full shrink-0"
+                            title="Remove file"
+                          >
+                            <X className="w-5 h-5" />
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Document Type</Label>
+                            <Select value={item.type} onValueChange={(v) => handleResubmitTypeChange(item.id, v)}>
+                              <SelectTrigger className="h-11 rounded-xl font-bold">
+                                <SelectValue placeholder="Select type..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.isArray(documentTypes) && documentTypes.map((t: any) => {
+                                  const label = typeof t === 'string' ? t : t?.label;
+                                  const key = typeof t === 'string' ? t : (t?.id || t?.label);
+                                  if (!label) return null;
+                                  return (
+                                    <SelectItem key={key} value={label}>{label}</SelectItem>
+                                  );
+                                })}
+                                <SelectItem value="OTHER">OTHER</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="flex items-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              asChild
+                              className="h-11 rounded-xl font-black w-full"
+                              title="Preview"
+                            >
+                              <a href={item.previewUrl} target="_blank" rel="noopener noreferrer">
+                                <Eye className="w-5 h-5 mr-2" />
+                                Preview
+                              </a>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleResubmit}
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-black h-12 rounded-xl shadow-lg"
+                  disabled={!!isActioning}
+                >
+                  {isActioning === "RESUBMIT" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Send Response
+                </Button>
               </CardContent>
             </Card>
           )}

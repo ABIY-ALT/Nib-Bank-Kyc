@@ -39,6 +39,12 @@ import { getGlobalSettings } from "@/actions/settings";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 
+function formatBranchName(name?: string | null) {
+  const raw = (name || "").trim();
+  if (!raw) return "Unknown Branch";
+  return raw.toLowerCase().includes("branch") ? raw : `${raw} Branch`;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { hasPermission, loading: permissionsLoading, isSuperAdmin } = usePermissions();
@@ -92,8 +98,7 @@ export default function Dashboard() {
 
   const dashboardContext = useMemo(() => {
     const roleName = user?.roles?.[0]?.role?.name || 'OFFICER';
-    const rawBranchName = user?.branchName || 'Local';
-    const cleanBranchName = rawBranchName.toLowerCase().includes('branch') ? rawBranchName : `${rawBranchName} Branch`;
+    const cleanBranchName = formatBranchName(user?.branchName || 'Local');
     
     if (isSuperAdmin) return {
       title: 'Dashboard',
@@ -117,8 +122,8 @@ export default function Dashboard() {
     };
 
     return {
-      title: `${cleanBranchName} Node`,
-      subtitle: 'Local node activity monitoring and methodology tracking.',
+      title: cleanBranchName,
+      subtitle: 'Local branch activity monitoring and methodology tracking.',
       scope: 'Branch',
       icon: Building2
     };
@@ -236,7 +241,7 @@ export default function Dashboard() {
                         )}
                       </div>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">
-                        {sub.id} • {sub.branch?.name || sub.branchName} Node
+                        {sub.id} • {formatBranchName(sub.branch?.name || sub.branchName)}
                       </p>
                     </div>
                     <div className="flex items-center gap-4">

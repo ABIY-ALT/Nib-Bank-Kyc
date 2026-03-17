@@ -44,7 +44,8 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
-  SidebarMenuBadge
+  SidebarMenuBadge,
+  useSidebar
 } from "@/components/ui/sidebar"
 import {
   Collapsible,
@@ -58,15 +59,16 @@ import { usePathname } from "next/navigation"
 import { useSidebarCounts } from "@/hooks/use-sidebar-counts"
 import { usePermissions } from "@/hooks/use-permissions"
 import { UserProfileDialog } from "@/components/auth/user-profile-dialog"
-import { LogoFixed } from "@/components/logo"
+import { LogoFixed, LogoSmall } from "@/components/logo"
 
 export function AppSidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const counts = useSidebarCounts(user)
   const { hasPermission, hasAnyInGroup, loading, isSuperAdmin } = usePermissions()
+  const { state } = useSidebar()
 
-  if (!user || loading) return null;
+  if (!user) return null;
 
   const canSeeMyPerformance = user.roles?.some((ur: any) => 
     ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER'].includes(ur.role.name)
@@ -74,15 +76,15 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r-0 shadow-2xl">
-      <SidebarHeader className="border-b h-16 flex items-center px-4 bg-sidebar-background">
+      <SidebarHeader className="border-b h-16 flex items-center px-4 bg-sidebar-background group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center">
         <div className="flex items-center gap-3 font-bold overflow-hidden">
-          <LogoFixed />
+          {state === "collapsed" ? <LogoSmall /> : <LogoFixed />}
           <span className="group-data-[collapsible=icon]:hidden truncate text-white font-headline tracking-tight text-lg">Nib Bank KYC</span>
         </div>
       </SidebarHeader>
       
       <SidebarContent>
-        {hasPermission('DASHBOARD_VIEW') && (
+        {!loading && hasPermission('DASHBOARD_VIEW') && (
           <SidebarGroup>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -97,7 +99,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {hasAnyInGroup('WORKFLOWS') && (
+        {!loading && hasAnyInGroup('WORKFLOWS') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">KYC Operations</SidebarGroupLabel>
             <SidebarMenu>
@@ -301,7 +303,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {hasPermission('VIEW_FQ_LIBRARY') && (
+        {!loading && hasPermission('VIEW_FQ_LIBRARY') && (
           <SidebarGroup>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -316,7 +318,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {hasAnyInGroup('REPORTING') && (
+        {!loading && hasAnyInGroup('REPORTING') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Audit & Reporting</SidebarGroupLabel>
             <SidebarMenu>
@@ -404,7 +406,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {hasAnyInGroup('SYSTEM') && (
+        {!loading && hasAnyInGroup('SYSTEM') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Administration</SidebarGroupLabel>
             <SidebarMenu>

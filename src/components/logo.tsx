@@ -47,17 +47,24 @@ interface LogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'a
  * Perfect for header/sidebar logos with defined dimensions
  */
 export function LogoFixed() {
+  const [error, setError] = useState(false);
+
   return (
-    <div className="w-10 h-10 rounded-lg shadow-sm shrink-0 flex items-center justify-center bg-transparent p-0 relative">
-      <Image
-        src="/logo.png"
-        alt="Nib Bank Logo"
-        width={40}
-        height={40}
-        priority
-        className="object-contain"
-        quality={85}
-      />
+    <div className="w-10 h-10 rounded-lg shadow-sm shrink-0 flex items-center justify-center bg-white/95 ring-1 ring-black/5 dark:bg-white/95 p-0 relative">
+      {error ? (
+        <span className="text-[10px] font-black text-[#0F172A]">NB</span>
+      ) : (
+        <Image
+          src="/logo.png"
+          alt="Nib Bank Logo"
+          width={40}
+          height={40}
+          priority
+          className="object-contain"
+          quality={85}
+          onError={() => setError(true)}
+        />
+      )}
     </div>
   );
 }
@@ -88,7 +95,8 @@ export function LogoResponsive() {
         fill
         priority
         className="object-contain"
-        quality={90}
+        quality={85}
+        sizes="128px"
         onError={() => setError(true)}
       />
     </div>
@@ -100,17 +108,24 @@ export function LogoResponsive() {
  * Compact size for navigation elements
  */
 export function LogoSmall() {
+  const [error, setError] = useState(false);
+
   return (
-    <div className="w-6 h-6 relative flex-shrink-0">
-      <Image
-        src="/logo.png"
-        alt="Nib Bank"
-        width={24}
-        height={24}
-        priority
-        className="object-contain"
-        quality={80}
-      />
+    <div className="w-6 h-6 relative flex-shrink-0 rounded-md bg-white/95 ring-1 ring-black/5 dark:bg-white/95">
+      {error ? (
+        <span className="text-[9px] font-black text-[#0F172A]">NB</span>
+      ) : (
+        <Image
+          src="/logo.png"
+          alt="Nib Bank"
+          width={24}
+          height={24}
+          priority
+          className="object-contain"
+          quality={75}
+          onError={() => setError(true)}
+        />
+      )}
     </div>
   );
 }
@@ -153,7 +168,7 @@ export function Logo({
 
   if (variant === 'fixed') {
     return (
-      <div className={`w-10 h-10 rounded-lg shadow-sm flex items-center justify-center bg-transparent relative ${className || ''}`}>
+      <div className={`w-10 h-10 rounded-lg shadow-sm flex items-center justify-center bg-white/95 ring-1 ring-black/5 dark:bg-white/95 relative ${className || ''}`}>
         <Image
           src="/logo.png"
           alt="Nib Bank Logo"
@@ -172,7 +187,7 @@ export function Logo({
 
   if (variant === 'small') {
     return (
-      <div className={`w-6 h-6 relative flex-shrink-0 ${className || ''}`}>
+      <div className={`w-6 h-6 relative flex-shrink-0 rounded-md bg-white/95 ring-1 ring-black/5 dark:bg-white/95 ${className || ''}`}>
         <Image
           src="/logo.png"
           alt="Nib Bank"
@@ -180,7 +195,7 @@ export function Logo({
           height={24}
           priority
           className="object-contain"
-          quality={80}
+          quality={75}
           onError={handleError}
           onLoad={handleLoad}
           {...props}
@@ -198,7 +213,8 @@ export function Logo({
         fill
         priority
         className="object-contain"
-        quality={90}
+        quality={85}
+        sizes="128px"
         onError={handleError}
         onLoad={handleLoad}
         {...props}

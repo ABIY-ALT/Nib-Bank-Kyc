@@ -182,7 +182,7 @@ export default function BranchesDistrictsPage() {
       if (type === 'district' && activeDistrictId === id) setActiveDistrictId(null);
       loadData();
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Delete Denied", description: "Node may contain active records." });
+      toast({ variant: "destructive", title: "Delete Denied", description: "Branch may contain active records." });
     }
   };
 
@@ -348,7 +348,7 @@ export default function BranchesDistrictsPage() {
                     </p>
                     {activeDistrict && (
                       <Button onClick={() => handleOpenBranchDialog()} className="mt-8 bg-primary text-white font-black px-8 h-12 rounded-xl shadow-xl shadow-primary/20">
-                        <Plus className="w-4 h-4 mr-2" /> Register First Node
+                        <Plus className="w-4 h-4 mr-2" /> Register First Branch
                       </Button>
                     )}
                   </div>

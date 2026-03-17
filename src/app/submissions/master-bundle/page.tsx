@@ -321,7 +321,7 @@ export default function MasterBundleDownloadPage() {
                             </div>
                             <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                               <span className="text-primary font-black">{sub.id}</span>
-                              <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {sub.branchName} Node</span>
+                              <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {sub.branchName?.toLowerCase().includes('branch') ? sub.branchName : `${sub.branchName} Branch`}</span>
                             </div>
                           </div>
                         </div>
