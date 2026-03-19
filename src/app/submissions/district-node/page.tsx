@@ -51,7 +51,7 @@ const STATUS_COLORS = {
 
 const chartConfig = {
   APPROVED: { label: "Successfully Authorized", color: STATUS_COLORS.APPROVED },
-  SUBMITTED: { label: "Specialist Analysis", color: STATUS_COLORS.SUBMITTED },
+  SUBMITTED: { label: "Officer Analysis", color: STATUS_COLORS.SUBMITTED },
   ACTION_REQUIRED: { label: "Action Required", color: STATUS_COLORS.ACTION_REQUIRED },
   REJECTED: { label: "Risk Rejected", color: STATUS_COLORS.REJECTED },
 } satisfies ChartConfig;
@@ -68,7 +68,7 @@ export default function DistrictMonitoringPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
-  const districtName = user?.districtName || "Central";
+  const districtName = user?.districtName || "";
 
   useEffect(() => {
     async function loadData() {
@@ -76,7 +76,7 @@ export default function DistrictMonitoringPage() {
       setLoading(true);
       try {
         let filters: any = {
-          district: isAdmin ? undefined : districtName,
+          district: isAdmin ? undefined : (districtName || undefined),
           limit: 1000
         };
 
@@ -177,7 +177,7 @@ export default function DistrictMonitoringPage() {
               <Map className="w-6 h-6" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-              {isAdmin ? "District Monitoring" : `${districtName} District Monitoring`}
+              {isAdmin ? "District Monitoring" : `${districtName || 'Unassigned'} District Monitoring`}
             </h1>
           </div>
           <div className="flex items-center gap-2 mt-1">

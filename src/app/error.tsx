@@ -32,7 +32,7 @@ export default function Error({
       <div className="space-y-2">
         <h2 className="text-2xl font-black text-foreground tracking-tight">Institutional Service Fault</h2>
         <p className="text-muted-foreground font-medium max-w-sm mx-auto leading-relaxed">
-          An unexpected technical exception has occurred within this node. The event has been cryptographically logged for security review.
+          An unexpected technical exception has occurred within this branch. The event has been cryptographically logged for security review.
         </p>
       </div>
       <div className="flex flex-col gap-3 pt-4">

@@ -94,7 +94,7 @@ export default function StorageVaultPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('MANAGE_VAULT_STORAGE')) {
-      router.push('/unauthorized');
+      router.push('/unauthorized?required=MANAGE_VAULT_STORAGE');
     }
   }, [hasPermission, permissionsLoading, router]);
 
@@ -279,7 +279,7 @@ export default function StorageVaultPage() {
                   <SelectValue placeholder="All Regions" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl shadow-2xl">
-                  <SelectItem value="all" className="font-bold">Global Network</SelectItem>
+                  <SelectItem value="all" className="font-bold">Overall Network</SelectItem>
                   {districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>

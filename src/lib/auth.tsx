@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { UserStatus } from "@prisma/client";
 import { updateInstitutionalPassword } from "@/actions/password";
+import { getInstitutionalLoginLocalPart, isValidInstitutionalLoginInput } from "@/lib/login-identifier";
 
 export interface UserProfile {
   id: string;
@@ -77,15 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, pass: string) => {
-    const normalizedEmail = email.toLowerCase().trim();
-    if (!normalizedEmail.endsWith('@nibbank.com.et')) {
-      throw new Error('Access restricted to @nibbank.com.et domain.');
+    const loginId = getInstitutionalLoginLocalPart(email);
+    if (!isValidInstitutionalLoginInput(loginId)) {
+      throw new Error('Invalid username or password.');
     }
 
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: normalizedEmail, password: pass }),
+      body: JSON.stringify({ email: loginId, password: pass }),
     });
 
     const contentType = res.headers.get("content-type");
@@ -101,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!res.ok) {
-      throw new Error(data?.message || "Incorrect email or password.");
+      throw new Error(data?.error || data?.message || "Invalid username or password.");
     }
 
     if (!data || !data.user) {

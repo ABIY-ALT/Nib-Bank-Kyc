@@ -60,7 +60,7 @@ export async function getServerSession() {
     
     // Resolve master role for permissions
     const activeRoles = user.roles.filter(ur => ur.role.active).map(ur => ur.role.name);
-    const masterRole = activeRoles.includes('SUPER_ADMIN') ? 'SUPER_ADMIN' : (activeRoles[0] || 'VIEWER');
+    const masterRole = activeRoles.includes('SUPER_ADMIN') ? 'SUPER_ADMIN' : (activeRoles[0] || 'UNASSIGNED');
 
     return {
       ...payload,

@@ -40,6 +40,7 @@ import { getBranches, getDistricts, createBranch, updateBranch, createDistrict, 
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { usePermissions } from '@/hooks/use-permissions';
+import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
 
 export default function BranchesDistrictsPage() {
   const router = useRouter();
@@ -64,7 +65,7 @@ export default function BranchesDistrictsPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('MANAGE_BRANCHES')) {
-      router.push('/unauthorized');
+      router.push('/unauthorized?required=MANAGE_BRANCHES');
     }
   }, [hasPermission, permissionsLoading, router]);
 
@@ -199,8 +200,8 @@ export default function BranchesDistrictsPage() {
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Add District and Branch</h1>
-          <p className="text-muted-foreground text-lg font-medium">Manage regional districts and local branch nodes.</p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">{SYSTEM_SECTION_COPY.MANAGE_BRANCHES.label}</h1>
+          <p className="text-muted-foreground text-lg font-medium">{SYSTEM_SECTION_COPY.MANAGE_BRANCHES.description}</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           <Button variant="outline" onClick={() => handleOpenDistrictDialog()} className="flex-1 md:flex-none gap-2 h-12 px-6 border-primary/20 text-primary font-black rounded-xl hover:bg-primary/5 transition-all">
@@ -240,7 +241,7 @@ export default function BranchesDistrictsPage() {
                     <div className={cn("p-2 rounded-lg", activeDistrictId === null ? "bg-white/20" : "bg-slate-50")}>
                       <Globe className="w-4 h-4" />
                     </div>
-                    <span className="font-black text-sm uppercase tracking-wider">All Regions (Global)</span>
+                    <span className="font-black text-sm uppercase tracking-wider">All Regions (Overall)</span>
                   </div>
                   {activeDistrictId === null && <ChevronRight className="w-4 h-4" />}
                 </div>
@@ -305,7 +306,7 @@ export default function BranchesDistrictsPage() {
               <div className="space-y-1">
                 <CardTitle className="text-2xl font-black tracking-tight flex items-center gap-3 text-white">
                   <Building2 className="w-6 h-6 text-white" /> 
-                  {activeDistrict ? `${activeDistrict.name} Branches` : 'Global Branch List'}
+                  {activeDistrict ? `${activeDistrict.name} Branches` : 'Overall Branch List'}
                 </CardTitle>
                 <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-[0.2em]">
                   {filteredBranches.length} Nodes Discovered in Current Filter

@@ -42,6 +42,12 @@ import { getSubmissions, getSubmissionById } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
+import {
+  buildBundleRootName,
+  getSubmissionBranchName,
+  getSubmissionDistrictName,
+  sanitizeBundleSegment,
+} from "@/lib/bundle-path";
 
 const STATUS_OPTIONS = [
   { id: KYC_STATUS.APPROVED, label: 'Approved' },
@@ -103,8 +109,8 @@ export default function MasterBundleDownloadPage() {
     return allSubmissions.filter(sub => {
       const matchesStatus = selectedStatuses.length === 0 || 
                            (selectedStatuses.includes(KYC_STATUS.SUBMITTED) ? [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
-      const matchesDistrict = selectedDistrict === 'all' || sub.branch?.district?.name === selectedDistrict;
-      const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
+      const matchesDistrict = selectedDistrict === 'all' || getSubmissionDistrictName(sub) === selectedDistrict;
+      const matchesBranch = selectedBranch === 'all' || getSubmissionBranchName(sub) === selectedBranch;
 
       return matchesStatus && matchesDistrict && matchesBranch;
     });
@@ -125,21 +131,30 @@ export default function MasterBundleDownloadPage() {
       const zip = new JSZip();
       const now = new Date();
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      const bundleName = `NIB_BANK_MASTER_EXPORT_${timestamp}`;
+      const scopeDistrict = selectedDistrict !== 'all'
+        ? selectedDistrict
+        : (filteredSubmissions.length === 1 ? getSubmissionDistrictName(filteredSubmissions[0]) : 'MULTI_DISTRICT');
+      const scopeBranch = selectedBranch !== 'all'
+        ? selectedBranch
+        : (filteredSubmissions.length === 1 ? getSubmissionBranchName(filteredSubmissions[0]) : 'MULTI_BRANCH');
+      const bundleName = buildBundleRootName(scopeDistrict, scopeBranch, timestamp);
+      const rootFolder = zip.folder(bundleName);
 
-      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nTOTAL CASES: ${filteredSubmissions.length}\n--------------------------------------------------\n\nSTRUCTURE: District / Branch / CaseID_CustomerName / Assets\n\nINVENTORY:\n`;
+      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nTOTAL CASES: ${filteredSubmissions.length}\nARCHIVE ROOT: ${bundleName}\n--------------------------------------------------\n\nSTRUCTURE: Root / District / Branch / CaseID_CustomerName / Documents\n\nINVENTORY:\n`;
       
       let manifestBody = "";
 
       for (let i = 0; i < filteredSubmissions.length; i++) {
         const sub = filteredSubmissions[i];
-        const distName = sub.branch?.district?.name || "Uncategorized";
-        const branchName = sub.branchName || "Main";
-        const folderSafeName = `${sub.id}_${sub.customerName.replace(/[^a-z0-9]/gi, '_')}`;
+        const distName = getSubmissionDistrictName(sub);
+        const branchName = getSubmissionBranchName(sub);
+        const folderSafeName = `${sanitizeBundleSegment(sub.id, 'CASE')}_${sanitizeBundleSegment(sub.customerName, 'CUSTOMER')}`;
         
         setCurrentActionLabel(`Packaging: ${sub.id}`);
         
-        const caseFolder = zip.folder(`${distName}/${branchName}/${folderSafeName}`);
+        const caseFolder = rootFolder?.folder(
+          `${sanitizeBundleSegment(distName, 'UNASSIGNED_DISTRICT')}/${sanitizeBundleSegment(branchName, 'UNASSIGNED_BRANCH')}/${folderSafeName}/Documents`
+        );
         const fullSub = await getSubmissionById(sub.id);
         
         if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
@@ -158,7 +173,7 @@ export default function MasterBundleDownloadPage() {
         setProgress(Math.round(((i + 1) / filteredSubmissions.length) * 100));
       }
 
-      zip.file("nib_bank_manifest.txt", manifestHeader + manifestBody);
+      rootFolder?.file("nib_bank_manifest.txt", manifestHeader + manifestBody);
 
       setCurrentActionLabel("Compressing Archive...");
       const content = await zip.generateAsync({ type: "blob" });
@@ -243,7 +258,7 @@ export default function MasterBundleDownloadPage() {
                     <SelectValue placeholder="All Regions" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl shadow-2xl border-none">
-                    <SelectItem value="all">Global (All Regions)</SelectItem>
+                    <SelectItem value="all">Overall (All Regions)</SelectItem>
                     {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
                   </SelectContent>
                 </Select>

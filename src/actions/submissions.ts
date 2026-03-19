@@ -12,6 +12,136 @@ import { logInstitutionalError } from '@/lib/logger';
 import fs from 'fs/promises';
 import path from 'path';
 
+const DIRECT_BRANCH_ROLES = new Set(['BRANCH_MANAGER', 'BRANCH_OFFICER']);
+const PORTFOLIO_BRANCH_ROLES = new Set(['KYC_OFFICER', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER', 'SUPERVISOR']);
+const DISTRICT_DIRECTOR_ROLE = 'DISTRICT_DIRECTOR';
+
+function normalizeAssignedBranches(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((branch) => String(branch).trim()).filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    return value.split(',').map((branch) => branch.trim()).filter(Boolean);
+  }
+
+  return [];
+}
+
+function getResolvedUserBranchName(user: any) {
+  return user?.branchName || user?.branch?.name || null;
+}
+
+function getResolvedUserDistrictName(user: any) {
+  return user?.districtName || user?.branch?.district?.name || null;
+}
+
+function hasPermission(user: any, slug: string) {
+  return Boolean(
+    user?.roles?.some((userRole: any) =>
+      userRole?.role?.active !== false &&
+      userRole?.role?.permissions?.some((rolePermission: any) => rolePermission?.permission?.slug === slug)
+    )
+  );
+}
+
+async function hasFollowUpCaseAccess(user: any, submissionId: string) {
+  const canAccessFollowUpCases = hasPermission(user, 'VIEW_AUDIT_POOL') || hasPermission(user, 'VIEW_AUDIT_LOGS');
+  if (!canAccessFollowUpCases) return false;
+
+  const followUpRecord = await prisma.followUpVerification.findFirst({
+    where: { submissionId },
+    select: { id: true }
+  });
+
+  return Boolean(followUpRecord);
+}
+
+function getNormalizedRole(role?: string | null) {
+  return role?.toUpperCase() || '';
+}
+
+function buildRestrictedJurisdictionFilter(
+  user: any,
+  role: string,
+  requestedBranches: string[],
+  requestedDistrict?: string
+) {
+  const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
+  const branchName = getResolvedUserBranchName(user);
+  const districtName = getResolvedUserDistrictName(user);
+
+  if (DIRECT_BRANCH_ROLES.has(role)) {
+    if (!branchName) return { denied: true };
+    if (requestedBranches.length > 0 && !requestedBranches.includes(branchName)) return { denied: true };
+    if (requestedDistrict && districtName && requestedDistrict !== districtName) return { denied: true };
+    return { filter: { branchName } };
+  }
+
+  if (PORTFOLIO_BRANCH_ROLES.has(role)) {
+    if (assignedBranches.length > 0) {
+      const visibleBranches = requestedBranches.length > 0
+        ? assignedBranches.filter((branch) => requestedBranches.includes(branch))
+        : assignedBranches;
+
+      if (visibleBranches.length === 0) return { denied: true };
+
+      return {
+        filter: {
+          branchName: visibleBranches.length === 1 ? visibleBranches[0] : { in: visibleBranches }
+        }
+      };
+    }
+
+    if (!branchName) return { denied: true };
+    if (requestedBranches.length > 0 && !requestedBranches.includes(branchName)) return { denied: true };
+    if (requestedDistrict && districtName && requestedDistrict !== districtName) return { denied: true };
+    return { filter: { branchName } };
+  }
+
+  if (role === DISTRICT_DIRECTOR_ROLE) {
+    if (!districtName) return { denied: true };
+    if (requestedDistrict && requestedDistrict !== districtName) return { denied: true };
+
+    const filter: any = { districtName };
+    if (requestedBranches.length > 0) {
+      filter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
+    }
+
+    return { filter };
+  }
+
+  return null;
+}
+
+function hasJurisdictionalAccess(user: any, role: string, sessionId: string, kyc: any) {
+  const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
+  const branchName = getResolvedUserBranchName(user);
+  const districtName = getResolvedUserDistrictName(user);
+  const matchesBranch = Boolean(
+    (user?.branchId && kyc.branchId === user.branchId) ||
+    (branchName && kyc.branchName === branchName)
+  );
+  const matchesPortfolio = assignedBranches.includes(kyc.branchName);
+  const matchesDistrict = role === DISTRICT_DIRECTOR_ROLE
+    && !!districtName
+    && (kyc.districtName === districtName || kyc.branch?.district?.name === districtName);
+
+  if (DIRECT_BRANCH_ROLES.has(role)) {
+    return matchesBranch;
+  }
+
+  if (PORTFOLIO_BRANCH_ROLES.has(role)) {
+    return assignedBranches.length > 0 ? matchesPortfolio : matchesBranch;
+  }
+
+  if (role === DISTRICT_DIRECTOR_ROLE) {
+    return matchesDistrict;
+  }
+
+  return matchesBranch || matchesPortfolio || matchesDistrict || kyc.createdById === sessionId || kyc.assignedToId === sessionId;
+}
+
 /**
  * Format helper to ensure JSON fields are valid and safe.
  */
@@ -45,28 +175,77 @@ export async function getSubmissions(filters?: any) {
       dateFilter = { gte: start, lte: end };
     }
 
+    const requestedBranches = Array.isArray(filters?.branches)
+      ? filters.branches.filter(Boolean)
+      : (filters?.branch ? [filters.branch] : []);
+    const requestedDistrict = filters?.district;
+    const normalizedRole = getNormalizedRole(session.role);
+    const isOwnSubmissionRequest = filters?.submittedBy === session.id || filters?.createdById === session.id;
     let jurisdictionalFilter: any = {};
     
-    if (session.role !== 'SUPER_ADMIN') {
-      const user = await prisma.user.findUnique({ where: { id: session.id } });
+    if (session.role !== 'SUPER_ADMIN' && !isOwnSubmissionRequest) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.id },
+        include: { branch: { include: { district: true } } }
+      });
       if (!user) return [];
 
-      const assignedBranches = user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [];
-      
-      if (assignedBranches.length > 0) {
-        jurisdictionalFilter.branchName = { in: assignedBranches };
-      } else if (user.branchName) {
-        jurisdictionalFilter.branchName = user.branchName;
-      } else if (filters?.submittedBy && filters.submittedBy === session.id) {
-        jurisdictionalFilter.createdById = session.id;
+      const restrictedScope = buildRestrictedJurisdictionFilter(user, normalizedRole, requestedBranches, requestedDistrict);
+      if (restrictedScope?.denied) {
+        return [];
+      }
+
+      if (restrictedScope?.filter) {
+        jurisdictionalFilter = restrictedScope.filter;
       } else {
-        if (filters?.branches) {
-          jurisdictionalFilter.branchName = { in: filters.branches };
-        } else if (filters?.branch) {
-          jurisdictionalFilter.branchName = filters.branch;
+        const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
+        const branchName = getResolvedUserBranchName(user);
+        const districtName = getResolvedUserDistrictName(user);
+      
+        if (assignedBranches.length > 0) {
+          const visibleBranches = requestedBranches.length > 0
+            ? assignedBranches.filter(branch => requestedBranches.includes(branch))
+            : assignedBranches;
+
+          if (visibleBranches.length === 0) return [];
+          jurisdictionalFilter.branchName = visibleBranches.length === 1 ? visibleBranches[0] : { in: visibleBranches };
+        } else if (branchName) {
+          if (requestedBranches.length > 0 && !requestedBranches.includes(branchName)) {
+            return [];
+          }
+
+          if (requestedDistrict && districtName && requestedDistrict !== districtName) {
+            return [];
+          }
+
+          jurisdictionalFilter.branchName = branchName;
+        } else if (districtName) {
+          if (requestedDistrict && requestedDistrict !== districtName) {
+            return [];
+          }
+
+          jurisdictionalFilter.districtName = districtName;
+
+          if (requestedBranches.length > 0) {
+            jurisdictionalFilter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
+          }
         } else {
-          return [];
+          if (requestedBranches.length > 0) {
+            jurisdictionalFilter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
+          } else if (requestedDistrict) {
+            jurisdictionalFilter.districtName = requestedDistrict;
+          } else {
+            return [];
+          }
         }
+      }
+    } else {
+      if (requestedDistrict) {
+        jurisdictionalFilter.districtName = requestedDistrict;
+      }
+
+      if (requestedBranches.length > 0) {
+        jurisdictionalFilter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
       }
     }
 
@@ -121,22 +300,31 @@ export async function getSubmissionById(id: string) {
 
     if (!kyc) return null;
 
-    if (session.role === 'SUPER_ADMIN') {
-      return formatKYC(kyc);
-    }
-
-    if (kyc.createdById === session.id || kyc.assignedToId === session.id) {
-      return formatKYC(kyc);
-    }
-
-    const user = await prisma.user.findUnique({ where: { id: session.id } });
+    const user = await prisma.user.findUnique({
+      where: { id: session.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
     if (!user) return null;
 
-    const assignedBranches = user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [];
-    const isAtBranch = kyc.branchId === user.branchId;
-    const isInPortfolio = assignedBranches.includes(kyc.branchName);
-
-    if (isAtBranch || isInPortfolio) {
+    if (
+      session.role === 'SUPER_ADMIN' ||
+      hasJurisdictionalAccess(user, getNormalizedRole(session.role), session.id, kyc) ||
+      await hasFollowUpCaseAccess(user, kyc.id)
+    ) {
       return formatKYC(kyc);
     }
 
@@ -255,6 +443,11 @@ export async function resubmitSubmission(formData: FormData) {
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
+    const actor = await prisma.user.findUnique({ where: { id: session.id } });
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
+      throw new Error("Unauthorized case access.");
+    }
+
     const memoData = [];
     const uploadDir = path.join(process.cwd(), 'uploads');
     try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
@@ -334,6 +527,10 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
   const reviewer = await prisma.user.findUnique({ where: { id: session.id } });
 
+  if (!reviewer || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(reviewer, getNormalizedRole(session.role), session.id, current))) {
+    throw new Error("Unauthorized case access.");
+  }
+
   const newEntry = {
     role: session.role || 'OFFICER',
     performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
@@ -371,13 +568,26 @@ export async function updateSubmissionChecklist(id: string, state: any) {
   if (!session) throw new Error("Unauthorized");
 
   try {
-    const kyc = await prisma.kYC.update({
+    const [currentKyc, actor] = await Promise.all([
+      prisma.kYC.findUnique({ where: { id } }),
+      prisma.user.findUnique({ where: { id: session.id } })
+    ]);
+
+    if (!currentKyc) {
+      throw new Error("KYC record not found");
+    }
+
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, currentKyc))) {
+      throw new Error("Unauthorized case access.");
+    }
+
+    const updatedKyc = await prisma.kYC.update({
       where: { id },
       data: { checklistState: state }
     });
 
     revalidatePath(`/submissions/${id}`);
-    return kyc;
+    return updatedKyc;
   } catch (error) {
     logInstitutionalError(error, 'DB_UPDATE_CHECKLIST');
     throw new Error("Institutional database fault.");
@@ -397,6 +607,11 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
 
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
+
+    const actor = await prisma.user.findUnique({ where: { id: session.id } });
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
+      throw new Error("Unauthorized case access.");
+    }
 
     const uploadDir = path.join(process.cwd(), 'uploads');
     const storedFileName = `${Date.now()}_governance_${memo.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
@@ -453,19 +668,64 @@ export async function getWorkflowCounts(params: { userId: string, branchName?: s
   const session = await getServerSession();
   if (!session) return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
 
-  const { branchName, branches, isSuperAdmin } = params;
+  const { isSuperAdmin } = params;
   
-  const branchFilter = isSuperAdmin ? {} : (branches && branches.length > 0 ? { branchName: { in: branches } } : { branchName: branchName || "NONE" });
-
   try {
-    const [myCount, actionRequired, reviewQueue, resubmitted, escalated, exceptional] = await Promise.all([
+    const user = await prisma.user.findUnique({
+      where: { id: session.id },
+      include: { branch: { include: { district: true } } }
+    });
+    if (!user) {
+      return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
+    }
+
+    let scopeFilter: any = {};
+    let scopeUnavailable = false;
+    const normalizedRole = getNormalizedRole(session.role);
+    const restrictedScope = buildRestrictedJurisdictionFilter(user, normalizedRole, [], undefined);
+    const branchName = getResolvedUserBranchName(user);
+    const districtName = getResolvedUserDistrictName(user);
+
+    if (!isSuperAdmin) {
+      if (restrictedScope?.denied) {
+        scopeUnavailable = true;
+      }
+
+      if (!scopeUnavailable && restrictedScope?.filter) {
+        scopeFilter = restrictedScope.filter;
+      } else if (!scopeUnavailable) {
+        const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
+        if (assignedBranches.length > 0) {
+          scopeFilter = { branchName: { in: assignedBranches } };
+        } else if (branchName) {
+          scopeFilter = { branchName };
+        } else if (normalizedRole === DISTRICT_DIRECTOR_ROLE && districtName) {
+          scopeFilter = { districtName };
+        } else {
+          scopeUnavailable = true;
+        }
+      }
+    }
+
+    const [myCount, actionRequired, queueCounts] = await Promise.all([
       prisma.kYC.count({ where: { createdById: session.id, active: true } }),
-      prisma.kYC.count({ where: { createdById: session.id, status: KYC_STATUS.ACTION_REQUIRED, active: true } }),
-      prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isExceptional: false, isResubmitted: false, active: true } }),
-      prisma.kYC.count({ where: { ...branchFilter, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isResubmitted: true, active: true } }),
-      prisma.kYC.count({ where: { ...branchFilter, status: KYC_STATUS.ESCALATED, active: true } }),
-      prisma.kYC.count({ where: { ...branchFilter, isExceptional: true, status: { not: KYC_STATUS.APPROVED }, active: true } })
+      prisma.kYC.count({
+        where: {
+          ...(isSuperAdmin ? {} : { createdById: session.id }),
+          status: KYC_STATUS.ACTION_REQUIRED,
+          active: true
+        }
+      }),
+      scopeUnavailable
+        ? Promise.resolve([0, 0, 0, 0] as const)
+        : Promise.all([
+            prisma.kYC.count({ where: { ...scopeFilter, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isExceptional: false, isResubmitted: false, active: true } }),
+            prisma.kYC.count({ where: { ...scopeFilter, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isResubmitted: true, active: true } }),
+            prisma.kYC.count({ where: { ...scopeFilter, status: KYC_STATUS.ESCALATED, active: true } }),
+            prisma.kYC.count({ where: { ...scopeFilter, isExceptional: true, status: { not: KYC_STATUS.APPROVED }, active: true } })
+          ])
     ]);
+    const [reviewQueue, resubmitted, escalated, exceptional] = queueCounts;
 
     return { mySubmissions: myCount, actionRequired: actionRequired, reviewQueue, resubmitted, escalated, exceptional, branchNode: 0 };
   } catch (error) {
@@ -488,6 +748,10 @@ export async function processExceptionalStep(formData: FormData) {
 
     const history = Array.isArray(current?.commentHistory) ? (current.commentHistory as any[]) : [];
     const actor = await prisma.user.findUnique({ where: { id: session.id } });
+
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
+      throw new Error("Unauthorized case access.");
+    }
 
     const data: any = { 
       exceptionalStatus: nextStatus, 

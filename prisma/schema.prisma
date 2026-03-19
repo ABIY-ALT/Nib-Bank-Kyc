@@ -20,7 +20,7 @@ model User {
   password            String
   firstName           String
   lastName            String
-  phoneNumber         String?
+  phoneNumber         String?    @unique
   status              UserStatus @default(ACTIVE)
   branchId            String?
   branchName          String?

@@ -12,7 +12,6 @@ import {
   Settings2,
   Check,
   CheckCircle2,
-  RefreshCcw,
   UserX,
   UserCheck,
   LayoutDashboard,
@@ -21,11 +20,12 @@ import {
   BookOpen,
   FileBarChart,
   Settings,
-  BarChart3
+  BarChart3,
+  MoreVertical
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getRoleDefinitions, getAllPermissions, upsertRole, toggleRoleStatus, seedInstitutionalPermissions } from '@/actions/roles';
+import { getRoleDefinitions, getAllPermissions, upsertRole, toggleRoleStatus } from '@/actions/roles';
 import {
   Dialog,
   DialogContent,
@@ -38,15 +38,24 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { usePermissions } from '@/hooks/use-permissions';
+import { ACCESS_CAPABILITY_COPY, ACCESS_GROUP_COPY, SYSTEM_SECTION_COPY } from '@/lib/access-ui';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const SIDEBAR_GROUPS = [
-  { id: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'WORKFLOWS', label: 'KYC Operations', icon: FileText },
-  { id: 'MONITORING', label: 'Monitoring', icon: BarChart3 },
-  { id: 'INFRASTRUCTURE', label: 'Infrastructure', icon: HardDrive },
-  { id: 'REFERENCE', label: 'KYC F&Q Reference', icon: BookOpen },
-  { id: 'REPORTING', label: 'Reporting Suite', icon: FileBarChart },
-  { id: 'SYSTEM', label: 'Administration', icon: Settings },
+  { id: 'DASHBOARD', label: ACCESS_GROUP_COPY.DASHBOARD.label, icon: LayoutDashboard },
+  { id: 'WORKFLOWS', label: ACCESS_GROUP_COPY.WORKFLOWS.label, icon: FileText },
+  { id: 'MONITORING', label: ACCESS_GROUP_COPY.MONITORING.label, icon: BarChart3 },
+  { id: 'INFRASTRUCTURE', label: ACCESS_GROUP_COPY.INFRASTRUCTURE.label, icon: HardDrive },
+  { id: 'REFERENCE', label: ACCESS_GROUP_COPY.REFERENCE.label, icon: BookOpen },
+  { id: 'REPORTING', label: ACCESS_GROUP_COPY.REPORTING.label, icon: FileBarChart },
+  { id: 'SYSTEM', label: ACCESS_GROUP_COPY.SYSTEM.label, icon: Settings },
 ];
 
 export default function StaffRolesPage() {
@@ -58,7 +67,6 @@ export default function StaffRolesPage() {
   const [allPermissions, setAllPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isToggling, setIsToggling] = useState<string | null>(null);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -89,18 +97,6 @@ export default function StaffRolesPage() {
     }
   };
 
-  const handleSyncPermissions = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await seedInstitutionalPermissions();
-      if (res.success) {
-        toast({ title: "Successful", description: "Standard capabilities have been provisioned." });
-        await loadData();
-      }
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const handleOpenAdd = () => {
     setSelectedRole(null);
@@ -206,38 +202,34 @@ export default function StaffRolesPage() {
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Staff Roles</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">{SYSTEM_SECTION_COPY.ROLE_CREATE.label}</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Define operational authorities exactly as per banking requirements.</p>
+          <p className="text-muted-foreground text-lg font-medium">{SYSTEM_SECTION_COPY.ROLE_CREATE.description}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSyncPermissions} disabled={isSyncing} className="border-primary/20 text-primary font-black gap-2 h-11">
-            {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
-            Sync Registry
-          </Button>
           <Button onClick={handleOpenAdd} className="bg-primary shadow-xl font-black h-11 px-8 text-white hover:bg-primary/90 rounded-xl">
-            <Plus className="w-4 h-4 mr-2" /> Define New Role
+            <Plus className="w-4 h-4 mr-2" /> Create Role
           </Button>
         </div>
       </div>
 
       <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
         <CardHeader className="bg-primary text-white border-b py-6">
-          <CardTitle className="text-xl font-black">Personnel Designations</CardTitle>
+          <CardTitle className="text-xl font-black">Configured Roles</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80">
-                <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Designation Name</TableHead>
+                <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Role Name</TableHead>
                 <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
-                <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Authority Count</TableHead>
+                <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Permission Count</TableHead>
                 <TableHead className="text-right font-black pr-8 text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {roleDefinitions.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="py-32 text-center text-muted-foreground italic">No roles defined in the vault.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={4} className="py-32 text-center text-muted-foreground italic">No roles have been created yet.</TableCell></TableRow>
               ) : roleDefinitions.map((role) => (
                 <TableRow key={role.id} className={cn("hover:bg-slate-50 transition-colors group", !role.active && "bg-slate-50/30 opacity-80")}>
                   <TableCell className={cn("font-black pl-8 py-6", role.active ? "text-slate-900" : "text-slate-400")}>
@@ -255,12 +247,41 @@ export default function StaffRolesPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right pr-8">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role)} className="h-10 w-10 text-slate-400 rounded-full hover:bg-primary/5 hover:text-primary transition-colors"><Settings2 className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(role)} disabled={isToggling === role.id} className={cn("h-10 w-10 rounded-full", role.active ? "text-destructive" : "text-emerald-600")}>
-                        {isToggling === role.id ? <Loader2 className="w-4 h-4 animate-spin" /> : role.active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                      </Button>
-                    </div>
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 rounded-full hover:bg-primary/5 hover:text-primary transition-colors">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-2xl">
+                        <DropdownMenuLabel className="text-[10px] font-black uppercase text-slate-400 px-4 py-2 border-b">
+                          Role Actions
+                        </DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onSelect={() => handleOpenEdit(role)}
+                          className="py-3 font-bold cursor-pointer gap-3"
+                        >
+                          <Settings2 className="w-4 h-4 text-[#B89334]" /> Edit Role
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onSelect={() => handleToggleStatus(role)}
+                          disabled={isToggling === role.id}
+                          className={cn(
+                            "py-3 font-bold cursor-pointer gap-3",
+                            role.active ? "text-red-600" : "text-emerald-600"
+                          )}
+                        >
+                          {isToggling === role.id ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                          ) : role.active ? (
+                            <><UserX className="w-4 h-4" /> Deactivate</>
+                          ) : (
+                            <><UserCheck className="w-4 h-4" /> Activate</>
+                          )}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -280,7 +301,7 @@ export default function StaffRolesPage() {
                   </div>
                   <div>
                     <DialogTitle className="text-2xl font-black tracking-tight text-white">
-                      {selectedRole ? 'Modify Designation Rights' : 'Define New Designation'}
+                      {selectedRole ? 'Edit Role Permissions' : 'Create Role'}
                     </DialogTitle>
                   </div>
                 </div>
@@ -289,7 +310,7 @@ export default function StaffRolesPage() {
             
             <div className="p-8 flex-1 overflow-hidden flex flex-col gap-8">
               <div className="space-y-2 max-w-sm shrink-0">
-                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Designation Label</Label>
+                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Role Name</Label>
                 <input 
                   placeholder="e.g. KYC_AUDITOR" 
                   className="h-12 w-full px-4 bg-slate-50 border border-slate-200 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 rounded-xl" 
@@ -327,6 +348,10 @@ export default function StaffRolesPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {perms.map((p: any) => {
                             const isSelected = permissionsForm.includes(p.id);
+                            const capabilityCopy = ACCESS_CAPABILITY_COPY[p.slug] ?? {
+                              label: p.name,
+                              description: p.name,
+                            };
                             return (
                               <div 
                                 key={p.id} 
@@ -342,7 +367,10 @@ export default function StaffRolesPage() {
                                   </div>
                                   <div className="flex flex-col">
                                     <span className={cn("text-sm font-black transition-colors", isSelected ? "text-slate-900" : "text-slate-400")}>
-                                      {p.name}
+                                      {capabilityCopy.label}
+                                    </span>
+                                    <span className={cn("mt-1 text-xs leading-relaxed", isSelected ? "text-slate-600" : "text-slate-400")}>
+                                      {capabilityCopy.description}
                                     </span>
                                   </div>
                                 </div>
@@ -368,7 +396,7 @@ export default function StaffRolesPage() {
               <button onClick={() => setIsDialogOpen(false)} className="text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors">Discard Changes</button>
               <Button onClick={handleSave} disabled={isSaving} className="h-14 px-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-2xl">
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Commit Rights Map
+                Save Role Permissions
               </Button>
             </DialogFooter>
           </div>

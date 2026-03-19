@@ -102,7 +102,7 @@ export default function FollowUpReportsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Follow up Report</h1>
-          <p className="text-muted-foreground text-lg font-medium">Head Office quality control data for regulatory verification.</p>
+          <p className="text-muted-foreground text-lg font-medium">Head Office follow-up review data for regulatory verification.</p>
         </div>
         <div className="flex gap-2">
           <DatePickerWithRange 
@@ -117,7 +117,7 @@ export default function FollowUpReportsPage() {
       <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
         <CardContent className="p-6">
           <div className="space-y-2 max-w-sm">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audit Finding</Label>
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Review Outcome</Label>
             <Select value={selectedResult} onValueChange={setSelectedResult}>
               <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="All Results" /></SelectTrigger>
               <SelectContent>
@@ -147,7 +147,7 @@ export default function FollowUpReportsPage() {
             <Table>
               <TableHeader className="bg-slate-50/80">
                 <TableRow>
-                  <TableHead className="font-black py-4 pl-8 text-[11px] uppercase">Audit ID</TableHead>
+                  <TableHead className="font-black py-4 pl-8 text-[11px] uppercase">Follow-up ID</TableHead>
                   <TableHead className="font-black text-[11px] uppercase">Customer / Case</TableHead>
                   <TableHead className="font-black text-center text-[11px] uppercase">Result</TableHead>
                   <TableHead className="font-black text-[11px] uppercase">Verified By</TableHead>

@@ -30,7 +30,7 @@ export interface FetchResponse<T = any> {
  * Replaces axios with native fetch for better security and performance
  */
 export class InstitutionalHttpClient {
-  private static timeout(ms: number, signal?: AbortSignal): AbortSignal {
+  private static timeout(ms: number, signal?: AbortSignal | null): AbortSignal {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), ms);
     signal?.addEventListener('abort', () => clearTimeout(id));

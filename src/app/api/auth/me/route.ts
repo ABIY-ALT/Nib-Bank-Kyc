@@ -19,6 +19,8 @@ import {
  * 2. Strict SameSite=Strict Cookie Policy
  * 3. Client Context Binding (IP + UA Hash)
  */
+const IS_PROD = process.env.NODE_ENV === 'production';
+
 export async function GET(req: Request) {
   try {
     // Verify authentication
@@ -48,6 +50,7 @@ export async function GET(req: Request) {
         email: true,
         status: true,
         branchId: true,
+        districtName: true,
         updatedAt: true,
         needsPasswordChange: true,
         assignedBranches: true,
@@ -78,11 +81,15 @@ export async function GET(req: Request) {
       role: {
         id: ur.role.id,
         name: ur.role.name,
+        active: ur.role.active,
         permissions: ur.role.permissions.map(p => ({
           permission: { slug: p.permission.slug, name: p.permission.name, group: p.permission.group }
         }))
       }
     }));
+    const activeRoleNames = serializableRoles
+      .filter((r) => r.role.active)
+      .map((r) => r.role.name);
 
     const nowSeconds = Math.floor(Date.now() / 1000);
     const iat = session.iat || 0;
@@ -98,7 +105,7 @@ export async function GET(req: Request) {
         email: user.email,
         status: user.status,
         branchName: user.branch?.name || null,
-        districtName: user.branch?.district?.name || null,
+        districtName: user.districtName || user.branch?.district?.name || null,
         assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [],
         roles: serializableRoles,
         needsPasswordChange: user.needsPasswordChange
@@ -111,6 +118,7 @@ export async function GET(req: Request) {
       const newToken = jwt.sign(
         { 
           ...sessionPayload,
+          role: activeRoleNames.includes('SUPER_ADMIN') ? 'SUPER_ADMIN' : (activeRoleNames[0] || 'UNASSIGNED'),
           needsPasswordChange: user.needsPasswordChange,
           iat: nowSeconds 
         },
@@ -120,7 +128,7 @@ export async function GET(req: Request) {
 
       response.cookies.set('nib-auth-token', newToken, {
         httpOnly: true,
-        secure: true,
+        secure: IS_PROD,
         sameSite: 'strict',
         maxAge: 60 * 10,
         path: '/',

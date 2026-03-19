@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAuthentication, successResponse, unauthorizedResponse } from "@/lib/api-security";
 
+const IS_PROD = process.env.NODE_ENV === 'production';
+
 /**
  * Institutional Logout Gateway.
  * Implements server-side session revocation via token version rotation.
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
   // Clear the secure cookie with Strict alignment
   response.cookies.set('nib-auth-token', '', {
     httpOnly: true,
-    secure: true,
+    secure: IS_PROD,
     sameSite: 'strict',
     expires: new Date(0),
     path: '/',

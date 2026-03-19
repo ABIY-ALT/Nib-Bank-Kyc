@@ -15,10 +15,10 @@
 'use client';
 
 import Image from 'next/image';
-import { ImgHTMLAttributes, useState } from 'react';
+import { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 
-interface LogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt'> {
+interface LogoProps {
   /**
    * Display mode: 'fixed' for sidebar/header, 'responsive' for page hero
    * @default 'responsive'
@@ -40,6 +40,11 @@ interface LogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'a
    * Custom load handler
    */
   onLoad?: () => void;
+
+  className?: string;
+  priority?: boolean;
+  quality?: number;
+  sizes?: string;
 }
 
 /**
@@ -139,7 +144,9 @@ export function Logo({
   onError,
   onLoad,
   className,
-  ...props
+  priority = true,
+  quality,
+  sizes,
 }: LogoProps) {
   const [error, setError] = useState(false);
 
@@ -174,12 +181,11 @@ export function Logo({
           alt="Nib Bank Logo"
           width={40}
           height={40}
-          priority
+          priority={priority}
           className="object-contain"
-          quality={85}
+          quality={quality ?? 85}
           onError={handleError}
           onLoad={handleLoad}
-          {...props}
         />
       </div>
     );
@@ -193,12 +199,11 @@ export function Logo({
           alt="Nib Bank"
           width={24}
           height={24}
-          priority
+          priority={priority}
           className="object-contain"
-          quality={75}
+          quality={quality ?? 75}
           onError={handleError}
           onLoad={handleLoad}
-          {...props}
         />
       </div>
     );
@@ -211,13 +216,12 @@ export function Logo({
         src="/logo.png"
         alt="Nib Bank Logo"
         fill
-        priority
+        priority={priority}
         className="object-contain"
-        quality={85}
-        sizes="128px"
+        quality={quality ?? 85}
+        sizes={sizes ?? "128px"}
         onError={handleError}
         onLoad={handleLoad}
-        {...props}
       />
     </div>
   );

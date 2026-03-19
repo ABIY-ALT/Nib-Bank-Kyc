@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   ShieldCheck, 
   Printer, 
   Database, 
@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/use-permissions";
+import { SYSTEM_SECTION_COPY } from "@/lib/access-ui";
 
 const MATRIX_DATA = [
   { module: "Dashboard", page: "Dashboard", officer: "R", super: "R", director: "R", admin: "R" },
@@ -45,16 +46,16 @@ const MATRIX_DATA = [
   { module: "Audit & Reporting", page: "Ops Monitoring", officer: "-", super: "R", director: "R", admin: "-" },
   { module: "Audit & Reporting", page: "Management Report", officer: "-", super: "-", director: "R", admin: "-" },
   { module: "Audit & Reporting", page: "System-wide", officer: "-", super: "R", director: "R", admin: "-" },
-  { module: "Audit & Reporting", page: "Follow-up Audit", officer: "-", super: "R", director: "R", admin: "-" },
+  { module: "Audit & Reporting", page: "Follow-up Workspace", officer: "-", super: "R", director: "R", admin: "-" },
   { module: "Audit & Reporting", page: "Audit Reports", officer: "-", super: "R", director: "R", admin: "-" },
   { module: "Audit & Reporting", page: "Master Archive", officer: "-", super: "-", director: "R", admin: "-" },
 
-  { module: "Administration", page: "User Access", officer: "-", super: "-", director: "-", admin: "W" },
-  { module: "Administration", page: "Assign Roles", officer: "-", super: "-", director: "-", admin: "W" },
-  { module: "Administration", page: "Portfolio Mapping", officer: "-", super: "W", director: "-", admin: "-" },
-  { module: "Administration", page: "Hierarchy", officer: "-", super: "-", director: "R", admin: "W" },
-  { module: "Administration", page: "Configuration", officer: "-", super: "-", director: "-", admin: "W" },
-  { module: "Administration", page: "Audit Logs", officer: "-", super: "R", director: "-", admin: "R" },
+  { module: "Administration", page: SYSTEM_SECTION_COPY.USER_CREATE.label, officer: "-", super: "-", director: "-", admin: "W" },
+  { module: "Administration", page: SYSTEM_SECTION_COPY.ROLE_CREATE.label, officer: "-", super: "-", director: "-", admin: "W" },
+  { module: "Administration", page: SYSTEM_SECTION_COPY.MAP_USERS_TO_BRANCH.label, officer: "-", super: "W", director: "-", admin: "-" },
+  { module: "Administration", page: SYSTEM_SECTION_COPY.MANAGE_BRANCHES.label, officer: "-", super: "-", director: "R", admin: "W" },
+  { module: "Administration", page: SYSTEM_SECTION_COPY.EDIT_SLA_POLICY.label, officer: "-", super: "-", director: "-", admin: "W" },
+  { module: "Administration", page: SYSTEM_SECTION_COPY.VIEW_SYSTEM_AUDIT.label, officer: "-", super: "R", director: "-", admin: "R" },
 ];
 
 export default function RBACBlueprintPage() {
@@ -63,7 +64,7 @@ export default function RBACBlueprintPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !isSuperAdmin) {
-      router.push('/unauthorized');
+      router.push('/unauthorized?required=SUPER_ADMIN');
     }
   }, [isSuperAdmin, permissionsLoading, router]);
 
@@ -217,7 +218,7 @@ export default function RBACBlueprintPage() {
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="text-left py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500 w-[240px]">Module / Node</th>
+                    <th className="text-left py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500 w-[240px]">Module / Branch</th>
                     <th className="text-left py-6 px-6 font-black text-[11px] uppercase tracking-widest text-slate-500">System Page</th>
                     <th className="text-center py-6 px-4 font-black text-[11px] uppercase tracking-widest text-slate-900">KYC Officer</th>
                     <th className="text-center py-6 px-4 font-black text-[11px] uppercase tracking-widest text-slate-900">Supervisor</th>

@@ -44,6 +44,7 @@ import { getAllUsers, updateUserPortfolio } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
 import { cn } from "@/lib/utils";
 import { usePermissions } from '@/hooks/use-permissions';
+import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
 
 export default function StaffAssignmentsPage() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export default function StaffAssignmentsPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('MAP_USERS_TO_BRANCH')) {
-      router.push('/unauthorized');
+      router.push('/unauthorized?required=MAP_USERS_TO_BRANCH');
     }
   }, [hasPermission, permissionsLoading, router]);
 
@@ -130,11 +131,14 @@ export default function StaffAssignmentsPage() {
     return branches.filter(b => b.name.toLowerCase().includes(branchSearchQuery.toLowerCase()));
   }, [branches, branchSearchQuery]);
 
+  const getPrimaryRoleLabel = (user: any) =>
+    user.roles?.[0]?.role?.name?.replace(/_/g, ' ') || 'UNASSIGNED';
+
   if (loading || permissionsLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">Retrieving specialist directory...</p>
+        <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">Retrieving officer directory...</p>
       </div>
     );
   }
@@ -147,16 +151,17 @@ export default function StaffAssignmentsPage() {
             <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
               <ArrowRightLeft className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Branch Mapping</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">{SYSTEM_SECTION_COPY.MAP_USERS_TO_BRANCH.label}</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Manage multi-branch portfolios for verification staff.</p>
+          <p className="text-muted-foreground text-lg font-medium">{SYSTEM_SECTION_COPY.MAP_USERS_TO_BRANCH.description}</p>
         </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-12">
         <Card className="lg:col-span-4 shadow-lg border-slate-200 h-fit sticky top-24">
           <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-primary" /> Jurisdiction Branch</CardTitle>
+            <CardTitle className="text-xl flex items-center gap-2 font-bold"><Building2 className="w-5 h-5 text-primary" /> Coverage Branch</CardTitle>
+            <CardDescription>Select the branch you want to map review staff to.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
@@ -222,7 +227,7 @@ export default function StaffAssignmentsPage() {
                 <div className="flex gap-3 text-amber-800">
                   <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
                   <p className="text-xs font-bold leading-relaxed">
-                    <strong>Protocol:</strong> Specialist portfolio expansion grants visibility into shared regional queues. All assignments are logged.
+                    <strong>Mapping rule:</strong> Only KYC review roles appear here, and every branch coverage change is logged for audit.
                   </p>
                 </div>
               </div>
@@ -240,21 +245,21 @@ export default function StaffAssignmentsPage() {
                       <ShieldCheck className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <CardTitle className="text-2xl font-black tracking-tight text-white">Global Coverage Matrix</CardTitle>
-                      <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Inventory of active specialist portfolios</CardDescription>
+                      <CardTitle className="text-2xl font-black tracking-tight text-white">Overall Coverage Matrix</CardTitle>
+                      <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Overview of current branch coverage assignments</CardDescription>
                     </div>
                   </div>
                   <Badge variant="outline" className="bg-white/20 border-white/20 text-white font-black px-4 py-1.5 h-9">
-                    {allMappedSpecialists.length} Specialists Active
+                    {allMappedSpecialists.length} Staff Mapped
                   </Badge>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader className="bg-slate-50/80">
-                      <TableRow>
-                        <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Specialist Officer</TableHead>
-                        <TableHead className="font-black py-5 text-[11px] uppercase tracking-widest text-slate-500">Jurisdiction Branch</TableHead>
-                        <TableHead className="font-black py-5 text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Portfolio</TableHead>
+                        <TableRow>
+                        <TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Staff Member</TableHead>
+                        <TableHead className="font-black py-5 text-[11px] uppercase tracking-widest text-slate-500">Covered Branches</TableHead>
+                        <TableHead className="font-black py-5 text-right pr-8 text-[11px] uppercase tracking-widest text-slate-500">Coverage Count</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -265,7 +270,7 @@ export default function StaffAssignmentsPage() {
                               <div className="p-6 bg-white rounded-full shadow-sm border border-slate-100">
                                 <Users className="w-12 h-12 text-slate-200" />
                               </div>
-                              <p className="font-bold text-slate-900 text-lg">No specialists have been mapped yet.</p>
+                              <p className="font-bold text-slate-900 text-lg">No officers have been mapped yet.</p>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -278,7 +283,7 @@ export default function StaffAssignmentsPage() {
                               </div>
                               <div className="flex flex-col">
                                 <span className="font-black text-slate-900 leading-tight">{u.firstName} {u.lastName}</span>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Verification Staff</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{getPrimaryRoleLabel(u)}</span>
                               </div>
                             </div>
                           </TableCell>
@@ -293,7 +298,7 @@ export default function StaffAssignmentsPage() {
                           </TableCell>
                           <TableCell className="text-right pr-8">
                             <Badge className="bg-primary text-white font-black px-3 py-1 shadow-sm">
-                              {u.assignedBranches.length} Branch
+                              {u.assignedBranches.length} Branch{u.assignedBranches.length === 1 ? '' : 'es'}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -308,8 +313,8 @@ export default function StaffAssignmentsPage() {
                   <MapPin className="w-8 h-8 text-slate-300" />
                 </div>
                 <div className="text-center space-y-1">
-                  <p className="font-bold text-slate-900 text-lg">Expansion Workspace Standby</p>
-                  <p className="text-sm text-muted-foreground font-medium">Select a node from the left card to manage specific specialist mappings.</p>
+                  <p className="font-bold text-slate-900 text-lg">Branch Coverage Workspace</p>
+                  <p className="text-sm text-muted-foreground font-medium">Select a branch to review assigned staff and add more reviewers to that location.</p>
                 </div>
               </div>
             </div>
@@ -320,7 +325,7 @@ export default function StaffAssignmentsPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xl flex items-center gap-3 font-black text-slate-900">
                       <div className="p-2 bg-primary/10 rounded-xl text-primary"><Users className="w-5 h-5" /></div>
-                      Mapped Specialists
+                      Assigned Review Staff
                     </CardTitle>
                     <Badge className="bg-primary text-white font-black">{selectedBranch}</Badge>
                   </div>
@@ -331,7 +336,7 @@ export default function StaffAssignmentsPage() {
                       {assignedUsers.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground italic text-sm gap-3">
                           <Users className="w-8 h-8 opacity-20" />
-                          <p className="font-bold uppercase tracking-widest text-[10px]">No specialists mapped to this branch.</p>
+                          <p className="font-bold uppercase tracking-widest text-[10px]">No officers mapped to this branch.</p>
                         </div>
                       ) : assignedUsers.map(u => {
                         const fullName = `${u.firstName} ${u.lastName}`;
@@ -343,8 +348,9 @@ export default function StaffAssignmentsPage() {
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-sm font-black text-slate-900">{fullName}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">{getPrimaryRoleLabel(u)}</span>
                                 <Badge variant="outline" className="text-[8px] h-4.5 px-2 bg-white border-primary/30 text-primary font-black uppercase mt-1">
-                                  {u.assignedBranches?.length || 0} Branch Covered
+                                  {u.assignedBranches?.length || 0} Branch{(u.assignedBranches?.length || 0) === 1 ? '' : 'es'} Covered
                                 </Badge>
                               </div>
                             </div>
@@ -362,8 +368,8 @@ export default function StaffAssignmentsPage() {
               <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
                 <CardHeader className="bg-slate-50/50 border-b flex flex-col md:flex-row justify-between items-start md:items-center p-6 gap-4">
                   <div>
-                    <CardTitle className="text-xl font-black">Specialist Registry</CardTitle>
-                    <CardDescription className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Discover personnel for coverage</CardDescription>
+                    <CardTitle className="text-xl font-black">Available Review Staff</CardTitle>
+                    <CardDescription className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Search eligible users and map them to this branch</CardDescription>
                   </div>
                   <div className="relative w-full md:w-72">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -383,7 +389,7 @@ export default function StaffAssignmentsPage() {
                           <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto shadow-inner">
                             <Users className="w-8 h-8 opacity-20" />
                           </div>
-                          <p className="italic text-sm font-bold uppercase tracking-widest text-[10px]">No available specialists discovered in registry.</p>
+                          <p className="italic text-sm font-bold uppercase tracking-widest text-[10px]">No available officers discovered in registry.</p>
                         </div>
                       ) : unassignedUsers.map(u => {
                         const fullName = `${u.firstName} ${u.lastName}`;
@@ -395,6 +401,7 @@ export default function StaffAssignmentsPage() {
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-sm font-black text-slate-900">{fullName}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">{getPrimaryRoleLabel(u)}</span>
                                 <span className="text-[10px] text-muted-foreground font-bold tracking-tight">{u.email}</span>
                               </div>
                             </div>

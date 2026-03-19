@@ -34,6 +34,34 @@ export const EXCEPTIONAL_STATUS = {
 
 export type SubmissionStatus = keyof typeof KYC_STATUS;
 export type ExceptionalStatus = keyof typeof EXCEPTIONAL_STATUS;
+export type SubmissionStatusValue = (typeof KYC_STATUS)[SubmissionStatus];
+
+export interface KYCFinding {
+  id?: string;
+  code: string;
+  title: string;
+  description: string;
+  category: string;
+  severity: string;
+  applicableTo: string[];
+  active?: boolean;
+  source?: string;
+  createdAt?: Date | string;
+}
+
+export interface KYCSubmission {
+  id: string;
+  customerName: string;
+  branchName?: string | null;
+  districtName?: string | null;
+  status: SubmissionStatusValue | string;
+  submittedAt?: Date | string;
+  entityType?: string | null;
+  isExceptional?: boolean;
+  exceptionalStatus?: string | null;
+  isResubmitted?: boolean;
+  amendCycles?: number;
+}
 
 export const AMENDMENT_SCENARIOS = [
   "1. Duplicate CID found on NIB search",

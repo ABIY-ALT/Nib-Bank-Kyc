@@ -1,4 +1,6 @@
-import { NextResponse, type NextResponseInit } from 'next/server';
+import { NextResponse } from 'next/server';
+
+type ApiResponseInit = ResponseInit;
 
 /**
  * Institutional API Response Builder.
@@ -10,7 +12,7 @@ export class ApiResponse {
    */
   static json(
     body: any,
-    init?: NextResponseInit & { status?: number }
+    init?: ApiResponseInit & { status?: number }
   ): NextResponse {
     const status = init?.status || 200;
     const response = NextResponse.json(body, { ...init, status });

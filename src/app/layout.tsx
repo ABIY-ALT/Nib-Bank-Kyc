@@ -6,14 +6,7 @@ import { AuthGuard } from '@/components/auth-guard';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { NonceProvider } from '@/lib/nonce-context';
 import { headers } from 'next/headers';
-import { Inter } from 'next/font/google';
 import { TooltipProvider } from '@/components/ui/tooltip';
-
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-});
 
 export const metadata: Metadata = {
   title: 'Nib Bank KYC - Secure Identity Verification',
@@ -30,7 +23,7 @@ export default async function RootLayout({
   const nonce = headerList.get('x-nonce') || undefined;
 
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className="font-body antialiased bg-background" suppressHydrationWarning>
         <NonceProvider nonce={nonce}>
           <AuthProvider>

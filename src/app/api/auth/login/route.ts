@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import { LoginSchema } from "@/lib/validation";
 import { logInstitutionalError } from "@/lib/logger";
 import crypto from "crypto";
+import { normalizeInstitutionalLogin } from "@/lib/login-identifier";
 import { 
   applySecurityHeaders, 
   badRequestResponse,
@@ -25,6 +26,7 @@ import {
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MINUTES = 15;
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 export async function POST(req: Request) {
   const headerList = await headers();
@@ -32,7 +34,7 @@ export async function POST(req: Request) {
   const userAgent = headerList.get('user-agent') || 'unknown';
   
   const uaHash = crypto.createHash('sha256').update(userAgent).digest('hex');
-  const genericErrorMessage = "Invalid institutional credentials.";
+  const genericErrorMessage = "Invalid username or password.";
 
   try {
     const text = await req.text();
@@ -51,7 +53,11 @@ export async function POST(req: Request) {
     }
 
     const { email, password } = validation.data;
-    const userEmail = email.toLowerCase().trim();
+    const userEmail = normalizeInstitutionalLogin(email);
+
+    if (!userEmail) {
+      return badRequestResponse(genericErrorMessage);
+    }
 
     const recentFailures = await prisma.auditLog.count({
       where: {
@@ -91,6 +97,7 @@ export async function POST(req: Request) {
         needsPasswordChange: true,
         assignedBranches: true,
         branchId: true,
+        districtName: true,
         roles: { 
           include: { 
             role: { 
@@ -130,6 +137,7 @@ export async function POST(req: Request) {
       role: {
         id: ur.role?.id ?? 'unknown',
         name: ur.role?.name ?? 'UNKNOWN',
+        active: ur.role?.active ?? false,
         permissions: (ur.role?.permissions ?? []).map(p => ({
           permission: { 
             slug: p.permission?.slug ?? '', 
@@ -140,9 +148,13 @@ export async function POST(req: Request) {
       }
     }));
 
-    const roleName = serializableRoles.some(r => r.role.name === 'SUPER_ADMIN') 
+    const activeRoleNames = serializableRoles
+      .filter((r) => r.role.active)
+      .map((r) => r.role.name);
+
+    const roleName = activeRoleNames.includes('SUPER_ADMIN') 
       ? 'SUPER_ADMIN' 
-      : (serializableRoles[0]?.role.name || 'VIEWER');
+      : (activeRoleNames[0] || 'UNASSIGNED');
 
     const nowSeconds = Math.floor(Date.now() / 1000);
     const absoluteLimit = nowSeconds + (8 * 60 * 60);
@@ -183,7 +195,7 @@ export async function POST(req: Request) {
         email: user.email,
         status: user.status,
         branchName: user.branch?.name || null,
-        districtName: user.branch?.district?.name || null,
+        districtName: user.districtName || user.branch?.district?.name || null,
         assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [],
         roles: serializableRoles,
         needsPasswordChange: user.needsPasswordChange
@@ -192,7 +204,7 @@ export async function POST(req: Request) {
 
     response.cookies.set('nib-auth-token', token, {
       httpOnly: true,
-      secure: true,
+      secure: IS_PROD,
       sameSite: 'strict',
       maxAge: 60 * 10,
       path: '/',

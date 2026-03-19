@@ -39,8 +39,8 @@ const SYSTEM_CAPABILITIES = [
   // REPORTING
   { slug: 'VIEW_SPECIALIST_PRODUCTIVITY', name: 'View Ops Monitoring', group: 'REPORTING' },
   { slug: 'REPORT_VIEW_SYSTEM', name: 'View System-wide Reports', group: 'REPORTING' },
-  { slug: 'VIEW_AUDIT_POOL', name: 'Access Follow-up Audit', group: 'REPORTING' },
-  { slug: 'VIEW_AUDIT_LOGS', name: 'View Audit Reports', group: 'REPORTING' },
+  { slug: 'VIEW_AUDIT_POOL', name: 'Access Follow-up Workspace', group: 'REPORTING' },
+  { slug: 'VIEW_AUDIT_LOGS', name: 'View Follow-up Reports', group: 'REPORTING' },
   { slug: 'DOWNLOAD_MASTER_ARCHIVE', name: 'Download Master Archive', group: 'REPORTING' },
 
   // SYSTEM

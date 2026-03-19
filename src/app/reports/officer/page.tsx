@@ -70,7 +70,7 @@ export default function OfficerReportsPage() {
       setSubmissions(data);
       setReportDataActive(true);
       toast({
-        title: "Specialist Audit Complete",
+        title: "Officer Audit Complete",
         description: `Analyzed records from the institutional archive.`,
       });
     } catch (e) {
@@ -143,8 +143,8 @@ export default function OfficerReportsPage() {
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary text-white rounded-lg shadow-lg"><TrendingUp className="w-6 h-6" /></div>
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Specialist Productivity</h1>
-            <p className="text-muted-foreground text-lg">Institutional matrix for monitoring KYC Specialist throughput and accuracy.</p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Officer Productivity</h1>
+            <p className="text-muted-foreground text-lg">Institutional matrix for monitoring KYC Officer throughput and accuracy.</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
@@ -152,7 +152,7 @@ export default function OfficerReportsPage() {
             <DropdownMenuTrigger asChild disabled={!reportDataActive}>
               <Button variant="outline" className="gap-2 h-10 px-4 border-slate-200 bg-white font-medium shadow-sm">
                 <Filter className="w-4 h-4 text-slate-400" />
-                Filter Specialists
+                Filter Officers
                 {selectedOfficers.length > 0 && <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold">{selectedOfficers.length}</Badge>}
               </Button>
             </DropdownMenuTrigger>
@@ -211,7 +211,7 @@ export default function OfficerReportsPage() {
             <div className="max-w-md mx-auto space-y-2">
               <p className="font-bold text-slate-900 text-xl">Productivity Analysis Inactive</p>
               <p className="text-sm text-slate-500 font-medium">
-                Initialize the audit to aggregate real-time metrics for specialists who have reviewed cases in the specified timeframe.
+                Initialize the audit to aggregate real-time metrics for officers who have reviewed cases in the specified timeframe.
               </p>
             </div>
             <Button 
@@ -221,7 +221,7 @@ export default function OfficerReportsPage() {
               disabled={loading}
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <UserCheck className="w-5 h-5 mr-2" />}
-              Run Specialist Audit
+              Run Officer Audit
             </Button>
           </CardContent>
         </Card>
@@ -257,9 +257,9 @@ export default function OfficerReportsPage() {
             <CardHeader className="border-b bg-slate-50/30 p-6 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-xl flex items-center gap-2 font-headline">
-                  <LayoutList className="w-5 h-5 text-primary" /> Specialist Performance Matrix
+                  <LayoutList className="w-5 h-5 text-primary" /> Officer Performance Matrix
                 </CardTitle>
-                <CardDescription>Comparative accuracy and resolution data for KYC Specialists.</CardDescription>
+                <CardDescription>Comparative accuracy and resolution data for KYC Officers.</CardDescription>
               </div>
               <Button variant="ghost" onClick={resetFilters} className="text-xs font-bold text-muted-foreground uppercase">New Search</Button>
             </CardHeader>
@@ -267,7 +267,7 @@ export default function OfficerReportsPage() {
               <Table>
                 <TableHeader className="bg-slate-50/80">
                   <TableRow>
-                    <TableHead className="font-black py-5 pl-8 text-slate-500 text-[11px] uppercase">Specialist Name</TableHead>
+                    <TableHead className="font-black py-5 pl-8 text-slate-500 text-[11px] uppercase">Officer Name</TableHead>
                     <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase text-center">Total Reviews</TableHead>
                     <TableHead className="font-black py-5 text-emerald-600 text-[11px] uppercase text-center">Approved</TableHead>
                     <TableHead className="font-black py-5 text-orange-600 text-[11px] uppercase text-center">Amended</TableHead>

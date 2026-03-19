@@ -56,6 +56,12 @@ import Link from "next/link";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import JSZip from 'jszip';
 import {
+  buildBundleRootName,
+  getSubmissionBranchName,
+  getSubmissionDistrictName,
+  sanitizeBundleSegment,
+} from "@/lib/bundle-path";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -167,26 +173,36 @@ export default function KYCOperationsMonitoringPage() {
     setIsDownloading(sub.id);
     try {
       const zip = new JSZip();
+      const timestamp = format(new Date(), 'yyyyMMdd_HHmmss');
+      const districtName = getSubmissionDistrictName(sub);
+      const branchName = getSubmissionBranchName(sub);
+      const bundleName = buildBundleRootName(districtName, branchName, timestamp);
+      const rootFolder = zip.folder(bundleName);
+      const caseFolderName = `${sanitizeBundleSegment(sub.id, 'CASE')}_${sanitizeBundleSegment(sub.customerName, 'CUSTOMER')}`;
       const fullSub = await getSubmissionById(sub.id);
       if (fullSub && fullSub.documents?.length > 0) {
-        const folder = zip.folder(sub.id);
+        const folder = rootFolder?.folder(`${caseFolderName}/Documents`);
         for (const doc of fullSub.documents) {
           const res = await fetch(doc.url);
           const blob = await res.blob();
           folder?.file(doc.name, blob);
         }
+        rootFolder?.file(
+          "nib_institutional_manifest.txt",
+          `CASE IDENTIFIER: ${sub.id}\nCUSTOMER ENTITY: ${sub.customerName}\nREGIONAL DIST: ${districtName}\nDISPATCH NODE: ${branchName}\nARCHIVE ROOT: ${bundleName}\n`
+        );
         const content = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(content);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `CASE_${sub.id}_BUNDLE.zip`;
+        link.download = `${bundleName}.zip`;
         link.click();
         await logBundleDownload({
           submissionId: sub.id,
           performedBy: user.name,
-          bundleName: `CASE_${sub.id}_BUNDLE`,
-          sourceDistrict: sub.branch?.district?.name || "General",
-          sourceBranch: sub.branchName
+          bundleName,
+          sourceDistrict: districtName,
+          sourceBranch: branchName
         });
         toast({ title: "Download Successful" });
       }
@@ -297,7 +313,7 @@ export default function KYCOperationsMonitoringPage() {
             <Popover open={distOpen} onOpenChange={setDistOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" role="combobox" className="w-full justify-between h-12 rounded-xl border-slate-200 bg-slate-50/50 font-bold">
-                  {selectedDistrict === 'all' ? "Global Network" : selectedDistrict}
+                  {selectedDistrict === 'all' ? "Overall Network" : selectedDistrict}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -314,7 +330,7 @@ export default function KYCOperationsMonitoringPage() {
                       className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedDistrict === 'all' ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
                       onClick={() => { setSelectedDistrict('all'); setSelectedBranchFilter('all'); setDistOpen(false); }}
                     >
-                      <div className="flex items-center gap-2"><Map className="w-4 h-4" /> Global Network</div>
+                      <div className="flex items-center gap-2"><Map className="w-4 h-4" /> Overall Network</div>
                       {selectedDistrict === 'all' && <Check className="w-4 h-4" />}
                     </div>
                     {filteredDistricts.map(d => (
@@ -347,7 +363,7 @@ export default function KYCOperationsMonitoringPage() {
                 <div className="p-3 border-b bg-slate-50/50">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <Input placeholder="Search branch node..." className="pl-9 h-10 rounded-lg text-sm border-slate-200" value={branchSearch} onChange={(e) => setBranchSearch(e.target.value)} />
+                    <Input placeholder="Search branch..." className="pl-9 h-10 rounded-lg text-sm border-slate-200" value={branchSearch} onChange={(e) => setBranchSearch(e.target.value)} />
                   </div>
                 </div>
                 <ScrollArea className="h-64">
@@ -429,7 +445,7 @@ export default function KYCOperationsMonitoringPage() {
           onClick={() => { setViewMode('officers'); setSelectedOfficer(null); setSelectedBranch(null); }}
           className={cn("h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all", viewMode === 'officers' ? "bg-primary text-white shadow-lg" : "text-slate-500")}
         >
-          Specialist Matrix
+          Officer Matrix
         </Button>
         {selectedOfficer && (
           <>
@@ -462,11 +478,11 @@ export default function KYCOperationsMonitoringPage() {
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
             <CardHeader className="bg-primary text-white p-8 border-b flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-2xl font-black flex items-center gap-3"><Users className="w-6 h-6 text-white" /> Specialist Productivity Index</CardTitle>
-                <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Authorized personnel across regional nodes</CardDescription>
+                <CardTitle className="text-2xl font-black flex items-center gap-3"><Users className="w-6 h-6 text-white" /> Officer Productivity Index</CardTitle>
+                <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Authorized personnel across regional branches</CardDescription>
               </div>
               <Badge variant="outline" className="bg-white/20 border-white/20 text-white font-black px-4 py-1.5 h-9">
-                {processedOfficers.length} Specialists Discovered
+                {processedOfficers.length} Officers Discovered
               </Badge>
             </CardHeader>
             <CardContent className="p-0">
@@ -474,7 +490,7 @@ export default function KYCOperationsMonitoringPage() {
                 <TableHeader className="bg-slate-50 border-b">
                   <TableRow>
                     <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">KYC Officer</TableHead>
-                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Nodes Mapped</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Branches Mapped</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Authorized</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amendment Cycles</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Overview</TableHead>
@@ -561,7 +577,7 @@ export default function KYCOperationsMonitoringPage() {
             </div>
             <div className="space-y-8">
               <Card className="shadow-xl border-slate-200 overflow-hidden rounded-[2rem] bg-primary/5 border-l-4 border-l-primary">
-                <CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-lg font-black uppercase tracking-widest text-white">Specialist Profile</CardTitle></CardHeader>
+                <CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-lg font-black uppercase tracking-widest text-white">Officer Profile</CardTitle></CardHeader>
                 <CardContent className="p-8 space-y-6">
                   <div className="flex items-center gap-5">
                     <div className="w-16 h-16 rounded-3xl bg-white flex items-center justify-center font-black text-2xl text-primary shadow-xl ring-4 ring-white">{selectedOfficer.firstName.charAt(0)}</div>
@@ -605,7 +621,7 @@ export default function KYCOperationsMonitoringPage() {
                 </TableHeader>
                 <TableBody>
                   {currentCases.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No case lifecycle data discovered for this node.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No case lifecycle data discovered for this branch.</TableCell></TableRow>
                   ) : currentCases.map((sub) => {
                     const subTime = new Date(sub.submittedAt || sub.createdAt);
                     const threshold = settings?.escalationHours || 72;
@@ -680,7 +696,7 @@ export default function KYCOperationsMonitoringPage() {
               <div className="p-3 bg-white/20 rounded-2xl"><TrendingUp className="w-6 h-6 text-white" /></div>
               <div>
                 <DialogTitle className="text-2xl font-black leading-tight text-white">Performance Summary</DialogTitle>
-                <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Weighted specialist profile</DialogDescription>
+                <DialogDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Weighted officer profile</DialogDescription>
               </div>
             </div>
           </DialogHeader>
@@ -689,7 +705,7 @@ export default function KYCOperationsMonitoringPage() {
               <div className="w-16 h-16 rounded-[1.5rem] bg-primary/10 text-primary flex items-center justify-center font-black text-2xl shadow-inner border border-primary/5">{showSummary?.firstName.charAt(0)}</div>
               <div>
                 <p className="text-xl font-black text-slate-900 leading-tight">{showSummary?.firstName} {showSummary?.lastName}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Institutional specialist</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Institutional officer</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

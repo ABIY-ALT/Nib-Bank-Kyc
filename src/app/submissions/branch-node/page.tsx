@@ -180,7 +180,7 @@ export default function BranchMonitoringPage() {
             <p className="text-muted-foreground text-lg">
               {isAdmin 
                 ? 'Master institutional monitoring of all branches.' 
-                : `Managing operational compliance at the authorized local node.`}
+                : `Managing operational compliance at the authorized local branch.`}
             </p>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
               <ShieldCheck className="w-3 h-3" />

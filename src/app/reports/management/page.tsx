@@ -246,7 +246,7 @@ export default function ManagementReportingPage() {
                 <SelectValue placeholder="All Regions" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-none shadow-2xl">
-                <SelectItem value="all">Global Network</SelectItem>
+                <SelectItem value="all">Overall Network</SelectItem>
                 {districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
               </SelectContent>
             </Select>

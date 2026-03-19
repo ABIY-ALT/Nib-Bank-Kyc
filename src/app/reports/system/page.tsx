@@ -1,13 +1,12 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { 
   Card, 
   CardContent, 
   CardHeader, 
-  CardTitle,
-  CardDescription
+  CardTitle
 } from "@/components/ui/card";
 import { 
   Table, 
@@ -21,16 +20,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   Globe, 
-  History,
   ShieldCheck,
   Building2,
-  Users,
   FileDown,
   Loader2,
   RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
 import { getSubmissions } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
@@ -54,11 +50,11 @@ export default function SystemWideReportsPage() {
       setSubmissions(data || []);
       setReportDataActive(true);
       toast({
-        title: "Institutional Audit Complete",
+        title: "Compliance Report Ready",
         description: `Analyzed ${data.length} system-wide records.`,
       });
     } catch (e) {
-      toast({ variant: "destructive", title: "Aggregation Failed" });
+      toast({ variant: "destructive", title: "Report Generation Failed" });
     } finally {
       setLoading(false);
     }
@@ -89,9 +85,9 @@ export default function SystemWideReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `nib-global-audit-export.csv`);
+    link.setAttribute('download', `nib-system-compliance-report.csv`);
     link.click();
-    toast({ title: "CSV Export Successful" });
+    toast({ title: "Report Export Successful" });
   };
 
   const resetFilters = () => {
@@ -116,7 +112,7 @@ export default function SystemWideReportsPage() {
             onDateChange={setDateRange} 
           />
           <Button variant="outline" className="gap-2 h-12 px-6 border-slate-200 bg-white" onClick={resetFilters}><RotateCcw className="w-4 h-4" /> Reset</Button>
-          <Button className="gap-2 bg-primary shadow-xl font-bold h-12 px-6 text-white rounded-xl" onClick={handleGenerateReport} disabled={loading}>{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Compile Master Audit</Button>
+          <Button className="gap-2 bg-primary shadow-xl font-bold h-12 px-6 text-white rounded-xl" onClick={handleGenerateReport} disabled={loading}>{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Generate Compliance Report</Button>
         </div>
       </div>
 
@@ -124,11 +120,23 @@ export default function SystemWideReportsPage() {
         <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50 shadow-inner rounded-[2.5rem]">
           <CardContent className="flex flex-col items-center justify-center py-24 text-center space-y-8">
             <div className="p-8 bg-white rounded-full shadow-2xl border border-slate-100"><Globe className="w-16 h-16 text-primary" /></div>
-            <div className="max-w-md mx-auto space-y-3"><p className="font-extrabold text-slate-900 text-2xl tracking-tight">Network Audit Standby</p><p className="text-slate-500 leading-relaxed font-medium">Run the institutional audit to aggregate real-time data across all network nodes from the Vault.</p></div>
-            <Button size="lg" className="px-12 h-14 font-extrabold text-lg shadow-2xl shadow-primary/20 text-white bg-primary rounded-xl" onClick={handleGenerateReport} disabled={loading}>{loading ? "Aggregating Intelligence..." : "Execute Global Aggregation"}</Button>
+            <div className="max-w-md mx-auto space-y-3"><p className="font-extrabold text-slate-900 text-2xl tracking-tight">Compliance Report Standby</p><p className="text-slate-500 leading-relaxed font-medium">Run the system-wide report to aggregate real-time case data across all branches and specialized staff.</p></div>
+            <Button size="lg" className="px-12 h-14 font-extrabold text-lg shadow-2xl shadow-primary/20 text-white bg-primary rounded-xl" onClick={handleGenerateReport} disabled={loading}>{loading ? "Building Report..." : "Generate System Report"}</Button>
           </CardContent>
         </Card>
-      ) : stats && (
+      ) : !stats ? (
+        <Card className="border border-slate-200 bg-white shadow-lg rounded-[2rem]">
+          <CardContent className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+            <div className="p-5 bg-slate-50 rounded-full border border-slate-100">
+              <Globe className="w-10 h-10 text-primary" />
+            </div>
+            <div className="max-w-lg space-y-2">
+              <p className="text-2xl font-extrabold tracking-tight text-slate-900">No records found for this report</p>
+              <p className="text-slate-500 font-medium">Try a different date range or reset the filters to generate a broader system-wide compliance report.</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
         <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
              <Card className="bg-primary text-white shadow-2xl rounded-2xl overflow-hidden border-none"><CardHeader className="pb-2 bg-white/10"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-white/80">Total Volume</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-white tracking-tighter">{stats.total}</span></CardContent></Card>

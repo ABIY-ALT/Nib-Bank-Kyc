@@ -2,7 +2,6 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { FindingCategory, FindingSeverity } from '@prisma/client';
 
 export async function getFindings() {
   try {
@@ -18,14 +17,17 @@ export async function getFindings() {
 
 export async function upsertFinding(data: any) {
   try {
+    const category = String(data.category || '').toUpperCase();
+    const severity = String(data.severity || '').toUpperCase();
+
     const finding = await prisma.finding.upsert({
       where: { id: data.id || 'new-id' },
       update: {
         code: data.code,
         title: data.title,
         description: data.description,
-        category: data.category as FindingCategory,
-        severity: data.severity as FindingSeverity,
+        category,
+        severity,
         applicableTo: data.applicableTo,
         active: data.active ?? true,
         source: data.source || 'manual'
@@ -35,8 +37,8 @@ export async function upsertFinding(data: any) {
         code: data.code,
         title: data.title,
         description: data.description,
-        category: data.category as FindingCategory,
-        severity: data.severity as FindingSeverity,
+        category,
+        severity,
         applicableTo: data.applicableTo,
         active: data.active ?? true,
         source: data.source || 'manual'

@@ -26,12 +26,7 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',')
     return !!o;
   }) || [];
 
-const ROLE_PERMISSIONS: Record<string, string[]> = {
-  SUPER_ADMIN: ['*'],
-  KYC_OFFICER: ['/', '/submissions', '/reports', '/performance', '/kyc-fq-reference', '/head-office', '/admin/storage'],
-  BRANCH_OFFICER: ['/', '/submissions', '/reports', '/performance', '/kyc-fq-reference'],
-  VIEWER: ['/'],
-};
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 const PUBLIC_IMAGE_ASSET = /\.(png|jpg|jpeg|svg|webp|avif|ico)$/i;
 
@@ -256,7 +251,7 @@ export async function proxy(req: NextRequest) {
       const response = NextResponse.redirect(new URL('/login?reason=abs_timeout', req.url));
       response.cookies.set('nib-auth-token', '', {
         httpOnly: true,
-        secure: true,
+        secure: IS_PROD,
         sameSite: 'strict',
         expires: new Date(0),
         path: '/',
@@ -274,7 +269,7 @@ export async function proxy(req: NextRequest) {
       const response = NextResponse.redirect(new URL('/login?reason=security_context', req.url));
       response.cookies.set('nib-auth-token', '', {
         httpOnly: true,
-        secure: true,
+        secure: IS_PROD,
         sameSite: 'strict',
         expires: new Date(0),
         path: '/',
@@ -283,32 +278,21 @@ export async function proxy(req: NextRequest) {
       return applyCORSHeaders(response, origin, ALLOWED_ORIGINS);
     }
 
-    // 8. ROLE-BASED ACCESS CONTROL (ROUTING)
-    const userRole = (payload.role as string) || 'VIEWER';
+    // 8. ROLE VALIDATION
+    const userRole = typeof payload.role === 'string' ? payload.role.trim().toUpperCase() : '';
+    const hasDefinedRole = Boolean(userRole && userRole !== 'UNASSIGNED' && userRole !== 'VIEWER');
+
     if (pathname === '/login') {
-      const response = NextResponse.redirect(new URL('/', req.url));
+      const nextUrl = hasDefinedRole
+        ? new URL('/', req.url)
+        : new URL('/unauthorized?reason=ROLE_UNASSIGNED', req.url);
+      const response = NextResponse.redirect(nextUrl);
       response.headers.set('Content-Security-Policy', cspHeader);
       return applyCORSHeaders(response, origin, ALLOWED_ORIGINS);
     }
 
-    const allowedRoutes = ROLE_PERMISSIONS[userRole];
-    if (!allowedRoutes) {
-      const response = NextResponse.redirect(new URL('/unauthorized', req.url));
-      response.headers.set('Content-Security-Policy', cspHeader);
-      return applyCORSHeaders(response, origin, ALLOWED_ORIGINS);
-    }
-
-    if (allowedRoutes.includes('*')) {
-      const response = NextResponse.next({ request: { headers: requestHeaders } });
-      response.headers.set('Content-Security-Policy', cspHeader);
-      return applyCORSHeaders(response, origin, ALLOWED_ORIGINS);
-    }
-
-    const isRoot = pathname === '/';
-    const isAllowed = isRoot || allowedRoutes.some(route => route !== '/' && pathname.startsWith(route));
-
-    if (!isAllowed) {
-      const response = NextResponse.redirect(new URL('/unauthorized', req.url));
+    if (!hasDefinedRole) {
+      const response = NextResponse.redirect(new URL('/unauthorized?reason=ROLE_UNASSIGNED', req.url));
       response.headers.set('Content-Security-Policy', cspHeader);
       return applyCORSHeaders(response, origin, ALLOWED_ORIGINS);
     }
@@ -320,7 +304,7 @@ export async function proxy(req: NextRequest) {
     const response = NextResponse.redirect(new URL('/login?reason=session_invalid', req.url));
     response.cookies.set('nib-auth-token', '', {
       httpOnly: true,
-      secure: true,
+      secure: IS_PROD,
       sameSite: 'strict',
       expires: new Date(0),
       path: '/',
@@ -329,3 +313,12 @@ export async function proxy(req: NextRequest) {
     return applyCORSHeaders(response, origin, ALLOWED_ORIGINS);
   }
 }
+
+// Keep security controls on app and API routes, but bypass immutable/static assets.
+// Running the proxy on Next.js chunk requests adds avoidable work and can interfere
+// with static asset delivery and caching.
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|avif|ico)$).*)',
+  ],
+};

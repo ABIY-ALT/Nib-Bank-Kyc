@@ -61,7 +61,7 @@ export default function ReturnedCasesPage() {
             {isAdmin && (
               <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
                 <ShieldCheck className="w-3 h-3" />
-                Global Oversight
+                Overall Oversight
               </Badge>
             )}
           </div>

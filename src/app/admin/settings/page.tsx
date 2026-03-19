@@ -59,7 +59,7 @@ export default function SystemSettingsPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('EDIT_SLA_POLICY')) {
-      router.push('/unauthorized');
+      router.push('/unauthorized?required=EDIT_SLA_POLICY');
     }
   }, [hasPermission, permissionsLoading, router]);
 
@@ -134,7 +134,7 @@ export default function SystemSettingsPage() {
           <Settings className="w-8 h-8 text-primary" />
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">System Configuration</h1>
         </div>
-        <p className="text-muted-foreground font-medium">Global governance and policy management.</p>
+        <p className="text-muted-foreground font-medium">Overall governance and policy management.</p>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
@@ -238,7 +238,7 @@ export default function SystemSettingsPage() {
           <Card className="shadow-lg border-slate-200 overflow-hidden">
             <CardHeader className="bg-primary text-white border-b">
               <CardTitle className="text-xl flex items-center gap-2 text-white">
-                <Megaphone className="w-5 h-5 text-white" /> Global Guidelines
+                <Megaphone className="w-5 h-5 text-white" /> Overall Guidelines
               </CardTitle>
               <CardDescription className="text-white/70">Publish critical policy updates to the user dashboard.</CardDescription>
             </CardHeader>

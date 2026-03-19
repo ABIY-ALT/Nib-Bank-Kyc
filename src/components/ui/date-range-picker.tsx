@@ -52,7 +52,7 @@ const MonthDropdown = ({ value, onChange }: { value: number; onChange: (m: numbe
       <select
         value={value}
         onChange={(e) => onChange(parseInt(e.target.value))}
-        className="appearance-none bg-card border rounded-lg px-3 py-1.5 pr-8 text-[11px] font-black uppercase tracking-widest text-foreground cursor-pointer hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
+        className="h-10 appearance-none bg-card border rounded-lg px-3 pr-8 text-[11px] font-black uppercase tracking-widest text-foreground cursor-pointer hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
       >
         {months.map((m, i) => (
           <option key={m} value={i}>{m}</option>
@@ -71,7 +71,7 @@ const YearDropdown = ({ value, onChange }: { value: number; onChange: (y: number
       <select
         value={value}
         onChange={(e) => onChange(parseInt(e.target.value))}
-        className="appearance-none bg-card border rounded-lg px-3 py-1.5 pr-8 text-[11px] font-black tracking-widest text-foreground cursor-pointer hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
+        className="h-10 appearance-none bg-card border rounded-lg px-3 pr-8 text-[11px] font-black tracking-widest text-foreground cursor-pointer hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
       >
         {years.map((y) => (
           <option key={y} value={y}>{y}</option>
@@ -163,9 +163,9 @@ const CustomCalendar = ({
   const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
   return (
-    <div className="p-4 w-[280px]">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex gap-2">
+    <div className={cn("w-[280px] py-4", isLeft ? "pl-14 pr-4" : "pl-4 pr-14")}>
+      <div className="flex min-h-10 items-center justify-center gap-2 mb-6">
+        <div className="flex items-center justify-center gap-2">
           <MonthDropdown 
             value={getMonth(monthDate)} 
             onChange={(m) => setMonthDate(setMonth(monthDate, m))} 
@@ -285,14 +285,14 @@ export function DatePickerWithRange({
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white" align="start">
           <div className="flex flex-col md:flex-row divide-x divide-slate-100 p-2">
-            <div className="relative">
+            <div className="relative flex items-center">
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute left-4 top-6 z-30 h-8 w-8 text-slate-400 hover:text-primary"
+                className="absolute left-2 top-1/2 z-30 h-10 w-10 -translate-y-1/2 rounded-full border border-slate-200 bg-white p-0 text-slate-400 shadow-sm hover:bg-slate-50 hover:text-primary"
                 onClick={() => handleSetLeftMonth(subMonths(leftMonth, 1))}
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeft className="h-4 w-4" />
               </Button>
               <CustomCalendar 
                 monthDate={leftMonth} 
@@ -304,14 +304,14 @@ export function DatePickerWithRange({
                 isLeft={true}
               />
             </div>
-            <div className="relative">
+            <div className="relative flex items-center">
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-4 top-6 z-30 h-8 w-8 text-slate-400 hover:text-primary"
+                className="absolute right-2 top-1/2 z-30 h-10 w-10 -translate-y-1/2 rounded-full border border-slate-200 bg-white p-0 text-slate-400 shadow-sm hover:bg-slate-50 hover:text-primary"
                 onClick={() => handleSetRightMonth(addMonths(rightMonth, 1))}
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <CustomCalendar 
                 monthDate={rightMonth} 

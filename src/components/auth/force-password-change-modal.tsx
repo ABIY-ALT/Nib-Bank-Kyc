@@ -45,9 +45,20 @@ export function ForcePasswordChangeModal() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPasswords, setShowPasswords] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState({
+    current: false,
+    next: false,
+    confirm: false,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const togglePasswordVisibility = (field: 'current' | 'next' | 'confirm') => {
+    setVisiblePasswords((prev) => ({
+      ...prev,
+      [field]: !prev[field],
+    }));
+  };
 
   // Ensure focus is properly moved to the dialog content to avoid aria-hidden conflicts
   useEffect(() => {
@@ -102,12 +113,12 @@ export function ForcePasswordChangeModal() {
   return (
     <Dialog open={true}>
       <DialogContent 
-        className="max-w-md p-0 overflow-hidden border-none shadow-2xl animate-in zoom-in-95 duration-300"
+        className="max-w-md p-0 overflow-hidden border-none shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh]"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
         inert={false}
       >
-        <div className="bg-card">
+        <div className="bg-card max-h-[90vh] overflow-y-auto">
           <DialogHeader className="bg-muted border-b p-8 space-y-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -137,7 +148,7 @@ export function ForcePasswordChangeModal() {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
                     ref={currentPasswordInputRef}
-                    type={showPasswords ? "text" : "password"} 
+                    type={visiblePasswords.current ? "text" : "password"} 
                     placeholder="••••••••" 
                     className="pl-10 pr-10 h-12 bg-slate-50/50 border-slate-200 font-bold"
                     value={currentPassword}
@@ -147,10 +158,10 @@ export function ForcePasswordChangeModal() {
                   <button
                     type="button"
                     tabIndex={-1}
-                    onClick={() => setShowPasswords(!showPasswords)}
+                    onClick={() => togglePasswordVisibility('current')}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none transition-colors"
                   >
-                    {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {visiblePasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
@@ -160,7 +171,7 @@ export function ForcePasswordChangeModal() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
-                    type={showPasswords ? "text" : "password"} 
+                    type={visiblePasswords.next ? "text" : "password"} 
                     placeholder="••••••••" 
                     className="pl-10 pr-10 h-12 bg-slate-50/50 border-slate-200 font-bold"
                     value={newPassword}
@@ -174,10 +185,10 @@ export function ForcePasswordChangeModal() {
                   <button
                     type="button"
                     tabIndex={-1}
-                    onClick={() => setShowPasswords(!showPasswords)}
+                    onClick={() => togglePasswordVisibility('next')}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none transition-colors"
                   >
-                    {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {visiblePasswords.next ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
@@ -187,7 +198,7 @@ export function ForcePasswordChangeModal() {
                 <div className="relative">
                   <CheckCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input 
-                    type={showPasswords ? "text" : "password"} 
+                    type={visiblePasswords.confirm ? "text" : "password"} 
                     placeholder="••••••••" 
                     className="pl-10 pr-10 h-12 bg-background border font-bold"
                     value={confirmPassword}
@@ -197,10 +208,10 @@ export function ForcePasswordChangeModal() {
                   <button
                     type="button"
                     tabIndex={-1}
-                    onClick={() => setShowPasswords(!showPasswords)}
+                    onClick={() => togglePasswordVisibility('confirm')}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none transition-colors"
                   >
-                    {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {visiblePasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>

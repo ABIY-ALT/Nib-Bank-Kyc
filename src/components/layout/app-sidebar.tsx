@@ -60,6 +60,8 @@ import { useSidebarCounts } from "@/hooks/use-sidebar-counts"
 import { usePermissions } from "@/hooks/use-permissions"
 import { UserProfileDialog } from "@/components/auth/user-profile-dialog"
 import { LogoFixed, LogoSmall } from "@/components/logo"
+import { SIDEBAR_LABELS, SYSTEM_SECTION_COPY } from "@/lib/access-ui"
+import { getActiveRoleNames, getPrimaryRoleDisplayName } from "@/lib/access-control"
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -70,8 +72,9 @@ export function AppSidebar() {
 
   if (!user) return null;
 
-  const canSeeMyPerformance = user.roles?.some((ur: any) => 
-    ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER'].includes(ur.role.name)
+  const activeRoleNames = getActiveRoleNames(user);
+  const canSeeMyPerformance = activeRoleNames.some((roleName) =>
+    ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER'].includes(roleName)
   ) || isSuperAdmin;
 
   return (
@@ -280,10 +283,10 @@ export function AppSidebar() {
 
               {hasPermission('MANAGE_VAULT_STORAGE') && (
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={pathname === '/admin/storage'} tooltip="KYC Document">
+                  <SidebarMenuButton asChild isActive={pathname === '/admin/storage'} tooltip={SIDEBAR_LABELS.documentVault}>
                     <Link href="/admin/storage">
                       <HardDrive className="w-4 h-4" />
-                      <span>KYC Document</span>
+                      <span>{SIDEBAR_LABELS.documentVault}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -426,7 +429,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/users'}>
                             <Link href="/admin/users">
                               <Users className="w-4 h-4 mr-2" />
-                              <span>User Access</span>
+                              <span>{SYSTEM_SECTION_COPY.USER_CREATE.label}</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -437,7 +440,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/roles'}>
                             <Link href="/admin/roles">
                               <UserCog className="w-4 h-4 mr-2 text-primary" />
-                              <span>Assign Roles</span>
+                              <span>{SYSTEM_SECTION_COPY.ROLE_CREATE.label}</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -448,7 +451,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/assignments'}>
                             <Link href="/admin/assignments">
                               <ArrowRightLeft className="w-4 h-4 mr-2 text-primary" />
-                              <span>Branch Mapping</span>
+                              <span>{SYSTEM_SECTION_COPY.MAP_USERS_TO_BRANCH.label}</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -459,7 +462,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/branches'}>
                             <Link href="/admin/branches">
                               <Building2 className="w-4 h-4 mr-2" />
-                              <span>Add District and Branch</span>
+                              <span>{SYSTEM_SECTION_COPY.MANAGE_BRANCHES.label}</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -470,7 +473,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/settings'}>
                             <Link href="/admin/settings">
                               <Settings className="w-4 h-4" />
-                              <span>Configuration</span>
+                              <span>{SYSTEM_SECTION_COPY.EDIT_SLA_POLICY.label}</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -481,7 +484,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={pathname === '/admin/audit'}>
                             <Link href="/admin/audit">
                               <History className="w-4 h-4 mr-2" />
-                              <span>Audit Logs</span>
+                              <span>{SYSTEM_SECTION_COPY.VIEW_SYSTEM_AUDIT.label}</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -505,7 +508,7 @@ export function AppSidebar() {
               <div className="flex-1 overflow-hidden text-left">
                 <p className="text-sm font-bold leading-tight truncate text-white group-hover:text-primary transition-colors">{user.name}</p>
                 <p className="text-[10px] text-white/40 truncate uppercase tracking-tighter mt-0.5 font-bold">
-                  {user.roles?.[0]?.role.name.replace(/_/g, ' ') || 'UNASSIGNED'}
+                  {getPrimaryRoleDisplayName(user)}
                 </p>
               </div>
             </div>

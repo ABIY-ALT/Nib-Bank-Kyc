@@ -5,6 +5,7 @@
 @layer base {
   /* Light Mode (Default) */
   :root {
+    --font-inter: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     /* Main Background: Light Tan (#FCFAF7) */
     --background: 36 33% 98%;
     /* Main Text: Dark Gray (#333333) */

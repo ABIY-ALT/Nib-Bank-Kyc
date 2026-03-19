@@ -53,7 +53,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { KYCFinding } from '@/lib/kyc-data';
 import { getFindings, upsertFinding, deleteFinding, seedFindings } from '@/actions/findings';
 import { getGlobalSettings } from '@/actions/settings';
-import { FindingCategory, FindingSeverity } from '@prisma/client';
 import { usePermissions } from '@/hooks/use-permissions';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -127,7 +126,7 @@ export default function KYCFFQReferencePage() {
         getGlobalSettings()
       ]);
       setFindings(findingsData);
-      if (settingsData?.entityTypes) {
+      if (Array.isArray(settingsData?.entityTypes)) {
         setAccountTypes(settingsData.entityTypes);
       }
     } catch (error) {

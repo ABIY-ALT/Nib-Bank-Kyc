@@ -5,10 +5,11 @@ import type { NextConfig } from 'next';
  * Institutional Security & Optimization Policy.
  */
 const nextConfig: NextConfig = {
+  productionBrowserSourceMaps: false,
   poweredByHeader: false,
   devIndicators: false, // Hides development overlays from UI
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     // Remote patterns for external images

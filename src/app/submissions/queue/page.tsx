@@ -61,7 +61,7 @@ export default function ReviewActionPage() {
             <p className="text-muted-foreground text-lg">Central hub for processing applications.</p>
             {isSuperAdmin ? (
               <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
-                <ShieldCheck className="w-3 h-3" /> Global Oversight
+                <ShieldCheck className="w-3 h-3" /> Overall Oversight
               </Badge>
             ) : user?.assignedBranches && user.assignedBranches.length > 0 && (
               <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">

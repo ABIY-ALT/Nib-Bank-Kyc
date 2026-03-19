@@ -16,6 +16,8 @@ export async function GET(
   props: { params: Promise<{ token: string }> }
 ) {
   const { token } = await props.params;
+  const requestUrl = new URL(req.url);
+  const forceDownload = requestUrl.searchParams.get('download') === '1';
   const cookieStore = await cookies();
   const jwtToken = cookieStore.get('nib-auth-token')?.value;
 
@@ -60,7 +62,7 @@ export async function GET(
       const response = new Response(fileBuffer, {
         headers: {
           'Content-Type': contentType,
-          'Content-Disposition': `inline; filename="${fileName}"`,
+          'Content-Disposition': `${forceDownload ? 'attachment' : 'inline'}; filename="${fileName}"`,
           'X-Content-Type-Options': 'nosniff',
           'Cache-Control': 'no-store, no-cache, must-revalidate',
           'Content-Security-Policy': "default-src 'none';",

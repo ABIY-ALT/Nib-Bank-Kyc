@@ -22,6 +22,7 @@ import { resetUserPassword } from '@/actions/users';
 import { tempPasswordRegistry } from '@/lib/temp-password-registry';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/use-permissions';
+import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
 
 export default function AdminPasswordResetPage() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function AdminPasswordResetPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !isSuperAdmin) {
-      router.push('/unauthorized');
+      router.push('/unauthorized?required=SUPER_ADMIN');
     }
   }, [isSuperAdmin, permissionsLoading, router]);
 
@@ -85,7 +86,7 @@ export default function AdminPasswordResetPage() {
         <Button asChild variant="ghost" className="h-10 px-4 -ml-4 text-muted-foreground hover:text-primary font-bold gap-2 group transition-all">
           <Link href="/admin/users">
             <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-            Back to Personnel Directory
+            Back to {SYSTEM_SECTION_COPY.USER_CREATE.label}
           </Link>
         </Button>
       </div>

@@ -3,6 +3,7 @@
 
 import { useAuth } from "@/lib/auth";
 import { useMemo, useCallback } from "react";
+import { getPermissionSlugs, isSuperAdminUser } from "@/lib/access-control";
 
 /**
  * Production-ready Permission Engine.
@@ -12,30 +13,11 @@ export function usePermissions() {
   const { user, loading: authLoading } = useAuth();
 
   const isSuperAdmin = useMemo(() => {
-    if (!user) return false;
-    
-    // Check direct role string from JWT payload or serializable roles array
-    return (user as any).role === 'SUPER_ADMIN' || user.roles?.some((ur: any) => {
-      const name = ur.role?.name || ur.name;
-      return name === 'SUPER_ADMIN';
-    });
+    return isSuperAdminUser(user);
   }, [user]);
 
   const permissionsSlugs = useMemo(() => {
-    const aggregatedSlugs = new Set<string>();
-    if (!user) return aggregatedSlugs;
-
-    user.roles?.forEach((userRoleRel: any) => {
-      const role = userRoleRel.role || userRoleRel;
-      if (role?.permissions) {
-        role.permissions.forEach((permRel: any) => {
-          const slug = permRel.permission?.slug || permRel.slug;
-          if (slug) aggregatedSlugs.add(slug);
-        });
-      }
-    });
-
-    return aggregatedSlugs;
+    return getPermissionSlugs(user);
   }, [user]);
 
   const hasPermission = useCallback((slug: string) => {
@@ -51,6 +33,7 @@ export function usePermissions() {
     
     return user.roles.some((ur: any) => {
       const role = ur.role || ur;
+      if (!role?.name || role.active === false) return false;
       return role.permissions?.some((pr: any) => {
         const p = pr.permission || pr;
         return p.group === group;

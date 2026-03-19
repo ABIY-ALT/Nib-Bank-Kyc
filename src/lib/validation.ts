@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidInstitutionalLoginInput } from './login-identifier';
 
 /**
  * @fileOverview Institutional Input Validation Schemas.
@@ -10,10 +11,14 @@ import { z } from 'zod';
 export const LoginSchema = z.object({
   email: z
     .string()
-    .email('Invalid institutional email format')
+    .min(3, 'Invalid institutional username')
     .max(255, 'Email exceeds max length')
     .toLowerCase()
-    .trim(),
+    .trim()
+    .refine(
+      (value) => isValidInstitutionalLoginInput(value),
+      'Use firstname.surname'
+    ),
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters')
@@ -37,10 +42,14 @@ export const PasswordChangeSchema = z.object({
 export const CreateUserSchema = z.object({
   email: z
     .string()
-    .email('Invalid email format')
     .max(255, 'Email exceeds max length')
     .toLowerCase()
-    .trim(),
+    .trim()
+    .refine(
+      (value) => !value || isValidInstitutionalLoginInput(value),
+      'Use firstname.surname for the username'
+    )
+    .optional(),
   firstName: z
     .string()
     .min(1, 'First name required')
@@ -51,15 +60,39 @@ export const CreateUserSchema = z.object({
     .min(1, 'Last name required')
     .max(100, 'Last name exceeds max length')
     .regex(/^[a-zA-Z\s-']*$/, 'Last name contains invalid characters'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(256, 'Password exceeds max length')
+    .optional(),
   phoneNumber: z
     .string()
-    .optional()
+    .trim()
+    .min(1, 'Phone number required')
+    .transform((value) => value.replace(/[\s()-]/g, ''))
     .refine(
-      (val) => !val || /^\+?[0-9]{7,15}$/.test(val),
+      (val) => /^\+?[0-9]{7,15}$/.test(val),
       'Invalid phone number format'
     ),
   branchId: z.string().nullable().optional(),
+  districtName: z.string().nullable().optional(),
   role: z.string().min(1, 'Role assignment required'),
+}).superRefine((data, ctx) => {
+  if (data.role === 'DISTRICT_DIRECTOR' && !data.districtName) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['districtName'],
+      message: 'District assignment required for District Director.',
+    });
+  }
+
+  if (['BRANCH_MANAGER', 'BRANCH_OFFICER'].includes(data.role?.toUpperCase()) && !data.branchId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['branchId'],
+      message: 'Branch assignment required for branch roles.',
+    });
+  }
 });
 
 // --- KYC/Submission Validation Schemas ---

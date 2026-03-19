@@ -29,7 +29,7 @@ export class InstitutionalHttpClient {
   /**
    * Internal timeout controller.
    */
-  private static createTimeoutSignal(ms: number, signal?: AbortSignal): AbortSignal {
+  private static createTimeoutSignal(ms: number, signal?: AbortSignal | null): AbortSignal {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), ms);
     signal?.addEventListener('abort', () => clearTimeout(id));

@@ -38,6 +38,7 @@ import { getSubmissions } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
+import { getActiveRoleNames, getPrimaryRoleName } from "@/lib/access-control";
 
 function formatBranchName(name?: string | null) {
   const raw = (name || "").trim();
@@ -57,8 +58,9 @@ export default function Dashboard() {
       if (!user) return;
       setLoading(true);
       try {
-        const isDirector = user.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
-        const isSpecialist = user.roles?.some(ur => ['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST_OFFICER'].includes(ur.role.name));
+        const activeRoleNames = getActiveRoleNames(user);
+        const isDirector = activeRoleNames.includes('DISTRICT_DIRECTOR');
+        const isSpecialist = activeRoleNames.some((roleName) => ['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST_OFFICER'].includes(roleName));
         
         let filters: any = { limit: 100 };
 
@@ -97,13 +99,13 @@ export default function Dashboard() {
   }, [user, isSuperAdmin]);
 
   const dashboardContext = useMemo(() => {
-    const roleName = user?.roles?.[0]?.role?.name || 'OFFICER';
+    const roleName = getPrimaryRoleName(user) || 'UNASSIGNED';
     const cleanBranchName = formatBranchName(user?.branchName || 'Local');
     
     if (isSuperAdmin) return {
       title: 'Dashboard',
-      subtitle: 'Global network oversight and master control.',
-      scope: 'Global',
+      subtitle: 'Overall network oversight and master control.',
+      scope: 'Overall',
       icon: Shield
     };
     
@@ -115,8 +117,8 @@ export default function Dashboard() {
     };
 
     if (['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR'].includes(roleName)) return {
-      title: 'Specialist Analysis Hub',
-      subtitle: `Portfolio visibility across authorized jurisdiction nodes.`,
+      title: 'Officer Analysis Hub',
+      subtitle: `Portfolio visibility across authorized jurisdiction branches.`,
       scope: 'Portfolio',
       icon: Zap
     };
@@ -150,7 +152,7 @@ export default function Dashboard() {
   }, [recentSubmissions, dashboardContext]);
 
   const isBranchOfficer = useMemo(() => {
-    return user?.roles?.some(ur => ur.role.name === 'BRANCH_OFFICER');
+    return getActiveRoleNames(user).includes('BRANCH_OFFICER');
   }, [user]);
 
   if (permissionsLoading) {
@@ -182,7 +184,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           {!isSuperAdmin && user?.districtName && (
             <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-2 font-black h-12 flex items-center gap-2 text-xs rounded-xl shadow-sm">
-              <MapPin className="w-4 h-4" /> {user.districtName} Node
+              <MapPin className="w-4 h-4" /> {user.districtName} Branch
             </Badge>
           )}
           {isBranchOfficer && (
@@ -274,7 +276,7 @@ export default function Dashboard() {
             <CardTitle className="text-xl font-bold flex items-center gap-2">
               <Info className="w-5 h-5 text-primary" /> Methodology Updates
             </CardTitle>
-            <CardDescription>Critical policy methodology for specialists.</CardDescription>
+            <CardDescription>Critical policy methodology for officers.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6 px-6">
              <div className="space-y-4">

@@ -1,9 +1,134 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { verifyDownloadToken } from '@/lib/security';
+import { signDownloadToken, verifyDownloadToken } from '@/lib/security';
 import { createAuditLog } from './audit';
-import { KYCStatus } from '@prisma/client';
+import { getServerSession } from './auth-server';
+
+const DIRECT_BRANCH_ROLES = new Set(['BRANCH_MANAGER', 'BRANCH_OFFICER']);
+const PORTFOLIO_BRANCH_ROLES = new Set(['KYC_OFFICER', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER', 'SUPERVISOR']);
+const DISTRICT_DIRECTOR_ROLE = 'DISTRICT_DIRECTOR';
+
+function normalizeAssignedBranches(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((branch) => String(branch).trim()).filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    return value.split(',').map((branch) => branch.trim()).filter(Boolean);
+  }
+
+  return [];
+}
+
+function hasPermission(user: any, slug: string) {
+  return Boolean(
+    user?.roles?.some((userRole: any) =>
+      userRole?.role?.active !== false &&
+      userRole?.role?.permissions?.some((rolePermission: any) => rolePermission?.permission?.slug === slug)
+    )
+  );
+}
+
+async function hasFollowUpCaseAccess(user: any, submissionId: string) {
+  const canAccessFollowUpCases = hasPermission(user, 'VIEW_AUDIT_POOL') || hasPermission(user, 'VIEW_AUDIT_LOGS');
+  if (!canAccessFollowUpCases) return false;
+
+  const followUpRecord = await prisma.followUpVerification.findFirst({
+    where: { submissionId },
+    select: { id: true }
+  });
+
+  return Boolean(followUpRecord);
+}
+
+async function getMemoAccessContext(userId: string, memoId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      roles: {
+        include: {
+          role: {
+            include: {
+              permissions: {
+                include: {
+                  permission: true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const memo = await prisma.memo.findUnique({
+    where: { id: memoId },
+    include: {
+      kyc: true
+    }
+  });
+
+  if (!memo) {
+    return { user, memo: null, authorized: false };
+  }
+
+  const kyc = memo.kyc;
+  const userRole = user?.roles?.[0]?.role?.name?.toUpperCase();
+  const userBranchId = user?.branchId;
+  const userBranchName = user?.branchName;
+  const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
+  const userDistrictName = user?.districtName;
+
+  let authorized = false;
+
+  if (userRole === 'SUPER_ADMIN') {
+    authorized = true;
+  } else if (DIRECT_BRANCH_ROLES.has(userRole || '')) {
+    authorized = Boolean(
+      (userBranchId && kyc.branchId === userBranchId) ||
+      (userBranchName && kyc.branchName === userBranchName)
+    );
+  } else if (PORTFOLIO_BRANCH_ROLES.has(userRole || '')) {
+    authorized = assignedBranches.length > 0
+      ? assignedBranches.includes(kyc.branchName)
+      : Boolean(
+          (userBranchId && kyc.branchId === userBranchId) ||
+          (userBranchName && kyc.branchName === userBranchName)
+        );
+  } else if (userRole === DISTRICT_DIRECTOR_ROLE) {
+    authorized = Boolean(
+      userDistrictName &&
+      kyc.districtName === userDistrictName
+    );
+  } else if (
+    (userBranchId && kyc.branchId === userBranchId) ||
+    (userBranchName && kyc.branchName === userBranchName) ||
+    assignedBranches.includes(kyc.branchName)
+  ) {
+    authorized = true;
+  } else if (await hasFollowUpCaseAccess(user, kyc.id)) {
+    authorized = true;
+  }
+
+  return { user, memo, authorized };
+}
+
+export async function getMemoAccessUrl(memoId: string, options?: { download?: boolean }) {
+  const session = await getServerSession();
+  if (!session) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  const { memo, authorized } = await getMemoAccessContext(session.id, memoId);
+  if (!memo || !authorized) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const token = signDownloadToken(memoId);
+  const suffix = options?.download ? '?download=1' : '';
+  return { success: true, url: `/api/memos/${token}${suffix}` };
+}
 
 /**
  * Institutional Memo Service (Security Layer).
@@ -14,18 +139,17 @@ export async function getSecureMemo(token: string, userId: string) {
   const memoId = verifyDownloadToken(token);
   
   // 2. User Identity Retrieval for Jurisdictional Check
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { roles: { include: { role: true } } }
+  const sessionUser = await prisma.user.findUnique({
+    where: { id: userId }
   });
 
   // 3. Integrity Check (Prevents IDOR / Manipulation / Expiration)
   if (!memoId) {
-    if (user) {
+    if (sessionUser) {
       await createAuditLog({
-        userId: user.id,
-        userEmail: user.email,
-        userName: `${user.firstName} ${user.lastName}`,
+        userId: sessionUser.id,
+        userEmail: sessionUser.email,
+        userName: `${sessionUser.firstName} ${sessionUser.lastName}`,
         action: 'SECURITY_ALERT_IDOR',
         details: `Access Denied: Invalid, expired, or tampered download token: ${token}`,
         metadata: { token, userId },
@@ -35,38 +159,14 @@ export async function getSecureMemo(token: string, userId: string) {
     return { error: 'Forbidden', status: 403 };
   }
 
-  // 4. Fetch Memo with KYC Jurisdiction Data
-  const memo = await prisma.memo.findUnique({
-    where: { id: memoId },
-    include: { 
-      kyc: true
-    }
-  });
-
+  const { user, memo, authorized } = await getMemoAccessContext(userId, memoId);
   if (!memo) {
     // Rule: Return 403 instead of 404 to prevent resource enumeration
     return { error: 'Forbidden', status: 403 };
   }
 
   const kyc = memo.kyc;
-  const userRole = user?.roles?.[0]?.role?.name;
-  const userBranchId = user?.branchId;
-
-  let authorized = false;
-
-  // RULE: Super Admin - Full audit access
-  if (userRole === 'SUPER_ADMIN') {
-    authorized = true;
-  } 
-  // RULE: Jurisdictional Verification (Branch Isolation)
-  else if (kyc.branchId === userBranchId) {
-    // Rule: Branch Officers can only view their own node's files
-    authorized = true;
-  }
-  // RULE: Specialist Portfolio Access
-  else if (user?.assignedBranches?.includes(kyc.branchName)) {
-    authorized = true;
-  }
+  const userRole = user?.roles?.[0]?.role?.name?.toUpperCase();
 
   // 5. Mandatory Audit Log before response
   await createAuditLog({

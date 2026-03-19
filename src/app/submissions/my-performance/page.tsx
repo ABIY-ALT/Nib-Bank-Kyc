@@ -167,7 +167,7 @@ export default function MyCasesPerformancePage() {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Querying Specialist Branch...</p>
+        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Querying Officer Branch...</p>
       </div>
     );
   }
@@ -182,7 +182,7 @@ export default function MyCasesPerformancePage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">My Cases & Performance</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Specialist analysis dashboard and jurisdiction metrics.</p>
+          <p className="text-muted-foreground text-lg font-medium">Officer analysis dashboard and jurisdiction metrics.</p>
         </div>
         <div className="flex items-center gap-3">
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
@@ -257,7 +257,7 @@ export default function MyCasesPerformancePage() {
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-500">Global Search</Label>
+              <Label className="text-[10px] font-black uppercase text-slate-500">Overall Search</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input placeholder="Case ID or Customer..." className="pl-9 h-10 border-slate-200 font-bold" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />

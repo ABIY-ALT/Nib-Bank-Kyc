@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   Mail, 
   Lock, 
   Loader2, 
@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { isValidInternalRedirect } from '@/lib/url-security';
 import { LogoResponsive } from '@/components/logo';
+import { getInstitutionalLoginInputValue } from '@/lib/login-identifier';
 
 export default function LoginPage() {
   return (
@@ -41,23 +42,24 @@ export default function LoginPage() {
 }
 
 function LoginContent() {
-  const { login, user } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const callbackUrl = searchParams.get('callbackUrl');
+  const redirectTarget = isValidInternalRedirect(callbackUrl) ? callbackUrl! : '/';
+
   useEffect(() => {
-    if (user) {
-      const callbackUrl = searchParams.get('callbackUrl');
-      const target = isValidInternalRedirect(callbackUrl) ? callbackUrl! : '/';
-      router.push(target);
+    if (!authLoading && user) {
+      router.replace(redirectTarget);
     }
-  }, [user, router, searchParams]);
+  }, [authLoading, user, router, redirectTarget]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,13 +67,11 @@ function LoginContent() {
     setError(null);
 
     try {
-      await login(email, password);
+      await login(loginId, password);
       
-      const callbackUrl = searchParams.get('callbackUrl');
-      const target = isValidInternalRedirect(callbackUrl) ? callbackUrl! : '/';
-      router.push(target);
+      router.replace(redirectTarget);
     } catch (err: any) {
-      setError(err.message || "Invalid institutional credentials.");
+      setError(err.message || "Invalid username or password.");
     } finally {
       setLoading(false);
     }
@@ -83,7 +83,7 @@ function LoginContent() {
         <LogoResponsive />
         <div className="space-y-1">
           <h1 className="text-4xl font-black text-foreground tracking-tighter">NIB BANK <span className="text-primary">KYC</span></h1>
-          <p className="text-muted-foreground text-lg font-medium">Secure institutional access portal.</p>
+          <p className="text-muted-foreground text-lg font-medium">Secure access portal.</p>
         </div>
       </div>
 
@@ -113,18 +113,24 @@ function LoginContent() {
             )}
 
             <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Official Bank Email</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Official Username</Label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input 
-                  type="email" 
-                  placeholder="name.surname@nibbank.com.et" 
+                  type="text"
+                  inputMode="text"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="firstname.surname"
                   className="pl-12 h-14 bg-background border font-black text-foreground rounded-xl focus-visible:ring-[#B89334]/20 transition-all shadow-inner"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={loginId}
+                  onChange={(e) => setLoginId(getInstitutionalLoginInputValue(e.target.value))}
                   required
                 />
               </div>
+              <p className="text-xs text-muted-foreground font-medium">Enter your registered first name, then a dot, then your surname.</p>
             </div>
 
             <div className="space-y-3">

@@ -46,7 +46,7 @@ export default function GlobalAuditLogPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('VIEW_SYSTEM_AUDIT')) {
-      router.push('/unauthorized');
+      router.push('/unauthorized?required=VIEW_SYSTEM_AUDIT');
     }
   }, [hasPermission, permissionsLoading, router]);
 

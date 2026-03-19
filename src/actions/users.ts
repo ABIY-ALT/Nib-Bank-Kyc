@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { UserStatus } from '@prisma/client';
+import { Prisma, UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
 import { generateSecurePassword } from '@/lib/security';
@@ -10,6 +10,89 @@ import { createAuditLog } from './audit';
 import { CreateUserSchema } from '@/lib/validation';
 import { ZodError } from 'zod';
 import { logInstitutionalError } from '@/lib/logger';
+import { normalizeInstitutionalLogin } from '@/lib/login-identifier';
+
+const INSTITUTIONAL_EMAIL_DOMAIN = 'nibbank.com.et';
+
+function buildEmailLocalPart(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function normalizePhoneNumber(value?: string | null) {
+  const normalized = value?.trim().replace(/[\s()-]/g, '') || '';
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizePersonName(value: string) {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function normalizePersonNameKey(value: string) {
+  return normalizePersonName(value).toLowerCase();
+}
+
+async function resolveInstitutionalEmail(params: {
+  tx: any;
+  firstName: string;
+  lastName: string;
+  currentUserId?: string;
+  currentEmail?: string | null;
+  preserveExisting?: boolean;
+}) {
+  const firstNamePart = buildEmailLocalPart(params.firstName);
+  const lastNamePart = buildEmailLocalPart(params.lastName);
+  const baseLocalPart = `${firstNamePart || 'user'}.${lastNamePart || 'staff'}`;
+  const baseEmail = `${baseLocalPart}@${INSTITUTIONAL_EMAIL_DOMAIN}`;
+
+  if (params.preserveExisting && params.currentEmail) {
+    return params.currentEmail.toLowerCase().trim();
+  }
+
+  let suffix = 0;
+
+  while (suffix < 10000) {
+    const localPart = suffix === 0 ? baseLocalPart : `${baseLocalPart}${suffix}`;
+    const candidateEmail = `${localPart}@${INSTITUTIONAL_EMAIL_DOMAIN}`;
+    const existingUser = await params.tx.user.findFirst({
+      where: {
+        email: candidateEmail,
+        NOT: params.currentUserId ? { id: params.currentUserId } : undefined
+      },
+      select: { id: true }
+    });
+
+    if (!existingUser) {
+      return candidateEmail;
+    }
+
+    suffix += 1;
+  }
+
+  throw new Error(`Could not allocate a unique institutional email for ${baseEmail}.`);
+}
+
+async function reserveRequestedInstitutionalEmail(params: {
+  tx: any;
+  requestedEmail: string;
+  currentUserId?: string;
+}) {
+  const existingUser = await params.tx.user.findFirst({
+    where: {
+      email: params.requestedEmail,
+      NOT: params.currentUserId ? { id: params.currentUserId } : undefined
+    },
+    select: { id: true }
+  });
+
+  if (existingUser) {
+    throw new Error('Official username is already assigned to another personnel record.');
+  }
+
+  return params.requestedEmail;
+}
 
 /**
  * Robust Authorization Helper.
@@ -85,11 +168,12 @@ export async function provisionUser(data: {
   id?: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email?: string;
   password?: string;
-  phoneNumber?: string;
+  phoneNumber: string;
   role: string;
   branchId?: string | null;
+  districtName?: string | null;
   status: UserStatus;
 }) {
   if (!(await verifyAdminClearance())) {
@@ -104,7 +188,23 @@ export async function provisionUser(data: {
   try {
     const validated = CreateUserSchema.parse(data);
     const isUpdate = !!data.id;
-    let tempPass = data.password;
+    const normalizedFirstName = normalizePersonName(validated.firstName);
+    const normalizedLastName = normalizePersonName(validated.lastName);
+    const normalizedPhoneNumber = normalizePhoneNumber(validated.phoneNumber);
+    const requestedEmail = validated.email ? normalizeInstitutionalLogin(validated.email) : '';
+    let tempPass = validated.password?.trim() || undefined;
+
+    if (!normalizedFirstName) {
+      return { success: false, error: 'First name required' };
+    }
+
+    if (!normalizedLastName) {
+      return { success: false, error: 'Last name required' };
+    }
+
+    if (!isUpdate && !tempPass) {
+      tempPass = generateSecurePassword(10);
+    }
     
     // SECURITY SAFEGUARD: Prevent SUPER_ADMIN users from being created as INACTIVE
     if (data.role === 'SUPER_ADMIN' && data.status === 'INACTIVE') {
@@ -120,23 +220,100 @@ export async function provisionUser(data: {
       finalStatus = 'ACTIVE';
     }
     
-    const branch = data.branchId ? await prisma.branch.findUnique({
+    const isDistrictDirector = data.role === 'DISTRICT_DIRECTOR';
+
+    const branch = !isDistrictDirector && data.branchId ? await prisma.branch.findUnique({
       where: { id: data.branchId },
       include: { district: true }
     }) : null;
 
+    const district = isDistrictDirector && data.districtName
+      ? await prisma.district.findUnique({
+          where: { name: data.districtName }
+        })
+      : null;
+
+    if (isDistrictDirector && !district) {
+      return {
+        success: false,
+        error: 'District Director must be assigned to a valid district.',
+      };
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       let user;
+      const existingUser = isUpdate ? await tx.user.findUnique({
+        where: { id: data.id },
+        select: { id: true, email: true, firstName: true, lastName: true }
+      }) : null;
+
+      if (isUpdate && !existingUser) {
+        throw new Error('Personnel record not found.');
+      }
+
+      const duplicateNameUsers = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id"
+        FROM "User"
+        WHERE LOWER(REGEXP_REPLACE(BTRIM("firstName"), '\\s+', ' ', 'g')) = ${normalizePersonNameKey(normalizedFirstName)}
+          AND LOWER(REGEXP_REPLACE(BTRIM("lastName"), '\\s+', ' ', 'g')) = ${normalizePersonNameKey(normalizedLastName)}
+          ${isUpdate ? Prisma.sql`AND "id" <> ${data.id}` : Prisma.empty}
+        LIMIT 1
+      `);
+
+      if (duplicateNameUsers.length > 0) {
+        throw new Error('Personnel record with the same first name and surname already exists.');
+      }
+
+      if (normalizedPhoneNumber) {
+        const duplicatePhoneUser = await tx.user.findFirst({
+          where: {
+            phoneNumber: normalizedPhoneNumber,
+            NOT: isUpdate ? { id: data.id } : undefined
+          },
+          select: { id: true }
+        });
+
+        if (duplicatePhoneUser) {
+          throw new Error('Phone number is already assigned to another personnel record.');
+        }
+      }
+
+      const generatedEmail = await resolveInstitutionalEmail({
+        tx,
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
+        currentUserId: existingUser?.id,
+        currentEmail: existingUser?.email,
+        preserveExisting: Boolean(
+          existingUser
+          && normalizePersonName(existingUser.firstName) === normalizedFirstName
+          && normalizePersonName(existingUser.lastName) === normalizedLastName
+        )
+      });
+
+      const finalEmail = requestedEmail
+        ? await reserveRequestedInstitutionalEmail({
+            tx,
+            requestedEmail,
+            currentUserId: existingUser?.id
+          })
+        : generatedEmail;
+
+      const resolvedBranchId = isDistrictDirector ? null : (data.branchId || null);
+      const resolvedBranchName = isDistrictDirector ? null : (branch?.name || null);
+      const resolvedDistrictName = isDistrictDirector
+        ? district?.name || null
+        : (branch?.district?.name || null);
 
       if (isUpdate) {
         let updateData: any = {
-          firstName: validated.firstName,
-          lastName: validated.lastName,
-          email: validated.email,
-          phoneNumber: validated.phoneNumber,
-          branchId: data.branchId || null,
-          branchName: branch?.name || null,
-          districtName: branch?.district?.name || null,
+          firstName: normalizedFirstName,
+          lastName: normalizedLastName,
+          email: finalEmail,
+          phoneNumber: normalizedPhoneNumber,
+          branchId: resolvedBranchId,
+          branchName: resolvedBranchName,
+          districtName: resolvedDistrictName,
           status: finalStatus,
           updatedAt: new Date()
         };
@@ -151,19 +328,19 @@ export async function provisionUser(data: {
           data: updateData
         });
       } else {
-        if (!tempPass) tempPass = generateSecurePassword(10);
-        const hashedPassword = await bcrypt.hash(tempPass, 10);
+        const createPassword = tempPass as string;
+        const hashedPassword = await bcrypt.hash(createPassword, 10);
 
         user = await tx.user.create({
           data: {
-            firstName: validated.firstName,
-            lastName: validated.lastName,
-            email: validated.email,
+            firstName: normalizedFirstName,
+            lastName: normalizedLastName,
+            email: finalEmail,
             password: hashedPassword,
-            phoneNumber: validated.phoneNumber,
-            branchId: data.branchId || null,
-            branchName: branch?.name || null,
-            districtName: branch?.district?.name || null,
+            phoneNumber: normalizedPhoneNumber,
+            branchId: resolvedBranchId,
+            branchName: resolvedBranchName,
+            districtName: resolvedDistrictName,
             status: finalStatus,
             needsPasswordChange: true
           }
@@ -206,13 +383,27 @@ export async function provisionUser(data: {
         districtName: result.districtName,
         needsPasswordChange: result.needsPasswordChange
       }, 
-      tempPassword: !isUpdate ? tempPass : (data.password ? tempPass : null) 
+      tempPassword: tempPass || null
     };
   } catch (error: any) {
     if (error instanceof ZodError) {
       const firstIssue = error.issues?.[0];
       const message = firstIssue?.message || 'Validation failed.';
       return { success: false, error: message };
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const target = Array.isArray(error.meta?.target)
+        ? error.meta.target.join(',')
+        : String(error.meta?.target || '');
+
+      if (target.includes('User_first_last_name_normalized_key') || error.message.includes('User_first_last_name_normalized_key')) {
+        return { success: false, error: 'Personnel record with the same first name and surname already exists.' };
+      }
+
+      if (target.includes('phoneNumber')) {
+        return { success: false, error: 'Phone number is already assigned to another personnel record.' };
+      }
     }
 
     const { message } = logInstitutionalError(error, 'DB_PROVISION_USER');
@@ -247,11 +438,15 @@ export async function resetUserPassword(email: string, authorizerId: string) {
 
     // Audit log for credential reset
     await createAuditLog({
+      userId: authorizerId,
+      userEmail: `admin:${authorizerId}`,
       action: 'CREDENTIAL_RESET',
-      resource: 'USER',
-      resourceId: user.id,
       details: `Password reset initiated by admin ${authorizerId}`,
-      metadata: { email: normalizedEmail }
+      metadata: {
+        email: normalizedEmail,
+        resource: 'USER',
+        resourceId: user.id,
+      }
     }).catch(() => {});
 
     return { success: true, tempPassword: tempPass, userName: `${user.firstName} ${user.lastName}` };

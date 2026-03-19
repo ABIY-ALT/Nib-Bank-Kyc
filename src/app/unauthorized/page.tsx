@@ -4,10 +4,19 @@
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, ArrowLeft, Home } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/lib/auth";
+import { getPrimaryRoleDisplayName } from "@/lib/access-control";
 
 export default function UnauthorizedPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, logout } = useAuth();
+
+  const required = searchParams.get('required');
+  const reason = searchParams.get('reason');
+  const roleName = getPrimaryRoleDisplayName(user);
+  const isUnassignedRole = reason === 'ROLE_UNASSIGNED';
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
@@ -24,19 +33,35 @@ export default function UnauthorizedPage() {
         <div className="space-y-3">
           <h1 className="text-4xl font-black text-foreground font-headline tracking-tight">Security Restriction</h1>
           <p className="text-muted-foreground text-lg font-medium leading-relaxed">
-            Your institutional credentials do not grant authorization for this specific network node.
+            {isUnassignedRole
+              ? "Your account is authenticated, but no active role is assigned to it."
+              : "Your institutional credentials do not grant authorization for this area."}
           </p>
         </div>
 
         <div className="p-6 bg-card border rounded-3xl shadow-xl space-y-4">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Policy Breach Logged</p>
+          <div className="rounded-2xl border bg-background p-4 text-left">
+            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Session</div>
+            <div className="mt-2 grid gap-1 text-sm font-mono">
+              <div>ROLE: {roleName}</div>
+              {required ? <div>REQUIRED: {required}</div> : null}
+            </div>
+          </div>
           <div className="flex flex-col gap-3">
-            <Button asChild className="h-14 bg-primary hover:bg-primary/90 text-white font-black rounded-2xl shadow-lg shadow-primary/20 gap-3">
-              <Link href="/">
+            {isUnassignedRole && user ? (
+              <Button onClick={() => logout('Role Assignment Required')} className="h-14 bg-primary hover:bg-primary/90 text-white font-black rounded-2xl shadow-lg shadow-primary/20 gap-3">
                 <Home className="w-5 h-5" />
-                Return to Dashboard
-              </Link>
-            </Button>
+                Sign Out
+              </Button>
+            ) : (
+              <Button asChild className="h-14 bg-primary hover:bg-primary/90 text-white font-black rounded-2xl shadow-lg shadow-primary/20 gap-3">
+                <Link href="/">
+                  <Home className="w-5 h-5" />
+                  Return to Dashboard
+                </Link>
+              </Button>
+            )}
             <Button variant="ghost" onClick={() => router.back()} className="h-14 font-bold text-muted-foreground hover:text-foreground gap-2">
               <ArrowLeft className="w-4 h-4" />
               Go Back

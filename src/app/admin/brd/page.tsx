@@ -29,7 +29,7 @@ export default function SystemBRDPage() {
 
   useEffect(() => {
     if (!permissionsLoading && !isSuperAdmin) {
-      router.push('/unauthorized');
+      router.push('/unauthorized?required=SUPER_ADMIN');
     }
   }, [isSuperAdmin, permissionsLoading, router]);
 
@@ -154,7 +154,7 @@ export default function SystemBRDPage() {
                 </div>
                 <ul className="space-y-3">
                   <li className="flex gap-2 text-sm text-slate-600 font-medium"><CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> Head Office Follow-up Shared Pool</li>
-                  <li className="flex gap-2 text-sm text-slate-600 font-medium"><CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> Global Audit Archive with IP Logs</li>
+                  <li className="flex gap-2 text-sm text-slate-600 font-medium"><CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> Overall Audit Archive with IP Logs</li>
                   <li className="flex gap-2 text-sm text-slate-600 font-medium"><CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> Bulk Master Archive (ZIP) Exports</li>
                 </ul>
               </div>
@@ -209,7 +209,7 @@ export default function SystemBRDPage() {
                 <Badge variant="outline" className="bg-primary text-white font-black shrink-0 h-fit">METRIC-A</Badge>
                 <div>
                   <p className="font-bold text-slate-900">Officer Productivity Index</p>
-                  <p className="text-sm text-slate-500">Tracks individual resolution accuracy and cycle times per specialist.</p>
+                  <p className="text-sm text-slate-500">Tracks individual resolution accuracy and cycle times per officer.</p>
                 </div>
               </div>
               <div className="flex gap-4">

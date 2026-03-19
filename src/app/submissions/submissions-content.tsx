@@ -42,6 +42,12 @@ import JSZip from 'jszip';
 import { useState } from "react";
 import { logBundleDownload, getSubmissionById } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
+import {
+  buildBundleRootName,
+  getSubmissionBranchName,
+  getSubmissionDistrictName,
+  sanitizeBundleSegment,
+} from "@/lib/bundle-path";
 
 export function SubmissionsPageContent({ submissions }: { submissions: any[] }) {
   const { toast } = useToast();
@@ -57,9 +63,11 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
       const now = new Date();
       
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      const districtName = (sub.branch?.district?.name || "INSTITUTIONAL").replace(/\s+/g, '_');
-      const branchName = (sub.branch?.name || sub.branchName || "HEADQUARTERS").replace(/\s+/g, '_');
-      const bundleName = `${sub.id}_${timestamp}`;
+      const districtName = getSubmissionDistrictName(sub);
+      const branchName = getSubmissionBranchName(sub);
+      const bundleName = buildBundleRootName(districtName, branchName, timestamp);
+      const rootFolder = zip.folder(bundleName);
+      const caseFolderName = `${sanitizeBundleSegment(sub.id, 'CASE')}_${sanitizeBundleSegment(sub.customerName, 'CUSTOMER')}`;
 
       const fullSub = await getSubmissionById(sub.id);
       
@@ -67,17 +75,18 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
                        `--------------------------------------------------\n` +
                        `CASE IDENTIFIER: ${sub.id}\n` +
                        `CUSTOMER ENTITY: ${sub.customerName}\n` +
-                       `DISPATCH NODE:   ${sub.branch?.name || sub.branchName}\n` +
-                       `REGIONAL DIST:   ${sub.branch?.district?.name || "General"}\n` +
+                       `DISPATCH NODE:   ${branchName}\n` +
+                       `REGIONAL DIST:   ${districtName}\n` +
                        `EXPORTED BY:     ${user.name}\n` +
                        `TIMESTAMP:       ${now.toLocaleString()}\n` +
+                       `ARCHIVE ROOT:    ${bundleName}\n` +
                        `--------------------------------------------------\n\n` +
                        `INVENTORY:\n`;
       
       let manifestBody = "";
       
       if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
-        const docFolder = zip.folder("Documents");
+        const docFolder = rootFolder?.folder(`${caseFolderName}/Documents`);
         for (const doc of fullSub.documents) {
           try {
             const response = await fetch(doc.url);
@@ -92,7 +101,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
         manifestBody += "No digital assets discovered for this case.\n";
       }
 
-      zip.file("nib_institutional_manifest.txt", manifest + manifestBody);
+      rootFolder?.file("nib_institutional_manifest.txt", manifest + manifestBody);
 
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
@@ -107,8 +116,8 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
         submissionId: sub.id,
         performedBy: user.name,
         bundleName: bundleName,
-        sourceDistrict: sub.branch?.district?.name || "Institutional",
-        sourceBranch: sub.branch?.name || sub.branchName || "Headquarters"
+        sourceDistrict: districtName,
+        sourceBranch: branchName
       });
 
       toast({ 
@@ -146,7 +155,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
             <History className="w-3 h-3" /> Resubmitted
           </Badge> : 
           <Badge variant="outline" className="text-slate-500 font-black text-[9px] px-3 py-1 flex items-center gap-1.5 uppercase">
-            <Clock className="w-3 h-3" /> {status === KYC_STATUS.SUBMITTED ? 'Awaiting Specialist' : 'Specialist Analysis'}
+            <Clock className="w-3 h-3" /> {status === KYC_STATUS.SUBMITTED ? 'Awaiting Officer' : 'Officer Analysis'}
           </Badge>;
       case KYC_STATUS.ACTION_REQUIRED: 
         return <Badge className="bg-orange-50 text-orange-700 border-orange-200 flex items-center gap-1.5 font-black text-[9px] px-3 py-1 uppercase animate-pulse">

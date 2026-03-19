@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, memo, useCallback } from 'react';
+import { useState, useEffect, useMemo, memo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Table, 
@@ -77,13 +77,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { getAllUsers, updateUserStatus, provisionUser, resetUserPassword } from '@/actions/users';
-import { getBranches } from '@/actions/hierarchy';
+import { getBranches, getDistricts } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
 import { USER_STATUS } from '@/lib/kyc-data';
 import { usePermissions } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
 import { tempPasswordRegistry } from '@/lib/temp-password-registry';
 import { TempPasswordModal } from '@/components/admin/temp-password-modal';
+import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
 
 const HQ_ONLY_ROLES = new Set([
   'SUPERVISOR',
@@ -99,6 +100,10 @@ const isHqOnlyRole = (role?: string) => {
   if (!role) return false;
   return HQ_ONLY_ROLES.has(role.toUpperCase());
 };
+
+const isDistrictDirectorRole = (role?: string) => role?.toUpperCase() === 'DISTRICT_DIRECTOR';
+
+const buildEmailPreviewSegment = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // Memoized UserTableRow component to prevent unnecessary re-renders
 const UserTableRow = memo(({ 
@@ -151,6 +156,12 @@ const UserTableRow = memo(({
             <Mail className="w-3.5 h-3.5 text-slate-300" />
             <span className="text-[11px] font-black text-slate-400 uppercase tracking-tight">{user.email}</span>
           </div>
+          <div className="flex items-center gap-2 mt-2">
+            <Phone className="w-3.5 h-3.5 text-slate-300" />
+            <span className="text-xs font-bold text-slate-500 tracking-tight">
+              {user.phoneNumber || 'No phone saved'}
+            </span>
+          </div>
         </div>
       </div>
     </TableCell>
@@ -166,7 +177,9 @@ const UserTableRow = memo(({
     <TableCell className="w-[200px]">
       <div className="flex items-center gap-3 text-slate-600">
         <Building2 className="w-4 h-4 text-slate-300" />
-        <span className="text-sm font-bold truncate">{user.branch?.name || "HQ / Central"}</span>
+        <span className="text-sm font-bold truncate">
+          {user.branch?.name || (user.districtName ? `${user.districtName} District` : "HQ / Central")}
+        </span>
       </div>
     </TableCell>
 
@@ -229,6 +242,7 @@ export default function UserManagementPage() {
   
   const [users, setUsers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
+  const [districts, setDistricts] = useState<any[]>([]);
   const [roleDefinitions, setRoleDefinitions] = useState<any[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -252,6 +266,8 @@ export default function UserManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const phoneInputRef = useRef<HTMLInputElement | null>(null);
+  const [phoneNumberError, setPhoneNumberError] = useState('');
 
   const [formData, setFormData] = useState<any>({
     firstName: '',
@@ -260,9 +276,25 @@ export default function UserManagementPage() {
     phoneNumber: '',
     role: '',
     status: USER_STATUS.ACTIVE,
-    branchId: ''
+    branchId: '',
+    districtName: ''
   });
   const isHqOnly = isHqOnlyRole(formData.role);
+  const isDistrictDirector = isDistrictDirectorRole(formData.role);
+  const generatedEmailPreview = useMemo(() => {
+    const firstNamePart = buildEmailPreviewSegment(formData.firstName || '');
+    const lastNamePart = buildEmailPreviewSegment(formData.lastName || '');
+
+    if (editingUser && editingUser.firstName === formData.firstName && editingUser.lastName === formData.lastName) {
+      return editingUser.email;
+    }
+
+    if (!firstNamePart || !lastNamePart) {
+      return 'firstname.surname@nibbank.com.et';
+    }
+
+    return `${firstNamePart}.${lastNamePart}@nibbank.com.et`;
+  }, [editingUser, formData.firstName, formData.lastName]);
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('USER_CREATE')) {
@@ -274,16 +306,26 @@ export default function UserManagementPage() {
     loadInitialData();
   }, []);
 
+  useEffect(() => {
+    users.forEach((userRecord) => {
+      if (!userRecord.needsPasswordChange) {
+        tempPasswordRegistry.remove(userRecord.email);
+      }
+    });
+  }, [users]);
+
   const loadInitialData = async () => {
     setInitialLoading(true);
     try {
-      const [u, b, r] = await Promise.all([
+      const [u, b, d, r] = await Promise.all([
         getAllUsers(), 
         getBranches(),
+        getDistricts(),
         getRoleDefinitions()
       ]);
       setUsers(u);
       setBranches(b);
+      setDistricts(d);
       setRoleDefinitions(r);
     } catch (error) {
       toast({ variant: "destructive", title: "Sync failed" });
@@ -309,7 +351,8 @@ export default function UserManagementPage() {
     return users
       .filter(user => 
         `${user.firstName} ${user.lastName}`.toLowerCase().includes(term) ||
-        user.email.toLowerCase().includes(term)
+        user.email.toLowerCase().includes(term) ||
+        (user.phoneNumber || '').toLowerCase().includes(term)
       )
       .sort((a, b) => a.firstName.localeCompare(b.firstName));
   }, [users, searchTerm]);
@@ -320,7 +363,16 @@ export default function UserManagementPage() {
     return filteredUsers.slice(start, start + itemsPerPage);
   }, [filteredUsers, currentPage]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.max(1, Math.min(page, totalPages)));
+  }, [totalPages]);
+
   const handleOpenDialog = useCallback((user?: any) => {
+    setPhoneNumberError('');
     if (user) {
       setEditingUser(user);
       const currentRole = user.roles?.[0]?.role?.name || '';
@@ -331,26 +383,46 @@ export default function UserManagementPage() {
         phoneNumber: user.phoneNumber || '',
         role: currentRole,
         status: user.status || USER_STATUS.ACTIVE,
-        branchId: user.branch?.id || 'none'
+        branchId: user.branch?.id || 'none',
+        districtName: user.districtName || ''
       });
     } else {
       setEditingUser(null);
       setFormData({ 
         firstName: '', 
         lastName: '',
-        email: '', 
+        email: '',
         phoneNumber: '',
         role: roleDefinitions[0]?.name || '', 
         status: USER_STATUS.ACTIVE, 
-        branchId: 'none' 
+        branchId: 'none',
+        districtName: ''
       });
     }
     setIsDialogOpen(true);
   }, [roleDefinitions]);
 
   const handleSave = useCallback(async () => {
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.role) {
+    if (!formData.firstName || !formData.lastName || !formData.role) {
       toast({ variant: "destructive", title: "Information Required" });
+      return;
+    }
+
+    if (!formData.phoneNumber?.trim()) {
+      setPhoneNumberError('Please enter phone number.');
+      phoneInputRef.current?.focus();
+      return;
+    }
+
+    setPhoneNumberError('');
+
+    if ((formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER') && (!formData.branchId || formData.branchId === 'none')) {
+      toast({ variant: "destructive", title: "Branch Required" });
+      return;
+    }
+
+    if (isDistrictDirector && !formData.districtName) {
+      toast({ variant: "destructive", title: "District Required" });
       return;
     }
 
@@ -359,18 +431,20 @@ export default function UserManagementPage() {
       const isBranchRole = formData.role === 'BRANCH_MANAGER' || formData.role === 'BRANCH_OFFICER';
       const res = await provisionUser({ 
         ...formData, 
+        email: (formData.email || generatedEmailPreview).toLowerCase().trim(),
         id: editingUser?.id, 
-        branchId: (isBranchRole && formData.branchId !== 'none') ? formData.branchId : null
+        branchId: (isBranchRole && formData.branchId !== 'none') ? formData.branchId : null,
+        districtName: isDistrictDirector ? formData.districtName : null
       });
       
       if (res.success) {
         if (res.tempPassword) {
-          tempPasswordRegistry.add(formData.email, res.tempPassword);
+          tempPasswordRegistry.add(res.user.email, res.tempPassword);
           setTempPasswordModalData({
             user: {
               firstName: formData.firstName,
               lastName: formData.lastName,
-              email: formData.email
+              email: res.user.email
             },
             password: res.tempPassword
           });
@@ -383,11 +457,15 @@ export default function UserManagementPage() {
         throw new Error(res.error);
       }
     } catch (error: any) {
+      if (typeof error?.message === 'string' && error.message.toLowerCase().includes('phone')) {
+        setPhoneNumberError(error.message);
+        phoneInputRef.current?.focus();
+      }
       toast({ variant: "destructive", title: "Action Error", description: error.message });
     } finally {
       setIsSyncing(false);
     }
-  }, [formData, editingUser, toast]);
+  }, [formData, editingUser, generatedEmailPreview, isDistrictDirector, toast]);
 
   const handleToggleStatus = useCallback(async (user: any) => {
     const newStatus = user.status === USER_STATUS.ACTIVE ? USER_STATUS.INACTIVE : USER_STATUS.ACTIVE;
@@ -454,8 +532,8 @@ export default function UserManagementPage() {
     <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Personnel Directory</h1>
-          <p className="text-muted-foreground text-lg font-medium">Manage institutional staff and branch assignments.</p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">{SYSTEM_SECTION_COPY.USER_CREATE.label}</h1>
+          <p className="text-muted-foreground text-lg font-medium">{SYSTEM_SECTION_COPY.USER_CREATE.description}</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
@@ -485,7 +563,7 @@ export default function UserManagementPage() {
             <TableRow className="bg-slate-50 border-b border-slate-100">
               <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest py-5 pl-8">Identity</TableHead>
               <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest text-center">Role</TableHead>
-              <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Branch</TableHead>
+              <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Assignment</TableHead>
               <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Status</TableHead>
               <TableHead className="text-right font-black text-slate-500 text-[11px] uppercase tracking-widest pr-8">Actions</TableHead>
             </TableRow>
@@ -494,7 +572,7 @@ export default function UserManagementPage() {
             {paginatedUsers.length === 0 ? (
               <TableRow><TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">No personnel records discovered.</TableCell></TableRow>
             ) : paginatedUsers.map((u) => {
-              const tempPass = tempPasswordRegistry.get(u.email);
+              const tempPass = u.needsPasswordChange ? tempPasswordRegistry.get(u.email) : null;
               // Check if the user being viewed is an admin
               const isUserAdmin = u.roles?.some((r: any) => r.role?.name === 'SUPER_ADMIN');
               return (
@@ -535,7 +613,10 @@ export default function UserManagementPage() {
   open={isDialogOpen}
   onOpenChange={(open) => {
     setIsDialogOpen(open);
-    if (!open) setEditingUser(null); // clear editing user when closed
+    if (!open) {
+      setEditingUser(null); // clear editing user when closed
+      setPhoneNumberError('');
+    }
   }}
 >
           <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">          <DialogHeader className="p-8 bg-primary text-white">
@@ -546,30 +627,84 @@ export default function UserManagementPage() {
           </DialogHeader>
           
           <div className="p-8 space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-500">First Name</Label><Input value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="h-11 rounded-xl font-bold" /></div>
-              <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-500">Last Name</Label><Input value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="h-11 rounded-xl font-bold" /></div>
+            <div className="absolute opacity-0 pointer-events-none -z-10 h-0 overflow-hidden" aria-hidden="true">
+              <input type="text" name="username" autoComplete="username" tabIndex={-1} />
+              <input type="password" name="current-password" autoComplete="current-password" tabIndex={-1} />
             </div>
-            <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-500">Bank Email</Label><Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl font-bold" /></div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-500">Phone Number</Label>
-              <Input
-                type="tel"
-                placeholder="e.g. +2519XXXXXXX"
-                value={formData.phoneNumber}
-                onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })}
-                className="h-11 rounded-xl font-bold"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-500">First Name</Label><Input name="personnel-first-name" autoComplete="given-name" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="h-11 rounded-xl font-bold" /></div>
+              <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-500">Surname</Label><Input name="personnel-surname" autoComplete="family-name" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="h-11 rounded-xl font-bold" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-500">Official Username</Label>
+                <Input
+                  name="personnel-outlook-address"
+                  autoComplete="off"
+                  value={formData.email || generatedEmailPreview}
+                  onFocus={(e) => {
+                    if (!formData.email) {
+                      e.currentTarget.select();
+                    }
+                  }}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    email: e.target.value.toLowerCase().replace(/\s+/g, '')
+                  })}
+                  className="h-11 rounded-xl font-bold"
+                />
+                <p className="text-[10px] font-bold text-slate-400">
+                  Edit manually if needed. Use `firstname.surname` or the full bank address.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className={cn(
+                  "text-[10px] font-black uppercase",
+                  phoneNumberError ? "text-red-600" : "text-slate-500"
+                )}>Phone Number *</Label>
+                <Input
+                  ref={phoneInputRef}
+                  type="tel"
+                  name="personnel-phone-number"
+                  placeholder="e.g. +2519XXXXXXX"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  required
+                  aria-invalid={phoneNumberError ? 'true' : 'false'}
+                  value={formData.phoneNumber}
+                  onChange={e => {
+                    const nextValue = e.target.value;
+                    setFormData({ ...formData, phoneNumber: nextValue });
+                    if (phoneNumberError && nextValue.trim()) {
+                      setPhoneNumberError('');
+                    }
+                  }}
+                  className={cn(
+                    "h-11 rounded-xl font-bold",
+                    phoneNumberError && "border-red-500 focus-visible:ring-red-200 focus-visible:border-red-500"
+                  )}
+                />
+                {phoneNumberError ? (
+                  <p className="text-[10px] font-bold text-red-600">
+                    {phoneNumberError}
+                  </p>
+                ) : (
+                  <p className="text-[10px] font-bold text-slate-400">
+                    Required for every personnel record.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-500">Role</Label>
                 <Select
                   value={formData.role}
-                  onValueChange={val => setFormData(prev => ({
+                  onValueChange={val => setFormData((prev: typeof formData) => ({
                     ...prev,
                     role: val,
-                    branchId: isHqOnlyRole(val) ? 'none' : prev.branchId
+                    branchId: isDistrictDirectorRole(val) || isHqOnlyRole(val) ? 'none' : prev.branchId,
+                    districtName: isDistrictDirectorRole(val) ? prev.districtName : ''
                   }))}
                 >
                   <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Select Role" /></SelectTrigger>
@@ -577,14 +712,26 @@ export default function UserManagementPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-500">Branch</Label>
+                <Label className="text-[10px] font-black uppercase text-slate-500">
+                  {isDistrictDirector ? 'District' : (isHqOnly ? 'Head Office' : 'Branch')}
+                </Label>
                 <Select
-                  value={isHqOnly ? "none" : (formData.branchId || "none")}
-                  onValueChange={val => setFormData({ ...formData, branchId: val })}
-                  disabled={isHqOnly}
+                  value={isDistrictDirector ? (formData.districtName || "none") : (isHqOnly ? "none" : (formData.branchId || "none"))}
+                  onValueChange={val => setFormData({
+                    ...formData,
+                    branchId: isDistrictDirector ? 'none' : val,
+                    districtName: isDistrictDirector ? (val === 'none' ? '' : val) : formData.districtName
+                  })}
+                  disabled={isHqOnly && !isDistrictDirector}
                 >
                   <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">HQ / Central</SelectItem>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    {!isDistrictDirector && <SelectItem value="none">HQ / Central</SelectItem>}
+                    {isDistrictDirector
+                      ? districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)
+                      : branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)
+                    }
+                  </SelectContent>
                 </Select>
               </div>
             </div>

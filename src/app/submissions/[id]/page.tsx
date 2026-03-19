@@ -105,8 +105,11 @@ export default function SubmissionDetails() {
   
   const [remarks, setRemarks] = useState("");
   const [isCustomRemark, setIsCustomRemark] = useState(true);
+  const [selectedScenario, setSelectedScenario] = useState("");
   const [isActioning, setIsActioning] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
+  const checklistSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checklistLatestRef = useRef<Record<string, boolean>>({});
 
   const [resubmitFiles, setResubmitFiles] = useState<ResubmitFile[]>([]);
   const resubmitInputRef = useRef<HTMLInputElement>(null);
@@ -147,19 +150,41 @@ export default function SubmissionDetails() {
       }
     }
     setChecklist(state || {});
+    checklistLatestRef.current = state || {};
   }, [submission]);
+
+  useEffect(() => {
+    return () => {
+      if (checklistSyncRef.current) clearTimeout(checklistSyncRef.current);
+    };
+  }, []);
 
   const documentTypes = useMemo(() => {
     return settings?.documentTypes || [];
   }, [settings]);
 
   const isCreator = user?.id === submission?.createdById;
+  const isEscalated = submission?.status === KYC_STATUS.ESCALATED;
+  const wasEscalated = useMemo(() => {
+    if (!submission) return false;
+    if (submission.status === KYC_STATUS.ESCALATED) return true;
+
+    return Array.isArray(submission.commentHistory)
+      && submission.commentHistory.some((entry: any) => entry?.action === KYC_STATUS.ESCALATED);
+  }, [submission]);
   
   const isReviewer = useMemo(() => {
     if (isSuperAdmin) return true;
     if (isCreator) return false;
-    return hasPermission('KYC_VIEW_QUEUE');
-  }, [hasPermission, isSuperAdmin, isCreator]);
+    return hasPermission('KYC_VIEW_QUEUE') || (submission?.status === KYC_STATUS.ESCALATED && hasPermission('VIEW_ESCALATED_CASES'));
+  }, [hasPermission, isSuperAdmin, isCreator, submission?.status]);
+
+  const canBulkManageChecklist = useMemo(() => {
+    if (isSuperAdmin) return true;
+    return user?.roles?.some((ur: any) =>
+      ['KYC_OFFICER', 'KYC_SPECIALIST_OFFICER'].includes(ur.role?.name)
+    ) && isReviewer;
+  }, [isSuperAdmin, isReviewer, user]);
 
   const isTerminal = submission?.status === KYC_STATUS.APPROVED || submission?.status === KYC_STATUS.REJECTED;
 
@@ -228,7 +253,7 @@ export default function SubmissionDetails() {
 
       const res = await resubmitSubmission(formData);
       if (res.success) {
-        toast({ title: "Successful", description: "Case resubmitted for specialist analysis." });
+        toast({ title: "Successful", description: "Case resubmitted for officer analysis." });
         const updated = await getSubmissionById(submission.id);
         setSubmission(updated);
         setRemarks("");
@@ -321,15 +346,43 @@ export default function SubmissionDetails() {
     }
   };
 
-  const handleChecklistToggle = async (itemId: string) => {
-    if (!isReviewer || isTerminal) return;
-    const nextState = { ...checklist, [itemId]: !checklist[itemId] };
+  const scheduleChecklistSync = (submissionId: string, nextState: Record<string, boolean>) => {
+    checklistLatestRef.current = nextState;
+    if (checklistSyncRef.current) clearTimeout(checklistSyncRef.current);
+    checklistSyncRef.current = setTimeout(async () => {
+      try {
+        await updateSubmissionChecklist(submissionId, checklistLatestRef.current);
+      } catch (e) {
+        toast({ variant: "destructive", title: "Sync Error" });
+      }
+    }, 300);
+  };
+
+  const handleChecklistToggle = (itemId: string) => {
+    if (!isReviewer || isTerminal || !submission?.id) return;
+    setChecklist(prev => {
+      const nextState = { ...prev, [itemId]: !prev[itemId] };
+      scheduleChecklistSync(submission.id, nextState);
+      return nextState;
+    });
+  };
+
+  const handleChecklistBulkUpdate = (nextValue: boolean) => {
+    if (!canBulkManageChecklist || isTerminal || !submission?.id) return;
+
+    const nextState = nextValue
+      ? Object.fromEntries(KYC_CHECKLIST_ITEMS.map(item => [item.id, true]))
+      : {};
+
     setChecklist(nextState);
-    try {
-      await updateSubmissionChecklist(submission.id, nextState);
-    } catch (e) {
-      toast({ variant: "destructive", title: "Sync Error" });
-    }
+    scheduleChecklistSync(submission.id, nextState);
+  };
+
+  const handleScenarioChange = (value: string) => {
+    const requiresCustomRemark = /\bother\b/i.test(value);
+    setSelectedScenario(value);
+    setIsCustomRemark(requiresCustomRemark);
+    setRemarks(requiresCustomRemark ? "" : value);
   };
 
   const workflowSteps = useMemo(() => {
@@ -349,9 +402,37 @@ export default function SubmissionDetails() {
       ];
     }
 
+    if (wasEscalated) {
+      return [
+        { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
+        { id: 'review', label: 'Officer Analysis', desc: 'Technical Review', state: 'completed', icon: Search },
+        {
+          id: 'senior',
+          label: 'Senior Assessment',
+          desc: 'Escalated Review',
+          state: status === KYC_STATUS.ESCALATED ? 'active' : 'completed',
+          icon: ShieldAlert
+        },
+        {
+          id: 'verdict',
+          label: 'Institutional Verdict',
+          desc: 'Senior Decision',
+          state: status === KYC_STATUS.ESCALATED ? 'pending' : (isTerminal ? 'completed' : 'active'),
+          icon: ShieldCheck
+        },
+        {
+          id: 'closed',
+          label: 'Case Closed',
+          desc: 'Lifecycle Conclusion',
+          state: isTerminal ? 'completed' : 'pending',
+          icon: Activity
+        }
+      ];
+    }
+
     return [
       { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
-      { id: 'review', label: 'Specialist Analysis', desc: 'Technical Review', state: status === KYC_STATUS.SUBMITTED ? 'active' : 'completed', icon: Search },
+      { id: 'review', label: 'Officer Analysis', desc: 'Technical Review', state: status === KYC_STATUS.SUBMITTED ? 'active' : 'completed', icon: Search },
       { id: 'verdict', label: 'Institutional Verdict', desc: 'Final Assessment', state: status === KYC_STATUS.IN_REVIEW ? 'active' : (isTerminal ? 'completed' : 'pending'), icon: ShieldCheck },
       { id: 'closed', label: 'Case Closed', desc: 'Lifecycle Conclusion', state: isTerminal ? 'completed' : 'pending', icon: Activity }
     ];
@@ -382,6 +463,7 @@ export default function SubmissionDetails() {
               <Badge variant="outline" className={cn(
                 "font-black px-3 py-1 uppercase text-[10px] tracking-widest",
                 submission.status === KYC_STATUS.APPROVED && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                submission.status === KYC_STATUS.ESCALATED && 'bg-violet-50 text-violet-700 border-violet-200',
                 submission.isExceptional && 'bg-yellow-50 text-yellow-700 border-yellow-200'
               )}>
                 {submission.status.replace(/_/g, ' ')}
@@ -491,6 +573,32 @@ export default function SubmissionDetails() {
                 <Progress value={progressPercentage} className="h-1.5 bg-white/20" />
               </CardHeader>
               <CardContent className="p-6 space-y-3">
+                {canBulkManageChecklist && (
+                  <div className="flex items-center gap-2 pb-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleChecklistBulkUpdate(true)}
+                      disabled={isTerminal || verifiedCount === KYC_CHECKLIST_ITEMS.length}
+                      className="h-8 rounded-full px-4 text-[10px] font-black uppercase tracking-widest"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                      Select All
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleChecklistBulkUpdate(false)}
+                      disabled={isTerminal || verifiedCount === 0}
+                      className="h-8 rounded-full px-4 text-[10px] font-black uppercase tracking-widest"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                      Deselect All
+                    </Button>
+                  </div>
+                )}
                 {KYC_CHECKLIST_ITEMS.map((item) => (
                   <div key={item.id} className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", checklist[item.id] ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-100")}>
                     <div className="flex items-center space-x-3"><Checkbox id={item.id} checked={checklist[item.id] || false} onCheckedChange={() => handleChecklistToggle(item.id)} disabled={!isReviewer || isTerminal} /><label htmlFor={item.id} className="text-[11px] font-bold uppercase tracking-tight">{item.label}</label></div>
@@ -620,14 +728,16 @@ export default function SubmissionDetails() {
 
           {!submission.isExceptional && !isTerminal && isReviewer && (
             <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden bg-white">
-              <CardHeader className="bg-primary text-white border-b py-5"><CardTitle className="text-lg font-black text-white">Technical Verdict</CardTitle></CardHeader>
+              <CardHeader className="bg-primary text-white border-b py-5"><CardTitle className="text-lg font-black text-white">{isEscalated ? 'Senior Assessment' : 'Technical Verdict'}</CardTitle></CardHeader>
               <CardContent className="space-y-6 pt-6 px-6 pb-8">
-                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scenario Library</Label><Select onValueChange={(v) => { setIsCustomRemark(v.includes("other")); setRemarks(v.includes("other") ? "" : v); }}><SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Select Findings..." /></SelectTrigger><SelectContent>{AMENDMENT_SCENARIOS.map((s, i) => <SelectItem key={i} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Final Determination Remarks</Label><Textarea placeholder="Detail findings..." value={remarks} onChange={(e) => setRemarks(e.target.value)} readOnly={!isCustomRemark} className="min-h-[140px] rounded-2xl bg-slate-50/50 font-medium" /></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scenario Library</Label><Select value={selectedScenario} onValueChange={handleScenarioChange}><SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Select Findings..." /></SelectTrigger><SelectContent>{AMENDMENT_SCENARIOS.map((s, i) => <SelectItem key={i} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isEscalated ? 'Senior Assessment Remarks' : 'Final Determination Remarks'}</Label><Textarea placeholder={isCustomRemark ? "Write a new comment..." : "Selected finding will appear here..."} value={remarks} onChange={(e) => setRemarks(e.target.value)} readOnly={!isCustomRemark} className="min-h-[140px] rounded-2xl bg-slate-50/50 font-medium" /></div>
+                <div className={cn("grid grid-cols-1 gap-3", isEscalated ? "md:grid-cols-2" : "md:grid-cols-3")}>
                   <Button onClick={() => handleAction(KYC_STATUS.APPROVED)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Authorize</Button>
                   <Button onClick={() => handleAction(KYC_STATUS.ACTION_REQUIRED)} variant="outline" className="border-orange-600 text-orange-600 font-black h-12 rounded-xl hover:bg-orange-50" disabled={!!isActioning}>Amend</Button>
-                  <Button onClick={() => handleAction(KYC_STATUS.ESCALATED)} className="bg-slate-900 hover:bg-black text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Escalate</Button>
+                  {!isEscalated && (
+                    <Button onClick={() => handleAction(KYC_STATUS.ESCALATED)} className="bg-slate-900 hover:bg-black text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Escalate</Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

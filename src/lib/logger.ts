@@ -26,7 +26,7 @@ export function logInstitutionalError(error: any, context: string): LogResult {
   // PRODUCTION RESPONSE (User-Safe)
   let userMessage = "An internal service exception occurred.";
 
-  if (context.includes('AUTH')) userMessage = "Invalid institutional credentials.";
+  if (context.includes('AUTH')) userMessage = "Invalid username or password.";
   if (context.includes('DB')) userMessage = "Institutional database fault.";
   if (context.includes('PERMISSION')) userMessage = "Access restricted: Insufficient clearance.";
   if (context.includes('FILE')) userMessage = "Institutional vault access fault.";
