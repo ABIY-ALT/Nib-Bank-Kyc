@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -68,11 +68,99 @@ import { cn } from '@/lib/utils';
 
 type AssetCategory = 'ALL' | 'INITIAL' | 'AMENDMENT' | 'MEMO' | 'OTHER';
 
+const StorageFileRow = memo(function StorageFileRow({
+  file,
+  isDownloaded,
+  isPurging,
+  onDownload,
+  onRequestPurge,
+}: {
+  file: any;
+  isDownloaded: boolean;
+  isPurging: boolean;
+  onDownload: (file: any) => void;
+  onRequestPurge: (file: any) => void;
+}) {
+  return (
+    <TableRow className="group/file hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0">
+      <TableCell className="pl-10 py-6">
+        <div className="flex items-center gap-4">
+          <div className={cn(
+            "p-2.5 rounded-xl group-hover/file:scale-110 transition-transform",
+            file.category === 'MEMO' ? 'bg-emerald-50 text-emerald-600' :
+            file.category === 'AMENDMENT' ? 'bg-indigo-50 text-indigo-600' : 'bg-primary/5 text-primary'
+          )}>
+            <FileText className="w-5 h-5" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-black text-slate-900 leading-tight truncate max-w-[300px]">{file.name}</span>
+            <span className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-widest">
+              Timestamp: {format(new Date(file.createdAt), 'MMM dd, yyyy - HH:mm')}
+            </span>
+          </div>
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className={cn(
+          "font-black text-[9px] uppercase px-3 py-1 border-none",
+          file.category === 'INITIAL' && "bg-slate-100 text-slate-600",
+          file.category === 'AMENDMENT' && "bg-indigo-100 text-indigo-700",
+          file.category === 'MEMO' && "bg-emerald-100 text-emerald-700"
+        )}>
+          {file.category.replace('_', ' ')}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-3.5 h-3.5 text-slate-300" />
+          <span className="text-xs font-bold text-slate-600">
+            {file.uploadedBy?.firstName} {file.uploadedBy?.lastName}
+          </span>
+        </div>
+      </TableCell>
+      <TableCell className="text-center">
+        {isDownloaded ? (
+          <Badge className="bg-emerald-500 text-white border-none font-black text-[9px] uppercase tracking-widest px-3">Protocol Unlocked</Badge>
+        ) : (
+          <Badge variant="outline" className="text-slate-400 font-bold text-[9px] uppercase border-slate-200 tracking-widest px-3">Protocol Locked</Badge>
+        )}
+      </TableCell>
+      <TableCell className="text-right pr-10">
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDownload(file)}
+            className="h-11 w-11 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 border border-transparent hover:border-emerald-100"
+            title="Download to Local Audit Storage"
+          >
+            <Download className="w-5 h-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onRequestPurge(file)}
+            disabled={!isDownloaded || isPurging}
+            className={cn(
+              "h-11 w-11 rounded-xl transition-all",
+              isDownloaded ? "hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100" : "opacity-20 grayscale"
+            )}
+            title={isDownloaded ? "Permanent Vault Purge" : "Download required to unlock purge"}
+          >
+            {isPurging ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+});
+
 export default function StorageVaultPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
+  const canManageVaultStorage = hasPermission('MANAGE_VAULT_STORAGE');
 
   // Data State
   const [inventory, setInventory] = useState<any[]>([]);
@@ -93,19 +181,12 @@ export default function StorageVaultPage() {
   const [fileToPurge, setFileToPurge] = useState<any | null>(null);
 
   useEffect(() => {
-    if (!permissionsLoading && !hasPermission('MANAGE_VAULT_STORAGE')) {
+    if (!permissionsLoading && !canManageVaultStorage) {
       router.push('/unauthorized?required=MANAGE_VAULT_STORAGE');
     }
-  }, [hasPermission, permissionsLoading, router]);
+  }, [canManageVaultStorage, permissionsLoading, router]);
 
-  useEffect(() => {
-    if (user && hasPermission('MANAGE_VAULT_STORAGE')) {
-      loadMetadata();
-      loadInventory();
-    }
-  }, [user, hasPermission]);
-
-  const loadMetadata = async () => {
+  const loadMetadata = useCallback(async () => {
     try {
       const [d, b] = await Promise.all([getDistricts(), getBranches()]);
       setDistricts(d || []);
@@ -113,9 +194,9 @@ export default function StorageVaultPage() {
     } catch (e) {
       console.error("Metadata load failed", e);
     }
-  };
+  }, []);
 
-  const loadInventory = async () => {
+  const loadInventory = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
@@ -131,7 +212,14 @@ export default function StorageVaultPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isSuperAdmin, user]);
+
+  useEffect(() => {
+    if (user && canManageVaultStorage) {
+      loadMetadata();
+      loadInventory();
+    }
+  }, [canManageVaultStorage, loadInventory, loadMetadata, user]);
 
   // Grouping & Filtering Logic
   const groupedInventory = useMemo(() => {
@@ -187,7 +275,7 @@ export default function StorageVaultPage() {
     return branches.filter(b => b.district?.name === selectedDistrict);
   }, [branches, selectedDistrict]);
 
-  const handleDownload = (file: any) => {
+  const handleDownload = useCallback((file: any) => {
     const link = document.createElement('a');
     link.href = file.fileUrl;
     link.download = file.name;
@@ -195,15 +283,20 @@ export default function StorageVaultPage() {
     link.click();
     document.body.removeChild(link);
     
-    setDownloadedFiles(prev => new Set([...prev, file.id]));
+    setDownloadedFiles(prev => {
+      if (prev.has(file.id)) return prev;
+      const next = new Set(prev);
+      next.add(file.id);
+      return next;
+    });
     
     toast({
       title: "Archive Extraction Successful",
       description: "File saved to local storage. Purge capability unlocked.",
     });
-  };
+  }, [toast]);
 
-  const handleConfirmPurge = async () => {
+  const handleConfirmPurge = useCallback(async () => {
     if (!fileToPurge) return;
     setIsPurging(fileToPurge.id);
     try {
@@ -218,21 +311,27 @@ export default function StorageVaultPage() {
       setIsPurging(null);
       setFileToPurge(null);
     }
-  };
+  }, [fileToPurge, toast]);
 
-  const toggleCase = (caseId: string) => {
-    const next = new Set(expandedCases);
-    if (next.has(caseId)) next.delete(caseId);
-    else next.add(caseId);
-    setExpandedCases(next);
-  };
+  const toggleCase = useCallback((caseId: string) => {
+    setExpandedCases(prev => {
+      const next = new Set(prev);
+      if (next.has(caseId)) next.delete(caseId);
+      else next.add(caseId);
+      return next;
+    });
+  }, []);
 
-  const resetFilters = () => {
+  const requestPurge = useCallback((file: any) => {
+    setFileToPurge(file);
+  }, []);
+
+  const resetFilters = useCallback(() => {
     setSearchTerm("");
     setSelectedDistrict("all");
     setSelectedBranch("all");
     setSelectedCategory("ALL");
-  };
+  }, []);
 
   if (permissionsLoading || (loading && inventory.length === 0)) {
     return (
@@ -429,7 +528,16 @@ export default function StorageVaultPage() {
                       <span className="font-black text-slate-900 text-lg tabular-nums">{caseItem.files.length}</span>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="ml-4 rounded-xl hover:bg-primary/10 text-primary">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleCase(caseItem.id);
+                    }}
+                    className="ml-4 rounded-xl hover:bg-primary/10 text-primary"
+                  >
                     {expandedCases.has(caseItem.id) ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
                   </Button>
                 </div>
@@ -450,76 +558,14 @@ export default function StorageVaultPage() {
                   </TableHeader>
                   <TableBody>
                     {caseItem.files.map((file: any) => (
-                      <TableRow key={file.id} className="group/file hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0">
-                        <TableCell className="pl-10 py-6">
-                          <div className="flex items-center gap-4">
-                            <div className={cn(
-                              "p-2.5 rounded-xl group-hover/file:scale-110 transition-transform",
-                              file.category === 'MEMO' ? 'bg-emerald-50 text-emerald-600' : 
-                              file.category === 'AMENDMENT' ? 'bg-indigo-50 text-indigo-600' : 'bg-primary/5 text-primary'
-                            )}>
-                              <FileText className="w-5 h-5" />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="font-black text-slate-900 leading-tight truncate max-w-[300px]">{file.name}</span>
-                              <span className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-widest">
-                                Timestamp: {format(new Date(file.createdAt), 'MMM dd, yyyy • HH:mm')}
-                              </span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={cn(
-                            "font-black text-[9px] uppercase px-3 py-1 border-none",
-                            file.category === 'INITIAL' && "bg-slate-100 text-slate-600",
-                            file.category === 'AMENDMENT' && "bg-indigo-100 text-indigo-700",
-                            file.category === 'MEMO' && "bg-emerald-100 text-emerald-700"
-                          )}>
-                            {file.category.replace('_', ' ')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <ShieldCheck className="w-3.5 h-3.5 text-slate-300" />
-                            <span className="text-xs font-bold text-slate-600">
-                              {file.uploadedBy?.firstName} {file.uploadedBy?.lastName}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {downloadedIds.has(file.id) ? (
-                            <Badge className="bg-emerald-500 text-white border-none font-black text-[9px] uppercase tracking-widest px-3">Protocol Unlocked</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-slate-400 font-bold text-[9px] uppercase border-slate-200 tracking-widest px-3">Protocol Locked</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right pr-10">
-                          <div className="flex justify-end gap-3">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => handleDownload(file)}
-                              className="h-11 w-11 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 border border-transparent hover:border-emerald-100"
-                              title="Download to Local Audit Storage"
-                            >
-                              <Download className="w-5 h-5" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => setFileToPurge(file)}
-                              disabled={!downloadedIds.has(file.id) || isPurging === file.id}
-                              className={cn(
-                                "h-11 w-11 rounded-xl transition-all",
-                                downloadedIds.has(file.id) ? "hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100" : "opacity-20 grayscale"
-                              )}
-                              title={downloadedIds.has(file.id) ? "Permanent Vault Purge" : "Download required to unlock purge"}
-                            >
-                              {isPurging === file.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                      <StorageFileRow
+                        key={file.id}
+                        file={file}
+                        isDownloaded={downloadedIds.has(file.id)}
+                        isPurging={isPurging === file.id}
+                        onDownload={handleDownload}
+                        onRequestPurge={requestPurge}
+                      />
                     ))}
                   </TableBody>
                 </Table>
@@ -581,3 +627,4 @@ export default function StorageVaultPage() {
     </div>
   );
 }
+

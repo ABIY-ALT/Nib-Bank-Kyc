@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, memo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, memo, useCallback, useDeferredValue, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Table, 
@@ -105,6 +105,11 @@ const isDistrictDirectorRole = (role?: string) => role?.toUpperCase() === 'DISTR
 
 const buildEmailPreviewSegment = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
+const ALL_ROLES_FILTER = 'ALL_ROLES';
+
+const getPrimaryRoleName = (user: any) => user.roles?.[0]?.role?.name || 'UNASSIGNED';
+const formatRoleLabel = (role?: string) => role?.replace(/_/g, ' ') || 'Unassigned';
+
 // Memoized UserTableRow component to prevent unnecessary re-renders
 const UserTableRow = memo(({ 
   user, 
@@ -114,7 +119,6 @@ const UserTableRow = memo(({
   onToggleStatus,
   onShowCredential,
   isAdminUser,
-  toast
 }: {
   user: any;
   tempPass: string | null;
@@ -123,7 +127,6 @@ const UserTableRow = memo(({
   onToggleStatus: (user: any) => void;
   onShowCredential: (user: any, password: string) => void;
   isAdminUser: boolean;
-  toast: any;
 }) => (
   <TableRow className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
     <TableCell className="py-6 pl-8">
@@ -169,7 +172,7 @@ const UserTableRow = memo(({
     <TableCell className="text-center">
       <div className="inline-flex h-8 items-center px-4 rounded-full bg-[#FAF7F2] border border-[#B89334]/10">
         <span className="text-[10px] font-black uppercase text-[#B89334] tracking-widest whitespace-nowrap">
-          {user.roles?.[0]?.role?.name?.replace(/_/g, ' ') || "Unassigned"}
+          {formatRoleLabel(getPrimaryRoleName(user))}
         </span>
       </div>
     </TableCell>
@@ -264,10 +267,13 @@ export default function UserManagementPage() {
   } | null>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState(ALL_ROLES_FILTER);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
   const [phoneNumberError, setPhoneNumberError] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const canManageUsers = hasPermission('USER_CREATE');
 
   const [formData, setFormData] = useState<any>({
     firstName: '',
@@ -296,15 +302,32 @@ export default function UserManagementPage() {
     return `${firstNamePart}.${lastNamePart}@nibbank.com.et`;
   }, [editingUser, formData.firstName, formData.lastName]);
 
-  useEffect(() => {
-    if (!permissionsLoading && !hasPermission('USER_CREATE')) {
-      router.push('/');
-    }
-  }, [hasPermission, permissionsLoading, router]);
+  const roleFilterOptions = useMemo(() => {
+    const roleMap = new Map<string, string>();
+
+    roleDefinitions.forEach((role) => {
+      if (role?.name) {
+        roleMap.set(role.name, formatRoleLabel(role.name));
+      }
+    });
+
+    users.forEach((userRecord) => {
+      const roleName = getPrimaryRoleName(userRecord);
+      if (roleName) {
+        roleMap.set(roleName, formatRoleLabel(roleName));
+      }
+    });
+
+    return Array.from(roleMap.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [roleDefinitions, users]);
 
   useEffect(() => {
-    loadInitialData();
-  }, []);
+    if (!permissionsLoading && !canManageUsers) {
+      router.push('/');
+    }
+  }, [canManageUsers, permissionsLoading, router]);
 
   useEffect(() => {
     users.forEach((userRecord) => {
@@ -314,7 +337,7 @@ export default function UserManagementPage() {
     });
   }, [users]);
 
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     setInitialLoading(true);
     try {
       const [u, b, d, r] = await Promise.all([
@@ -332,9 +355,15 @@ export default function UserManagementPage() {
     } finally {
       setInitialLoading(false);
     }
-  };
+  }, [toast]);
 
-  const refreshUsers = async () => {
+  useEffect(() => {
+    if (!permissionsLoading && canManageUsers) {
+      void loadInitialData();
+    }
+  }, [canManageUsers, loadInitialData, permissionsLoading]);
+
+  const refreshUsers = useCallback(async () => {
     setIsRefreshing(true);
     try {
       const u = await getAllUsers();
@@ -344,18 +373,39 @@ export default function UserManagementPage() {
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [toast]);
 
   const filteredUsers = useMemo(() => {
-    const term = searchTerm.toLowerCase();
+    const term = deferredSearchTerm.trim().toLowerCase();
+    const roleFilter = selectedRoleFilter === ALL_ROLES_FILTER ? null : selectedRoleFilter;
+
     return users
-      .filter(user => 
-        `${user.firstName} ${user.lastName}`.toLowerCase().includes(term) ||
-        user.email.toLowerCase().includes(term) ||
-        (user.phoneNumber || '').toLowerCase().includes(term)
-      )
-      .sort((a, b) => a.firstName.localeCompare(b.firstName));
-  }, [users, searchTerm]);
+      .filter(user => {
+        const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
+        const primaryRole = getPrimaryRoleName(user);
+        const assignmentLabel = (user.branch?.name || user.districtName || 'HQ / Central').toLowerCase();
+        const matchesRole = !roleFilter || primaryRole === roleFilter;
+        const matchesSearch =
+          !term ||
+          fullName.includes(term) ||
+          user.email.toLowerCase().includes(term) ||
+          (user.phoneNumber || '').toLowerCase().includes(term) ||
+          formatRoleLabel(primaryRole).toLowerCase().includes(term) ||
+          assignmentLabel.includes(term);
+
+        return matchesRole && matchesSearch;
+      })
+      .map((user) => ({
+        user,
+        tempPass: user.needsPasswordChange ? tempPasswordRegistry.get(user.email) : null,
+        isAdminUser: user.roles?.some((roleEntry: any) => roleEntry.role?.name === 'SUPER_ADMIN'),
+      }))
+      .sort((left, right) => {
+        const firstNameComparison = left.user.firstName.localeCompare(right.user.firstName);
+        if (firstNameComparison !== 0) return firstNameComparison;
+        return left.user.lastName.localeCompare(right.user.lastName);
+      });
+  }, [deferredSearchTerm, selectedRoleFilter, users]);
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = useMemo(() => {
@@ -365,7 +415,7 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, selectedRoleFilter]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.max(1, Math.min(page, totalPages)));
@@ -465,7 +515,7 @@ export default function UserManagementPage() {
     } finally {
       setIsSyncing(false);
     }
-  }, [formData, editingUser, generatedEmailPreview, isDistrictDirector, toast]);
+  }, [formData, editingUser, generatedEmailPreview, isDistrictDirector, refreshUsers, toast]);
 
   const handleToggleStatus = useCallback(async (user: any) => {
     const newStatus = user.status === USER_STATUS.ACTIVE ? USER_STATUS.INACTIVE : USER_STATUS.ACTIVE;
@@ -476,7 +526,7 @@ export default function UserManagementPage() {
     } catch (e) {
       toast({ variant: "destructive", title: "Action Failed" });
     }
-  }, [toast]);
+  }, [refreshUsers, toast]);
 
   const handleInitiateReset = useCallback((user: any) => {
     setUserToReset(user);
@@ -535,8 +585,8 @@ export default function UserManagementPage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">{SYSTEM_SECTION_COPY.USER_CREATE.label}</h1>
           <p className="text-muted-foreground text-lg font-medium">{SYSTEM_SECTION_COPY.USER_CREATE.description}</p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full md:w-auto">
+          <div className="relative flex-1 md:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input 
               placeholder="Search staff..." 
@@ -544,6 +594,23 @@ export default function UserManagementPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 h-11 bg-white border rounded-xl font-medium"
             />
+          </div>
+          <div className="w-full md:w-64">
+            <Select value={selectedRoleFilter} onValueChange={setSelectedRoleFilter}>
+              <SelectTrigger className="h-11 rounded-xl bg-white font-medium">
+                <SelectValue placeholder="Filter by role" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl shadow-2xl">
+                <SelectItem value={ALL_ROLES_FILTER} className="font-bold">
+                  All Roles
+                </SelectItem>
+                {roleFilterOptions.map((roleOption) => (
+                  <SelectItem key={roleOption.value} value={roleOption.value}>
+                    {roleOption.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {isRefreshing && (
             <div className="hidden md:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -571,21 +638,17 @@ export default function UserManagementPage() {
           <TableBody>
             {paginatedUsers.length === 0 ? (
               <TableRow><TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">No personnel records discovered.</TableCell></TableRow>
-            ) : paginatedUsers.map((u) => {
-              const tempPass = u.needsPasswordChange ? tempPasswordRegistry.get(u.email) : null;
-              // Check if the user being viewed is an admin
-              const isUserAdmin = u.roles?.some((r: any) => r.role?.name === 'SUPER_ADMIN');
+            ) : paginatedUsers.map(({ user, tempPass, isAdminUser }) => {
               return (
                 <UserTableRow 
-                  key={u.id} 
-                  user={u} 
+                  key={user.id} 
+                  user={user} 
                   tempPass={tempPass}
                   onEdit={handleOpenDialog}
                   onReset={handleInitiateReset}
                   onToggleStatus={handleToggleStatus}
                   onShowCredential={handleShowCredential}
-                  isAdminUser={!!isUserAdmin}
-                  toast={toast}
+                  isAdminUser={!!isAdminUser}
                 />
               );
             })}
@@ -594,7 +657,7 @@ export default function UserManagementPage() {
 
         <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            Page {currentPage} of {totalPages} &bull; {filteredUsers.length} Entries
+            Page {currentPage} of {totalPages} &bull; {filteredUsers.length} Users{selectedRoleFilter !== ALL_ROLES_FILTER ? ` in ${formatRoleLabel(selectedRoleFilter)}` : ''}
           </p>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-9 px-4 rounded-xl border-slate-200">

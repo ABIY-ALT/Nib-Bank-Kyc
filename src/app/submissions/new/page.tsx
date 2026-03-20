@@ -1,47 +1,56 @@
-"use client"
+"use client";
 
-import { useState, useRef, useMemo, useEffect } from "react";
+import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Card, 
-  CardContent, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { 
-  Upload, 
-  FilePlus, 
-  Shield, 
-  X, 
-  FileText, 
-  Eye, 
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Upload,
+  FilePlus,
+  Shield,
+  X,
+  FileText,
+  Eye,
   CheckCircle2,
   Download,
-  Loader2
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import { getBranches } from "@/actions/hierarchy";
 import { getGlobalSettings } from "@/actions/settings";
 import { createSubmission } from "@/actions/submissions";
+import { cn } from "@/lib/utils";
+import {
+  DocumentPreviewNavigation,
+  DocumentPreviewViewer,
+  PreviewableDocument,
+  formatFileSize,
+  getPreviewFormatLabel,
+} from "@/components/submissions/document-preview";
 
 interface UploadedFile {
   id: string;
@@ -50,22 +59,253 @@ interface UploadedFile {
   previewUrl: string;
 }
 
-const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+type PreviewMode = "modal" | "panel";
+
+interface UploadedFileRowProps {
+  item: UploadedFile;
+  documentTypes: any[];
+  isSelected: boolean;
+  previewMode: PreviewMode;
+  onTypeChange: (id: string, newType: string) => void;
+  onPreview: (file: UploadedFile) => void;
+  onSelect: (id: string) => void;
+  onRemove: (id: string) => void;
+}
+
+const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+const getFileStatusLabel = (file: UploadedFile) =>
+  file.type ? "Ready for submission" : "Classification pending";
+
+const resolveDocumentTypeLabel = (typeId: string, documentTypes: any[]) => {
+  if (!typeId) return "Awaiting classification";
+
+  const matchedType = documentTypes.find((type: any) => {
+    if (typeof type === "string") return type === typeId;
+    return type?.id === typeId || type?.label === typeId;
+  });
+
+  if (typeof matchedType === "string") return matchedType;
+  return matchedType?.label || typeId;
+};
+
+const toPreviewDocument = (
+  file: UploadedFile | null,
+  documentTypes: any[]
+): PreviewableDocument | null => {
+  if (!file) return null;
+
+  return {
+    id: file.id,
+    name: file.file.name,
+    previewUrl: file.previewUrl,
+    mimeType: file.file.type,
+    size: file.file.size,
+    documentType: resolveDocumentTypeLabel(file.type, documentTypes),
+    status: getFileStatusLabel(file),
+  };
+};
+
+function PreviewMetadataBadges({
+  file,
+  documentTypes,
+  tone = "light",
+}: {
+  file: UploadedFile | null;
+  documentTypes: any[];
+  tone?: "light" | "dark";
+}) {
+  if (!file) return null;
+
+  const isDark = tone === "dark";
+  const sharedClasses = "px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em]";
+  const defaultTone = isDark
+    ? "border-white/10 bg-white/10 text-white/80"
+    : "border-slate-200 bg-slate-50 text-slate-600";
+  const accentTone = isDark
+    ? "border-white/10 bg-white/15 text-white"
+    : "border-primary/15 bg-primary/10 text-primary";
+  const classificationTone = file.type
+    ? isDark
+      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-50"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : isDark
+      ? "border-orange-300/20 bg-orange-300/10 text-orange-100"
+      : "border-orange-200 bg-orange-50 text-orange-600";
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Badge variant="outline" className={cn(sharedClasses, accentTone)}>
+        {getPreviewFormatLabel(toPreviewDocument(file, documentTypes))}
+      </Badge>
+      <Badge variant="outline" className={cn(sharedClasses, classificationTone)}>
+        Type: {resolveDocumentTypeLabel(file.type, documentTypes)}
+      </Badge>
+      <Badge variant="outline" className={cn(sharedClasses, defaultTone)}>
+        Status: {getFileStatusLabel(file)}
+      </Badge>
+      <Badge variant="outline" className={cn(sharedClasses, defaultTone)}>
+        {formatFileSize(file.file.size)}
+      </Badge>
+    </div>
+  );
+}
+
+const UploadedFileRow = memo(function UploadedFileRow({
+  item,
+  documentTypes,
+  isSelected,
+  previewMode,
+  onTypeChange,
+  onPreview,
+  onSelect,
+  onRemove,
+}: UploadedFileRowProps) {
+  const isPanelMode = previewMode === "panel";
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-4 rounded-2xl border bg-white p-4 shadow-sm transition-all duration-200 md:flex-row md:items-center",
+        isPanelMode && "cursor-pointer hover:border-primary/40 hover:bg-primary/[0.03]",
+        isSelected
+          ? "border-primary bg-primary/[0.04] shadow-[0_18px_40px_rgba(15,23,42,0.08)] ring-1 ring-primary/20"
+          : "border-slate-200"
+      )}
+      onClick={isPanelMode ? () => onSelect(item.id) : undefined}
+      onKeyDown={
+        isPanelMode
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(item.id);
+              }
+            }
+          : undefined
+      }
+      role={isPanelMode ? "button" : undefined}
+      tabIndex={isPanelMode ? 0 : undefined}
+      aria-pressed={isPanelMode ? isSelected : undefined}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-4">
+        <div
+          className={cn(
+            "rounded-xl p-2 transition-colors",
+            isSelected ? "bg-primary/10" : "bg-slate-100"
+          )}
+        >
+          <FileText className={cn("h-6 w-6", isSelected ? "text-primary" : "text-slate-400")} />
+        </div>
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="max-w-[260px] truncate text-sm font-bold text-slate-800">
+              {item.file.name}
+            </span>
+            {isPanelMode && isSelected ? (
+              <Badge className="bg-primary px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                Selected
+              </Badge>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+              {formatFileSize(item.file.size)}
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+              {getPreviewFormatLabel(toPreviewDocument(item, documentTypes))}
+            </span>
+            <Badge
+              variant="outline"
+              className={cn(
+                "px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]",
+                item.type
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-orange-200 bg-orange-50 text-orange-600"
+              )}
+            >
+              {item.type ? "Classified" : "Type pending"}
+            </Badge>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="flex w-full flex-col gap-3 sm:flex-row sm:items-center md:w-auto"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Select value={item.type} onValueChange={(value) => onTypeChange(item.id, value)}>
+          <SelectTrigger className="h-10 w-full bg-slate-50/60 font-bold md:w-64">
+            <SelectValue placeholder="Select file type" />
+          </SelectTrigger>
+          <SelectContent className="rounded-xl shadow-2xl">
+            {documentTypes.length > 0 ? (
+              documentTypes.map((type: any) => (
+                <SelectItem key={type.id} value={type.id} className="font-medium">
+                  {type.label}
+                </SelectItem>
+              ))
+            ) : (
+              <div className="p-4 text-center text-xs italic text-muted-foreground">
+                No document types configured.
+              </div>
+            )}
+          </SelectContent>
+        </Select>
+
+        <div className="flex gap-1 self-end sm:self-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            onClick={() => onPreview(item)}
+            className="h-10 w-10 rounded-full text-slate-500 hover:bg-primary/5 hover:text-primary"
+            title={isPanelMode ? "Preview in panel" : "View"}
+          >
+            <Eye className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className="h-10 w-10 rounded-full text-slate-500 hover:bg-primary/5 hover:text-primary"
+          >
+            <a href={item.previewUrl} download={item.file.name}>
+              <Download className="h-5 w-5" />
+            </a>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            onClick={() => onRemove(item.id)}
+            className="h-10 w-10 rounded-full text-red-500 hover:bg-red-50"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+UploadedFileRow.displayName = "UploadedFileRow";
 
 export default function NewSubmission() {
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
-  
+
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [entityType, setEntityType] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("modal");
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [branches, setBranches] = useState<any[]>([]);
+  const uploadedFilesRef = useRef<UploadedFile[]>([]);
+
   const [settings, setSettings] = useState<any>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,17 +313,46 @@ export default function NewSubmission() {
   useEffect(() => {
     async function loadConfig() {
       try {
-        const [b, s] = await Promise.all([getBranches(), getGlobalSettings()]);
-        setBranches(b);
-        setSettings(s);
+        const nextSettings = await getGlobalSettings();
+        setSettings(nextSettings);
       } catch (error) {
         console.error("Config load failed:", error);
       } finally {
         setLoadingConfig(false);
       }
     }
+
     loadConfig();
   }, []);
+
+  useEffect(() => {
+    uploadedFilesRef.current = uploadedFiles;
+  }, [uploadedFiles]);
+
+  useEffect(() => {
+    return () => {
+      uploadedFilesRef.current.forEach((file) => URL.revokeObjectURL(file.previewUrl));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (previewMode === "panel") {
+      setIsPreviewModalOpen(false);
+    }
+  }, [previewMode]);
+
+  useEffect(() => {
+    if (uploadedFiles.length === 0) {
+      setActiveFileId(null);
+      setIsPreviewModalOpen(false);
+      return;
+    }
+
+    const activeFileStillExists = uploadedFiles.some((file) => file.id === activeFileId);
+    if (!activeFileStillExists) {
+      setActiveFileId(uploadedFiles[0].id);
+    }
+  }, [activeFileId, uploadedFiles]);
 
   const documentTypes = useMemo(() => {
     return settings?.documentTypes || [];
@@ -93,154 +362,307 @@ export default function NewSubmission() {
     return settings?.entityTypes || [];
   }, [settings]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      const validFiles: UploadedFile[] = [];
-      
-      for (const file of files) {
-        if (file.size > MAX_FILE_SIZE) {
-          toast({ 
-            variant: "destructive", 
-            title: "File Too Large", 
-            description: `"${file.name}" exceeds the 10MB limit.` 
-          });
-          continue;
-        }
+  const activePreviewIndex = useMemo(() => {
+    return uploadedFiles.findIndex((file) => file.id === activeFileId);
+  }, [activeFileId, uploadedFiles]);
 
-        if (!ALLOWED_TYPES.includes(file.type)) {
-          toast({ 
-            variant: "destructive", 
-            title: "Invalid Type", 
-            description: "Only PDF or image files are allowed." 
-          });
-          continue;
-        }
+  const activeFile = activePreviewIndex >= 0 ? uploadedFiles[activePreviewIndex] : null;
 
-        validFiles.push({
-          id: crypto.randomUUID(),
-          file: file,
-          type: "",
-          previewUrl: URL.createObjectURL(file)
+  const activePreviewDocument = useMemo(() => {
+    return toPreviewDocument(activeFile, documentTypes);
+  }, [activeFile, documentTypes]);
+  const deferredPreviewDocument = useDeferredValue(activePreviewDocument);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files) return;
+
+    const files = Array.from(event.target.files);
+    const validFiles: UploadedFile[] = [];
+
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast({
+          variant: "destructive",
+          title: "File Too Large",
+          description: `"${file.name}" exceeds the 10MB limit.`,
+        });
+        continue;
+      }
+
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        toast({
+          variant: "destructive",
+          title: "Invalid Type",
+          description: "Only PDF or image files are allowed.",
+        });
+        continue;
+      }
+
+      validFiles.push({
+        id: crypto.randomUUID(),
+        file,
+        type: "",
+        previewUrl: URL.createObjectURL(file),
+      });
+    }
+
+    if (validFiles.length > 0) {
+      setUploadedFiles((previousFiles) => [...previousFiles, ...validFiles]);
+    }
+
+    event.target.value = "";
+  };
+
+  const handleTypeChange = useCallback((id: string, newType: string) => {
+    setUploadedFiles((previousFiles) =>
+      previousFiles.map((file) => (file.id === id ? { ...file, type: newType } : file))
+    );
+  }, []);
+
+  const handleRemoveFile = useCallback((id: string) => {
+    setUploadedFiles((previousFiles) => {
+      const fileToRemove = previousFiles.find((file) => file.id === id);
+      if (fileToRemove) {
+        URL.revokeObjectURL(fileToRemove.previewUrl);
+      }
+
+      return previousFiles.filter((file) => file.id !== id);
+    });
+  }, []);
+
+  const handlePreviewRequest = useCallback(
+    (file: UploadedFile) => {
+      startTransition(() => {
+        setActiveFileId(file.id);
+      });
+
+      if (previewMode === "modal") {
+        setIsPreviewModalOpen(true);
+      }
+    },
+    [previewMode]
+  );
+
+  const handlePanelSelection = useCallback((id: string) => {
+    startTransition(() => {
+      setActiveFileId(id);
+    });
+  }, []);
+
+  const goToPreviewIndex = useCallback(
+    (nextIndex: number) => {
+      const nextFile = uploadedFiles[nextIndex];
+      if (nextFile) {
+        startTransition(() => {
+          setActiveFileId(nextFile.id);
         });
       }
-      
-      setUploadedFiles((prev) => [...prev, ...validFiles]);
+    },
+    [uploadedFiles]
+  );
+
+  const goToPreviousPreview = useCallback(() => {
+    if (activePreviewIndex > 0) {
+      goToPreviewIndex(activePreviewIndex - 1);
     }
-  };
+  }, [activePreviewIndex, goToPreviewIndex]);
 
-  const removeFile = (id: string) => {
-    setUploadedFiles((prev) => {
-      const filtered = prev.filter((f) => f.id !== id);
-      const removed = prev.find(f => f.id === id);
-      if (removed) URL.revokeObjectURL(removed.previewUrl);
-      return filtered;
-    });
-  };
+  const goToNextPreview = useCallback(() => {
+    if (activePreviewIndex >= 0 && activePreviewIndex < uploadedFiles.length - 1) {
+      goToPreviewIndex(activePreviewIndex + 1);
+    }
+  }, [activePreviewIndex, goToPreviewIndex, uploadedFiles.length]);
 
-  const handleTypeChange = (id: string, newType: string) => {
-    setUploadedFiles((prev) => prev.map(f => f.id === id ? { ...f, type: newType } : f));
-  };
+  useEffect(() => {
+    if (uploadedFiles.length < 2) return;
+    if (!isPreviewModalOpen && previewMode !== "panel") return;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        !!target?.isContentEditable;
+
+      if (isTypingTarget) return;
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goToPreviousPreview();
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goToNextPreview();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    goToNextPreview,
+    goToPreviousPreview,
+    isPreviewModalOpen,
+    previewMode,
+    uploadedFiles.length,
+  ]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!user || isSubmitting) return;
-    
+
     if (!customerName.trim()) {
-      toast({ variant: "destructive", title: "Validation Error", description: "Customer Full Name is required." });
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Customer Full Name is required.",
+      });
       return;
     }
 
     if (!entityType) {
-      toast({ variant: "destructive", title: "Classification Required", description: "Please select an account category." });
+      toast({
+        variant: "destructive",
+        title: "Classification Required",
+        description: "Please select an account category.",
+      });
       return;
     }
 
     if (uploadedFiles.length === 0) {
-      toast({ variant: "destructive", title: "Missing Documents", description: "Upload at least one document." });
+      toast({
+        variant: "destructive",
+        title: "Missing Documents",
+        description: "Upload at least one document.",
+      });
       return;
     }
 
-    if (uploadedFiles.some(f => !f.type)) {
-      toast({ variant: "destructive", title: "Classification Required", description: "Please select a file type for all uploaded documents." });
+    if (uploadedFiles.some((file) => !file.type)) {
+      toast({
+        variant: "destructive",
+        title: "Classification Required",
+        description: "Please select a file type for all uploaded documents.",
+      });
       return;
     }
 
     setIsSubmitting(true);
+
     try {
       const branchName = user.branchName || "HEADQUARTERS";
-      const branchSlug = branchName.replace(/\s+/g, '_').toUpperCase();
-      
+      const branchSlug = branchName.replace(/\s+/g, "_").toUpperCase();
+
       const randomArray = new Uint32Array(1);
       window.crypto.getRandomValues(randomArray);
       const randomSuffix = 1000 + (randomArray[0] % 9000);
-      
-      const submissionId = `${branchSlug}-KYC-${randomSuffix}`;
-      
-      const formData = new FormData();
-      formData.append('id', submissionId);
-      formData.append('customerName', customerName);
-      formData.append('entityType', entityType);
-      formData.append('branchName', branchName);
-      formData.append('districtName', user.districtName || "Central");
-      formData.append('remarks', remarks);
 
-      uploadedFiles.forEach(f => {
-        formData.append('files', f.file);
-        formData.append('types', f.type);
+      const submissionId = `${branchSlug}-KYC-${randomSuffix}`;
+
+      const formData = new FormData();
+      formData.append("id", submissionId);
+      formData.append("customerName", customerName);
+      formData.append("entityType", entityType);
+      formData.append("branchName", branchName);
+      formData.append("districtName", user.districtName || "Central");
+      formData.append("remarks", remarks);
+
+      uploadedFiles.forEach((file) => {
+        formData.append("files", file.file);
+        formData.append("types", file.type);
       });
 
       const result = await createSubmission(formData);
-      
+
       if (result.success) {
         toast({ title: "Successful", description: `Case ${submissionId} dispatched for review.` });
-        router.push(`/submissions/my`);
+        router.push("/submissions/my");
       } else {
         throw new Error(result.error);
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Submission Failed", description: error.message });
+      toast({
+        variant: "destructive",
+        title: "Submission Failed",
+        description: error.message,
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isPdf = previewFile?.file.type === 'application/pdf' || previewFile?.file.name.toLowerCase().endsWith('.pdf');
+  const fileListContent =
+    uploadedFiles.length > 0 ? (
+      <div className="space-y-3">
+        {uploadedFiles.map((item) => (
+          <UploadedFileRow
+            key={item.id}
+            item={item}
+            documentTypes={documentTypes}
+            isSelected={item.id === activeFileId}
+            previewMode={previewMode}
+            onTypeChange={handleTypeChange}
+            onPreview={handlePreviewRequest}
+            onSelect={handlePanelSelection}
+            onRemove={handleRemoveFile}
+          />
+        ))}
+      </div>
+    ) : (
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center">
+        <p className="text-sm font-bold text-slate-500">No documents uploaded yet.</p>
+        <p className="mt-2 text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
+          Add PDF or image files to begin the KYC bundle.
+        </p>
+      </div>
+    );
 
   if (loadingConfig) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 gap-4">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Synchronizing Config...</p>
+      <div className="flex flex-col items-center justify-center gap-4 py-32">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          Synchronizing Config...
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
+    <div className="mx-auto max-w-6xl space-y-8 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">New KYC Submission</h1>
-        <Shield className="w-8 h-8 text-primary" />
+        <h1 className="font-headline text-4xl font-extrabold tracking-tight text-slate-900">
+          New KYC Submission
+        </h1>
+        <Shield className="h-8 w-8 text-primary" />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 pb-12">
-        <Card className="border-slate-200 shadow-sm overflow-hidden">
-          <CardHeader className="bg-primary text-white border-b">
-            <CardTitle className="text-xl flex items-center gap-2 text-white"><CheckCircle2 className="w-5 h-5 text-white" /> Entity Profile</CardTitle>
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader className="border-b bg-primary text-white">
+            <CardTitle className="flex items-center gap-2 text-xl text-white">
+              <CheckCircle2 className="h-5 w-5 text-white" />
+              Entity Profile
+            </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-6 md:grid-cols-2 pt-6">
+          <CardContent className="grid gap-6 pt-6 md:grid-cols-2">
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Customer Full Name</Label>
-              <input 
-                placeholder="Full legal name" 
-                required 
-                className="h-11 w-full px-3 border rounded-md font-bold focus:outline-none focus:ring-2 focus:ring-primary/20" 
-                value={customerName} 
-                onChange={(e) => setCustomerName(e.target.value)} 
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Customer Full Name
+              </Label>
+              <input
+                placeholder="Full legal name"
+                required
+                className="h-11 w-full rounded-md border px-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Account Classification</Label>
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Account Classification
+              </Label>
               <Select value={entityType} onValueChange={setEntityType}>
                 <SelectTrigger className="h-11 font-bold">
                   <SelectValue placeholder="Select account category" />
@@ -248,12 +670,18 @@ export default function NewSubmission() {
                 <SelectContent className="rounded-xl shadow-2xl">
                   {entityClassifications.length > 0 ? (
                     entityClassifications.map((classification: any) => (
-                      <SelectItem key={classification.id} value={classification.id} className="font-medium">
+                      <SelectItem
+                        key={classification.id}
+                        value={classification.id}
+                        className="font-medium"
+                      >
                         {classification.label}
                       </SelectItem>
                     ))
                   ) : (
-                    <div className="p-4 text-center text-xs text-muted-foreground italic">No classifications configured.</div>
+                    <div className="p-4 text-center text-xs italic text-muted-foreground">
+                      No classifications configured.
+                    </div>
                   )}
                 </SelectContent>
               </Select>
@@ -261,148 +689,264 @@ export default function NewSubmission() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm overflow-hidden">
-          <CardHeader className="bg-primary text-white border-b">
-            <CardTitle className="text-xl flex items-center gap-2 text-white"><FilePlus className="w-5 h-5 text-white" /> Documentation Bundle</CardTitle>
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader className="border-b bg-primary text-white">
+            <CardTitle className="flex items-center gap-2 text-xl text-white">
+              <FilePlus className="h-5 w-5 text-white" />
+              Documentation Bundle
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
-             <input 
-               type="file" 
-               className="hidden" 
-               ref={fileInputRef} 
-               onChange={handleFileChange} 
-               multiple 
-               accept=".pdf,.jpg,.jpeg,.png" 
-             />
-             <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all bg-slate-50/30">
-                <Upload className="w-10 h-10 text-primary mb-4" />
-                <p className="font-bold text-xl text-slate-800">Drop customer files here</p>
-                <p className="text-xs text-muted-foreground mt-1 font-bold uppercase tracking-widest">Only PDF or image files (max 10MB)</p>
-                <Button variant="outline" type="button" className="mt-4 font-bold border-primary/20 text-primary hover:bg-primary/5">Browse Filesystem</Button>
-             </div>
+            <input
+              type="file"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png"
+            />
 
-             <div className="space-y-3">
-               {uploadedFiles.map((item) => (
-                 <div key={item.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/20 transition-all">
-                   <div className="flex items-center gap-4 flex-1">
-                     <div className="p-2 bg-slate-100 rounded-lg">
-                       <FileText className="w-6 h-6 text-slate-400" />
-                     </div>
-                     <div className="flex flex-col">
-                       <span className="text-sm font-bold truncate text-slate-700 max-w-[200px]">{item.file.name}</span>
-                       <span className="text-[10px] text-muted-foreground uppercase font-bold">{(item.file.size / 1024).toFixed(1)} KB</span>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-4 w-full md:w-auto">
-                     <Select value={item.type} onValueChange={(val) => handleTypeChange(item.id, val)}>
-                       <SelectTrigger className="h-10 w-full md:w-60 bg-slate-50/50 font-bold">
-                         <SelectValue placeholder="Select file type" />
-                       </SelectTrigger>
-                       <SelectContent className="rounded-xl shadow-2xl">
-                         {documentTypes.length > 0 ? (
-                           documentTypes.map((type: any) => (
-                             <SelectItem key={type.id} value={type.id} className="font-medium">
-                               {type.label}
-                             </SelectItem>
-                           ))
-                         ) : (
-                           <div className="p-4 text-center text-xs text-muted-foreground italic">No document types configured.</div>
-                         )}
-                       </SelectContent>
-                     </Select>
-                     <div className="flex gap-1">
-                       <Button variant="ghost" size="icon" type="button" onClick={() => setPreviewFile(item)} className="h-10 w-10 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
-                         <Eye className="w-5 h-5" />
-                       </Button>
-                       <Button variant="ghost" size="icon" asChild className="h-10 w-10 text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full">
-                         <a href={item.previewUrl} download={item.file.name}>
-                           <Download className="w-5 h-5" />
-                         </a>
-                       </Button>
-                       <Button variant="ghost" size="icon" type="button" onClick={() => removeFile(item.id)} className="h-10 w-10 text-red-500 hover:bg-red-50 rounded-full">
-                         <X className="w-5 h-5" />
-                       </Button>
-                     </div>
-                   </div>
-                 </div>
-               ))}
-             </div>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/30 p-16 transition-all hover:bg-primary/5"
+            >
+              <div className="flex flex-col items-center justify-center">
+                <Upload className="mb-4 h-10 w-10 text-primary" />
+                <p className="text-center text-xl font-bold text-slate-800">
+                  Drop customer files here
+                </p>
+                <p className="mt-1 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Only PDF or image files (max 10MB)
+                </p>
+                <Button
+                  variant="outline"
+                  type="button"
+                  className="mt-4 border-primary/20 font-bold text-primary hover:bg-primary/5"
+                >
+                  Browse Filesystem
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,rgba(15,23,42,0.02),rgba(15,118,110,0.05))] p-4 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+                    Preview Workspace
+                  </p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "text-sm font-bold transition-colors",
+                        previewMode === "modal" ? "text-slate-900" : "text-slate-400"
+                      )}
+                    >
+                      Modal
+                    </span>
+                    <Switch
+                      checked={previewMode === "panel"}
+                      onCheckedChange={(checked) =>
+                        setPreviewMode(checked ? "panel" : "modal")
+                      }
+                      aria-label="Toggle preview mode"
+                    />
+                    <span
+                      className={cn(
+                        "text-sm font-bold transition-colors",
+                        previewMode === "panel" ? "text-slate-900" : "text-slate-400"
+                      )}
+                    >
+                      Panel
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs font-medium text-slate-500">
+                    Preview Mode: Modal | Panel
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500"
+                  >
+                    {uploadedFiles.length} file{uploadedFiles.length === 1 ? "" : "s"}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500"
+                  >
+                    {activePreviewIndex >= 0
+                      ? `Selected ${activePreviewIndex + 1} of ${uploadedFiles.length}`
+                      : "No preview selected"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {previewMode === "panel" ? (
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(420px,0.92fr)]">
+                <div className="space-y-3 xl:max-h-[720px] xl:overflow-y-auto xl:pr-2">
+                  {fileListContent}
+                </div>
+
+                <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+                  <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(1,29,61,0.97),rgba(13,71,105,0.94))] px-6 py-5 text-white">
+                    <div className="flex flex-col gap-4">
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/60">
+                          Preview Panel
+                        </p>
+                        <div className="space-y-1">
+                          <h3 className="text-xl font-black tracking-tight">
+                            {activeFile?.file.name || "Document inspection"}
+                          </h3>
+                          <p className="text-sm font-medium text-white/70">
+                            {activeFile
+                              ? "Review the selected document without leaving the upload workflow."
+                              : "Upload files to start inspecting documents here."}
+                          </p>
+                        </div>
+                        <PreviewMetadataBadges
+                          file={activeFile}
+                          documentTypes={documentTypes}
+                          tone="dark"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <DocumentPreviewNavigation
+                          currentIndex={activePreviewIndex >= 0 ? activePreviewIndex : 0}
+                          total={uploadedFiles.length}
+                          onPrevious={goToPreviousPreview}
+                          onNext={goToNextPreview}
+                          buttonClassName="border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                          counterClassName="border-white/15 bg-white/10 text-white/80"
+                        />
+
+                        {activeFile ? (
+                          <Button
+                            asChild
+                            variant="outline"
+                            className="h-10 rounded-full border-white/15 bg-white/10 px-5 font-bold text-white hover:bg-white/20 hover:text-white"
+                          >
+                            <a href={activeFile.previewUrl} download={activeFile.file.name}>
+                              <Download className="h-4 w-4" />
+                              Download Original
+                            </a>
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 sm:p-6">
+                    <DocumentPreviewViewer
+                      file={deferredPreviewDocument}
+                      className="h-[520px] xl:h-[620px]"
+                      emptyStateTitle="No file selected"
+                      emptyStateDescription="Upload documents and click any file in the list to inspect it here."
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              fileListContent
+            )}
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm overflow-hidden">
-          <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl text-white">Initial Remarks</CardTitle></CardHeader>
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader className="border-b bg-primary text-white">
+            <CardTitle className="text-xl text-white">Initial Remarks</CardTitle>
+          </CardHeader>
           <CardContent className="pt-6">
-             <Textarea placeholder="Provide internal context for the KYC Officer (optional)..." className="min-h-[140px] font-medium" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+            <Textarea
+              placeholder="Provide internal context for the KYC Officer (optional)..."
+              className="min-h-[140px] font-medium"
+              value={remarks}
+              onChange={(event) => setRemarks(event.target.value)}
+            />
           </CardContent>
           <CardFooter className="flex justify-end gap-4 border-t pt-8">
-            <Button variant="outline" type="button" onClick={() => router.back()} className="px-8 h-11 font-bold" disabled={isSubmitting}>Cancel</Button>
-            <Button type="submit" className="px-12 h-11 bg-primary font-black shadow-lg text-white rounded-xl hover:bg-primary/90 transition-all active:scale-[0.98]" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => router.back()}
+              className="h-11 px-8 font-bold"
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="h-11 rounded-xl bg-primary px-12 font-black text-white shadow-lg transition-all hover:bg-primary/90 active:scale-[0.98]"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Dispatch for Review
             </Button>
           </CardFooter>
         </Card>
       </form>
 
-      <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
-        <DialogContent className="max-w-[90vw] w-[1200px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-[#1a1a1a] rounded-3xl">
-          <DialogHeader className="p-4 bg-primary text-white flex flex-row items-center justify-between space-y-0 border-b border-white/10 pr-14">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-xl">
-                <FileText className="w-5 h-5 text-white" />
+      <Dialog open={isPreviewModalOpen} onOpenChange={setIsPreviewModalOpen}>
+        <DialogContent className="h-[92vh] w-[1240px] max-w-[92vw] overflow-hidden rounded-3xl border-none bg-[#08111f] p-0 shadow-2xl [&>button]:rounded-full [&>button]:border [&>button]:border-white/10 [&>button]:bg-white/10 [&>button]:text-white [&>button]:opacity-100">
+          <DialogHeader className="space-y-0 border-b border-white/10 bg-[linear-gradient(135deg,rgba(3,37,76,0.98),rgba(14,84,120,0.94))] px-6 py-5 text-white">
+            <div className="flex flex-col gap-4">
+              <div className="space-y-2 pr-12">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-white/15 p-2">
+                    <FileText className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <DialogTitle className="text-left text-lg font-black text-white">
+                      {activeFile?.file.name || "Document Preview"}
+                    </DialogTitle>
+                    <DialogDescription className="text-left text-[11px] font-black uppercase tracking-[0.2em] text-white/60">
+                      Modal inspection mode
+                    </DialogDescription>
+                  </div>
+                </div>
+                <PreviewMetadataBadges
+                  file={activeFile}
+                  documentTypes={documentTypes}
+                  tone="dark"
+                />
               </div>
-              <div className="flex flex-col">
-                <DialogTitle className="text-base font-bold text-white">
-                  {previewFile?.file.name}
-                </DialogTitle>
-                <DialogDescription className="text-white/70 text-[10px] uppercase font-black tracking-widest mt-0.5">
-                  Document Inspection
-                </DialogDescription>
+
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <DocumentPreviewNavigation
+                  currentIndex={activePreviewIndex >= 0 ? activePreviewIndex : 0}
+                  total={uploadedFiles.length}
+                  onPrevious={goToPreviousPreview}
+                  onNext={goToNextPreview}
+                  buttonClassName="border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                  counterClassName="border-white/15 bg-white/10 text-white/80"
+                />
+
+                {activeFile ? (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="h-10 rounded-full border-white/15 bg-white/10 px-5 font-bold text-white hover:bg-white/20 hover:text-white"
+                  >
+                    <a href={activeFile.previewUrl} download={activeFile.file.name}>
+                      <Download className="h-4 w-4" />
+                      Download Original
+                    </a>
+                  </Button>
+                ) : null}
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20 h-9 font-bold px-4">
-                <a href={previewFile?.previewUrl} download={previewFile?.file.name}>
-                  <Download className="w-4 h-4 mr-2" /> Download Original
-                </a>
-              </Button>
             </div>
           </DialogHeader>
-          <div className="flex-1 bg-[#121212] overflow-hidden flex flex-col">
-            {isPdf ? (
-              <div className="w-full h-full flex flex-col">
-                <iframe 
-                  src={`${previewFile?.previewUrl}#toolbar=1&navpanes=1&scrollbar=1`} 
-                  className="w-full h-full border-none" 
-                  title="PDF Preview"
-                />
-              </div>
-            ) : previewFile?.file.type.startsWith('image/') ? (
-              <div className="w-full h-full overflow-auto flex items-center justify-center p-8">
-                <img 
-                  src={previewFile?.previewUrl} 
-                  alt="Preview" 
-                  className="max-w-full max-h-full object-contain shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-sm"
-                />
-              </div>
-            ) : (
-              <div className="text-white flex flex-col items-center gap-6 p-12 text-center h-full justify-center">
-                <div className="p-8 bg-white/5 rounded-full">
-                  <FileText className="w-20 h-20 text-slate-500" />
-                </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-bold">Preview Unavailable</p>
-                  <p className="text-slate-400">Visualization for this file type is not supported in-browser.</p>
-                </div>
-                <Button asChild variant="outline" className="text-white border-white/20 hover:bg-white/10 h-12 px-8 font-bold">
-                  <a href={previewFile?.previewUrl} download={previewFile?.file.name}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download to Inspect
-                  </a>
-                </Button>
-              </div>
-            )}
+
+          <div className="h-full flex-1 overflow-hidden bg-[#050d18] p-4 sm:p-6">
+            <DocumentPreviewViewer
+              file={deferredPreviewDocument}
+              className="h-full border-white/10 bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.18),_rgba(3,7,18,0.98)_58%)]"
+              emptyStateTitle="No file selected"
+              emptyStateDescription="Choose a document from the list to open it in the preview modal."
+            />
           </div>
         </DialogContent>
       </Dialog>
