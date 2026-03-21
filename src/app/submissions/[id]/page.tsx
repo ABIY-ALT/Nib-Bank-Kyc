@@ -38,6 +38,7 @@ import {
   X,
   History
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -66,7 +67,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { formatFileSize } from "@/components/submissions/document-preview";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import * as documentPreview from "@/components/submissions/document-preview";
+import {
+  DocumentPreviewViewer,
+  DocumentPreviewNavigation,
+  formatFileSize,
+  getPreviewFormatLabel,
+  type PreviewableDocument,
+} from "@/components/submissions/document-preview";
 
 const KYC_CHECKLIST_ITEMS = [
   { id: 'id_verified', label: 'Identity Document Authenticity' },
@@ -83,8 +98,10 @@ const KYC_CHECKLIST_ITEMS = [
   { id: 'signature_match', label: 'Specimen Signature Verification' }
 ];
 
+
+
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
 
 interface ResubmitFile {
   id: string;
@@ -182,7 +199,7 @@ const ResubmitFileRow = memo(function ResubmitFileRow({
             <p className="font-black text-slate-900 truncate">{item.file.name}</p>
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest truncate">
-                {formatFileSize(item.file.size)}
+                {documentPreview.formatFileSize(item.file.size)}
               </p>
               <Badge
                 variant="outline"
@@ -256,7 +273,7 @@ export default function SubmissionDetails() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { hasPermission, isSuperAdmin } = usePermissions();
-  const routeSubmissionId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const routeSubmissionId = params && Array.isArray(params.id) ? params.id[0] : params?.id;
   
   const [submission, setSubmission] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
@@ -279,6 +296,9 @@ export default function SubmissionDetails() {
 
   const [fileToPurge, setFileToPurge] = useState<any | null>(null);
   const [isPurging, setIsPurging] = useState<string | null>(null);
+
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [isDocPreviewModalOpen, setIsDocPreviewModalOpen] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -328,6 +348,53 @@ export default function SubmissionDetails() {
     return Array.isArray(submission?.documents) ? submission.documents : [];
   }, [submission?.documents]);
 
+  const previewableDocuments: PreviewableDocument[] = useMemo(() => {
+    return submissionDocuments.map((doc: any) => {
+      // Infer mimeType from the file name since the Memo model
+      // stores the document classification in `type` (e.g. "Passport"), not a MIME type.
+      const lowerName = (doc.name || "").toLowerCase();
+      let inferredMime: string | undefined;
+      if (lowerName.endsWith(".pdf")) inferredMime = "application/pdf";
+      else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) inferredMime = "image/jpeg";
+      else if (lowerName.endsWith(".png")) inferredMime = "image/png";
+
+      return {
+        id: doc.id,
+        name: doc.name,
+        previewUrl: doc.url,
+        mimeType: inferredMime,
+        size: doc.size,
+        documentType: doc.type,
+      };
+    });
+  }, [submissionDocuments]);
+
+  const activeDocIndex = useMemo(() => {
+    return previewableDocuments.findIndex((d) => d.id === activeDocId);
+  }, [activeDocId, previewableDocuments]);
+
+  const activeDocPreview = activeDocIndex >= 0 ? previewableDocuments[activeDocIndex] : null;
+
+  useEffect(() => {
+    if (previewableDocuments.length > 0 && !activeDocId) {
+      setActiveDocId(previewableDocuments[0].id);
+    }
+  }, [previewableDocuments, activeDocId]);
+
+
+
+  const goToPreviousDoc = useCallback(() => {
+    if (activeDocIndex > 0) {
+      setActiveDocId(previewableDocuments[activeDocIndex - 1].id);
+    }
+  }, [activeDocIndex, previewableDocuments]);
+
+  const goToNextDoc = useCallback(() => {
+    if (activeDocIndex >= 0 && activeDocIndex < previewableDocuments.length - 1) {
+      setActiveDocId(previewableDocuments[activeDocIndex + 1].id);
+    }
+  }, [activeDocIndex, previewableDocuments]);
+
   const isCreator = user?.id === submission?.createdById;
   const isEscalated = submission?.status === KYC_STATUS.ESCALATED;
   const wasEscalated = useMemo(() => {
@@ -352,6 +419,17 @@ export default function SubmissionDetails() {
   }, [isSuperAdmin, isReviewer, user]);
 
   const isTerminal = submission?.status === KYC_STATUS.APPROVED || submission?.status === KYC_STATUS.REJECTED;
+
+  // Only the creator (branch officer) or super admin can upload additional documents.
+  // KYC officers and other reviewers can only view/preview/download.
+  const canUploadDocuments = useMemo(() => {
+    if (isSuperAdmin) return true;
+    if (isCreator) return true;
+    // Allow branch roles to upload for their cases
+    return user?.roles?.some((ur: any) =>
+      ['BRANCH_OFFICER', 'BRANCH_MANAGER'].includes(ur.role?.name)
+    ) ?? false;
+  }, [isSuperAdmin, isCreator, user]);
 
   const showChecklist = useMemo(() => {
     if (!submission) return false;
@@ -675,15 +753,138 @@ export default function SubmissionDetails() {
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="bg-primary p-6 border-b flex flex-row items-center justify-between">
               <div className="flex items-center gap-3"><FileText className="w-5 h-5 text-white" /><CardTitle className="text-xl font-black text-white">Documentation</CardTitle></div>
+              
             </CardHeader>
-            <CardContent className="pt-6 px-6">
+            <CardContent className="pt-6 px-6 space-y-5">
+              {submissionDocuments.length > 0 && (
+                <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,rgba(15,23,42,0.02),rgba(15,118,110,0.05))] p-4 shadow-sm mb-6">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Attached Files</p>
+                      <p className="mt-2 text-xs font-medium text-slate-500">Select any document to inspect.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                        {previewableDocuments.length} file{previewableDocuments.length === 1 ? "" : "s"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid gap-4">
-                {submissionDocuments.map((doc: any) => (
-                  <SubmissionDocumentRow key={doc.id} doc={doc} />
-                ))}
+                {submissionDocuments.map((doc: any) => {
+                  const previewDoc = previewableDocuments.find((p) => p.id === doc.id);
+                  return (
+                    <div
+                      key={doc.id}
+                      className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 md:flex-row md:items-center hover:border-primary/40 hover:bg-primary/[0.03] cursor-pointer"
+                      onClick={() => { setActiveDocId(doc.id); setIsDocPreviewModalOpen(true); }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveDocId(doc.id); setIsDocPreviewModalOpen(true); } }}
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-4">
+                        <div className="rounded-xl p-2 bg-slate-100 transition-colors">
+                          <FileText className="h-6 w-6 text-slate-400" />
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="max-w-[260px] truncate text-sm font-bold text-slate-800">{doc.name}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {doc.size && (
+                              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{formatFileSize(doc.size)}</span>
+                            )}
+                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{getPreviewFormatLabel(previewDoc || null)}</span>
+                            <Badge variant="outline" className={cn(
+                              "px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]",
+                              doc.type ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-orange-200 bg-orange-50 text-orange-600"
+                            )}>
+                              {doc.type ? "Classified" : "Unclassified"}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center md:w-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="h-10 w-full md:w-48 flex items-center rounded-md border border-slate-200 bg-slate-50/60 px-3">
+                          <span className="truncate text-sm font-bold text-slate-700">{doc.type ? resolveDocumentTypeLabel(doc.type, documentTypes) : "No type assigned"}</span>
+                        </div>
+                        <div className="flex gap-1 self-end sm:self-auto">
+                          <Button variant="ghost" size="icon" type="button" className="h-10 w-10 rounded-full text-slate-500 hover:bg-primary/5 hover:text-primary" onClick={() => { setActiveDocId(doc.id); setIsDocPreviewModalOpen(true); }}>
+                            <Eye className="h-5 w-5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" asChild className="h-10 w-10 rounded-full text-slate-500 hover:bg-primary/5 hover:text-primary">
+                            <a href={doc.url} download={doc.name}><Download className="h-5 w-5" /></a>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
+
+          <Dialog open={isDocPreviewModalOpen} onOpenChange={setIsDocPreviewModalOpen}>
+            <DialogContent className="h-[92vh] w-[1240px] max-w-[92vw] overflow-hidden rounded-3xl border-none bg-[#08111f] p-0 shadow-2xl [&>button]:rounded-full [&>button]:border [&>button]:border-white/10 [&>button]:bg-white/10 [&>button]:text-white [&>button]:opacity-100">
+              <DialogHeader className="space-y-0 border-b border-white/10 bg-[linear-gradient(135deg,rgba(3,37,76,0.98),rgba(14,84,120,0.94))] px-6 py-5 text-white">
+                <div className="flex flex-col gap-4">
+                  <div className="space-y-2 pr-12">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-xl bg-white/15 p-2"><FileText className="h-5 w-5 text-white" /></div>
+                      <div className="space-y-1">
+                        <DialogTitle className="text-left text-lg font-black text-white">{activeDocPreview?.name || "Document Preview"}</DialogTitle>
+                        <DialogDescription className="text-left text-[11px] font-black uppercase tracking-[0.2em] text-white/60">Modal inspection mode</DialogDescription>
+                      </div>
+                    </div>
+                    {activeDocPreview && (
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline" className="px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] border-white/10 bg-white/15 text-white">
+                          {getPreviewFormatLabel(activeDocPreview)}
+                        </Badge>
+                        <Badge variant="outline" className="px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] border-emerald-300/20 bg-emerald-300/10 text-emerald-50">
+                          {activeDocPreview.documentType || "Unclassified"}
+                        </Badge>
+                        {activeDocPreview.size && (
+                          <Badge variant="outline" className="px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] border-white/10 bg-white/10 text-white/80">
+                            {formatFileSize(activeDocPreview.size)}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <DocumentPreviewNavigation
+                      currentIndex={activeDocIndex >= 0 ? activeDocIndex : 0}
+                      total={previewableDocuments.length}
+                      onPrevious={goToPreviousDoc}
+                      onNext={goToNextDoc}
+                      buttonClassName="border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                      counterClassName="border-white/15 bg-white/10 text-white/80"
+                    />
+                    {activeDocPreview && (
+                      <Button asChild variant="outline" className="h-10 rounded-full border-white/15 bg-white/10 px-5 font-bold text-white hover:bg-white/20 hover:text-white">
+                        <a href={activeDocPreview.previewUrl} download={activeDocPreview.name}>
+                          <Download className="h-4 w-4" />
+                          Download Original
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="h-full flex-1 overflow-hidden bg-[#050d18] p-4 sm:p-6">
+                <DocumentPreviewViewer
+                  file={activeDocPreview}
+                  className="h-full border-white/10 bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.18),_rgba(3,7,18,0.98)_58%)]"
+                  emptyStateTitle="No file selected"
+                  emptyStateDescription="Choose a document from the list to open it in preview."
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="bg-primary p-6 border-b"><CardTitle className="text-xl font-black text-white">Verdict History</CardTitle></CardHeader>

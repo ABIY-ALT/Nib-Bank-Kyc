@@ -12,29 +12,17 @@ import { logInstitutionalError } from '@/lib/logger';
 import fs from 'fs/promises';
 import path from 'path';
 
-const DIRECT_BRANCH_ROLES = new Set(['BRANCH_MANAGER', 'BRANCH_OFFICER']);
-const PORTFOLIO_BRANCH_ROLES = new Set(['KYC_OFFICER', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER', 'SUPERVISOR']);
-const DISTRICT_DIRECTOR_ROLE = 'DISTRICT_DIRECTOR';
+import { 
+  DIRECT_BRANCH_ROLES, 
+  PORTFOLIO_BRANCH_ROLES, 
+  DISTRICT_DIRECTOR_ROLE, 
+  normalizeAssignedBranches, 
+  getResolvedUserBranchName, 
+  getResolvedUserDistrictName, 
+  getNormalizedRole, 
+  hasJurisdictionalAccess 
+} from '@/lib/jurisdiction';
 
-function normalizeAssignedBranches(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((branch) => String(branch).trim()).filter(Boolean);
-  }
-
-  if (typeof value === 'string') {
-    return value.split(',').map((branch) => branch.trim()).filter(Boolean);
-  }
-
-  return [];
-}
-
-function getResolvedUserBranchName(user: any) {
-  return user?.branchName || user?.branch?.name || null;
-}
-
-function getResolvedUserDistrictName(user: any) {
-  return user?.districtName || user?.branch?.district?.name || null;
-}
 
 function hasPermission(user: any, slug: string) {
   return Boolean(
@@ -57,9 +45,6 @@ async function hasFollowUpCaseAccess(user: any, submissionId: string) {
   return Boolean(followUpRecord);
 }
 
-function getNormalizedRole(role?: string | null) {
-  return role?.toUpperCase() || '';
-}
 
 function buildRestrictedJurisdictionFilter(
   user: any,
@@ -114,33 +99,6 @@ function buildRestrictedJurisdictionFilter(
   return null;
 }
 
-function hasJurisdictionalAccess(user: any, role: string, sessionId: string, kyc: any) {
-  const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
-  const branchName = getResolvedUserBranchName(user);
-  const districtName = getResolvedUserDistrictName(user);
-  const matchesBranch = Boolean(
-    (user?.branchId && kyc.branchId === user.branchId) ||
-    (branchName && kyc.branchName === branchName)
-  );
-  const matchesPortfolio = assignedBranches.includes(kyc.branchName);
-  const matchesDistrict = role === DISTRICT_DIRECTOR_ROLE
-    && !!districtName
-    && (kyc.districtName === districtName || kyc.branch?.district?.name === districtName);
-
-  if (DIRECT_BRANCH_ROLES.has(role)) {
-    return matchesBranch;
-  }
-
-  if (PORTFOLIO_BRANCH_ROLES.has(role)) {
-    return assignedBranches.length > 0 ? matchesPortfolio : matchesBranch;
-  }
-
-  if (role === DISTRICT_DIRECTOR_ROLE) {
-    return matchesDistrict;
-  }
-
-  return matchesBranch || matchesPortfolio || matchesDistrict || kyc.createdById === sessionId || kyc.assignedToId === sessionId;
-}
 
 /**
  * Format helper to ensure JSON fields are valid and safe.
@@ -273,7 +231,7 @@ export async function getSubmissions(filters?: any) {
       skip: filters?.offset || 0,
     });
 
-    return data.map(item => formatKYC(item));
+    return data.map((item: any) => formatKYC(item));
   } catch (error) {
     logInstitutionalError(error, 'DB_QUERY_SUBMISSIONS');
     return [];
@@ -784,7 +742,6 @@ export async function processExceptionalStep(formData: FormData) {
     throw new Error("Institutional database fault.");
   }
 }
-
 export async function logBundleDownload(data: any) {
   const session = await getServerSession();
   if (!session) return false;
@@ -801,5 +758,76 @@ export async function logBundleDownload(data: any) {
     return true;
   } catch {
     return false;
+  }
+}
+
+export async function uploadAdditionalDocuments(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) return { success: false, error: "Unauthenticated" };
+
+  try {
+    const id = formData.get('id') as string;
+    const files = formData.getAll('files') as File[];
+    const types = formData.getAll('types') as string[];
+
+    const current = await prisma.kYC.findUnique({ where: { id } });
+    if (!current) throw new Error("Case not found");
+
+    const actor = await prisma.user.findUnique({ where: { id: session.id } });
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
+      throw new Error("Unauthorized case access.");
+    }
+
+    const memoData = [];
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const type = types[i] || 'OTHER';
+      const storedFileName = `${Date.now()}_added_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(path.join(uploadDir, storedFileName), buffer);
+      memoData.push({ 
+        name: file.name, 
+        type: type, 
+        fileUrl: `uploads/${storedFileName}`, 
+        uploadedById: session.id,
+        kycId: id
+      });
+    }
+
+    if (memoData.length > 0) {
+      const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
+      const newHistory = [...history, {
+        role: session.role || 'BRANCH_OFFICER',
+        performedBy: session.email.split('@')[0],
+        timestamp: new Date().toISOString(),
+        comment: `${files.length} additional document(s) uploaded.`,
+        action: "ADD_DOCUMENT"
+      }];
+
+      await prisma.$transaction([
+        prisma.memo.createMany({ data: memoData }),
+        prisma.kYC.update({
+          where: { id },
+          data: { commentHistory: newHistory }
+        })
+      ]);
+
+      await createAuditLog({
+        userId: session.id,
+        userEmail: session.email,
+        action: 'ADD_DOCUMENT',
+        details: `${files.length} documents appended to case ${id}.`,
+        kycId: id
+      });
+    }
+
+    revalidatePath(`/submissions/${id}`);
+    return { success: true };
+  } catch (error: any) {
+    const { message } = logInstitutionalError(error, 'DB_ADD_DOCUMENTS');
+    return { success: false, error: message };
   }
 }

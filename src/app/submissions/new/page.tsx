@@ -59,13 +59,12 @@ interface UploadedFile {
   previewUrl: string;
 }
 
-type PreviewMode = "modal" | "panel";
+
 
 interface UploadedFileRowProps {
   item: UploadedFile;
   documentTypes: any[];
   isSelected: boolean;
-  previewMode: PreviewMode;
   onTypeChange: (id: string, newType: string) => void;
   onPreview: (file: UploadedFile) => void;
   onSelect: (id: string) => void;
@@ -73,7 +72,7 @@ interface UploadedFileRowProps {
 }
 
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
 
 const getFileStatusLabel = (file: UploadedFile) =>
   file.type ? "Ready for submission" : "Classification pending";
@@ -156,37 +155,27 @@ const UploadedFileRow = memo(function UploadedFileRow({
   item,
   documentTypes,
   isSelected,
-  previewMode,
   onTypeChange,
   onPreview,
   onSelect,
   onRemove,
 }: UploadedFileRowProps) {
-  const isPanelMode = previewMode === "panel";
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 rounded-2xl border bg-white p-4 shadow-sm transition-all duration-200 md:flex-row md:items-center",
-        isPanelMode && "cursor-pointer hover:border-primary/40 hover:bg-primary/[0.03]",
-        isSelected
-          ? "border-primary bg-primary/[0.04] shadow-[0_18px_40px_rgba(15,23,42,0.08)] ring-1 ring-primary/20"
-          : "border-slate-200"
+        "flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 md:flex-row md:items-center hover:border-primary/40 hover:bg-primary/[0.03] cursor-pointer"
       )}
-      onClick={isPanelMode ? () => onSelect(item.id) : undefined}
-      onKeyDown={
-        isPanelMode
-          ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onSelect(item.id);
-              }
-            }
-          : undefined
-      }
-      role={isPanelMode ? "button" : undefined}
-      tabIndex={isPanelMode ? 0 : undefined}
-      aria-pressed={isPanelMode ? isSelected : undefined}
+      onClick={() => { onSelect(item.id); onPreview(item); }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(item.id);
+          onPreview(item);
+        }
+      }}
     >
       <div className="flex min-w-0 flex-1 items-center gap-4">
         <div
@@ -202,11 +191,6 @@ const UploadedFileRow = memo(function UploadedFileRow({
             <span className="max-w-[260px] truncate text-sm font-bold text-slate-800">
               {item.file.name}
             </span>
-            {isPanelMode && isSelected ? (
-              <Badge className="bg-primary px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
-                Selected
-              </Badge>
-            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
@@ -260,7 +244,7 @@ const UploadedFileRow = memo(function UploadedFileRow({
             type="button"
             onClick={() => onPreview(item)}
             className="h-10 w-10 rounded-full text-slate-500 hover:bg-primary/5 hover:text-primary"
-            title={isPanelMode ? "Preview in panel" : "View"}
+            title="View"
           >
             <Eye className="h-5 w-5" />
           </Button>
@@ -300,7 +284,6 @@ export default function NewSubmission() {
   const [customerName, setCustomerName] = useState("");
   const [entityType, setEntityType] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("modal");
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -335,11 +318,7 @@ export default function NewSubmission() {
     };
   }, []);
 
-  useEffect(() => {
-    if (previewMode === "panel") {
-      setIsPreviewModalOpen(false);
-    }
-  }, [previewMode]);
+
 
   useEffect(() => {
     if (uploadedFiles.length === 0) {
@@ -384,7 +363,7 @@ export default function NewSubmission() {
         toast({
           variant: "destructive",
           title: "File Too Large",
-          description: `"${file.name}" exceeds the 10MB limit.`,
+          description: `"${file.name}" exceeds the 30MB limit.`,
         });
         continue;
       }
@@ -435,12 +414,9 @@ export default function NewSubmission() {
       startTransition(() => {
         setActiveFileId(file.id);
       });
-
-      if (previewMode === "modal") {
-        setIsPreviewModalOpen(true);
-      }
+      setIsPreviewModalOpen(true);
     },
-    [previewMode]
+    []
   );
 
   const handlePanelSelection = useCallback((id: string) => {
@@ -475,7 +451,7 @@ export default function NewSubmission() {
 
   useEffect(() => {
     if (uploadedFiles.length < 2) return;
-    if (!isPreviewModalOpen && previewMode !== "panel") return;
+    if (!isPreviewModalOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -504,7 +480,6 @@ export default function NewSubmission() {
     goToNextPreview,
     goToPreviousPreview,
     isPreviewModalOpen,
-    previewMode,
     uploadedFiles.length,
   ]);
 
@@ -601,7 +576,6 @@ export default function NewSubmission() {
             item={item}
             documentTypes={documentTypes}
             isSelected={item.id === activeFileId}
-            previewMode={previewMode}
             onTypeChange={handleTypeChange}
             onPreview={handlePreviewRequest}
             onSelect={handlePanelSelection}
@@ -716,7 +690,7 @@ export default function NewSubmission() {
                   Drop customer files here
                 </p>
                 <p className="mt-1 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                  Only PDF or image files (max 10MB)
+                  Only PDF or image files (max 30MB)
                 </p>
                 <Button
                   variant="outline"
@@ -728,39 +702,14 @@ export default function NewSubmission() {
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,rgba(15,23,42,0.02),rgba(15,118,110,0.05))] p-4 shadow-sm">
+            <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,rgba(15,23,42,0.02),rgba(15,118,110,0.05))] p-4 shadow-sm mb-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-                    Preview Workspace
+                    Bundle Contents
                   </p>
-                  <div className="mt-2 flex items-center gap-3">
-                    <span
-                      className={cn(
-                        "text-sm font-bold transition-colors",
-                        previewMode === "modal" ? "text-slate-900" : "text-slate-400"
-                      )}
-                    >
-                      Modal
-                    </span>
-                    <Switch
-                      checked={previewMode === "panel"}
-                      onCheckedChange={(checked) =>
-                        setPreviewMode(checked ? "panel" : "modal")
-                      }
-                      aria-label="Toggle preview mode"
-                    />
-                    <span
-                      className={cn(
-                        "text-sm font-bold transition-colors",
-                        previewMode === "panel" ? "text-slate-900" : "text-slate-400"
-                      )}
-                    >
-                      Panel
-                    </span>
-                  </div>
                   <p className="mt-2 text-xs font-medium text-slate-500">
-                    Preview Mode: Modal | Panel
+                    Classify all uploaded documents before submission.
                   </p>
                 </div>
 
@@ -771,87 +720,13 @@ export default function NewSubmission() {
                   >
                     {uploadedFiles.length} file{uploadedFiles.length === 1 ? "" : "s"}
                   </Badge>
-                  <Badge
-                    variant="outline"
-                    className="border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500"
-                  >
-                    {activePreviewIndex >= 0
-                      ? `Selected ${activePreviewIndex + 1} of ${uploadedFiles.length}`
-                      : "No preview selected"}
-                  </Badge>
                 </div>
               </div>
             </div>
 
-            {previewMode === "panel" ? (
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(420px,0.92fr)]">
-                <div className="space-y-3 xl:max-h-[720px] xl:overflow-y-auto xl:pr-2">
-                  {fileListContent}
-                </div>
-
-                <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
-                  <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(1,29,61,0.97),rgba(13,71,105,0.94))] px-6 py-5 text-white">
-                    <div className="flex flex-col gap-4">
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/60">
-                          Preview Panel
-                        </p>
-                        <div className="space-y-1">
-                          <h3 className="text-xl font-black tracking-tight">
-                            {activeFile?.file.name || "Document inspection"}
-                          </h3>
-                          <p className="text-sm font-medium text-white/70">
-                            {activeFile
-                              ? "Review the selected document without leaving the upload workflow."
-                              : "Upload files to start inspecting documents here."}
-                          </p>
-                        </div>
-                        <PreviewMetadataBadges
-                          file={activeFile}
-                          documentTypes={documentTypes}
-                          tone="dark"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <DocumentPreviewNavigation
-                          currentIndex={activePreviewIndex >= 0 ? activePreviewIndex : 0}
-                          total={uploadedFiles.length}
-                          onPrevious={goToPreviousPreview}
-                          onNext={goToNextPreview}
-                          buttonClassName="border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                          counterClassName="border-white/15 bg-white/10 text-white/80"
-                        />
-
-                        {activeFile ? (
-                          <Button
-                            asChild
-                            variant="outline"
-                            className="h-10 rounded-full border-white/15 bg-white/10 px-5 font-bold text-white hover:bg-white/20 hover:text-white"
-                          >
-                            <a href={activeFile.previewUrl} download={activeFile.file.name}>
-                              <Download className="h-4 w-4" />
-                              Download Original
-                            </a>
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 sm:p-6">
-                    <DocumentPreviewViewer
-                      file={deferredPreviewDocument}
-                      className="h-[520px] xl:h-[620px]"
-                      emptyStateTitle="No file selected"
-                      emptyStateDescription="Upload documents and click any file in the list to inspect it here."
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              fileListContent
-            )}
+            <div className="grid gap-4">
+              {fileListContent}
+            </div>
           </CardContent>
         </Card>
 

@@ -53,12 +53,12 @@ export default function FollowUpDashboard() {
   };
 
   const pendingVerifications = useMemo(
-    () => verifications.filter((verification) => verification.status === "PENDING"),
+    () => verifications.filter((verification: any) => verification.status === "PENDING"),
     [verifications]
   );
 
   const completedVerifications = useMemo(
-    () => verifications.filter((verification) => verification.status === "COMPLETED"),
+    () => verifications.filter((verification: any) => verification.status === "COMPLETED"),
     [verifications]
   );
 
@@ -67,8 +67,8 @@ export default function FollowUpDashboard() {
 
     try {
       const approved = await getApprovedCasesForFollowUp({ limit: 100 });
-      const existingIds = new Set(verifications.map((verification) => verification.submissionId));
-      const assignable = approved.filter((submission) => !existingIds.has(submission.id));
+      const existingIds = new Set(verifications.map((verification: any) => verification.submissionId));
+      const assignable = approved.filter((submission: any) => !existingIds.has(submission.id));
 
       if (assignable.length === 0) {
         toast({
@@ -80,12 +80,12 @@ export default function FollowUpDashboard() {
       }
 
       const selected = assignable
-        .map((value) => ({ value, sort: window.crypto.getRandomValues(new Uint32Array(1))[0] }))
-        .sort((a, b) => a.sort - b.sort)
-        .map(({ value }) => value)
+        .map((value: any) => ({ value, sort: window.crypto.getRandomValues(new Uint32Array(1))[0] }))
+        .sort((a: any, b: any) => a.sort - b.sort)
+        .map(({ value }: any) => value)
         .slice(0, 5);
 
-      const poolData = selected.map((submission) => ({
+      const poolData = selected.map((submission: any) => ({
         submissionId: submission.id,
         customerName: submission.customerName,
         branch: submission.branchName,
@@ -124,7 +124,7 @@ export default function FollowUpDashboard() {
 
   const analytics = useMemo(() => {
     const total = completedVerifications.length;
-    const discrepancies = completedVerifications.filter((verification) => verification.result === "Discrepancy").length;
+    const discrepancies = completedVerifications.filter((verification: any) => verification.result === "Discrepancy").length;
     const rate = total > 0 ? Math.round(((total - discrepancies) / total) * 100) : 100;
 
     return { rate, total, discrepancies };
@@ -134,7 +134,7 @@ export default function FollowUpDashboard() {
     if (completedVerifications.length === 0) return;
 
     const headers = ["Review ID", "Case ID", "Customer", "Branch", "Result", "Reviewer", "Review Date"];
-    const rows = completedVerifications.map((verification) => [
+    const rows = completedVerifications.map((verification: any) => [
       verification.id,
       verification.submissionId,
       verification.customerName,
@@ -144,7 +144,7 @@ export default function FollowUpDashboard() {
       format(new Date(verification.verifiedAt), "yyyy-MM-dd"),
     ]);
 
-    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const csvContent = [headers.join(","), ...rows.map((row: any) => row.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -270,7 +270,7 @@ export default function FollowUpDashboard() {
               </div>
             ) : pendingVerifications.length > 0 ? (
               <div className="divide-y">
-                {pendingVerifications.map((verification) => (
+                {pendingVerifications.map((verification: any) => (
                   <div
                     key={verification.id}
                     className="group flex items-center justify-between p-5 transition-colors hover:bg-slate-50"
@@ -319,7 +319,7 @@ export default function FollowUpDashboard() {
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-4">
-                {completedVerifications.slice(0, 5).map((verification) => (
+                {completedVerifications.slice(0, 5).map((verification: any) => (
                   <div
                     key={verification.id}
                     className="flex items-center justify-between gap-4 rounded-xl border bg-white p-4 shadow-sm"

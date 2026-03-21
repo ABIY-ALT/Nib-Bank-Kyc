@@ -56,13 +56,13 @@ const REPORTING_ACCESS_PERMISSIONS = [
   "VIEW_AUDIT_LOGS",
   "DOWNLOAD_MASTER_ARCHIVE",
   "CASE_VIEW_BRANCH",
-  "REPORT_VIEW_DISTRICT",
+  "DASHBOARD_VIEW_DISTRICT",
 ];
 
 const PERFORMANCE_ACCESS_PERMISSIONS = [
   "VIEW_SPECIALIST_PRODUCTIVITY",
   "CASE_VIEW_BRANCH",
-  "REPORT_VIEW_DISTRICT",
+  "DASHBOARD_VIEW_DISTRICT",
   "REPORT_VIEW_SYSTEM",
 ];
 
@@ -195,13 +195,13 @@ const ROUTE_RULES: RouteRule[] = [
   },
   {
     matches: (pathname) => pathname === "/performance/branch" || pathname === "/reports/branch",
-    requireAnyPermission: ["CASE_VIEW_BRANCH", "REPORT_VIEW_DISTRICT", "REPORT_VIEW_SYSTEM"],
+    requireAnyPermission: ["CASE_VIEW_BRANCH", "DASHBOARD_VIEW_DISTRICT", "REPORT_VIEW_SYSTEM"],
     requiredLabel: "CASE_VIEW_BRANCH",
   },
   {
     matches: (pathname) => pathname === "/performance/district",
-    requireAnyPermission: ["REPORT_VIEW_DISTRICT", "REPORT_VIEW_SYSTEM"],
-    requiredLabel: "REPORT_VIEW_DISTRICT",
+    requireAnyPermission: ["DASHBOARD_VIEW_DISTRICT", "REPORT_VIEW_SYSTEM"],
+    requiredLabel: "DASHBOARD_VIEW_DISTRICT",
   },
   {
     matches: (pathname) => pathname.startsWith("/performance"),
@@ -224,8 +224,8 @@ const ROUTE_RULES: RouteRule[] = [
     requiredLabel: "VIEW_AUDIT_POOL",
   },
   {
-    matches: (pathname) => pathname.startsWith("/reports"),
-    requireAnyPermission: REPORTING_ACCESS_PERMISSIONS,
+    matches: (pathname) => pathname.startsWith("/reports") || pathname.startsWith("/performance"),
+    requireAnyPermission: [...REPORTING_ACCESS_PERMISSIONS, ...PERFORMANCE_ACCESS_PERMISSIONS],
     requiredLabel: "REPORTING_ACCESS",
   },
 ];

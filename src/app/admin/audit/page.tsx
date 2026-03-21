@@ -86,7 +86,7 @@ export default function GlobalAuditLogPage() {
     const exportLogs = fullResult.logs;
 
     const headers = ['ID', 'User', 'Email', 'Action', 'IP Address', 'Timestamp', 'Details'];
-    const csvContent = [headers.join(','), ...exportLogs.map(log => [
+    const csvContent = [headers.join(','), ...exportLogs.map((log: any) => [
       log.id, 
       log.userName || 'N/A', 
       log.userEmail || 'N/A', 

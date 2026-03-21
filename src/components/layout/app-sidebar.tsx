@@ -108,7 +108,7 @@ export function AppSidebar() {
             <SidebarMenu>
               <Collapsible 
                 className="group/collapsible" 
-                defaultOpen={pathname.includes('/submissions') && !['/submissions', '/submissions/branch-node', '/submissions/district-node', '/submissions/master-bundle', '/admin/storage'].includes(pathname)}
+                defaultOpen={(pathname || "").includes('/submissions') && !['/submissions', '/submissions/branch-node', '/submissions/district-node', '/submissions/master-bundle', '/admin/storage'].includes(pathname || "")}
               >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -243,7 +243,7 @@ export function AppSidebar() {
               </Collapsible>
 
               {(hasPermission('CASE_VIEW_BRANCH') || hasPermission('DASHBOARD_VIEW_DISTRICT')) && (
-                <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/submissions/branch-node') || pathname.includes('/submissions/district-node')}>
+                <Collapsible className="group/collapsible" defaultOpen={(pathname || "").includes('/submissions/branch-node') || (pathname || "").includes('/submissions/district-node')}>
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton tooltip="Monitoring">
@@ -325,7 +325,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Audit & Reporting</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/reports') || pathname.includes('/performance')}>
+              <Collapsible className="group/collapsible" defaultOpen={(pathname || "").includes('/reports') || (pathname || "").includes('/performance')}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="Reporting Suite">
@@ -413,7 +413,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Administration</SidebarGroupLabel>
             <SidebarMenu>
-              <Collapsible className="group/collapsible" defaultOpen={pathname.includes('/admin/') && pathname !== '/admin/storage'}>
+              <Collapsible className="group/collapsible" defaultOpen={(pathname || "").includes('/admin/') && pathname !== '/admin/storage'}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="System Management">

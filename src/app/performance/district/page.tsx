@@ -60,7 +60,7 @@ export default function DistrictPerformancePage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const isAdmin = isSuperAdmin;
-  const isDistDir = hasPermission('REPORT_VIEW_DISTRICT');
+  const isDistDir = hasPermission('DASHBOARD_VIEW_DISTRICT');
   
   const activeDistrict = isDistDir && !isAdmin ? user?.districtName : (selectedDistrict === 'all' ? null : selectedDistrict);
 

@@ -13,8 +13,8 @@ export default function UnauthorizedPage() {
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
 
-  const required = searchParams.get('required');
-  const reason = searchParams.get('reason');
+  const required = searchParams?.get('required');
+  const reason = searchParams?.get('reason');
   const roleName = getPrimaryRoleDisplayName(user);
   const isUnassignedRole = reason === 'ROLE_UNASSIGNED';
 

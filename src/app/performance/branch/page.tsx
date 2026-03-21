@@ -45,7 +45,7 @@ export default function BranchPerformancePage() {
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  const isDistDir = hasPermission('REPORT_VIEW_DISTRICT');
+  const isDistDir = hasPermission('DASHBOARD_VIEW_DISTRICT');
   const isAdmin = isSuperAdmin;
 
   useEffect(() => {

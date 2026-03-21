@@ -20,7 +20,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const isLoginPage = pathname === '/login';
   const isUnauthorizedPage = pathname === '/unauthorized';
-  const isAdminPage = pathname.startsWith('/admin');
+  const isAdminPage = (pathname || "").startsWith('/admin');
 
   // Render clean layout for the gateway entry point
   if (isLoginPage || isUnauthorizedPage) {

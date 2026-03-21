@@ -56,7 +56,7 @@ async function resolveInstitutionalEmail(params: {
   while (suffix < 10000) {
     const localPart = suffix === 0 ? baseLocalPart : `${baseLocalPart}${suffix}`;
     const candidateEmail = `${localPart}@${INSTITUTIONAL_EMAIL_DOMAIN}`;
-    const existingUser = await params.tx.user.findFirst({
+    const existingUser = await (params.tx as any).user.findFirst({
       where: {
         email: candidateEmail,
         NOT: params.currentUserId ? { id: params.currentUserId } : undefined
@@ -79,7 +79,7 @@ async function reserveRequestedInstitutionalEmail(params: {
   requestedEmail: string;
   currentUserId?: string;
 }) {
-  const existingUser = await params.tx.user.findFirst({
+  const existingUser = await (params.tx as any).user.findFirst({
     where: {
       email: params.requestedEmail,
       NOT: params.currentUserId ? { id: params.currentUserId } : undefined
@@ -111,7 +111,7 @@ async function verifyAdminClearance() {
     }
   });
 
-  return user?.roles.some(ur => ur.role.name === 'SUPER_ADMIN') || false;
+  return user?.roles.some((ur: any) => ur.role.name === 'SUPER_ADMIN') || false;
 }
 
 export async function getAllUsers() {
@@ -137,7 +137,7 @@ export async function getAllUsers() {
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }]
     });
 
-    return users.map(u => ({
+    return users.map((u: any) => ({
       id: u.id,
       firstName: u.firstName,
       lastName: u.lastName,
@@ -240,9 +240,9 @@ export async function provisionUser(data: {
       };
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       let user;
-      const existingUser = isUpdate ? await tx.user.findUnique({
+      const existingUser = isUpdate ? await (tx as any).user.findUnique({
         where: { id: data.id },
         select: { id: true, email: true, firstName: true, lastName: true }
       }) : null;
@@ -251,7 +251,7 @@ export async function provisionUser(data: {
         throw new Error('Personnel record not found.');
       }
 
-      const duplicateNameUsers = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      const duplicateNameUsers = await (tx as any).$queryRaw(Prisma.sql`
         SELECT "id"
         FROM "User"
         WHERE LOWER(REGEXP_REPLACE(BTRIM("firstName"), '\\s+', ' ', 'g')) = ${normalizePersonNameKey(normalizedFirstName)}
@@ -265,7 +265,7 @@ export async function provisionUser(data: {
       }
 
       if (normalizedPhoneNumber) {
-        const duplicatePhoneUser = await tx.user.findFirst({
+        const duplicatePhoneUser = await (tx as any).user.findFirst({
           where: {
             phoneNumber: normalizedPhoneNumber,
             NOT: isUpdate ? { id: data.id } : undefined
@@ -323,7 +323,7 @@ export async function provisionUser(data: {
           updateData.needsPasswordChange = true;
         }
 
-        user = await tx.user.update({
+        user = await (tx as any).user.update({
           where: { id: data.id },
           data: updateData
         });
@@ -331,7 +331,7 @@ export async function provisionUser(data: {
         const createPassword = tempPass as string;
         const hashedPassword = await bcrypt.hash(createPassword, 10);
 
-        user = await tx.user.create({
+        user = await (tx as any).user.create({
           data: {
             firstName: normalizedFirstName,
             lastName: normalizedLastName,
@@ -349,8 +349,8 @@ export async function provisionUser(data: {
 
       const role = await tx.role.findUnique({ where: { name: validated.role } });
       if (role) {
-        await tx.userRole.deleteMany({ where: { userId: user.id } });
-        await tx.userRole.create({ data: { userId: user.id, roleId: role.id } });
+        await (tx as any).userRole.deleteMany({ where: { userId: user.id } });
+        await (tx as any).userRole.create({ data: { userId: user.id, roleId: role.id } });
       }
 
       return user;
@@ -475,7 +475,7 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
 
     if (!user) throw new Error('User not found.');
 
-    const isSuperAdmin = user.roles.some(ur => ur.role.name === 'SUPER_ADMIN');
+    const isSuperAdmin = user.roles.some((ur: any) => ur.role.name === 'SUPER_ADMIN');
     
     // Prevent SUPER_ADMIN users from being set to INACTIVE
     if (isSuperAdmin && status === 'INACTIVE') {

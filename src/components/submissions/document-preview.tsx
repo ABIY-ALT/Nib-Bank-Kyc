@@ -25,9 +25,12 @@ export interface PreviewableDocument {
 
 interface DocumentPreviewViewerProps {
   file: PreviewableDocument | null;
+  files?: PreviewableDocument[];
+  showMultipleView?: boolean;
   className?: string;
   emptyStateTitle?: string;
   emptyStateDescription?: string;
+  onFileSelect?: (file: PreviewableDocument) => void;
 }
 
 interface DocumentPreviewNavigationProps {
@@ -125,11 +128,96 @@ export function DocumentPreviewNavigation({
   );
 }
 
+function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSelect?: (file: PreviewableDocument) => void }) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const isPdf = isPdfDocument(file);
+  const isImage = isImageDocument(file);
+
+  return (
+    <div
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:border-primary/40 hover:shadow-xl cursor-pointer"
+      onClick={() => onSelect?.(file)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect?.(file);
+        }
+      }}
+    >
+      <div className="relative h-48 w-full overflow-hidden bg-slate-50">
+        {!isLoaded && (isPdf || isImage) && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </div>
+        )}
+
+        {isPdf ? (
+          <iframe
+            src={`${file.previewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+            title={`Thumbnail of ${file.name}`}
+            loading="lazy"
+            onLoad={() => setIsLoaded(true)}
+            className={cn(
+              "pointer-events-none h-full w-full border-0 transition-opacity duration-300",
+              isLoaded ? "opacity-100" : "opacity-0"
+            )}
+          />
+        ) : isImage ? (
+          <img
+            src={file.previewUrl}
+            alt={file.name}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setIsLoaded(true)}
+            className={cn(
+              "h-full w-full object-cover transition-all duration-300 group-hover:scale-105",
+              isLoaded ? "opacity-100" : "opacity-0"
+            )}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <FileText className="h-12 w-12 text-slate-300" />
+          </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+      </div>
+
+      <div className="flex items-center gap-3 border-t border-slate-100 p-3">
+        <div className="rounded-lg bg-slate-100 p-1.5 transition-colors group-hover:bg-primary/10">
+          <FileText className="h-4 w-4 text-slate-400 transition-colors group-hover:text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-bold text-slate-800">{file.name}</p>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+              {getPreviewFormatLabel(file)}
+            </span>
+            {file.size ? (
+              <>
+                <span className="text-[10px] text-slate-300">•</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+                  {formatFileSize(file.size)}
+                </span>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DocumentPreviewViewer({
   file,
+  files,
+  showMultipleView = false,
   className,
   emptyStateTitle = "Select a document",
   emptyStateDescription = "Choose a file from the list to inspect it here.",
+  onFileSelect,
 }: DocumentPreviewViewerProps) {
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -137,7 +225,34 @@ export function DocumentPreviewViewer({
     setIsLoaded(false);
   }, [file?.id]);
 
-  if (!file) {
+  // --- Multiple View Mode ---
+  if (showMultipleView && files && files.length > 0) {
+    return (
+      <div
+        className={cn(
+          "overflow-auto rounded-[28px] border border-[#d9c7a4] bg-[radial-gradient(circle_at_top,_rgba(184,147,52,0.10),_rgba(255,251,245,0.98)_56%)] p-5",
+          className
+        )}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+            All Documents
+          </p>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+            {files.length} file{files.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {files.map((f) => (
+            <MultipleFileCard key={f.id} file={f} onSelect={onFileSelect} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // --- Empty state (no file, or showMultipleView with no files) ---
+  if (!file && !(showMultipleView && files && files.length > 0)) {
     return (
       <div
         className={cn(
@@ -156,6 +271,9 @@ export function DocumentPreviewViewer({
     );
   }
 
+  if (!file) return null;
+
+  // --- Single View Mode (default) ---
   const isPdf = isPdfDocument(file);
   const isImage = isImageDocument(file);
   const shouldShowLoader = (isPdf || isImage) && !isLoaded;

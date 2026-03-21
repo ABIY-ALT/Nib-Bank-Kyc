@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   HardDrive, 
   Search, 
@@ -42,7 +43,8 @@ import {
   History,
   Zap,
   FolderOpen,
-  ArrowRight
+  ArrowRight,
+  Archive,
 } from "lucide-react";
 import { 
   AlertDialog,
@@ -62,6 +64,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import JSZip from 'jszip';
 import { getStorageInventory, deleteInstitutionalFile } from '@/actions/storage';
 import { getDistricts, getBranches } from '@/actions/hierarchy';
 import { cn } from '@/lib/utils';
@@ -71,20 +74,28 @@ type AssetCategory = 'ALL' | 'INITIAL' | 'AMENDMENT' | 'MEMO' | 'OTHER';
 const StorageFileRow = memo(function StorageFileRow({
   file,
   isDownloaded,
-  isPurging,
+  purging,
   onDownload,
   onRequestPurge,
+  onSelect,
+  isSelected,
 }: {
   file: any;
   isDownloaded: boolean;
-  isPurging: boolean;
+  purging: boolean;
   onDownload: (file: any) => void;
   onRequestPurge: (file: any) => void;
+  onSelect: (fileId: string) => void;
+  isSelected: boolean;
 }) {
   return (
     <TableRow className="group/file hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0">
       <TableCell className="pl-10 py-6">
         <div className="flex items-center gap-4">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => onSelect(file.id)}
+          />
           <div className={cn(
             "p-2.5 rounded-xl group-hover/file:scale-110 transition-transform",
             file.category === 'MEMO' ? 'bg-emerald-50 text-emerald-600' :
@@ -140,14 +151,14 @@ const StorageFileRow = memo(function StorageFileRow({
             variant="ghost"
             size="icon"
             onClick={() => onRequestPurge(file)}
-            disabled={!isDownloaded || isPurging}
+            disabled={!isDownloaded || purging}
             className={cn(
               "h-11 w-11 rounded-xl transition-all",
               isDownloaded ? "hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100" : "opacity-20 grayscale"
             )}
             title={isDownloaded ? "Permanent Vault Purge" : "Download required to unlock purge"}
           >
-            {isPurging ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+            {purging ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
           </Button>
         </div>
       </TableCell>
@@ -177,8 +188,12 @@ export default function StorageVaultPage() {
   // UI State
   const [expandedCases, setExpandedCases] = useState<Set<string>>(new Set());
   const [downloadedIds, setDownloadedFiles] = useState<Set<string>>(new Set());
-  const [isPurging, setIsPurging] = useState<string | null>(null);
+  const [purgingFileId, setPurgingFileId] = useState<string | null>(null);
+  const [purging, setPurging] = useState<string[]>([]);
   const [fileToPurge, setFileToPurge] = useState<any | null>(null);
+  const [filesToBulkPurge, setFilesToBulkPurge] = useState<any[]>([]);
+  const [isZipping, setIsZipping] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!permissionsLoading && !canManageVaultStorage) {
@@ -275,7 +290,7 @@ export default function StorageVaultPage() {
     return branches.filter(b => b.district?.name === selectedDistrict);
   }, [branches, selectedDistrict]);
 
-  const handleDownload = useCallback((file: any) => {
+  const handleSingleDownload = useCallback((file: any) => {
     const link = document.createElement('a');
     link.href = file.fileUrl;
     link.download = file.name;
@@ -296,9 +311,160 @@ export default function StorageVaultPage() {
     });
   }, [toast]);
 
-  const handleConfirmPurge = useCallback(async () => {
+  const handleSelectAllVisible = useCallback(() => {
+    const visibleFiles = groupedInventory.flatMap(c => c.files.map((f: any) => f.id));
+    if (visibleFiles.length === 0) return;
+    
+    const allSelected = visibleFiles.every(id => selectedFiles.has(id));
+    
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        visibleFiles.forEach(id => next.delete(id));
+      } else {
+        visibleFiles.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  }, [groupedInventory, selectedFiles]);
+
+  const handleBulkDownload = useCallback(async () => {
+    const filesToDownload = inventory.filter(file => selectedFiles.has(file.id));
+    if (filesToDownload.length === 0 || isZipping) return;
+
+    setIsZipping(true);
+    try {
+      const zip = new JSZip();
+      const now = new Date();
+      const timestamp = format(now, 'yyyyMMdd_HHmmss');
+      
+      const uniqueBranches = Array.from(new Set(filesToDownload.map(f => f.kyc?.branchName).filter(Boolean)));
+      const branchLabel = uniqueBranches.length === 1 ? uniqueBranches[0]?.replace(/[^a-zA-Z0-9]/g, '_') : 'Bulk_Extraction';
+      const bundleName = `${branchLabel}_${timestamp}`;
+      
+      const rootFolder = zip.folder(bundleName);
+      
+      let manifestBody = "BULK INSTITUTIONAL EXTRACTION\n";
+      manifestBody += `TIMESTAMP: ${now.toLocaleString()}\n`;
+      manifestBody += `TOTAL ASSETS: ${filesToDownload.length}\n`;
+      manifestBody += `--------------------------------------------------\n\n`;
+
+      toast({
+        title: "Starting Bundle Extraction",
+        description: `Zipping ${filesToDownload.length} files...`,
+      });
+
+      for (const file of filesToDownload) {
+        try {
+          const kycId = file.kyc?.id || 'UNKNOWN_CASE';
+          const customerName = file.kyc?.customerName ? file.kyc.customerName.replace(/[^a-zA-Z0-9]/g, '_') : 'Unknown_Customer';
+          const caseFolder = rootFolder?.folder(kycId);
+          const response = await fetch(file.fileUrl);
+          const blob = await response.blob();
+          
+          const formattedDocName = `${customerName}_${file.name}`;
+          caseFolder?.file(formattedDocName, blob);
+          manifestBody += `- [SUCCESS] ${kycId}/${formattedDocName}\n`;
+        } catch (e) {
+          manifestBody += `- [ERROR] Failed to fetch: ${file.name}\n`;
+        }
+      }
+
+      rootFolder?.file("bulk_manifest.txt", manifestBody);
+      
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.body.appendChild(document.createElement('a'));
+      link.href = url;
+      link.download = `${bundleName}.zip`;
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+
+      setDownloadedFiles(prev => {
+        const next = new Set(prev);
+        filesToDownload.forEach(f => next.add(f.id));
+        return next;
+      });
+
+      toast({
+        title: "Bundle Extraction Complete",
+        description: `${filesToDownload.length} files compressed into ZIP. Purge capability unlocked.`,
+      });
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Bundle Extraction Failed",
+        description: "An error occurred while zipping the files.",
+      });
+    } finally {
+      setIsZipping(false);
+    }
+  }, [inventory, isZipping, selectedFiles, toast]);
+
+  const handleBulkPurge = useCallback(() => {
+    const filesToPurge = inventory.filter(file => selectedFiles.has(file.id));
+    const downloadableFiles = filesToPurge.filter(file => downloadedIds.has(file.id));
+    
+    if (downloadableFiles.length !== filesToPurge.length) {
+      toast({
+        variant: "destructive",
+        title: "Purge Prerequisite Failed",
+        description: "All selected files must be downloaded before they can be purged.",
+      });
+      return;
+    }
+    setFilesToBulkPurge(downloadableFiles);
+}, [inventory, selectedFiles, downloadedIds, toast]);
+
+const handleConfirmBulkPurge = useCallback(() => {
+  setPurging(filesToBulkPurge.map(f => f.id));
+  
+  const purgePromises = filesToBulkPurge.map(file => deleteInstitutionalFile(file.id));
+  
+  Promise.all(purgePromises).then(results => {
+    const successfulPurges: any[] = [];
+    const failedPurges: any[] = [];
+
+    results.forEach((result, index) => {
+        if (result.success) {
+            successfulPurges.push(filesToBulkPurge[index]);
+        } else {
+            failedPurges.push(filesToBulkPurge[index]);
+        }
+    });
+    
+    if (successfulPurges.length > 0) {
+      toast({
+        title: "Bulk Purge Successful",
+        description: `${successfulPurges.length} files permanently removed.`,
+      });
+      setInventory(prev => prev.filter(f => !successfulPurges.some(p => p.id === f.id)));
+      setSelectedFiles(prev => {
+        const next = new Set(prev);
+        successfulPurges.forEach(p => next.delete(p.id));
+        return next;
+      });
+    }
+    
+    if (failedPurges.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Bulk Purge Failed",
+        description: `${failedPurges.length} files could not be removed.`,
+      });
+    }
+  }).finally(() => {
+    setPurging([]);
+    setFilesToBulkPurge([]);
+  });
+}, [filesToBulkPurge, toast]);
+
+
+
+  const handleConfirmSinglePurge = useCallback(async () => {
     if (!fileToPurge) return;
-    setIsPurging(fileToPurge.id);
+    setPurgingFileId(fileToPurge.id);
     try {
       const res = await deleteInstitutionalFile(fileToPurge.id);
       if (res.success) {
@@ -308,7 +474,7 @@ export default function StorageVaultPage() {
         toast({ variant: "destructive", title: "Purge Denied", description: res.error });
       }
     } finally {
-      setIsPurging(null);
+      setPurgingFileId(null);
       setFileToPurge(null);
     }
   }, [fileToPurge, toast]);
@@ -324,6 +490,18 @@ export default function StorageVaultPage() {
 
   const requestPurge = useCallback((file: any) => {
     setFileToPurge(file);
+  }, []);
+
+  const handleSelectFile = useCallback((fileId: string) => {
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+      if (next.has(fileId)) {
+        next.delete(fileId);
+      } else {
+        next.add(fileId);
+      }
+      return next;
+    });
   }, []);
 
   const resetFilters = useCallback(() => {
@@ -348,14 +526,48 @@ export default function StorageVaultPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-3 bg-primary text-white rounded-2xl shadow-xl">
+            <div className="p-3 bg-primary text-white rounded-2xl shadow-xl flex items-center gap-3">
               <HardDrive className="w-8 h-8" />
+              <Archive className="w-8 h-8" />
             </div>
             <div>
               <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">KYC Document Vault</h1>
               <p className="text-muted-foreground text-lg font-medium">Regional asset oversight and digital preservation management.</p>
             </div>
           </div>
+        </div>
+          <div className="flex items-center gap-3">
+          <Button
+            onClick={handleSelectAllVisible}
+            className="h-12 font-black uppercase text-[10px] tracking-widest rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
+          >
+            Select All Displays
+          </Button>
+          <Button
+            onClick={handleBulkDownload}
+            disabled={selectedFiles.size === 0 || isZipping}
+            className="h-12 font-black uppercase text-[10px] tracking-widest rounded-xl"
+          >
+            {isZipping ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            {isZipping ? "Extracting Bundle..." : `Download Selected (${selectedFiles.size})`}
+          </Button>
+          <Button
+            onClick={handleBulkPurge}
+            disabled={selectedFiles.size === 0 || purging.length > 0}
+            variant="destructive"
+            className="h-12 font-black uppercase text-[10px] tracking-widest rounded-xl"
+          >
+            {purging.length > 0 ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : (
+              <Trash2 className="w-4 h-4 mr-2" />
+            )}
+            Purge Selected ({selectedFiles.size})
+          </Button>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-2 font-black h-12 flex items-center gap-2 text-[10px] uppercase rounded-xl">
@@ -562,9 +774,11 @@ export default function StorageVaultPage() {
                         key={file.id}
                         file={file}
                         isDownloaded={downloadedIds.has(file.id)}
-                        isPurging={isPurging === file.id}
-                        onDownload={handleDownload}
+                        purging={purgingFileId === file.id || purging.includes(file.id)}
+                        onDownload={handleSingleDownload}
                         onRequestPurge={requestPurge}
+                        onSelect={handleSelectFile}
+                        isSelected={selectedFiles.has(file.id)}
                       />
                     ))}
                   </TableBody>
@@ -581,7 +795,7 @@ export default function StorageVaultPage() {
         ))}
       </div>
 
-      <AlertDialog open={!!fileToPurge} onOpenChange={() => !isPurging && setFileToPurge(null)}>
+      <AlertDialog open={!!fileToPurge} onOpenChange={() => !purgingFileId && setFileToPurge(null)}>
         <AlertDialogContent className="max-w-md rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl">
           <div className="bg-white">
             <AlertDialogHeader className="p-8 bg-red-50 border-b border-red-100">
@@ -611,14 +825,55 @@ export default function StorageVaultPage() {
               </div>
             </div>
             <AlertDialogFooter className="p-8 bg-slate-50 border-t flex flex-row items-center justify-end gap-4">
-              <AlertDialogCancel disabled={!!isPurging} className="rounded-xl font-bold h-14 px-8 border-slate-200">Abort Protocol</AlertDialogCancel>
+              <AlertDialogCancel disabled={!!purgingFileId} className="rounded-xl font-bold h-14 px-8 border-slate-200">Abort Protocol</AlertDialogCancel>
               <AlertDialogAction 
-                onClick={(e) => { e.preventDefault(); handleConfirmPurge(); }}
-                disabled={!!isPurging}
+                onClick={(e) => { e.preventDefault(); handleConfirmSinglePurge(); }}
+                disabled={!!purgingFileId}
                 className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl h-14 px-12 shadow-xl shadow-red-200"
               >
-                {isPurging ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Trash2 className="w-5 h-5 mr-2" />}
+                {purgingFileId ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Trash2 className="w-5 h-5 mr-2" />}
                 Purge Asset
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={filesToBulkPurge.length > 0} onOpenChange={() => purging.length === 0 && setFilesToBulkPurge([])}>
+        <AlertDialogContent className="max-w-lg rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-white">
+            <AlertDialogHeader className="p-8 bg-red-50 border-b border-red-100">
+              <div className="flex items-center gap-4">
+                <div className="p-4 bg-white rounded-3xl shadow-sm">
+                  <AlertTriangle className="w-8 h-8 text-red-600" />
+                </div>
+                <div className="space-y-1">
+                  <AlertDialogTitle className="text-2xl font-black text-red-900 tracking-tight">
+                    Bulk Purge Confirmation
+                  </AlertDialogTitle>
+                  <p className="text-[10px] font-black uppercase text-red-400 tracking-widest">You are about to delete {filesToBulkPurge.length} assets</p>
+                </div>
+              </div>
+            </AlertDialogHeader>
+            <div className="p-8">
+              <p className="text-base font-bold text-slate-700 leading-relaxed">
+                This will permanently delete the following files from the institutional vault. This action cannot be undone.
+              </p>
+              <div className="mt-4 max-h-60 overflow-y-auto space-y-2 p-4 bg-slate-50 rounded-xl border">
+                {filesToBulkPurge.map(f => (
+                  <p key={f.id} className="text-sm font-mono text-slate-600 truncate">{f.name}</p>
+                ))}
+              </div>
+            </div>
+            <AlertDialogFooter className="p-8 bg-slate-50 border-t flex flex-row items-center justify-end gap-4">
+              <AlertDialogCancel disabled={purging.length > 0} className="rounded-xl font-bold h-14 px-8 border-slate-200">Abort Protocol</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={(e) => { e.preventDefault(); handleConfirmBulkPurge(); }}
+                disabled={purging.length > 0}
+                className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl h-14 px-12 shadow-xl shadow-red-200"
+              >
+                {purging.length > 0 ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Trash2 className="w-5 h-5 mr-2" />}
+                Purge All ({filesToBulkPurge.length})
               </AlertDialogAction>
             </AlertDialogFooter>
           </div>

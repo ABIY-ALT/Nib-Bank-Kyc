@@ -55,7 +55,7 @@ export function LogoFixed() {
   const [error, setError] = useState(false);
 
   return (
-    <div className="w-10 h-10 rounded-lg shadow-sm shrink-0 flex items-center justify-center bg-white/95 ring-1 ring-black/5 dark:bg-white/95 p-0 relative">
+    <div className="w-10 h-10 rounded-lg shadow-sm shrink-0 flex items-center justify-center bg-white/95 ring-1 ring-black/5 dark:bg-white/95 p-1 relative">
       {error ? (
         <span className="text-[10px] font-black text-[#0F172A]">NB</span>
       ) : (
@@ -93,17 +93,19 @@ export function LogoResponsive() {
   }
 
   return (
-    <div className="relative w-32 h-24 shadow-2xl rounded-2xl overflow-hidden border-0 bg-transparent">
-      <Image
-        src="/logo.png"
-        alt="Nib Bank Logo"
-        fill
-        priority
-        className="object-contain"
-        quality={85}
-        sizes="128px"
-        onError={() => setError(true)}
-      />
+    <div className="relative w-32 h-32 shadow-2xl rounded-[2.5rem] border-0 bg-white overflow-hidden">
+      <div className="absolute inset-6">
+        <Image
+          src="/logo.png"
+          alt="Nib Bank Logo"
+          fill
+          priority
+          className="object-contain"
+          quality={100}
+          sizes="128px"
+          onError={() => setError(true)}
+        />
+      </div>
     </div>
   );
 }
@@ -211,20 +213,22 @@ export function Logo({
 
   // Default: responsive variant
   return (
-    <div className={`relative w-32 h-24 shadow-2xl rounded-2xl overflow-hidden border-0 bg-transparent ${className || ''}`}>
-      <Image
-        src="/logo.png"
-        alt="Nib Bank Logo"
-        fill
-        priority={priority}
-        className="object-contain"
-        quality={quality ?? 85}
-        sizes={sizes ?? "128px"}
-        onError={handleError}
-        onLoad={handleLoad}
-      />
-    </div>
-  );
+  <div className={`relative w-32 h-32 flex items-center justify-center ${className || ''}`}
+  
+  ><Image
+    src="/logo.png"
+    alt="Nib Bank Logo"
+    width={100}
+    height={100}
+    priority={priority}
+    className="object-contain"
+    quality={quality ?? 100}
+    sizes={sizes ?? "128px"}
+    onError={handleError}
+    onLoad={handleLoad}
+  />
+</div>
+  )
 }
 
 export default Logo;

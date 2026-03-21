@@ -60,6 +60,7 @@ export default function CaseArchivePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
+  const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
@@ -83,10 +84,19 @@ export default function CaseArchivePage() {
     }
   };
 
+  const districts = useMemo(() => {
+    if (!submissions) return [];
+    return Array.from(new Set(submissions.map(s => s.districtName).filter(Boolean))).sort() as string[];
+  }, [submissions]);
+
   const branches = useMemo(() => {
     if (!submissions) return [];
-    return Array.from(new Set(submissions.map(s => s.branchName || "Unknown"))).sort();
-  }, [submissions]);
+    let relevantSubmissions = submissions;
+    if (selectedDistricts.length > 0) {
+      relevantSubmissions = submissions.filter(s => selectedDistricts.includes(s.districtName));
+    }
+    return Array.from(new Set(relevantSubmissions.map(s => s.branchName || "Unknown"))).sort();
+  }, [submissions, selectedDistricts]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -95,14 +105,16 @@ export default function CaseArchivePage() {
     return submissions.filter(s => {
       const matchesSearch = s.customerName.toLowerCase().includes(term) ||
                           s.id.toLowerCase().includes(term) ||
-                          (s.branchName || "").toLowerCase().includes(term);
+                          (s.branchName || "").toLowerCase().includes(term) ||
+                          (s.districtName || "").toLowerCase().includes(term);
       
       const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(s.status);
+      const matchesDistrict = selectedDistricts.length === 0 || selectedDistricts.includes(s.districtName);
       const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(s.branchName);
       
-      return matchesSearch && matchesStatus && matchesBranch;
+      return matchesSearch && matchesStatus && matchesDistrict && matchesBranch;
     });
-  }, [submissions, searchTerm, selectedStatuses, selectedBranches]);
+  }, [submissions, searchTerm, selectedStatuses, selectedDistricts, selectedBranches]);
 
   const handleExportCSV = () => {
     if (filteredSubmissions.length === 0) return;
@@ -126,8 +138,14 @@ export default function CaseArchivePage() {
     setSelectedBranches(prev => prev.includes(branch) ? prev.filter(b => b !== branch) : [...prev, branch]);
   };
 
+  const toggleDistrict = (district: string) => {
+    setSelectedDistricts(prev => prev.includes(district) ? prev.filter(d => d !== district) : [...prev, district]);
+    setSelectedBranches([]); // Clear selected branches when district selection changes
+  };
+
   const resetFilters = () => {
     setSelectedStatuses([]);
+    setSelectedDistricts([]);
     setSelectedBranches([]);
     setSearchTerm("");
     setDateRange(undefined);
@@ -188,6 +206,20 @@ export default function CaseArchivePage() {
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
               <DropdownMenuSub>
+                <DropdownMenuSubTrigger>District Name</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56 max-h-64 overflow-y-auto">
+                  {districts.map((district) => (
+                    <DropdownMenuCheckboxItem
+                      key={district}
+                      checked={selectedDistricts.includes(district)}
+                      onCheckedChange={() => toggleDistrict(district)}
+                    >
+                      {district}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
                 <DropdownMenuSubTrigger>Branch Name</DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="w-56 max-h-64 overflow-y-auto">
                   {branches.map((branch) => (
@@ -226,7 +258,7 @@ export default function CaseArchivePage() {
             <TableRow>
               <TableHead className="font-bold text-slate-600 w-[120px] py-4">Case ID</TableHead>
               <TableHead className="font-bold text-slate-600">Customer Details</TableHead>
-              <TableHead className="font-bold text-slate-600">Branch Name</TableHead>
+              <TableHead className="font-bold text-slate-600">District & Branch</TableHead>
               <TableHead className="font-bold text-slate-600">Workflow Status</TableHead>
               <TableHead className="font-bold text-slate-600">Submitted On</TableHead>
               <TableHead className="text-right font-bold text-slate-600 pr-8">Actions</TableHead>
@@ -241,7 +273,12 @@ export default function CaseArchivePage() {
               <TableRow key={sub.id} className="group hover:bg-slate-50">
                 <TableCell className="font-bold text-primary py-4">{sub.id}</TableCell>
                 <TableCell><div className="flex flex-col"><span className="font-bold text-slate-900 leading-tight">{sub.customerName}</span><span className="text-[10px] text-muted-foreground uppercase">{sub.entityType || 'Individual'}</span></div></TableCell>
-                <TableCell className="font-medium text-slate-600">{sub.branchName}</TableCell>
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span className="font-medium text-slate-900 leading-tight">{sub.branchName}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase">{sub.districtName || 'No District'}</span>
+                  </div>
+                </TableCell>
                 <TableCell>{getStatusBadge(sub)}</TableCell>
                 <TableCell className="text-slate-500 font-medium text-xs">{sub.submittedAt ? format(new Date(sub.submittedAt), 'MMM dd, yyyy') : 'N/A'}</TableCell>
                 <TableCell className="text-right pr-8"><Button variant="ghost" size="icon" asChild className="rounded-full text-primary"><Link href={`/submissions/${sub.id}`}><Eye className="h-4 w-4" /></Link></Button></TableCell>

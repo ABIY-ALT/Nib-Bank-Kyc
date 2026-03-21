@@ -14,6 +14,8 @@ import {
   Loader2,
   ShieldCheck,
   User,
+  Zap,
+  X
 } from "lucide-react";
 
 import { getFollowUpById, updateFollowUp } from "@/actions/follow-up";
@@ -26,6 +28,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import * as documentPreview from "@/components/submissions/document-preview";
+import {
+  DocumentPreviewViewer,
+  DocumentPreviewNavigation,
+  formatFileSize,
+  getPreviewFormatLabel,
+  type PreviewableDocument,
+} from "@/components/submissions/document-preview";
 
 export default function FollowUpVerificationDetail() {
   const params = useParams();
@@ -40,15 +56,20 @@ export default function FollowUpVerificationDetail() {
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
   const [activeDocumentAction, setActiveDocumentAction] = useState<string | null>(null);
 
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [isDocPreviewModalOpen, setIsDocPreviewModalOpen] = useState(false);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+
   useEffect(() => {
     loadData();
-  }, [params.id]);
+  }, [params?.id]);
 
   const loadData = async () => {
-    if (!params.id) return;
+    const routeId = params && Array.isArray(params.id) ? params.id[0] : params?.id;
+    if (!routeId) return;
 
     setLoading(true);
-    const followUpRecord = await getFollowUpById(params.id as string);
+    const followUpRecord = await getFollowUpById(routeId as string);
 
     if (followUpRecord) {
       setVerification(followUpRecord);
@@ -95,18 +116,39 @@ export default function FollowUpVerificationDetail() {
   };
 
   const handleDocumentAccess = async (memoId: string, fileName: string, mode: "view" | "download") => {
+    if (mode === "view") {
+      // First check if we already have a preview URL
+      if (previewUrls[memoId]) {
+        setActiveDocId(memoId);
+        setIsDocPreviewModalOpen(true);
+        return;
+      }
+
+      setActiveDocumentAction(`${memoId}:view`);
+      try {
+        const response = await getMemoAccessUrl(memoId, { download: false });
+        if (response.success && response.url) {
+          setPreviewUrls(prev => ({ ...prev, [memoId]: response.url! }));
+          setActiveDocId(memoId);
+          setIsDocPreviewModalOpen(true);
+        } else {
+          throw new Error(response.error);
+        }
+      } catch (error) {
+        toast({ variant: "destructive", title: "Open Failed" });
+      } finally {
+        setActiveDocumentAction(null);
+      }
+      return;
+    }
+
     const actionKey = `${memoId}:${mode}`;
     setActiveDocumentAction(actionKey);
 
     try {
-      const response = await getMemoAccessUrl(memoId, { download: mode === "download" });
+      const response = await getMemoAccessUrl(memoId, { download: true });
       if (!response.success || !response.url) {
         throw new Error(response.error || "Unable to open document.");
-      }
-
-      if (mode === "view") {
-        window.open(response.url, "_blank", "noopener,noreferrer");
-        return;
       }
 
       const link = window.document.createElement("a");
@@ -118,11 +160,67 @@ export default function FollowUpVerificationDetail() {
     } catch (error) {
       toast({
         variant: "destructive",
-        title: mode === "view" ? "Open Failed" : "Download Failed",
+        title: "Download Failed",
         description: "Unable to access this document right now.",
       });
     } finally {
       setActiveDocumentAction(null);
+    }
+  };
+
+  const previewableDocuments: PreviewableDocument[] = (submission?.documents || []).map((doc: any) => {
+    const lowerName = (doc.name || "").toLowerCase();
+    let inferredMime: string | undefined;
+    if (lowerName.endsWith(".pdf")) inferredMime = "application/pdf";
+    else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) inferredMime = "image/jpeg";
+    else if (lowerName.endsWith(".png")) inferredMime = "image/png";
+
+    return {
+      id: doc.id,
+      name: doc.name,
+      previewUrl: previewUrls[doc.id] || "",
+      mimeType: inferredMime,
+      size: doc.size,
+      documentType: doc.type,
+    };
+  });
+
+  const activeDocIndex = previewableDocuments.findIndex((d) => d.id === activeDocId);
+  const activeDocPreview = activeDocIndex >= 0 ? previewableDocuments[activeDocIndex] : null;
+
+  const goToPreviousDoc = async () => {
+    if (activeDocIndex > 0) {
+      const nextDoc = previewableDocuments[activeDocIndex - 1];
+      if (!previewUrls[nextDoc.id]) {
+        setActiveDocumentAction(`${nextDoc.id}:view`);
+        try {
+          const res = await getMemoAccessUrl(nextDoc.id, { download: false });
+          if (res.success && res.url) {
+            setPreviewUrls(prev => ({ ...prev, [nextDoc.id]: res.url! }));
+          }
+        } finally {
+          setActiveDocumentAction(null);
+        }
+      }
+      setActiveDocId(nextDoc.id);
+    }
+  };
+
+  const goToNextDoc = async () => {
+    if (activeDocIndex >= 0 && activeDocIndex < previewableDocuments.length - 1) {
+      const nextDoc = previewableDocuments[activeDocIndex + 1];
+      if (!previewUrls[nextDoc.id]) {
+        setActiveDocumentAction(`${nextDoc.id}:view`);
+        try {
+          const res = await getMemoAccessUrl(nextDoc.id, { download: false });
+          if (res.success && res.url) {
+            setPreviewUrls(prev => ({ ...prev, [nextDoc.id]: res.url! }));
+          }
+        } finally {
+          setActiveDocumentAction(null);
+        }
+      }
+      setActiveDocId(nextDoc.id);
     }
   };
 
@@ -336,6 +434,68 @@ export default function FollowUpVerificationDetail() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={isDocPreviewModalOpen} onOpenChange={setIsDocPreviewModalOpen}>
+        <DialogContent className="max-w-6xl p-0 overflow-hidden border-none rounded-[32px] bg-slate-900/95 backdrop-blur-xl shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
+          <div className="flex flex-col h-[90vh]">
+            <div className="p-6 bg-slate-900 border-b border-white/5 flex items-center justify-between shrink-0">
+              <div className="space-y-1">
+                <DialogTitle className="text-xl font-black text-white flex items-center gap-3">
+                  <FileText className="w-5 h-5 text-primary" />
+                  {activeDocPreview?.name || "Document Preview"}
+                </DialogTitle>
+                <div className="flex items-center gap-3">
+                  <Badge variant="outline" className="bg-white/5 border-white/10 text-white/60 font-black uppercase text-[10px] tracking-widest px-2 py-0.5">
+                    {activeDocPreview ? getPreviewFormatLabel(activeDocPreview) : "Unknown"}
+                  </Badge>
+                  {activeDocPreview?.size && (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40">{formatFileSize(activeDocPreview.size)}</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {activeDocPreview && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 rounded-full font-bold text-white hover:bg-white/10 gap-2 px-4"
+                    onClick={() => handleDocumentAccess(activeDocPreview.id, activeDocPreview.name, "download")}
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </Button>
+                )}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setIsDocPreviewModalOpen(false)}
+                  className="rounded-full h-10 w-10 text-white/60 hover:text-white hover:bg-white/10"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="flex-1 min-h-0 bg-slate-950 p-6">
+              <DocumentPreviewViewer 
+                file={activeDocPreview} 
+                className="h-full w-full rounded-2xl border border-white/5"
+              />
+            </div>
+
+            <div className="p-6 bg-slate-900 border-t border-white/5 shrink-0">
+                <DocumentPreviewNavigation
+                  currentIndex={activeDocIndex}
+                  total={previewableDocuments.length}
+                  onPrevious={goToPreviousDoc}
+                  onNext={goToNextDoc}
+                  buttonClassName="border-white/10 bg-white/5 text-white hover:bg-white/15 h-12"
+                  counterClassName="text-white/60 font-black"
+                />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

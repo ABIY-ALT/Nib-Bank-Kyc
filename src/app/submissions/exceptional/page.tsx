@@ -31,7 +31,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import Link from "next/link";
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
 
 export default function ExceptionalCasesPage() {
   const { user } = useAuth();
@@ -104,7 +104,7 @@ export default function ExceptionalCasesPage() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > MAX_FILE_SIZE) {
-        toast({ variant: "destructive", title: "File Too Large", description: "Memo exceeds the 10MB institutional limit." });
+        toast({ variant: "destructive", title: "File Too Large", description: "Memo exceeds the 30MB institutional limit." });
         return;
       }
       if (!ALLOWED_TYPES.includes(file.type)) {
@@ -282,7 +282,7 @@ export default function ExceptionalCasesPage() {
                   <Upload className="w-7 h-7 text-primary" />
                 </div>
                 <p className="text-sm font-black text-slate-900">{memoFile ? memoFile.name : "Select Signature-Authorized Memo"}</p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Maximum 10MB • Only PDF or Image</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Maximum 30MB • Only PDF or Image</p>
               </div>
               <input 
                 type="file" 

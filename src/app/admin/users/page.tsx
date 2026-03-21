@@ -656,14 +656,34 @@ export default function UserManagementPage() {
         </Table>
 
         <div className="flex items-center justify-between px-8 py-5 bg-slate-50/50 border-t">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            Page {currentPage} of {totalPages} &bull; {filteredUsers.length} Users{selectedRoleFilter !== ALL_ROLES_FILTER ? ` in ${formatRoleLabel(selectedRoleFilter)}` : ''}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-9 px-4 rounded-xl border-slate-200">
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+              Page {currentPage} of {totalPages}
+            </p>
+            <p className="text-[9px] font-bold text-[#B89334] uppercase">
+              {filteredUsers.length} Total Personnel Discovered
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary transition-all shadow-sm active:scale-95"
+            >
               <ChevronLeft className="w-4 h-4 mr-2" /> Previous
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages} className="h-9 px-4 rounded-xl border-slate-200">
+            <div className="h-9 min-w-[36px] px-3 flex items-center justify-center bg-white border border-[#B89334]/20 rounded-xl font-black text-sm text-[#B89334] shadow-sm">
+              {currentPage}
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+              disabled={currentPage >= totalPages}
+              className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary transition-all shadow-sm active:scale-95"
+            >
               Next <ChevronRight className="w-4 h-4 ml-2" />
             </Button>
           </div>

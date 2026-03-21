@@ -59,7 +59,7 @@ export async function getServerSession() {
     if (payload.v !== currentVersion) return null;
     
     // Resolve master role for permissions
-    const activeRoles = user.roles.filter(ur => ur.role.active).map(ur => ur.role.name);
+    const activeRoles = user.roles.filter((ur: any) => ur.role.active).map((ur: any) => ur.role.name);
     const masterRole = activeRoles.includes('SUPER_ADMIN') ? 'SUPER_ADMIN' : (activeRoles[0] || 'UNASSIGNED');
 
     return {
@@ -118,7 +118,7 @@ export async function verifyPermission(slug: string) {
 
   if (!user || user.status !== 'ACTIVE') return false;
 
-  return user.roles.some(ur => 
-    ur.role.active && ur.role.permissions.some(rp => rp.permission.slug === slug)
+  return user.roles.some((ur: any) => 
+    ur.role.active && ur.role.permissions.some((rp: any) => rp.permission.slug === slug)
   );
 }

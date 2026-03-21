@@ -44,11 +44,11 @@ export async function getUserProfile(userId: string) {
       branchName: user.branch?.name || null,
       districtName: user.districtName || user.branch?.district?.name || null,
       assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [],
-      roles: user.roles.map(ur => ({
+      roles: user.roles.map((ur: any) => ({
         role: {
           id: ur.role.id,
           name: ur.role.name,
-          permissions: ur.role.permissions.map(p => ({
+          permissions: ur.role.permissions.map((p: any) => ({
             permission: { 
               slug: p.permission.slug, 
               name: p.permission.name, 
@@ -102,7 +102,7 @@ export async function getUserByEmail(email: string) {
       status: user.status,
       branchName: user.branch?.name || null,
       districtName: user.districtName || user.branch?.district?.name || null,
-      roles: user.roles.map(ur => ({
+      roles: user.roles.map((ur: any) => ({
         role: {
           name: ur.role.name
         }

@@ -1,14 +1,14 @@
 /**
  * Institutional HTTP Client using Native Fetch API
  * More secure than axios for Next.js, with:
- * - Request size limits (10MB max)
+ * - Request size limits (30MB max)
  * - Timeout enforcement (30s)
  * - Security headers
  * - Response validation
  * - Audit logging on failures
  */
 
-const MAX_CONTENT_LENGTH = 10 * 1024 * 1024; // 10MB
+const MAX_CONTENT_LENGTH = 30 * 1024 * 1024; // 30MB
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 export interface FetchOptions extends RequestInit {
@@ -71,7 +71,7 @@ export class InstitutionalHttpClient {
         statusText: 'Payload Too Large',
         headers: new Headers(),
         data: null as T,
-        error: 'Request payload exceeds 10MB limit',
+        error: 'Request payload exceeds 30MB limit',
       };
     }
 
@@ -100,7 +100,7 @@ export class InstitutionalHttpClient {
         statusText: 'Payload Too Large',
         headers: new Headers(),
         data: null as T,
-        error: 'Request payload exceeds 10MB limit',
+        error: 'Request payload exceeds 30MB limit',
       };
     }
 

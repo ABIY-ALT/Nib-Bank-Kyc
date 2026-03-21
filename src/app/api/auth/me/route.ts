@@ -77,19 +77,19 @@ export async function GET(req: Request) {
       return unauthorizedResponse('Session invalidated');
     }
 
-    const serializableRoles = user.roles.map(ur => ({
+    const serializableRoles = user.roles.map((ur: any) => ({
       role: {
         id: ur.role.id,
         name: ur.role.name,
         active: ur.role.active,
-        permissions: ur.role.permissions.map(p => ({
+        permissions: ur.role.permissions.map((p: any) => ({
           permission: { slug: p.permission.slug, name: p.permission.name, group: p.permission.group }
         }))
       }
     }));
     const activeRoleNames = serializableRoles
-      .filter((r) => r.role.active)
-      .map((r) => r.role.name);
+      .filter((r: any) => r.role.active)
+      .map((r: any) => r.role.name);
 
     const nowSeconds = Math.floor(Date.now() / 1000);
     const iat = session.iat || 0;

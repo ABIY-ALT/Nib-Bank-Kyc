@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * @fileOverview Institutional Security Middleware Utilities.
- * - Request size validation (10MB Max)
+ * - Request size validation (30MB Max)
  * - Content-Type validation
  * - Rate limiting engine (IP-based)
  */
 
-const MAX_REQUEST_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_REQUEST_SIZE = 30 * 1024 * 1024; // 30MB
 
 /**
  * Appends standard institutional security headers to a response.
@@ -58,7 +58,7 @@ export function validateContentType(
  */
 const requestCounts = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 100;
+const MAX_REQUESTS_PER_WINDOW = 500;
 
 export function checkRateLimit(ip: string): {
   allowed: boolean;

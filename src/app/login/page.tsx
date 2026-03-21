@@ -52,7 +52,7 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const callbackUrl = searchParams.get('callbackUrl');
+  const callbackUrl = searchParams?.get('callbackUrl');
   const redirectTarget = isValidInternalRedirect(callbackUrl) ? callbackUrl! : '/';
 
   useEffect(() => {

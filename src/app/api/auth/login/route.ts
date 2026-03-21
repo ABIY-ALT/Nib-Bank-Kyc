@@ -133,12 +133,12 @@ export async function POST(req: Request) {
       throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure.");
     }
 
-    const serializableRoles = (user.roles ?? []).map(ur => ({
+    const serializableRoles = (user.roles ?? []).map((ur: any) => ({
       role: {
         id: ur.role?.id ?? 'unknown',
         name: ur.role?.name ?? 'UNKNOWN',
         active: ur.role?.active ?? false,
-        permissions: (ur.role?.permissions ?? []).map(p => ({
+        permissions: (ur.role?.permissions ?? []).map((p: any) => ({
           permission: { 
             slug: p.permission?.slug ?? '', 
             name: p.permission?.name ?? '', 
@@ -149,8 +149,8 @@ export async function POST(req: Request) {
     }));
 
     const activeRoleNames = serializableRoles
-      .filter((r) => r.role.active)
-      .map((r) => r.role.name);
+      .filter((r: any) => r.role.active)
+      .map((r: any) => r.role.name);
 
     const roleName = activeRoleNames.includes('SUPER_ADMIN') 
       ? 'SUPER_ADMIN' 

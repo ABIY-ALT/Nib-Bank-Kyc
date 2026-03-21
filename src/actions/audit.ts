@@ -74,7 +74,7 @@ export async function createAuditLog(data: {
 }) {
   try {
     const ipAddress = await getClientIp();
-    const { severity = 'LOW', ...logData } = data;
+    const { severity = 'LOW', metadata, ...logData } = data;
 
     // INTEGRATION: High-severity event alerting logic
     if (severity === 'CRITICAL' || severity === 'HIGH') {

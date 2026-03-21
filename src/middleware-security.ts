@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * - Rate limiting headers
  */
 
-const MAX_REQUEST_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_REQUEST_SIZE = 30 * 1024 * 1024; // 30MB
 
 export function securityHeaders(req: NextRequest, res: NextResponse) {
   res.headers.set('X-Content-Type-Options', 'nosniff');
@@ -56,7 +56,7 @@ export function validateContentType(
  */
 const requestCounts = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 100;
+const MAX_REQUESTS_PER_WINDOW = 500;
 
 export function checkRateLimit(ip: string): {
   allowed: boolean;

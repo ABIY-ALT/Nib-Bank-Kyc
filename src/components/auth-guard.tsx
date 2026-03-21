@@ -12,13 +12,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const isPublicRoute = PUBLIC_ROUTES.has(pathname);
+  const isPublicRoute = PUBLIC_ROUTES.has(pathname || "");
   const accessDecision = useMemo(() => {
     if (isPublicRoute) {
       return { allowed: true };
     }
 
-    return getRouteAccessDecision(user, pathname);
+    return getRouteAccessDecision(user, pathname || '/');
   }, [isPublicRoute, pathname, user]);
 
   useEffect(() => {

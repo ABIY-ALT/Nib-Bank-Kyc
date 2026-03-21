@@ -65,7 +65,7 @@ export async function getStorageInventory(params: {
     });
 
     // Tokenize IDs with expiration to prevent IDOR and stale link reuse
-    return memos.map(m => ({
+    return memos.map((m: any) => ({
       ...m,
       fileUrl: `/api/memos/${signDownloadToken(m.id)}` // Indirect route
     }));
@@ -103,7 +103,7 @@ export async function deleteInstitutionalFile(memoId: string) {
     revalidatePath('/admin/storage');
     revalidatePath(`/submissions/${memo.kycId}`);
     
-    return { success: true };
+    return { success: true, kycId: memo.kycId };
   } catch (error: any) {
     console.error('[Vault Storage] Purge Failure:', error);
     return { success: false, error: error.message };

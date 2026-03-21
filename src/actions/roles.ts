@@ -70,7 +70,7 @@ async function internalSeedPermissions() {
       const allPerms = await prisma.permission.findMany();
       await prisma.rolePermission.deleteMany({ where: { roleId: superAdminRole.id } });
       await prisma.rolePermission.createMany({
-        data: allPerms.map(p => ({ roleId: superAdminRole.id, permissionId: p.id }))
+        data: allPerms.map((p: any) => ({ roleId: superAdminRole.id, permissionId: p.id }))
       });
     }
     
@@ -139,23 +139,23 @@ export async function upsertRole(data: { id?: string, name: string, description:
   }
 
   try {
-    const role = await prisma.$transaction(async (tx) => {
-      const r = await tx.role.upsert({
+    const role = await prisma.$transaction(async (tx: any) => {
+      const r = await (tx as any).role.upsert({
         where: { id: data.id || 'new-id' },
         update: { name: data.name, description: data.description, updatedAt: new Date() },
         create: { name: data.name, description: data.description }
       });
 
-      await tx.rolePermission.deleteMany({ where: { roleId: r.id } });
+      await (tx as any).rolePermission.deleteMany({ where: { roleId: r.id } });
       if (data.permissionIds.length > 0) {
-        await tx.rolePermission.createMany({
+        await (tx as any).rolePermission.createMany({
           data: data.permissionIds.map(pid => ({ roleId: r.id, permissionId: pid }))
         });
       }
 
       // MANDATORY REVOCATION: Rotate update timestamps for all users with this role
       // This forces session version mismatch and re-authentication
-      await tx.user.updateMany({
+      await (tx as any).user.updateMany({
         where: { roles: { some: { roleId: r.id } } },
         data: { updatedAt: new Date() }
       });
