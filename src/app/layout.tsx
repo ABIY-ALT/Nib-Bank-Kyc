@@ -9,8 +9,8 @@ import { headers } from 'next/headers';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 export const metadata: Metadata = {
-  title: 'Nib Bank KYC - Secure Identity Verification',
-  description: 'Mission-critical identity verification and submission management system.',
+  title: 'Nib Bank KYC',
+  description: 'KYC submission management system.',
 };
 
 export default async function RootLayout({

@@ -45,12 +45,11 @@ import { getGlobalSettings } from "@/actions/settings";
 import { createSubmission } from "@/actions/submissions";
 import { cn } from "@/lib/utils";
 import {
-  DocumentPreviewNavigation,
   DocumentPreviewViewer,
   PreviewableDocument,
-  formatFileSize,
-  getPreviewFormatLabel,
+  DocumentPreviewNavigation,
 } from "@/components/submissions/document-preview";
+import { formatFileSize, getPreviewFormatLabel } from "@/lib/documents";
 
 interface UploadedFile {
   id: string;
@@ -66,7 +65,7 @@ interface UploadedFileRowProps {
   documentTypes: any[];
   isSelected: boolean;
   onTypeChange: (id: string, newType: string) => void;
-  onPreview: (file: UploadedFile) => void;
+  onPreview: (file: any) => void;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
 }
@@ -410,7 +409,7 @@ export default function NewSubmission() {
   }, []);
 
   const handlePreviewRequest = useCallback(
-    (file: UploadedFile) => {
+    (file: any) => {
       startTransition(() => {
         setActiveFileId(file.id);
       });
@@ -723,6 +722,22 @@ export default function NewSubmission() {
                 </div>
               </div>
             </div>
+
+            {uploadedFiles.length > 0 ? (
+              <DocumentPreviewViewer
+                files={uploadedFiles.map((file) => ({
+                  id: file.id,
+                  name: file.file.name,
+                  previewUrl: file.previewUrl,
+                  mimeType: file.file.type,
+                  size: file.file.size,
+                  documentType: resolveDocumentTypeLabel(file.type, documentTypes),
+                }))}
+                showMultipleView={true}
+                className="mb-6"
+                onFileSelect={handlePreviewRequest}
+              />
+            ) : null}
 
             <div className="grid gap-4">
               {fileListContent}

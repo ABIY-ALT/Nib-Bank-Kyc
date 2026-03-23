@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, FileText, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileText, Loader2, CheckCircle2, AlertTriangle, Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
 
-function hasFileExtension(fileName: string, extensions: string[]) {
-  const normalizedName = fileName.toLowerCase();
-  return extensions.some((extension) => normalizedName.endsWith(extension));
-}
+import {
+  formatFileSize,
+  getPreviewFormatLabel,
+  isImageDocument,
+  isPdfDocument,
+} from "@/lib/documents";
 
 export interface PreviewableDocument {
   id: string;
@@ -24,7 +27,7 @@ export interface PreviewableDocument {
 }
 
 interface DocumentPreviewViewerProps {
-  file: PreviewableDocument | null;
+  file?: PreviewableDocument | null;
   files?: PreviewableDocument[];
   showMultipleView?: boolean;
   className?: string;
@@ -33,50 +36,13 @@ interface DocumentPreviewViewerProps {
   onFileSelect?: (file: PreviewableDocument) => void;
 }
 
-interface DocumentPreviewNavigationProps {
+export interface DocumentPreviewNavigationProps {
   currentIndex: number;
   total: number;
   onPrevious: () => void;
   onNext: () => void;
-  className?: string;
   buttonClassName?: string;
   counterClassName?: string;
-}
-
-export function isPdfDocument(file: PreviewableDocument | null | undefined) {
-  if (!file) return false;
-  return file.mimeType === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-}
-
-export function isImageDocument(file: PreviewableDocument | null | undefined) {
-  if (!file) return false;
-  return !!file.mimeType?.startsWith("image/") || hasFileExtension(file.name, IMAGE_EXTENSIONS);
-}
-
-export function getPreviewFormatLabel(file: PreviewableDocument | null | undefined) {
-  if (!file) return "Document";
-  if (isPdfDocument(file)) return "PDF";
-  if (isImageDocument(file)) return "Image";
-
-  if (!file.mimeType) return "Document";
-  const [type, subtype] = file.mimeType.split("/");
-  const normalizedType = type ? type[0].toUpperCase() + type.slice(1) : "Document";
-  return subtype ? `${normalizedType} / ${subtype.toUpperCase()}` : normalizedType;
-}
-
-export function formatFileSize(size?: number) {
-  if (!size) return "Unknown size";
-  const units = ["B", "KB", "MB", "GB"];
-  let value = size;
-  let unitIndex = 0;
-
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-
-  const precision = unitIndex === 0 ? 0 : value >= 100 ? 0 : value >= 10 ? 1 : 2;
-  return `${value.toFixed(precision)} ${units[unitIndex]}`;
 }
 
 export function DocumentPreviewNavigation({
@@ -84,45 +50,36 @@ export function DocumentPreviewNavigation({
   total,
   onPrevious,
   onNext,
-  className,
   buttonClassName,
   counterClassName,
 }: DocumentPreviewNavigationProps) {
-  const hasItems = total > 0;
-  const previousDisabled = !hasItems || currentIndex <= 0;
-  const nextDisabled = !hasItems || currentIndex >= total - 1;
-
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)}>
+    <div className="flex items-center gap-2">
       <Button
-        type="button"
-        variant="outline"
-        size="sm"
+        variant="ghost"
+        size="icon"
         onClick={onPrevious}
-        disabled={previousDisabled}
-        className={cn("h-9 rounded-full px-4 font-bold", buttonClassName)}
+        disabled={currentIndex <= 0}
+        className={cn("h-10 w-10 rounded-full", buttonClassName)}
       >
-        <ChevronLeft className="mr-1 h-4 w-4" />
-        Previous
+        <ChevronLeft className="h-5 w-5" />
       </Button>
       <div
         className={cn(
-          "rounded-full border border-slate-200 bg-white/70 px-3 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-500",
+          "flex h-10 min-w-[80px] items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 shadow-sm",
           counterClassName
         )}
       >
-        {hasItems ? `${currentIndex + 1} of ${total}` : "0 of 0"}
+        {total > 0 ? `${currentIndex + 1} / ${total}` : "0 / 0"}
       </div>
       <Button
-        type="button"
-        variant="outline"
-        size="sm"
+        variant="ghost"
+        size="icon"
         onClick={onNext}
-        disabled={nextDisabled}
-        className={cn("h-9 rounded-full px-4 font-bold", buttonClassName)}
+        disabled={currentIndex >= total - 1}
+        className={cn("h-10 w-10 rounded-full", buttonClassName)}
       >
-        Next
-        <ChevronRight className="ml-1 h-4 w-4" />
+        <ChevronRight className="h-5 w-5" />
       </Button>
     </div>
   );
@@ -130,12 +87,67 @@ export function DocumentPreviewNavigation({
 
 function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSelect?: (file: PreviewableDocument) => void }) {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [error, setError] = useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const isPdf = isPdfDocument(file);
   const isImage = isImageDocument(file);
 
+  useEffect(() => {
+    let active = true;
+    setIsLoaded(false);
+    setError(false);
+
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+      setBlobUrl(null);
+    }
+
+    if (!file?.previewUrl || (!isPdf && !isImage)) return;
+
+    const loadPreview = async () => {
+      try {
+        const response = await fetch(file.previewUrl);
+        if (!active) return;
+
+        if (!response.ok) {
+          setError(true);
+          setIsLoaded(true);
+          return;
+        }
+
+        const blob = await response.blob();
+        if (!active) return;
+
+        const url = URL.createObjectURL(blob);
+        setBlobUrl(url);
+      } catch (err) {
+        if (!active) return;
+        console.error("Fetch preview error:", err);
+        setError(true);
+        setIsLoaded(true);
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      active = false;
+    };
+  }, [file?.id, file?.previewUrl, isPdf, isImage]);
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const link = document.createElement('a');
+    link.href = file.previewUrl;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:border-primary/40 hover:shadow-xl cursor-pointer"
+      className="group relative flex flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm transition-all duration-500 hover:border-primary/40 hover:shadow-[0_20px_40px_rgba(15,23,42,0.12)] cursor-pointer"
       onClick={() => onSelect?.(file)}
       role="button"
       tabIndex={0}
@@ -146,31 +158,39 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
         }
       }}
     >
-      <div className="relative h-48 w-full overflow-hidden bg-slate-50">
-        {!isLoaded && (isPdf || isImage) && (
+      <div className="relative h-56 w-full overflow-hidden bg-slate-50">
+        {!isLoaded && (isPdf || isImage) && !error && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
         )}
 
-        {isPdf ? (
+        {error ? (
+          <div className="flex h-full w-full items-center justify-center bg-red-50">
+            <div className="rounded-full bg-red-100 p-4">
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+            </div>
+          </div>
+        ) : isPdf && blobUrl ? (
           <iframe
-            src={`${file.previewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+            src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0`}
             title={`Thumbnail of ${file.name}`}
             loading="lazy"
             onLoad={() => setIsLoaded(true)}
+            onError={() => { setError(true); setIsLoaded(true); }}
             className={cn(
               "pointer-events-none h-full w-full border-0 transition-opacity duration-300",
               isLoaded ? "opacity-100" : "opacity-0"
             )}
           />
-        ) : isImage ? (
+        ) : isImage && blobUrl ? (
           <img
-            src={file.previewUrl}
+            src={blobUrl}
             alt={file.name}
             loading="lazy"
             decoding="async"
             onLoad={() => setIsLoaded(true)}
+            onError={() => { setError(true); setIsLoaded(true); }}
             className={cn(
               "h-full w-full object-cover transition-all duration-300 group-hover:scale-105",
               isLoaded ? "opacity-100" : "opacity-0"
@@ -178,32 +198,67 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <FileText className="h-12 w-12 text-slate-300" />
+            <div className="rounded-full bg-slate-100 p-6">
+              <FileText className="h-12 w-12 text-slate-300" />
+            </div>
           </div>
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+        {/* Status Overlay */}
+        <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-2">
+          {file.documentType && (
+            <Badge className="bg-white/90 backdrop-blur-md text-slate-900 border-slate-200/50 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm">
+              {file.documentType}
+            </Badge>
+          )}
+        </div>
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 flex items-end p-4">
+           <div className="flex items-center gap-2 text-white">
+             <Search className="w-4 h-4" />
+             <span className="text-xs font-black uppercase tracking-widest">Inspect File</span>
+           </div>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3 border-t border-slate-100 p-3">
-        <div className="rounded-lg bg-slate-100 p-1.5 transition-colors group-hover:bg-primary/10">
-          <FileText className="h-4 w-4 text-slate-400 transition-colors group-hover:text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-bold text-slate-800">{file.name}</p>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-              {getPreviewFormatLabel(file)}
-            </span>
-            {file.size ? (
-              <>
-                <span className="text-[10px] text-slate-300">•</span>
-                <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-                  {formatFileSize(file.size)}
-                </span>
-              </>
-            ) : null}
+      <div className="flex flex-col gap-2 p-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-slate-100 p-2 transition-colors group-hover:bg-primary/10">
+            <FileText className="h-5 w-5 text-slate-400 transition-colors group-hover:text-primary" />
           </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-black text-slate-800">{file.name}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+                {getPreviewFormatLabel(file)}
+              </span>
+              {file.size ? (
+                <>
+                  <span className="text-[10px] text-slate-300">•</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+                    {formatFileSize(file.size)}
+                  </span>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        
+        {/* Verification indicator and download button */}
+        <div className="flex items-center justify-between mt-1 pt-3 border-t border-slate-100">
+           <div className="flex items-center gap-1.5 text-emerald-600">
+             <CheckCircle2 className="w-3.5 h-3.5" />
+             <span className="text-[9px] font-black uppercase tracking-widest">Vault Storage</span>
+           </div>
+           <Button
+             variant="ghost"
+             size="icon"
+             onClick={handleDownload}
+             className="h-8 w-8 rounded-full text-slate-400 hover:text-primary hover:bg-primary/5 transition-colors"
+             title="Download file"
+           >
+             <Download className="w-4 h-4" />
+           </Button>
         </div>
       </div>
     </div>
@@ -220,32 +275,221 @@ export function DocumentPreviewViewer({
   onFileSelect,
 }: DocumentPreviewViewerProps) {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     setIsLoaded(false);
-  }, [file?.id]);
+    setError(null);
+    
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+      setBlobUrl(null);
+    }
+
+    if (!file?.previewUrl) return;
+
+    // Fetch the document to check for errors (401, 403, 404, etc.)
+    // this allows us to show the user exactly why the preview failed.
+    const loadPreview = async () => {
+      try {
+        const response = await fetch(file.previewUrl);
+        
+        if (!active) return;
+
+        if (!response.ok) {
+          const status = response.status;
+          let message = `Failed to load preview (Status: ${status})`;
+          
+          if (status === 401) message = "Session expired or unauthenticated. Please log in again.";
+          else if (status === 403) message = "Access denied. You do not have permissions to view this document.";
+          else if (status === 404) message = "The requested document was not found on the server.";
+          else if (status >= 500) message = "Internal server error while retrieving document.";
+
+          setError(message);
+          setIsLoaded(true);
+          return;
+        }
+
+        const blob = await response.blob();
+        if (!active) return;
+
+        const url = URL.createObjectURL(blob);
+        setBlobUrl(url);
+        // setIsLoaded will be set by the iframe/img onLoad
+      } catch (err) {
+        if (!active) return;
+        console.error("Fetch preview error:", err);
+        setError("Network error or security block prevented loading the preview.");
+        setIsLoaded(true);
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      active = false;
+    };
+  }, [file?.id, file?.previewUrl]);
 
   // --- Multiple View Mode ---
   if (showMultipleView && files && files.length > 0) {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const selectedFile = files[selectedIndex];
+
+    const goToPrevious = () => {
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : files.length - 1));
+    };
+
+    const goToNext = () => {
+      setSelectedIndex((prev) => (prev < files.length - 1 ? prev + 1 : 0));
+    };
+
     return (
       <div
         className={cn(
-          "overflow-auto rounded-[28px] border border-[#d9c7a4] bg-[radial-gradient(circle_at_top,_rgba(184,147,52,0.10),_rgba(255,251,245,0.98)_56%)] p-5",
+          "overflow-hidden rounded-[32px] border border-slate-200 bg-slate-50/50 shadow-inner",
           className
         )}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-            All Documents
-          </p>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-            {files.length} file{files.length === 1 ? "" : "s"}
-          </span>
+        {/* Header */}
+        <div className="border-b border-slate-200 bg-white p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-primary/10 p-2.5">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+                  Institutional Vault
+                </p>
+                <h3 className="text-lg font-black text-slate-900">Document Inventory</h3>
+              </div>
+            </div>
+            <Badge variant="outline" className="rounded-full border-slate-200 bg-white px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 shadow-sm">
+              {files.length} item{files.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {files.map((f) => (
-            <MultipleFileCard key={f.id} file={f} onSelect={onFileSelect} />
-          ))}
+
+        {/* Preview Section */}
+        <div className="border-b border-slate-200 bg-gradient-to-b from-slate-50 to-white p-6">
+          <div className="space-y-4">
+            {/* Selected File Preview */}
+            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+              <div className="relative h-64 w-full overflow-hidden bg-slate-100 flex items-center justify-center">
+                {selectedFile && (
+                  <>
+                    {isPdfDocument(selectedFile) ? (
+                      <iframe
+                        src={`${selectedFile.previewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                        title={`Preview of ${selectedFile.name}`}
+                        className="h-full w-full border-0"
+                      />
+                    ) : isImageDocument(selectedFile) ? (
+                      <img
+                        src={selectedFile.previewUrl}
+                        alt={selectedFile.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <FileText className="h-12 w-12 text-slate-300" />
+                        <p className="text-sm font-bold text-slate-400">Preview unavailable</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* File Info */}
+              <div className="p-4 border-t border-slate-100">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black text-slate-900">{selectedFile?.name}</p>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-slate-200 bg-slate-50 text-slate-600">
+                        {getPreviewFormatLabel(selectedFile)}
+                      </Badge>
+                      {selectedFile?.size && (
+                        <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-slate-200 bg-slate-50 text-slate-600">
+                          {formatFileSize(selectedFile.size)}
+                        </Badge>
+                      )}
+                      {selectedFile?.documentType && (
+                        <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-emerald-200 bg-emerald-50 text-emerald-700">
+                          {selectedFile.documentType}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  {selectedFile && (
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg border-primary/20 text-primary hover:bg-primary/5 font-bold"
+                    >
+                      <a href={selectedFile.previewUrl} download={selectedFile.name}>
+                        <Download className="h-4 w-4 mr-1" />
+                        Download
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Controls */}
+            <div className="flex items-center justify-between gap-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPrevious}
+                className="h-10 rounded-full px-4 font-bold border-slate-200 hover:bg-slate-100"
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  {selectedIndex + 1} of {files.length}
+                </span>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNext}
+                className="h-10 rounded-full px-4 font-bold border-slate-200 hover:bg-slate-100"
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Gallery Grid */}
+        <div className="overflow-auto p-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {files.map((f, index) => (
+              <div
+                key={f.id}
+                onClick={() => { setSelectedIndex(index); onFileSelect?.(f); }}
+                className={cn(
+                  "cursor-pointer rounded-2xl border-2 transition-all duration-200",
+                  selectedIndex === index
+                    ? "border-primary bg-primary/5 shadow-lg"
+                    : "border-slate-200 bg-white hover:border-primary/40 hover:shadow-md"
+                )}
+              >
+                <MultipleFileCard file={f} onSelect={onFileSelect} />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -276,7 +520,13 @@ export function DocumentPreviewViewer({
   // --- Single View Mode (default) ---
   const isPdf = isPdfDocument(file);
   const isImage = isImageDocument(file);
-  const shouldShowLoader = (isPdf || isImage) && !isLoaded;
+  const shouldShowLoader = (isPdf || isImage) && !isLoaded && !error;
+
+  const handlePdfError = (e: any) => {
+    console.error("PDF loading error:", e);
+    setError("Failed to load PDF preview. The file might be corrupted or the URL may be inaccessible.");
+    setIsLoaded(true); // Stop the loader
+  };
 
   return (
     <div
@@ -294,13 +544,30 @@ export function DocumentPreviewViewer({
         </div>
       ) : null}
 
-      {isPdf ? (
+      {error ? (
+        <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-6 p-10 text-center">
+          <div className="rounded-full bg-red-100 p-6">
+            <FileText className="h-14 w-14 text-red-500" />
+          </div>
+          <div className="space-y-2">
+            <p className="text-xl font-black text-slate-900">Preview Error</p>
+            <p className="max-w-md text-sm font-medium text-slate-500">{error}</p>
+          </div>
+          <Button asChild className="h-11 rounded-full bg-primary px-6 font-bold text-white shadow-lg">
+            <a href={file.previewUrl} download={file.name}>
+              <Download className="h-4 w-4" />
+              Download Original
+            </a>
+          </Button>
+        </div>
+      ) : isPdf ? (
         <iframe
           key={file.id}
-          src={`${file.previewUrl}#toolbar=1&navpanes=0&scrollbar=1`}
+          src={blobUrl ? `${blobUrl}#toolbar=1&navpanes=0&scrollbar=1` : undefined}
           title={`Preview of ${file.name}`}
           loading="lazy"
           onLoad={() => setIsLoaded(true)}
+          onError={handlePdfError}
           className={cn(
             "h-full min-h-[420px] w-full border-0 transition-opacity duration-300",
             isLoaded ? "opacity-100" : "opacity-0"
@@ -310,11 +577,12 @@ export function DocumentPreviewViewer({
         <div className="flex h-full min-h-[420px] w-full items-center justify-center overflow-auto p-6 sm:p-8">
           <img
             key={file.id}
-            src={file.previewUrl}
+            src={blobUrl || undefined}
             alt={file.name}
             loading="lazy"
             decoding="async"
             onLoad={() => setIsLoaded(true)}
+            onError={() => setError("Failed to load image.")}
             className={cn(
               "max-h-full max-w-full rounded-2xl object-contain shadow-[0_18px_60px_rgba(15,23,42,0.18)] transition-all duration-300",
               isLoaded ? "scale-100 opacity-100" : "scale-[0.985] opacity-0"

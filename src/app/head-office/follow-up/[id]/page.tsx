@@ -34,14 +34,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import * as documentPreview from "@/components/submissions/document-preview";
 import {
   DocumentPreviewViewer,
-  DocumentPreviewNavigation,
-  formatFileSize,
-  getPreviewFormatLabel,
   type PreviewableDocument,
 } from "@/components/submissions/document-preview";
+import { formatFileSize, getPreviewFormatLabel } from "@/lib/documents";
 
 export default function FollowUpVerificationDetail() {
   const params = useParams();
@@ -483,15 +480,36 @@ export default function FollowUpVerificationDetail() {
               />
             </div>
 
-            <div className="p-6 bg-slate-900 border-t border-white/5 shrink-0">
-                <DocumentPreviewNavigation
-                  currentIndex={activeDocIndex}
-                  total={previewableDocuments.length}
-                  onPrevious={goToPreviousDoc}
-                  onNext={goToNextDoc}
-                  buttonClassName="border-white/10 bg-white/5 text-white hover:bg-white/15 h-12"
-                  counterClassName="text-white/60 font-black"
-                />
+            <div className="p-6 bg-slate-900 border-t border-white/5 shrink-0 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={goToPreviousDoc}
+                  disabled={activeDocIndex <= 0}
+                  className="h-9 rounded-full px-3 font-bold border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                >
+                  <FileText className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-white/15 bg-white/10 text-white/80">
+                  <span className="text-[10px] font-black uppercase tracking-widest">
+                    {activeDocIndex >= 0 ? activeDocIndex + 1 : 0} of {previewableDocuments.length}
+                  </span>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={goToNextDoc}
+                  disabled={activeDocIndex >= previewableDocuments.length - 1}
+                  className="h-9 rounded-full px-3 font-bold border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                >
+                  Next
+                  <FileText className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

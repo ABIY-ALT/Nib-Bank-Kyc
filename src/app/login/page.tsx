@@ -83,7 +83,7 @@ function LoginContent() {
         <LogoResponsive />
         <div className="space-y-1">
           <h1 className="text-4xl font-black text-foreground tracking-tighter">NIB BANK <span className="text-primary">KYC</span></h1>
-          <p className="text-muted-foreground text-lg font-medium">Secure access portal.</p>
+          <p className="text-muted-foreground text-lg font-medium"></p>
         </div>
       </div>
 

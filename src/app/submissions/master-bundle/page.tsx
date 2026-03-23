@@ -131,63 +131,154 @@ export default function MasterBundleDownloadPage() {
       const zip = new JSZip();
       const now = new Date();
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      const scopeDistrict = selectedDistrict !== 'all'
-        ? selectedDistrict
-        : (filteredSubmissions.length === 1 ? getSubmissionDistrictName(filteredSubmissions[0]) : 'MULTI_DISTRICT');
-      const scopeBranch = selectedBranch !== 'all'
-        ? selectedBranch
-        : (filteredSubmissions.length === 1 ? getSubmissionBranchName(filteredSubmissions[0]) : 'MULTI_BRANCH');
-      const bundleName = buildBundleRootName(scopeDistrict, scopeBranch, timestamp);
-      const rootFolder = zip.folder(bundleName);
-
-      const manifestHeader = `NIB BANK MASTER KYC EXPORT\n--------------------------------------------------\nAUTHORIZING OFFICIAL: ${user.name}\nTOTAL CASES: ${filteredSubmissions.length}\nARCHIVE ROOT: ${bundleName}\n--------------------------------------------------\n\nSTRUCTURE: Root / District / Branch / CaseID_CustomerName / Documents\n\nINVENTORY:\n`;
       
-      let manifestBody = "";
-
-      for (let i = 0; i < filteredSubmissions.length; i++) {
-        const sub = filteredSubmissions[i];
+      // Build filter type label
+      const filterTypeLabel = selectedStatuses.length === 0 
+        ? 'ALL_STATUSES'
+        : selectedStatuses.map(s => STATUS_OPTIONS.find(opt => opt.id === s)?.label || s).join('_');
+      
+      // Build date range label
+      const dateRangeLabel = dateRange?.from && dateRange?.to
+        ? `${format(dateRange.from, 'yyyyMMdd')}_to_${format(dateRange.to, 'yyyyMMdd')}`
+        : dateRange?.from
+        ? `from_${format(dateRange.from, 'yyyyMMdd')}`
+        : 'ALL_DATES';
+      
+      // Root folder structure: District > Branch > FilterType_DateRange > Customer
+      const rootFolder = zip.folder('NIB_KYC_MASTER_EXPORT');
+      
+      // Group submissions by district and branch
+      const groupedByDistrict: Record<string, Record<string, any[]>> = {};
+      
+      for (const sub of filteredSubmissions) {
         const distName = getSubmissionDistrictName(sub);
         const branchName = getSubmissionBranchName(sub);
-        const folderSafeName = `${sanitizeBundleSegment(sub.id, 'CASE')}_${sanitizeBundleSegment(sub.customerName, 'CUSTOMER')}`;
         
-        setCurrentActionLabel(`Packaging: ${sub.id}`);
+        if (!groupedByDistrict[distName]) {
+          groupedByDistrict[distName] = {};
+        }
+        if (!groupedByDistrict[distName][branchName]) {
+          groupedByDistrict[distName][branchName] = [];
+        }
+        groupedByDistrict[distName][branchName].push(sub);
+      }
+      
+      // Build nested structure
+      let manifestBody = "";
+      let processedCount = 0;
+
+      for (const [districtName, branches] of Object.entries(groupedByDistrict)) {
+        const districtFolder = rootFolder?.folder(sanitizeBundleSegment(districtName, 'DISTRICT'));
         
-        const caseFolder = rootFolder?.folder(
-          `${sanitizeBundleSegment(distName, 'UNASSIGNED_DISTRICT')}/${sanitizeBundleSegment(branchName, 'UNASSIGNED_BRANCH')}/${folderSafeName}/Documents`
-        );
-        const fullSub = await getSubmissionById(sub.id);
-        
-        if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
-          for (const doc of fullSub.documents) {
-            try {
-              const fileRes = await fetch(doc.url);
-              const blob = await fileRes.blob();
-              caseFolder?.file(doc.name, blob);
-            } catch (err) {
-              console.error(`Failed to fetch asset: ${doc.name}`);
+        for (const [branchName, submissions] of Object.entries(branches)) {
+          const branchFolder = districtFolder?.folder(sanitizeBundleSegment(branchName, 'BRANCH'));
+          
+          // Create filter type and date range subfolder
+          const filterFolder = branchFolder?.folder(`${sanitizeBundleSegment(filterTypeLabel, 'FILTER')}_${dateRangeLabel}`);
+          
+          for (const sub of submissions) {
+            const customerFolderName = sanitizeBundleSegment(sub.customerName, 'CUSTOMER');
+            const customerFolder = filterFolder?.folder(customerFolderName);
+            
+            setCurrentActionLabel(`Packaging: ${sub.id} (${sub.customerName})`);
+            
+            const fullSub = await getSubmissionById(sub.id);
+            
+            if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
+              for (const doc of fullSub.documents) {
+                try {
+                  const fileRes = await fetch(doc.previewUrl || doc.url);
+                  const blob = await fileRes.blob();
+                  customerFolder?.file(doc.name, blob);
+                } catch (err) {
+                  console.error(`Failed to fetch asset: ${doc.name}`);
+                }
+              }
             }
+            
+            // Create case metadata file
+            const caseMetadata = `CASE METADATA
+==================================================
+Case ID:           ${sub.id}
+Customer Name:     ${sub.customerName}
+Entity Type:       ${sub.entityType || 'Individual'}
+Branch:            ${branchName}
+District:          ${districtName}
+Status:            ${sub.status}
+Submitted Date:    ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : 'N/A'}
+Last Updated:      ${sub.updatedAt ? new Date(sub.updatedAt).toLocaleString() : 'N/A'}
+Document Count:    ${fullSub?.documents?.length || 0}
+==================================================`;
+            
+            customerFolder?.file('CASE_METADATA.txt', caseMetadata);
+            
+            manifestBody += `[${sub.status}] ${districtName} > ${branchName} > ${sub.id} (${sub.customerName}) - ${fullSub?.documents?.length || 0} documents\n`;
+            processedCount++;
+            setProgress(Math.round((processedCount / filteredSubmissions.length) * 100));
           }
         }
-
-        manifestBody += `- [${sub.status}] ${distName} > ${branchName} > ${sub.id} (${sub.customerName})\n`;
-        setProgress(Math.round(((i + 1) / filteredSubmissions.length) * 100));
       }
+      
+      // Create comprehensive manifest
+      const manifestHeader = `NIB BANK MASTER KYC EXPORT
+==================================================
+EXPORT METADATA
+==================================================
+Authorizing Official:  ${user.name}
+Export Timestamp:      ${now.toLocaleString()}
+Total Cases:           ${filteredSubmissions.length}
+Total Documents:       ${filteredSubmissions.reduce((sum, sub) => sum + (sub.documents?.length || 0), 0)}
 
-      rootFolder?.file("nib_bank_manifest.txt", manifestHeader + manifestBody);
+FILTER CRITERIA
+==================================================
+Status Filter:         ${filterTypeLabel}
+Date Range:            ${dateRangeLabel}
+District Filter:       ${selectedDistrict !== 'all' ? selectedDistrict : 'All Districts'}
+Branch Filter:         ${selectedBranch !== 'all' ? selectedBranch : 'All Branches'}
+
+==================================================
+Root: NIB_KYC_MASTER_EXPORT
+  └─ [District Name]
+      └─ [Branch Name]
+          └─ [${sanitizeBundleSegment(filterTypeLabel, 'FILTER')}_${dateRangeLabel}]
+              └─ [Customer Name]
+                  ├─ [Document Files]
+                  └─ CASE_METADATA.txt
+
+CASE INVENTORY
+==================================================
+`;
+      
+      rootFolder?.file('EXPORT_MANIFEST.txt', manifestHeader + manifestBody);
+      
+      // Create filter summary
+      const filterSummary = `FILTER SUMMARY
+==================================================
+Export Date:           ${format(now, 'yyyy-MM-dd HH:mm:ss')}
+Status Filters:        ${selectedStatuses.length === 0 ? 'All Statuses' : selectedStatuses.map(s => STATUS_OPTIONS.find(opt => opt.id === s)?.label).join(', ')}
+Date Range:            ${dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : 'Start'} to ${dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : 'End'}
+District:              ${selectedDistrict !== 'all' ? selectedDistrict : 'All'}
+Branch:                ${selectedBranch !== 'all' ? selectedBranch : 'All'}
+Total Records:         ${filteredSubmissions.length}
+==================================================`;
+      
+      rootFolder?.file('FILTER_SUMMARY.txt', filterSummary);
 
       setCurrentActionLabel("Compressing Archive...");
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${bundleName}.zip`);
+      link.setAttribute('download', `NIB_KYC_EXPORT_${timestamp}.zip`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-      toast({ title: "Successful", description: `Master Archive with folders and files is ready.` });
+      toast({ title: "Successful", description: `Master bundle exported with ${filteredSubmissions.length} cases organized by district, branch, and filter criteria.` });
     } catch (error) {
-      toast({ variant: "destructive", title: "Export Failure" });
+      console.error('Export error:', error);
+      toast({ variant: "destructive", title: "Export Failure", description: "Could not complete the master bundle export." });
     } finally {
       setIsProcessing(false);
       setProgress(0);

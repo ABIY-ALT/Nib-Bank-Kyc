@@ -103,17 +103,34 @@ function buildRestrictedJurisdictionFilter(
 /**
  * Format helper to ensure JSON fields are valid and safe.
  */
+function inferMimeTypeFromName(name: string | null | undefined) {
+  if (!name) return undefined;
+  const lower = name.toLowerCase();
+
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.bmp')) return 'image/bmp';
+
+  return undefined;
+}
+
 function formatKYC(kyc: any) {
   return {
     ...kyc,
     checklistState: kyc.checklistState || {},
     commentHistory: Array.isArray(kyc.commentHistory) ? kyc.commentHistory : [],
-    documents: kyc.memos?.map((m: any) => ({
-      id: m.id,
-      name: m.name,
-      type: m.type,
-      url: `/api/memos/${signDownloadToken(m.id)}`
-    })) || []
+    documents:
+      kyc.memos?.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        type: m.type,
+        // Use the file serving API route for all files (PDFs, images, etc.)
+        previewUrl: m.fileUrl ? `/api/files/${m.fileUrl}` : `/api/memos/${signDownloadToken(m.id)}`,
+        mimeType: inferMimeTypeFromName(m.name),
+      })) || [],
   };
 }
 

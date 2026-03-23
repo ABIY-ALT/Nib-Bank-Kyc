@@ -59,13 +59,13 @@ export async function GET(
       else if (['.jpg', '.jpeg'].includes(extension)) contentType = 'image/jpeg';
       else if (extension === '.png') contentType = 'image/png';
 
-      const response = new Response(fileBuffer, {
+      const response = new Response(new Uint8Array(fileBuffer), {
         headers: {
           'Content-Type': contentType,
           'Content-Disposition': `${forceDownload ? 'attachment' : 'inline'}; filename="${fileName}"`,
           'X-Content-Type-Options': 'nosniff',
           'Cache-Control': 'no-store, no-cache, must-revalidate',
-          'Content-Security-Policy': "default-src 'none';",
+          'Content-Security-Policy': "default-src 'self' blob:; frame-ancestors 'self';",
         },
       });
 

@@ -74,14 +74,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import * as documentPreview from "@/components/submissions/document-preview";
 import {
   DocumentPreviewViewer,
-  DocumentPreviewNavigation,
-  formatFileSize,
-  getPreviewFormatLabel,
   type PreviewableDocument,
 } from "@/components/submissions/document-preview";
+import { formatFileSize, getPreviewFormatLabel } from "@/lib/documents";
 
 const KYC_CHECKLIST_ITEMS = [
   { id: 'id_verified', label: 'Identity Document Authenticity' },
@@ -199,7 +196,7 @@ const ResubmitFileRow = memo(function ResubmitFileRow({
             <p className="font-black text-slate-900 truncate">{item.file.name}</p>
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest truncate">
-                {documentPreview.formatFileSize(item.file.size)}
+                {formatFileSize(item.file.size)}
               </p>
               <Badge
                 variant="outline"
@@ -349,25 +346,20 @@ export default function SubmissionDetails() {
   }, [submission?.documents]);
 
   const previewableDocuments: PreviewableDocument[] = useMemo(() => {
-    return submissionDocuments.map((doc: any) => {
-      // Infer mimeType from the file name since the Memo model
-      // stores the document classification in `type` (e.g. "Passport"), not a MIME type.
-      const lowerName = (doc.name || "").toLowerCase();
-      let inferredMime: string | undefined;
-      if (lowerName.endsWith(".pdf")) inferredMime = "application/pdf";
-      else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) inferredMime = "image/jpeg";
-      else if (lowerName.endsWith(".png")) inferredMime = "image/png";
-
-      return {
-        id: doc.id,
-        name: doc.name,
-        previewUrl: doc.url,
-        mimeType: inferredMime,
-        size: doc.size,
-        documentType: doc.type,
-      };
-    });
+    return submissionDocuments.map((doc: any) => ({
+      id: doc.id,
+      name: doc.name,
+      previewUrl: doc.previewUrl || doc.url,
+      mimeType: doc.mimeType,
+      size: doc.size,
+      documentType: doc.type,
+    }));
   }, [submissionDocuments]);
+
+  const handleDocumentSelect = useCallback((doc: PreviewableDocument) => {
+    setActiveDocId(doc.id);
+    setIsDocPreviewModalOpen(true);
+  }, []);
 
   const activeDocIndex = useMemo(() => {
     return previewableDocuments.findIndex((d) => d.id === activeDocId);
@@ -855,19 +847,48 @@ export default function SubmissionDetails() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <DocumentPreviewNavigation
-                      currentIndex={activeDocIndex >= 0 ? activeDocIndex : 0}
-                      total={previewableDocuments.length}
-                      onPrevious={goToPreviousDoc}
-                      onNext={goToNextDoc}
-                      buttonClassName="border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                      counterClassName="border-white/15 bg-white/10 text-white/80"
-                    />
+
+                  {/* Navigation Controls */}
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between pt-2 border-t border-white/10">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={goToPreviousDoc}
+                        disabled={activeDocIndex <= 0}
+                        className="h-9 rounded-full px-3 font-bold border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        Previous
+                      </Button>
+
+                      <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-white/15 bg-white/10 text-white/80">
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                          {activeDocIndex >= 0 ? activeDocIndex + 1 : 0} of {previewableDocuments.length}
+                        </span>
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={goToNextDoc}
+                        disabled={activeDocIndex >= previewableDocuments.length - 1}
+                        className="h-9 rounded-full px-3 font-bold border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                      >
+                        Next
+                        <FileText className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+
                     {activeDocPreview && (
-                      <Button asChild variant="outline" className="h-10 rounded-full border-white/15 bg-white/10 px-5 font-bold text-white hover:bg-white/20 hover:text-white">
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="h-9 rounded-full border-white/15 bg-white/10 px-4 font-bold text-white hover:bg-white/20 hover:text-white"
+                      >
                         <a href={activeDocPreview.previewUrl} download={activeDocPreview.name}>
-                          <Download className="h-4 w-4" />
+                          <Download className="h-4 w-4 mr-1" />
                           Download Original
                         </a>
                       </Button>
