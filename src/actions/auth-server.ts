@@ -41,6 +41,7 @@ export async function getServerSession() {
       select: { 
         updatedAt: true, 
         status: true, 
+        sessionId: true,
         roles: { 
           include: { 
             role: {
@@ -51,8 +52,9 @@ export async function getServerSession() {
       }
     });
 
-    // RULE: Account must be active and role must be valid
+    // RULE: Account must be active and session must match (single session enforcement)
     if (!user || user.status !== 'ACTIVE') return null;
+    if (user.sessionId !== payload.sid) return null;
 
     // 3. TOKEN VERSIONING (Revocation on password/role change)
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);

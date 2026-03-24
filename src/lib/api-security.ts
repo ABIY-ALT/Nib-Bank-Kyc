@@ -78,11 +78,17 @@ export async function verifyAuthentication(request: Request) {
           email: true,
           status: true,
           updatedAt: true,
+          sessionId: true,
           roles: { include: { role: { select: { name: true } } } }
         }
       });
 
       if (!user || user.status !== 'ACTIVE') {
+        return null;
+      }
+
+      // Single session enforcement
+      if (user.sessionId !== payload.sid) {
         return null;
       }
 

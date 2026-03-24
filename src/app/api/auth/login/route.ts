@@ -159,11 +159,21 @@ export async function POST(req: Request) {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const absoluteLimit = nowSeconds + (8 * 60 * 60);
 
+    // Generate unique session identifier for single-session enforcement
+    const sessionId = crypto.randomUUID();
+
+    // Store sessionId in database to invalidate previous sessions
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { sessionId }
+    });
+
     const token = jwt.sign(
       { 
         id: user.id, 
         email: user.email,
         role: roleName,
+        sid: sessionId, // Include session ID in token
         ip: ipAddress,
         ua: uaHash,
         v: versionSeconds,
