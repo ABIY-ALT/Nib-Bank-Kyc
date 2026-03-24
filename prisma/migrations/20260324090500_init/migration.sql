@@ -15,6 +15,7 @@ CREATE TABLE "User" (
     "districtName" TEXT,
     "assignedBranches" TEXT,
     "needsPasswordChange" BOOLEAN NOT NULL DEFAULT true,
+    "sessionId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

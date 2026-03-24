@@ -126,7 +126,6 @@ export async function POST(req: Request) {
       return unauthorizedResponse(genericErrorMessage);
     }
 
-    const versionSeconds = Math.floor(user.updatedAt.getTime() / 1000);
     const secret = process.env.JWT_SECRET;
     
     if (!secret || secret.length < 32) {
@@ -163,10 +162,13 @@ export async function POST(req: Request) {
     const sessionId = crypto.randomUUID();
 
     // Store sessionId in database to invalidate previous sessions
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: user.id },
-      data: { sessionId }
+      data: { sessionId },
+      select: { updatedAt: true }
     });
+
+    const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
 
     const token = jwt.sign(
       { 
