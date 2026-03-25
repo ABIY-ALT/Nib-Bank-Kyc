@@ -78,7 +78,7 @@ export default function SystemWideReportsPage() {
   const handleExportCSV = () => {
     if (!stats) return;
     const headers = ['Category', 'Value'];
-    const dataRows = [['Total Volume', stats.total], ['Approvals', stats.approved], ['Pending', stats.pending], ['Accuracy (%)', stats.accuracy]];
+    const dataRows = [['Total Volume', stats.total], ['Approvals', stats.approved], ['Unseen', stats.pending], ['Accuracy (%)', stats.accuracy]];
     stats.branches.forEach(b => dataRows.push([`Branch: ${b.name}`, b.count]));
     const csvContent = [headers.join(','), ...dataRows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -141,7 +141,7 @@ export default function SystemWideReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
              <Card className="bg-primary text-white shadow-2xl rounded-2xl overflow-hidden border-none"><CardHeader className="pb-2 bg-white/10"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-white/80">Total Volume</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-white tracking-tighter">{stats.total}</span></CardContent></Card>
              <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Total Approvals</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-emerald-600 tracking-tighter">{stats.approved}</span></CardContent></Card>
-             <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Review</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-orange-600 tracking-tighter">{stats.pending}</span></CardContent></Card>
+             <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Unseen Review</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-orange-600 tracking-tighter">{stats.pending}</span></CardContent></Card>
              <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Accuracy Index</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-primary tracking-tighter">{stats.accuracy}%</span></CardContent></Card>
           </div>
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, type WheelEvent, type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, FileText, Loader2, CheckCircle2, AlertTriangle, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -8,6 +8,184 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
+
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3;
+const ZOOM_STEP = 0.15;
+
+const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+const clampValue = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+function useZoomController() {
+  const [zoomLevel, setZoomLevel] = useState(1);
+
+  const resetZoom = useCallback(() => {
+    setZoomLevel(1);
+  }, []);
+
+  const handleWheelZoom = useCallback((event: WheelEvent<HTMLDivElement>, requireModifier = true) => {
+    if (requireModifier && !event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    const adjustment = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    setZoomLevel((current) => clampZoom(current + adjustment));
+  }, []);
+
+  return { zoomLevel, handleWheelZoom, resetZoom };
+}
+
+interface ZoomSurfaceProps {
+  zoomLevel: number;
+  onWheel: (event: WheelEvent<HTMLDivElement>) => void;
+  onDoubleClick?: () => void;
+  className?: string;
+  children: ReactNode;
+  resetSignal?: number;
+  showZoomBadge?: boolean;
+  verticalAlign?: "center" | "start";
+}
+
+function ZoomSurface({
+  zoomLevel,
+  onWheel,
+  onDoubleClick,
+  className,
+  children,
+  resetSignal,
+  showZoomBadge = false,
+  verticalAlign = "center",
+}: ZoomSurfaceProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef({
+    pointerId: -1,
+    startX: 0,
+    startY: 0,
+    offsetX: 0,
+    offsetY: 0,
+  });
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+
+  const resetOffset = useCallback(() => {
+    setOffset({ x: 0, y: 0 });
+    dragStateRef.current = { pointerId: -1, startX: 0, startY: 0, offsetX: 0, offsetY: 0 };
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (zoomLevel <= 1) {
+      resetOffset();
+      return;
+    }
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const maxX = ((zoomLevel - 1) * container.clientWidth) / 2;
+    const maxY = ((zoomLevel - 1) * container.clientHeight) / 2;
+
+    setOffset((current) => ({
+      x: clampValue(current.x, -maxX, maxX),
+      y: clampValue(current.y, -maxY, maxY),
+    }));
+  }, [zoomLevel, resetOffset]);
+
+  useEffect(() => {
+    if (resetSignal === undefined) return;
+    resetOffset();
+  }, [resetOffset, resetSignal]);
+
+  const handlePointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (zoomLevel <= 1) return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+
+      event.preventDefault();
+      const container = containerRef.current;
+      if (!container) return;
+
+      dragStateRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        offsetX: offset.x,
+        offsetY: offset.y,
+      };
+
+      container.setPointerCapture(event.pointerId);
+      setIsDragging(true);
+    },
+    [offset, zoomLevel]
+  );
+
+  const handlePointerMove = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (dragStateRef.current.pointerId !== event.pointerId) return;
+      const container = containerRef.current;
+      if (!container) return;
+
+      const deltaX = event.clientX - dragStateRef.current.startX;
+      const deltaY = event.clientY - dragStateRef.current.startY;
+
+      const maxX = ((zoomLevel - 1) * container.clientWidth) / 2;
+      const maxY = ((zoomLevel - 1) * container.clientHeight) / 2;
+
+      const nextX = clampValue(dragStateRef.current.offsetX + deltaX, -maxX, maxX);
+      const nextY = clampValue(dragStateRef.current.offsetY + deltaY, -maxY, maxY);
+
+      setOffset({ x: nextX, y: nextY });
+    },
+    [zoomLevel]
+  );
+
+  const releasePointer = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (dragStateRef.current.pointerId !== event.pointerId) return;
+    const container = containerRef.current;
+    if (container) {
+      container.releasePointerCapture(event.pointerId);
+    }
+    dragStateRef.current.pointerId = -1;
+    setIsDragging(false);
+  }, []);
+
+  const transformStyle = {
+    transform: `translate(${offset.x}px, ${offset.y}px)`,
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        "relative h-full w-full overflow-auto transition-all duration-200",
+        className,
+        zoomLevel > 1 ? "cursor-grab" : "cursor-auto",
+        isDragging && "cursor-grabbing"
+      )}
+      onWheel={onWheel}
+      onDoubleClick={onDoubleClick}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={releasePointer}
+      onPointerLeave={releasePointer}
+      style={{ touchAction: zoomLevel > 1 ? "none" : "auto" }}
+    >
+      <div className={cn("flex h-full w-full justify-center", verticalAlign === "start" ? "items-start" : "items-center")}>
+        <div
+          className={cn("flex h-full w-full justify-center", verticalAlign === "start" ? "items-start" : "items-center")}
+          style={{ transform: `scale(${zoomLevel})`, transformOrigin: "center center" }}
+        >
+          <div className="w-full max-w-full" style={transformStyle}>
+            {children}
+          </div>
+        </div>
+      </div>
+      {showZoomBadge ? (
+        <div className="pointer-events-none absolute right-3 top-3 rounded-full bg-white/85 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-600 shadow-sm">
+          Zoom {Math.round(zoomLevel * 100)}%
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 import {
   formatFileSize,
@@ -277,6 +455,23 @@ export function DocumentPreviewViewer({
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const { zoomLevel, handleWheelZoom, resetZoom } = useZoomController();
+  const [zoomResetSignal, setZoomResetSignal] = useState(0);
+  const resetZoomWithSignal = useCallback(() => {
+    resetZoom();
+    setZoomResetSignal((prev) => prev + 1);
+  }, [resetZoom]);
+
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const { zoomLevel: multiZoomLevel, handleWheelZoom: handleMultiWheelZoom, resetZoom: resetMultiZoom } = useZoomController();
+  const [multiZoomResetSignal, setMultiZoomResetSignal] = useState(0);
+  const resetMultiZoomWithSignal = useCallback(() => {
+    resetMultiZoom();
+    setMultiZoomResetSignal((prev) => prev + 1);
+  }, [resetMultiZoom]);
+  const fileList = files ?? [];
+  const filesLength = fileList.length;
+  const isMultiMode = showMultipleView && filesLength > 0;
 
   useEffect(() => {
     let active = true;
@@ -333,17 +528,33 @@ export function DocumentPreviewViewer({
     };
   }, [file?.id, file?.previewUrl]);
 
-  // --- Multiple View Mode ---
-  if (showMultipleView && files && files.length > 0) {
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const selectedFile = files[selectedIndex];
+  useEffect(() => {
+    resetZoomWithSignal();
+  }, [file?.id, resetZoomWithSignal]);
 
+  useEffect(() => {
+    if (!isMultiMode) return;
+    resetMultiZoomWithSignal();
+  }, [isMultiMode, selectedIndex, resetMultiZoomWithSignal]);
+
+  useEffect(() => {
+    if (!isMultiMode) return;
+    setSelectedIndex((prev) => {
+      if (filesLength === 0) return 0;
+      return prev < filesLength ? prev : filesLength - 1;
+    });
+  }, [filesLength, isMultiMode]);
+
+  const selectedFile = isMultiMode ? fileList[selectedIndex] : null;
+
+  // --- Multiple View Mode ---
+  if (isMultiMode) {
     const goToPrevious = () => {
-      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : files.length - 1));
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : filesLength - 1));
     };
 
     const goToNext = () => {
-      setSelectedIndex((prev) => (prev < files.length - 1 ? prev + 1 : 0));
+      setSelectedIndex((prev) => (prev < filesLength - 1 ? prev + 1 : 0));
     };
 
     return (
@@ -368,7 +579,7 @@ export function DocumentPreviewViewer({
               </div>
             </div>
             <Badge variant="outline" className="rounded-full border-slate-200 bg-white px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 shadow-sm">
-              {files.length} item{files.length === 1 ? "" : "s"}
+              {filesLength} item{filesLength === 1 ? "" : "s"}
             </Badge>
           </div>
         </div>
@@ -378,8 +589,16 @@ export function DocumentPreviewViewer({
           <div className="space-y-4">
             {/* Selected File Preview */}
             <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-              <div className="relative h-64 w-full overflow-hidden bg-slate-100 flex items-center justify-center">
-                {selectedFile && (
+              <ZoomSurface
+                className="h-64 w-full bg-slate-100"
+                zoomLevel={multiZoomLevel}
+                onWheel={(event) => handleMultiWheelZoom(event, selectedFile ? !isImageDocument(selectedFile) : true)}
+                onDoubleClick={resetMultiZoomWithSignal}
+                resetSignal={multiZoomResetSignal}
+                showZoomBadge={!!selectedFile && isImageDocument(selectedFile)}
+                verticalAlign={selectedFile && isPdfDocument(selectedFile) ? "start" : "center"}
+              >
+                {selectedFile ? (
                   <>
                     {isPdfDocument(selectedFile) ? (
                       <iframe
@@ -391,7 +610,8 @@ export function DocumentPreviewViewer({
                       <img
                         src={selectedFile.previewUrl}
                         alt={selectedFile.name}
-                        className="h-full w-full object-cover"
+                        draggable={false}
+                        className="h-full w-full select-none object-contain"
                       />
                     ) : (
                       <div className="flex flex-col items-center justify-center gap-3">
@@ -400,8 +620,8 @@ export function DocumentPreviewViewer({
                       </div>
                     )}
                   </>
-                )}
-              </div>
+                ) : null}
+              </ZoomSurface>
 
               {/* File Info */}
               <div className="p-4 border-t border-slate-100">
@@ -455,7 +675,7 @@ export function DocumentPreviewViewer({
 
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  {selectedIndex + 1} of {files.length}
+                  {selectedIndex + 1} of {filesLength}
                 </span>
               </div>
 
@@ -475,7 +695,7 @@ export function DocumentPreviewViewer({
         {/* Gallery Grid */}
         <div className="overflow-auto p-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {files.map((f, index) => (
+            {fileList.map((f, index) => (
               <div
                 key={f.id}
                 onClick={() => { setSelectedIndex(index); onFileSelect?.(f); }}
@@ -496,7 +716,7 @@ export function DocumentPreviewViewer({
   }
 
   // --- Empty state (no file, or showMultipleView with no files) ---
-  if (!file && !(showMultipleView && files && files.length > 0)) {
+  if (!file && !isMultiMode) {
     return (
       <div
         className={cn(
@@ -561,34 +781,51 @@ export function DocumentPreviewViewer({
           </Button>
         </div>
       ) : isPdf ? (
-        <iframe
-          key={file.id}
-          src={blobUrl ? `${blobUrl}#toolbar=1&navpanes=0&scrollbar=1` : undefined}
-          title={`Preview of ${file.name}`}
-          loading="lazy"
-          onLoad={() => setIsLoaded(true)}
-          onError={handlePdfError}
-          className={cn(
-            "h-full min-h-[420px] w-full border-0 transition-opacity duration-300",
-            isLoaded ? "opacity-100" : "opacity-0"
-          )}
-        />
+        <ZoomSurface
+          className="h-full min-h-[420px] w-full"
+          zoomLevel={zoomLevel}
+          onWheel={(event) => handleWheelZoom(event, true)}
+          onDoubleClick={resetZoomWithSignal}
+          resetSignal={zoomResetSignal}
+          verticalAlign="start"
+        >
+          <iframe
+            key={file.id}
+            src={blobUrl ? `${blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width&pagemode=none` : undefined}
+            title={`Preview of ${file.name}`}
+            loading="lazy"
+            onLoad={() => setIsLoaded(true)}
+            onError={handlePdfError}
+            className={cn(
+              "h-full min-h-[420px] w-full border-0 transition-opacity duration-300",
+              isLoaded ? "opacity-100" : "opacity-0"
+            )}
+          />
+        </ZoomSurface>
       ) : isImage ? (
-        <div className="flex h-full min-h-[420px] w-full items-center justify-center overflow-auto p-6 sm:p-8">
+        <ZoomSurface
+          className="h-full min-h-[420px] w-full p-6 sm:p-8"
+          zoomLevel={zoomLevel}
+          onWheel={(event) => handleWheelZoom(event, false)}
+          onDoubleClick={resetZoomWithSignal}
+          resetSignal={zoomResetSignal}
+          showZoomBadge
+        >
           <img
             key={file.id}
             src={blobUrl || undefined}
             alt={file.name}
             loading="lazy"
             decoding="async"
+            draggable={false}
             onLoad={() => setIsLoaded(true)}
             onError={() => setError("Failed to load image.")}
             className={cn(
-              "max-h-full max-w-full rounded-2xl object-contain shadow-[0_18px_60px_rgba(15,23,42,0.18)] transition-all duration-300",
+              "max-h-full max-w-full select-none rounded-2xl object-contain shadow-[0_18px_60px_rgba(15,23,42,0.18)] transition-all duration-300 will-change-transform",
               isLoaded ? "scale-100 opacity-100" : "scale-[0.985] opacity-0"
             )}
           />
-        </div>
+        </ZoomSurface>
       ) : (
         <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-6 p-10 text-center">
           <div className="rounded-full bg-slate-100 p-6">

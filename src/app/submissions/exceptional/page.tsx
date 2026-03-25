@@ -192,9 +192,9 @@ export default function ExceptionalCasesPage() {
 
       <Alert className="bg-amber-50 border-amber-200 text-amber-900 shadow-sm border-l-4 border-l-yellow-600">
         <Info className="h-4 w-4 text-yellow-600" />
-        <AlertDescription className="text-xs font-bold text-amber-800 uppercase tracking-tight">
-          Standard Protocol: Exceptional cases require sequential sign-off from District, Director, and Supervisor nodes.
-        </AlertDescription>
+          <AlertDescription className="text-xs font-bold text-amber-800 uppercase tracking-tight">
+            Standard Protocol: Exceptional cases require sequential sign-off from District, Director, and Supervisor branches.
+          </AlertDescription>
       </Alert>
 
       {loading ? (

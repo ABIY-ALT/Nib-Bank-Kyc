@@ -75,7 +75,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
                        `--------------------------------------------------\n` +
                        `CASE IDENTIFIER: ${sub.id}\n` +
                        `CUSTOMER ENTITY: ${sub.customerName}\n` +
-                       `DISPATCH NODE:   ${branchName}\n` +
+                       `DISPATCH BRANCH: ${branchName}\n` +
                        `REGIONAL DIST:   ${districtName}\n` +
                        `EXPORTED BY:     ${user.name}\n` +
                        `TIMESTAMP:       ${now.toLocaleString()}\n` +

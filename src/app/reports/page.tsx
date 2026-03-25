@@ -174,7 +174,7 @@ export default function ReportsPage() {
             <CardTitle className="text-xl flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-primary" /> Lifecycle SLA Compliance
             </CardTitle>
-            <CardDescription className="text-slate-400">Real-time resolution metrics across authorized nodes.</CardDescription>
+            <CardDescription className="text-slate-400">Real-time resolution metrics across authorized branches.</CardDescription>
           </CardHeader>
           <CardContent className="p-8">
             <div className="grid gap-8 md:grid-cols-3">

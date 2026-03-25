@@ -605,7 +605,7 @@ const handleConfirmBulkPurge = useCallback(() => {
                   <SelectValue placeholder="All Branches" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl shadow-2xl">
-                  <SelectItem value="all" className="font-bold">All Authorized Nodes</SelectItem>
+                  <SelectItem value="all" className="font-bold">All Authorized Branches</SelectItem>
                   {availableBranchesForDistrict.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>

@@ -25,13 +25,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import { 
   BarChart, 
   Bar, 
   XAxis, 
@@ -47,12 +40,12 @@ import {
   Legend
 } from 'recharts';
 import { 
+  Check,
+  ChevronsUpDown,
   FileBarChart, 
   Download, 
   Filter, 
   Search, 
-  Building2, 
-  ShieldCheck, 
   AlertTriangle, 
   Clock, 
   Loader2,
@@ -63,6 +56,12 @@ import {
   RotateCcw,
   ShieldAlert
 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { format, startOfMonth, eachMonthOfInterval, isSameMonth, subDays } from "date-fns";
 import { getSubmissions } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
@@ -83,9 +82,18 @@ export default function ManagementReportingPage() {
   const [loading, setLoading] = useState(true);
 
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedRisk, setSelectedRisk] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
+  const [districtSearch, setDistrictSearch] = useState("");
+  const [districtFilterOpen, setDistrictFilterOpen] = useState(false);
+  const [branchSearch, setBranchSearch] = useState("");
+  const [branchFilterOpen, setBranchFilterOpen] = useState(false);
+  const [riskSearch, setRiskSearch] = useState("");
+  const [riskFilterOpen, setRiskFilterOpen] = useState(false);
+  const [statusSearch, setStatusSearch] = useState("");
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
@@ -118,9 +126,73 @@ export default function ManagementReportingPage() {
     }
   };
 
+  const branchOptions = useMemo(() => {
+    return (branches || [])
+      .filter((branch: any) => selectedDistrict === "all" || branch?.district?.name === selectedDistrict)
+      .map((branch: any) => branch.name)
+      .sort((a: string, b: string) => a.localeCompare(b));
+  }, [branches, selectedDistrict]);
+
+  const districtOptions = useMemo(() => {
+    return (districts || []).map((district: any) => district.name).sort((a: string, b: string) => a.localeCompare(b));
+  }, [districts]);
+
+  const filteredDistrictOptions = useMemo(() => {
+    const query = districtSearch.trim().toLowerCase();
+    if (!query) return districtOptions;
+    return districtOptions.filter((name) => name.toLowerCase().includes(query));
+  }, [districtOptions, districtSearch]);
+
+  const filteredBranchOptions = useMemo(() => {
+    const query = branchSearch.trim().toLowerCase();
+    if (!query) return branchOptions;
+    return branchOptions.filter((name) => name.toLowerCase().includes(query));
+  }, [branchOptions, branchSearch]);
+
+  const riskOptions = useMemo(
+    () => [
+      { value: "LOW", label: "Standard / Low" },
+      { value: "HIGH", label: "High Risk" },
+    ],
+    []
+  );
+
+  const filteredRiskOptions = useMemo(() => {
+    const query = riskSearch.trim().toLowerCase();
+    if (!query) return riskOptions;
+    return riskOptions.filter((option) => option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query));
+  }, [riskOptions, riskSearch]);
+
+  const statusOptions = useMemo(
+    () => Object.values(KYC_STATUS).map((status) => ({ value: status, label: status.replace(/_/g, " ") })),
+    []
+  );
+
+  const filteredStatusOptions = useMemo(() => {
+    const query = statusSearch.trim().toLowerCase();
+    if (!query) return statusOptions;
+    return statusOptions.filter((option) => option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query));
+  }, [statusOptions, statusSearch]);
+
+  useEffect(() => {
+    if (selectedBranch === "all") return;
+    if (!branchOptions.includes(selectedBranch)) {
+      setSelectedBranch("all");
+    }
+  }, [branchOptions, selectedBranch]);
+
+  useEffect(() => {
+    if (selectedDistrict === "all") return;
+    if (!districtOptions.includes(selectedDistrict)) {
+      setSelectedDistrict("all");
+    }
+  }, [districtOptions, selectedDistrict]);
+
   const filteredData = useMemo(() => {
     return submissions.filter(sub => {
       const matchesDistrict = selectedDistrict === 'all' || sub.branch?.district?.name === selectedDistrict;
+      const branchName = sub.branch?.name || sub.branchName;
+      const matchesBranch = selectedBranch === 'all' || branchName === selectedBranch;
       const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
       const matchesType = selectedType === 'all' || sub.entityType === selectedType;
       const matchesSearch = sub.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || sub.id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -128,9 +200,9 @@ export default function ManagementReportingPage() {
       const riskLevel = sub.isExceptional ? 'HIGH' : 'LOW';
       const matchesRisk = selectedRisk === 'all' || riskLevel === selectedRisk;
 
-      return matchesDistrict && matchesStatus && matchesType && matchesSearch && matchesRisk;
+      return matchesDistrict && matchesBranch && matchesStatus && matchesType && matchesSearch && matchesRisk;
     });
-  }, [submissions, selectedDistrict, selectedStatus, selectedType, searchTerm, selectedRisk]);
+  }, [submissions, selectedDistrict, selectedBranch, selectedStatus, selectedType, searchTerm, selectedRisk]);
 
   const stats = useMemo(() => {
     const total = filteredData.length;
@@ -238,46 +310,261 @@ export default function ManagementReportingPage() {
             <Filter className="w-4 h-4" /> Intelligence Filters
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="space-y-1.5">
             <Label className="text-[9px] font-black uppercase text-slate-400">Regional District</Label>
-            <Select value={selectedDistrict} onValueChange={setSelectedDistrict} disabled={!isSuperAdmin}>
-              <SelectTrigger className="h-10 text-xs font-bold rounded-xl">
-                <SelectValue placeholder="All Regions" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-none shadow-2xl">
-                <SelectItem value="all">Overall Network</SelectItem>
-                {districts.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Popover
+              open={districtFilterOpen}
+              onOpenChange={(open) => {
+                if (!isSuperAdmin) return;
+                setDistrictFilterOpen(open);
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  disabled={!isSuperAdmin}
+                  className="h-10 w-full justify-between rounded-xl border-slate-200 text-xs font-bold disabled:opacity-100"
+                >
+                  <span className="truncate">{selectedDistrict === "all" ? "Overall Network" : selectedDistrict}</span>
+                  <ChevronsUpDown className="h-4 w-4 text-slate-400" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[320px] rounded-xl border border-slate-200 p-0 shadow-2xl">
+                <div className="relative border-b border-slate-100 p-3">
+                  <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    placeholder="Search district..."
+                    className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                    value={districtSearch}
+                    onChange={(e) => setDistrictSearch(e.target.value)}
+                  />
+                </div>
+                <ScrollArea className="max-h-64 p-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                      selectedDistrict === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                    )}
+                    onClick={() => {
+                      setSelectedDistrict("all");
+                      setSelectedBranch("all");
+                      setDistrictFilterOpen(false);
+                    }}
+                  >
+                    <span>Overall Network</span>
+                    {selectedDistrict === "all" && <Check className="h-4 w-4" />}
+                  </button>
+                  {filteredDistrictOptions.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      className={cn(
+                        "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                        selectedDistrict === name ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                      )}
+                      onClick={() => {
+                        setSelectedDistrict(name);
+                        setSelectedBranch("all");
+                        setDistrictFilterOpen(false);
+                      }}
+                    >
+                      <span className="truncate">{name}</span>
+                      {selectedDistrict === name && <Check className="h-4 w-4" />}
+                    </button>
+                  ))}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[9px] font-black uppercase text-slate-400">Branch</Label>
+            <Popover open={branchFilterOpen} onOpenChange={setBranchFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-10 w-full justify-between rounded-xl border-slate-200 text-xs font-bold">
+                  <span className="truncate">{selectedBranch === "all" ? "All Branches" : selectedBranch}</span>
+                  <ChevronsUpDown className="h-4 w-4 text-slate-400" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[320px] rounded-xl border border-slate-200 p-0 shadow-2xl">
+                <div className="relative border-b border-slate-100 p-3">
+                  <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    placeholder="Search branch..."
+                    className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                    value={branchSearch}
+                    onChange={(e) => setBranchSearch(e.target.value)}
+                  />
+                </div>
+                <ScrollArea className="max-h-64 p-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                      selectedBranch === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                    )}
+                    onClick={() => {
+                      setSelectedBranch("all");
+                      setBranchFilterOpen(false);
+                    }}
+                  >
+                    <span>All Branches</span>
+                    {selectedBranch === "all" && <Check className="h-4 w-4" />}
+                  </button>
+                  {filteredBranchOptions.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      className={cn(
+                        "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                        selectedBranch === name ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                      )}
+                      onClick={() => {
+                        setSelectedBranch(name);
+                        setBranchFilterOpen(false);
+                      }}
+                    >
+                      <span className="truncate">{name}</span>
+                      {selectedBranch === name && <Check className="h-4 w-4" />}
+                    </button>
+                  ))}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="space-y-1.5">
             <Label className="text-[9px] font-black uppercase text-slate-400">Risk Level</Label>
-            <Select value={selectedRisk} onValueChange={setSelectedRisk}>
-              <SelectTrigger className="h-10 text-xs font-bold rounded-xl">
-                <SelectValue placeholder="All Risks" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-none shadow-2xl">
-                <SelectItem value="all">All Profiles</SelectItem>
-                <SelectItem value="LOW">Standard / Low</SelectItem>
-                <SelectItem value="HIGH">High Risk</SelectItem>
-              </SelectContent>
-            </Select>
+            <Popover open={riskFilterOpen} onOpenChange={setRiskFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-10 w-full justify-between rounded-xl border-slate-200 text-xs font-bold">
+                  <span className="truncate">
+                    {selectedRisk === "all" ? "All Profiles" : riskOptions.find((option) => option.value === selectedRisk)?.label || selectedRisk}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 text-slate-400" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[320px] rounded-xl border border-slate-200 p-0 shadow-2xl">
+                <div className="relative border-b border-slate-100 p-3">
+                  <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    placeholder="Search risk level..."
+                    className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                    value={riskSearch}
+                    onChange={(e) => setRiskSearch(e.target.value)}
+                  />
+                </div>
+                <ScrollArea className="max-h-64 p-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                      selectedRisk === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                    )}
+                    onClick={() => {
+                      setSelectedRisk("all");
+                      setRiskFilterOpen(false);
+                    }}
+                  >
+                    <span>All Profiles</span>
+                    {selectedRisk === "all" && <Check className="h-4 w-4" />}
+                  </button>
+                  {filteredRiskOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={cn(
+                        "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                        selectedRisk === option.value ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                      )}
+                      onClick={() => {
+                        setSelectedRisk(option.value);
+                        setRiskFilterOpen(false);
+                      }}
+                    >
+                      <span className="truncate">{option.label}</span>
+                      {selectedRisk === option.value && <Check className="h-4 w-4" />}
+                    </button>
+                  ))}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="space-y-1.5">
             <Label className="text-[9px] font-black uppercase text-slate-400">Workflow Status</Label>
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="h-10 text-xs font-bold rounded-xl">
-                <SelectValue placeholder="All Stages" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-none shadow-2xl">
-                <SelectItem value="all">All Stages</SelectItem>
-                {Object.values(KYC_STATUS).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Popover open={statusFilterOpen} onOpenChange={setStatusFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-10 w-full justify-between rounded-xl border-slate-200 text-xs font-bold">
+                  <span className="truncate">{selectedStatus === "all" ? "All Stages" : selectedStatus.replace(/_/g, " ")}</span>
+                  <ChevronsUpDown className="h-4 w-4 text-slate-400" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[320px] rounded-xl border border-slate-200 p-0 shadow-2xl">
+                <div className="relative border-b border-slate-100 p-3">
+                  <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    placeholder="Search status..."
+                    className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                    value={statusSearch}
+                    onChange={(e) => setStatusSearch(e.target.value)}
+                  />
+                </div>
+                <ScrollArea className="max-h-64 p-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                      selectedStatus === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                    )}
+                    onClick={() => {
+                      setSelectedStatus("all");
+                      setStatusFilterOpen(false);
+                    }}
+                  >
+                    <span>All Stages</span>
+                    {selectedStatus === "all" && <Check className="h-4 w-4" />}
+                  </button>
+                  {filteredStatusOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={cn(
+                        "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                        selectedStatus === option.value ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                      )}
+                      onClick={() => {
+                        setSelectedStatus(option.value);
+                        setStatusFilterOpen(false);
+                      }}
+                    >
+                      <span className="truncate">{option.label}</span>
+                      {selectedStatus === option.value && <Check className="h-4 w-4" />}
+                    </button>
+                  ))}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="flex items-end">
-            <Button variant="ghost" onClick={() => { setSelectedStatus("all"); setSelectedRisk("all"); setSelectedDistrict("all"); setDateRange(undefined); }} className="w-full h-10 gap-2 font-bold text-slate-400 hover:text-primary">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSelectedStatus("all");
+                setSelectedRisk("all");
+                setSelectedDistrict("all");
+                setSelectedBranch("all");
+                setDistrictSearch("");
+                setBranchSearch("");
+                setRiskSearch("");
+                setStatusSearch("");
+                setDistrictFilterOpen(false);
+                setBranchFilterOpen(false);
+                setRiskFilterOpen(false);
+                setStatusFilterOpen(false);
+                setDateRange(undefined);
+              }}
+              className="w-full h-10 gap-2 font-bold text-slate-400 hover:text-primary"
+            >
               <RotateCcw className="w-4 h-4" /> Reset Filters
             </Button>
           </div>
@@ -287,9 +574,9 @@ export default function ManagementReportingPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
           { label: 'Total Cases', value: stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white' },
-          { label: 'Pending Analysis', value: stats.pending, icon: Clock, color: 'text-primary', bg: 'bg-white' },
+          { label: 'Unseen Analysis', value: stats.pending, icon: Clock, color: 'text-primary', bg: 'bg-white' },
           { label: 'Authorized', value: stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white' },
-          { label: 'Methodology Gaps', value: stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white' },
+          { label: 'Amendments', value: stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white' },
         ].map((item, i) => (
           <Card key={i} className={cn("shadow-lg border-slate-200 overflow-hidden group hover:scale-[1.02] transition-all rounded-2xl", item.bg)}>
             <CardHeader className="p-4 pb-2 border-b bg-slate-50/50">

@@ -36,7 +36,7 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { format, differenceInHours } from "date-fns";
+import { format, differenceInMinutes } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { 
@@ -70,6 +70,21 @@ import {
 } from "@/components/ui/dialog";
 
 type ViewMode = 'officers' | 'branches' | 'cases';
+
+const MINUTES_IN_DAY = 1440;
+const MINUTES_IN_HOUR = 60;
+
+const formatResolutionDuration = (totalMinutes?: number) => {
+  const safeMinutes = Math.max(0, Math.round(totalMinutes ?? 0));
+  const days = Math.floor(safeMinutes / MINUTES_IN_DAY);
+  const hours = Math.floor((safeMinutes % MINUTES_IN_DAY) / MINUTES_IN_HOUR);
+  const minutes = safeMinutes % MINUTES_IN_HOUR;
+  const parts: string[] = [];
+  if (days) parts.push(`${days} day${days === 1 ? "" : "s"}`);
+  if (hours) parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+  if (minutes || parts.length === 0) parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+  return parts.join(" ");
+};
 
 export default function KYCOperationsMonitoringPage() {
   const { user } = useAuth();
@@ -189,7 +204,7 @@ export default function KYCOperationsMonitoringPage() {
         }
         rootFolder?.file(
           "nib_institutional_manifest.txt",
-          `CASE IDENTIFIER: ${sub.id}\nCUSTOMER ENTITY: ${sub.customerName}\nREGIONAL DIST: ${districtName}\nDISPATCH NODE: ${branchName}\nARCHIVE ROOT: ${bundleName}\n`
+          `CASE IDENTIFIER: ${sub.id}\nCUSTOMER ENTITY: ${sub.customerName}\nREGIONAL DIST: ${districtName}\nDISPATCH BRANCH: ${branchName}\nARCHIVE ROOT: ${bundleName}\n`
         );
         const content = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(content);
@@ -216,14 +231,35 @@ export default function KYCOperationsMonitoringPage() {
   const processedOfficers = useMemo(() => {
     return officers.map(off => {
       const offSubs = submissions.filter(s => s.assignedToId === off.id);
-      const approved = offSubs.filter(s => s.status === KYC_STATUS.APPROVED).length;
+      const approved = offSubs.filter(s => s.status === KYC_STATUS.APPROVED);
       const escalated = offSubs.filter(s => s.status === KYC_STATUS.ESCALATED).length;
       const amended = offSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0);
       const branchesMapped = off.assignedBranches?.length || (off.branchName ? 1 : 0);
-      
-      return { 
-        ...off, 
-        stats: { total: offSubs.length, approved, escalated, amended, branchesMapped }
+
+      // Calculate Average Resolution Time for Approved Cases
+      let avgResolutionMinutes = 0;
+      if (approved.length > 0) {
+        const totalMinutes = approved.reduce((acc, sub) => {
+          const approvalEntry = sub.commentHistory?.find((h: any) => h.action === KYC_STATUS.APPROVED);
+          const submissionTime = new Date(sub.submittedAt);
+          if (approvalEntry) {
+            return acc + differenceInMinutes(new Date(approvalEntry.timestamp), submissionTime);
+          }
+          return acc + differenceInMinutes(new Date(sub.updatedAt), submissionTime);
+        }, 0);
+        avgResolutionMinutes = Math.round(totalMinutes / approved.length);
+      }
+
+      return {
+        ...off,
+        stats: {
+          total: offSubs.length,
+          approved: approved.length,
+          escalated,
+          amended,
+          branchesMapped,
+          avgResolutionMinutes
+        }
       };
     }).filter(off => {
       const matchesSelection = selectedOfficerFilter === 'all' || off.id === selectedOfficerFilter;
@@ -235,19 +271,35 @@ export default function KYCOperationsMonitoringPage() {
 
   const currentBranches = useMemo(() => {
     if (!selectedOfficer) return [];
-    const bNames = selectedOfficer.assignedBranches?.length > 0 
-      ? selectedOfficer.assignedBranches 
+    const bNames = selectedOfficer.assignedBranches?.length > 0
+      ? selectedOfficer.assignedBranches
       : (selectedOfficer.branchName ? [selectedOfficer.branchName] : []);
-    
+
     return bNames.map((name: string) => {
       const branchSubs = submissions.filter(s => s.branchName === name && s.assignedToId === selectedOfficer.id);
+      const approved = branchSubs.filter(s => s.status === KYC_STATUS.APPROVED);
+      
+      let avgResolutionMinutes = 0;
+      if (approved.length > 0) {
+        const totalMinutes = approved.reduce((acc, sub) => {
+          const approvalEntry = sub.commentHistory?.find((h: any) => h.action === KYC_STATUS.APPROVED);
+          const submissionTime = new Date(sub.submittedAt);
+          if (approvalEntry) {
+            return acc + differenceInMinutes(new Date(approvalEntry.timestamp), submissionTime);
+          }
+          return acc + differenceInMinutes(new Date(sub.updatedAt), submissionTime);
+        }, 0);
+        avgResolutionMinutes = Math.round(totalMinutes / approved.length);
+      }
+
       return {
         name,
         totalFiles: branchSubs.reduce((acc, s) => acc + (s.memos?.length || 0), 0),
         total: branchSubs.length,
-        approved: branchSubs.filter(s => s.status === KYC_STATUS.APPROVED).length,
+        approved: approved.length,
         amended: branchSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0),
-        pending: branchSubs.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length
+        pending: branchSubs.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
+        avgResolutionMinutes
       };
     });
   }, [selectedOfficer, submissions]);
@@ -258,7 +310,7 @@ export default function KYCOperationsMonitoringPage() {
   }, [selectedBranch, selectedOfficer, submissions]);
 
   const handleExportCSV = () => {
-    const headers = ['KYC Officer', 'Mapped Nodes', 'Case Volume', 'Authorized', 'Amendment Cycles', 'Escalated'];
+    const headers = ['KYC Officer', 'Mapped Branches', 'Case Volume', 'Authorized', 'Amendment Cycles', 'Escalated'];
     const rows = processedOfficers.map(o => [
       `${o.firstName} ${o.lastName}`,
       o.stats.branchesMapped,
@@ -326,7 +378,7 @@ export default function KYCOperationsMonitoringPage() {
                 </div>
                 <ScrollArea className="h-64">
                   <div className="p-1">
-                    <div 
+                    <div
                       className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedDistrict === 'all' ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
                       onClick={() => { setSelectedDistrict('all'); setSelectedBranchFilter('all'); setDistOpen(false); }}
                     >
@@ -334,7 +386,7 @@ export default function KYCOperationsMonitoringPage() {
                       {selectedDistrict === 'all' && <Check className="w-4 h-4" />}
                     </div>
                     {filteredDistricts.map(d => (
-                      <div 
+                      <div
                         key={d.id}
                         className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedDistrict === d.name ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
                         onClick={() => { setSelectedDistrict(d.name); setSelectedBranchFilter('all'); setDistOpen(false); }}
@@ -368,7 +420,7 @@ export default function KYCOperationsMonitoringPage() {
                 </div>
                 <ScrollArea className="h-64">
                   <div className="p-1">
-                    <div 
+                    <div
                       className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedBranchFilter === 'all' ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
                       onClick={() => { setSelectedBranchFilter('all'); setBranchOpen(false); }}
                     >
@@ -376,7 +428,7 @@ export default function KYCOperationsMonitoringPage() {
                       {selectedBranchFilter === 'all' && <Check className="w-4 h-4" />}
                     </div>
                     {filteredBranchesList.map(b => (
-                      <div 
+                      <div
                         key={b.id}
                         className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedBranchFilter === b.name ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
                         onClick={() => { setSelectedBranchFilter(b.name); setBranchOpen(false); }}
@@ -410,7 +462,7 @@ export default function KYCOperationsMonitoringPage() {
                 </div>
                 <ScrollArea className="h-64">
                   <div className="p-1">
-                    <div 
+                    <div
                       className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedOfficerFilter === 'all' ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
                       onClick={() => { setSelectedOfficerFilter('all'); setOfficerOpen(false); }}
                     >
@@ -418,7 +470,7 @@ export default function KYCOperationsMonitoringPage() {
                       {selectedOfficerFilter === 'all' && <Check className="w-4 h-4" />}
                     </div>
                     {filteredOfficersList.map(o => (
-                      <div 
+                      <div
                         key={o.id}
                         className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedOfficerFilter === o.id ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
                         onClick={() => { setSelectedOfficerFilter(o.id); setOfficerOpen(false); }}
@@ -440,8 +492,8 @@ export default function KYCOperationsMonitoringPage() {
 
       {/* DRILL-DOWN NAVIGATION TRACK */}
       <div className="flex items-center gap-3 bg-slate-100/50 p-2 rounded-2xl w-fit border border-slate-200/50 shadow-inner">
-        <Button 
-          variant={viewMode === 'officers' ? 'secondary' : 'ghost'} 
+        <Button
+          variant={viewMode === 'officers' ? 'secondary' : 'ghost'}
           onClick={() => { setViewMode('officers'); setSelectedOfficer(null); setSelectedBranch(null); }}
           className={cn("h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all", viewMode === 'officers' ? "bg-primary text-white shadow-lg" : "text-slate-500")}
         >
@@ -450,8 +502,8 @@ export default function KYCOperationsMonitoringPage() {
         {selectedOfficer && (
           <>
             <ChevronRight className="w-4 h-4 text-slate-300" />
-            <Button 
-              variant={viewMode === 'branches' ? 'secondary' : 'ghost'} 
+            <Button
+              variant={viewMode === 'branches' ? 'secondary' : 'ghost'}
               onClick={() => { setViewMode('branches'); setSelectedBranch(null); }}
               className={cn("h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all", viewMode === 'branches' ? "bg-primary text-white shadow-lg" : "text-slate-500")}
             >
@@ -462,8 +514,8 @@ export default function KYCOperationsMonitoringPage() {
         {selectedBranch && (
           <>
             <ChevronRight className="w-4 h-4 text-slate-300" />
-            <Button 
-              variant="secondary" 
+            <Button
+              variant="secondary"
               className="h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest bg-primary text-white shadow-lg"
             >
               Branch Audit: {selectedBranch}
@@ -492,6 +544,7 @@ export default function KYCOperationsMonitoringPage() {
                     <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">KYC Officer</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Branches Mapped</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Authorized</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Avg. Resolution</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amendment Cycles</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Overview</TableHead>
                     <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
@@ -499,7 +552,7 @@ export default function KYCOperationsMonitoringPage() {
                 </TableHeader>
                 <TableBody>
                   {processedOfficers.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="py-32 text-center text-slate-400 italic">No personnel discovered in current selection context.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="py-32 text-center text-slate-400 italic">No personnel discovered in current selection context.</TableCell></TableRow>
                   ) : processedOfficers.map((off) => (
                     <TableRow key={off.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-100 group">
                       <TableCell className="py-8 pl-10">
@@ -515,6 +568,11 @@ export default function KYCOperationsMonitoringPage() {
                       </TableCell>
                       <TableCell className="text-center font-black text-slate-700 text-lg">{off.stats.branchesMapped}</TableCell>
                       <TableCell className="text-center font-black text-emerald-600 text-lg">{off.stats.approved}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="font-black text-[10px] bg-slate-50">
+                          {formatResolutionDuration(off.stats.avgResolutionMinutes)}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-center font-black text-orange-600 text-lg">{off.stats.amended}</TableCell>
                       <TableCell className="text-center">
                         <Button variant="ghost" size="icon" onClick={() => setShowSummary(off)} className="h-11 w-11 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all">
@@ -547,7 +605,8 @@ export default function KYCOperationsMonitoringPage() {
                     <TableHeader className="bg-slate-50 border-b">
                       <TableRow>
                         <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead>
-                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Inflight Files</TableHead>
+                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Uploaded Files</TableHead>
+                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Avg. Resolution</TableHead>
                         <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amend Cycles</TableHead>
                         <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch SLA Health</TableHead>
                       </TableRow>
@@ -562,6 +621,11 @@ export default function KYCOperationsMonitoringPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-center font-black text-slate-700">{b.totalFiles}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="font-black text-[10px] bg-slate-50">
+                            {formatResolutionDuration(b.avgResolutionMinutes)}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-center font-black text-orange-600">{b.amended}</TableCell>
                           <TableCell className="text-right pr-10">
                             <Badge className={cn("font-black text-[9px] uppercase px-3 py-1", b.pending > 0 ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700")}>
@@ -587,8 +651,20 @@ export default function KYCOperationsMonitoringPage() {
                     </div>
                   </div>
                   <div className="pt-6 border-t border-slate-200 grid grid-cols-2 gap-6">
-                    <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Approved Cases</p><p className="text-3xl font-black text-emerald-600">{selectedOfficer.stats.approved}</p></div>
-                    <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Total Cycles</p><p className="text-3xl font-black text-orange-600">{selectedOfficer.stats.amended}</p></div>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Approved Cases</p>
+                      <p className="text-3xl font-black text-emerald-600">{selectedOfficer.stats.approved}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Total Cycles</p>
+                      <p className="text-3xl font-black text-orange-600">{selectedOfficer.stats.amended}</p>
+                    </div>
+                    <div className="space-y-1 col-span-2 pt-2 border-t border-slate-100">
+                      <p className="text-[9px] font-black text-primary uppercase tracking-widest">Avg. Resolution Time</p>
+                      <p className="text-2xl font-black text-primary">
+                        {formatResolutionDuration(selectedOfficer.stats.avgResolutionMinutes)}
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -614,6 +690,7 @@ export default function KYCOperationsMonitoringPage() {
                   <TableRow>
                     <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Case ID</TableHead>
                     <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Customer Identity</TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Age / Resolution SLA</TableHead>
                     <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Oversight</TableHead>
                     <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
                     <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
@@ -621,13 +698,13 @@ export default function KYCOperationsMonitoringPage() {
                 </TableHeader>
                 <TableBody>
                   {currentCases.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="py-32 text-center text-slate-400 italic">No case lifecycle data discovered for this branch.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="py-32 text-center text-slate-400 italic">No case lifecycle data discovered for this branch.</TableCell></TableRow>
                   ) : currentCases.map((sub) => {
-                    const subTime = new Date(sub.submittedAt || sub.createdAt);
-                    const threshold = settings?.escalationHours || 72;
-                    const hoursSince = differenceInHours(new Date(), subTime);
-                    const isBreached = hoursSince >= threshold && ![KYC_STATUS.APPROVED, KYC_STATUS.REJECTED, KYC_STATUS.ESCALATED].includes(sub.status);
-                    
+                    const submissionTime = new Date(sub.submittedAt || sub.createdAt);
+                    const escalationThresholdMinutes = (settings?.escalationHours || 72) * 60;
+                    const minutesSinceSubmission = differenceInMinutes(new Date(), submissionTime);
+                    const isBreached = minutesSinceSubmission >= escalationThresholdMinutes && ![KYC_STATUS.APPROVED, KYC_STATUS.REJECTED, KYC_STATUS.ESCALATED].includes(sub.status);
+
                     return (
                       <TableRow key={sub.id} className={cn("border-b border-slate-100 hover:bg-slate-50/50 transition-colors", isBreached && "bg-red-50/30")}>
                         <TableCell className="py-8 pl-10 font-black text-primary tabular-nums tracking-tighter">{sub.id}</TableCell>
@@ -638,15 +715,29 @@ export default function KYCOperationsMonitoringPage() {
                           </div>
                         </TableCell>
                         <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Zap className={cn("w-3.5 h-3.5", sub.status === KYC_STATUS.APPROVED ? "text-emerald-500" : "text-amber-500")} />
+                            <span className="font-black text-xs tabular-nums text-slate-700">
+                              {(() => {
+                                const approvalEntry = sub.commentHistory?.find((h: any) => h.action === KYC_STATUS.APPROVED);
+                                const end = approvalEntry ? new Date(approvalEntry.timestamp) : new Date();
+                                const resolutionMinutes = Math.max(0, differenceInMinutes(end, submissionTime));
+                                return formatResolutionDuration(resolutionMinutes);
+                              })()}
+                            </span>
+                            {sub.status === KYC_STATUS.APPROVED && <Badge className="bg-emerald-50 text-emerald-700 text-[8px] font-black h-4 px-1 border-emerald-100">FINAL</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           {isBreached ? (
                             <div className="flex flex-col gap-2">
                               <div className="flex items-center gap-1.5 text-red-600">
                                 <ShieldAlert className="w-4 h-4" />
                                 <span className="text-[10px] font-black uppercase tracking-widest">Oversight Alert</span>
                               </div>
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleManualEscalation(sub.id)} 
+                              <Button
+                                size="sm"
+                                onClick={() => handleManualEscalation(sub.id)}
                                 disabled={isEscalating === sub.id}
                                 className="h-9 px-5 bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase rounded-xl shadow-xl shadow-red-200 transition-all active:scale-95"
                               >
@@ -724,6 +815,12 @@ export default function KYCOperationsMonitoringPage() {
               <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Escalated Cases</p>
                 <p className="text-3xl font-black text-destructive">{showSummary?.stats.escalated}</p>
+              </div>
+              <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 shadow-sm space-y-1 col-span-2">
+                <p className="text-[9px] font-black text-primary uppercase tracking-widest">Avg. Resolution Time</p>
+                <p className="text-3xl font-black text-primary">
+                  {formatResolutionDuration(showSummary?.stats.avgResolutionMinutes)} Resolution
+                </p>
               </div>
             </div>
             <Button onClick={() => setShowSummary(null)} className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-black transition-all">Close Performance Audit</Button>

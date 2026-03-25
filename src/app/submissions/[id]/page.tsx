@@ -11,6 +11,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
+  ChevronLeft,
+  ChevronRight,
   FileText, 
   MessageSquare,
   ArrowLeft,
@@ -72,7 +74,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   DocumentPreviewViewer,
@@ -139,7 +140,7 @@ const areChecklistStatesEqual = (
 };
 
 const resolveDocumentTypeLabel = (type: string, documentTypes: any[]) => {
-  if (!type) return "Pending classification";
+  if (!type) return "Unseen classification";
 
   const matchedType = documentTypes.find((documentType: any) => {
     if (typeof documentType === "string") return documentType === type;
@@ -708,7 +709,7 @@ export default function SubmissionDetails() {
                 {submission.status.replace(/_/g, ' ')}
               </Badge>
             </div>
-            <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} • {submission.branchName}</p>
+            <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} | {submission.branchName}</p>
           </div>
         </div>
       </div>
@@ -820,83 +821,67 @@ export default function SubmissionDetails() {
           </Card>
 
           <Dialog open={isDocPreviewModalOpen} onOpenChange={setIsDocPreviewModalOpen}>
-            <DialogContent className="h-[92vh] w-[1240px] max-w-[92vw] overflow-hidden rounded-3xl border-none bg-[#08111f] p-0 shadow-2xl [&>button]:rounded-full [&>button]:border [&>button]:border-white/10 [&>button]:bg-white/10 [&>button]:text-white [&>button]:opacity-100">
-              <DialogHeader className="space-y-0 border-b border-white/10 bg-[linear-gradient(135deg,rgba(3,37,76,0.98),rgba(14,84,120,0.94))] px-6 py-5 text-white">
-                <div className="flex flex-col gap-4">
-                  <div className="space-y-2 pr-12">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl bg-white/15 p-2"><FileText className="h-5 w-5 text-white" /></div>
-                      <div className="space-y-1">
-                        <DialogTitle className="text-left text-lg font-black text-white">{activeDocPreview?.name || "Document Preview"}</DialogTitle>
-                        <DialogDescription className="text-left text-[11px] font-black uppercase tracking-[0.2em] text-white/60">Modal inspection mode</DialogDescription>
-                      </div>
+            <DialogContent className="h-[92vh] w-[1240px] max-w-[92vw] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-3xl border-none bg-[#08111f] p-0 shadow-2xl [&>button]:right-4 [&>button]:top-2.5 [&>button]:z-30 [&>button]:h-8 [&>button]:w-8 [&>button]:rounded-full [&>button]:border [&>button]:border-white/15 [&>button]:bg-white/10 [&>button]:text-white [&>button]:opacity-100 [&>button]:ring-0 [&>button]:ring-offset-0 [&>button]:focus:ring-0 [&>button]:focus:ring-offset-0 [&>button]:focus-visible:ring-0 [&>button]:focus-visible:ring-offset-0 [&>button]:data-[state=open]:bg-white/20 [&>button]:data-[state=open]:text-white">
+              <DialogHeader className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(3,37,76,0.98),rgba(14,84,120,0.94))] px-3 py-1 pr-24 text-white sm:px-4 sm:py-1.5 sm:pr-28">
+                <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <div className="rounded-md bg-white/15 p-1">
+                      <FileText className="h-3 w-3 text-white" />
                     </div>
-                    {activeDocPreview && (
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="outline" className="px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] border-white/10 bg-white/15 text-white">
+                    <div className="min-w-0">
+                      <DialogTitle className="truncate text-left text-[12px] font-black leading-none text-white sm:text-[13px]">
+                        {activeDocPreview?.name || "Document Preview"}
+                      </DialogTitle>
+                      {activeDocPreview && (
+                        <p className="truncate text-left text-[8px] font-bold uppercase tracking-[0.08em] text-white/65 sm:text-[9px]">
                           {getPreviewFormatLabel(activeDocPreview)}
-                        </Badge>
-                        <Badge variant="outline" className="px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] border-emerald-300/20 bg-emerald-300/10 text-emerald-50">
-                          {activeDocPreview.documentType || "Unclassified"}
-                        </Badge>
-                        {activeDocPreview.size && (
-                          <Badge variant="outline" className="px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] border-white/10 bg-white/10 text-white/80">
-                            {formatFileSize(activeDocPreview.size)}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Navigation Controls */}
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between pt-2 border-t border-white/10">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={goToPreviousDoc}
-                        disabled={activeDocIndex <= 0}
-                        className="h-9 rounded-full px-3 font-bold border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                      >
-                        <FileText className="h-4 w-4 mr-1" />
-                        Previous
-                      </Button>
-
-                      <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-white/15 bg-white/10 text-white/80">
-                        <span className="text-[10px] font-black uppercase tracking-widest">
-                          {activeDocIndex >= 0 ? activeDocIndex + 1 : 0} of {previewableDocuments.length}
-                        </span>
-                      </div>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={goToNextDoc}
-                        disabled={activeDocIndex >= previewableDocuments.length - 1}
-                        className="h-9 rounded-full px-3 font-bold border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                      >
-                        Next
-                        <FileText className="h-4 w-4 ml-1" />
-                      </Button>
+                          {activeDocPreview.size ? ` | ${formatFileSize(activeDocPreview.size)}` : ""}
+                          {activeDocPreview.documentType ? ` | ${activeDocPreview.documentType}` : " | Unclassified"}
+                        </p>
+                      )}
                     </div>
-
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={goToPreviousDoc}
+                      disabled={activeDocIndex <= 0}
+                      className="h-6 w-6 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white sm:h-7 sm:w-7"
+                      title="Previous document"
+                    >
+                      <ChevronLeft className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                    </Button>
+                    <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.16em] text-white/75 sm:text-[9px]">
+                      {activeDocIndex >= 0 ? activeDocIndex + 1 : 0} of {previewableDocuments.length}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={goToNextDoc}
+                      disabled={activeDocIndex >= previewableDocuments.length - 1}
+                      className="h-6 w-6 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white sm:h-7 sm:w-7"
+                      title="Next document"
+                    >
+                      <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                    </Button>
                     {activeDocPreview && (
                       <Button
                         asChild
                         variant="outline"
                         size="sm"
-                        className="h-9 rounded-full border-white/15 bg-white/10 px-4 font-bold text-white hover:bg-white/20 hover:text-white"
+                        className="h-6 rounded-full border-white/25 bg-white/10 px-2 text-[9px] font-bold text-white hover:bg-white/20 hover:text-white sm:h-7 sm:px-2.5"
                       >
                         <a href={activeDocPreview.previewUrl} download={activeDocPreview.name}>
-                          <Download className="h-4 w-4 mr-1" />
-                          Download Original
+                          <Download className="h-3.5 w-3.5 sm:mr-1" />
+                          <span className="hidden lg:inline">Download</span>
                         </a>
                       </Button>
                     )}
                   </div>
                 </div>
               </DialogHeader>
-              <div className="h-full flex-1 overflow-hidden bg-[#050d18] p-4 sm:p-6">
+              <div className="min-h-0 overflow-hidden bg-[#050d18] p-4 sm:p-6">
                 <DocumentPreviewViewer
                   file={activeDocPreview}
                   className="h-full border-white/10 bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.18),_rgba(3,7,18,0.98)_58%)]"

@@ -182,7 +182,7 @@ export default function MyCasesPerformancePage() {
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">My Cases & Performance</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Officer analysis dashboard and jurisdiction metrics.</p>
+          <p className="text-muted-foreground text-lg font-medium">Officer analysis dashboard and productivity metrics.</p>
         </div>
         <div className="flex items-center gap-3">
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
@@ -194,7 +194,7 @@ export default function MyCasesPerformancePage() {
               </div>
             </SelectTrigger>
             <SelectContent className="rounded-xl shadow-2xl">
-              <SelectItem value="all" className="font-bold">Combined (All Nodes)</SelectItem>
+              <SelectItem value="all" className="font-bold">Combined (All Branches)</SelectItem>
               {assignedBranchesList.map(b => (
                 <SelectItem key={b} value={b}>{b}</SelectItem>
               ))}
@@ -311,8 +311,8 @@ export default function MyCasesPerformancePage() {
               <TabsTrigger value="history" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8 h-full rounded-lg">
                 <History className="w-4 h-4 mr-2" /> Resolved Archive
               </TabsTrigger>
-              <TabsTrigger value="nodes" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8 h-full rounded-lg">
-                <Building2 className="w-4 h-4 mr-2" /> Jurisdiction Analytics
+              <TabsTrigger value="branches" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8 h-full rounded-lg">
+                <Building2 className="w-4 h-4 mr-2" /> Productivity Analytics
               </TabsTrigger>
             </TabsList>
 
@@ -321,7 +321,7 @@ export default function MyCasesPerformancePage() {
                 <CardHeader className="bg-primary text-white p-6 border-b flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl font-black">Technical Work Queue</CardTitle>
-                    <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Pending and in-review institutional cases</CardDescription>
+                    <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Unseen and in-review institutional cases</CardDescription>
                   </div>
                   <Badge variant="outline" className="bg-white/20 border-white/20 text-white font-black px-4 py-1">
                     {filteredSubmissions.filter(s => ![KYC_STATUS.APPROVED, KYC_STATUS.REJECTED].includes(s.status)).length} Priority Items
@@ -413,14 +413,14 @@ export default function MyCasesPerformancePage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="nodes" className="animate-in slide-in-from-bottom-2 duration-300">
+            <TabsContent value="branches" className="animate-in slide-in-from-bottom-2 duration-300">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {Object.entries(stats.branchBreakdown).map(([branch, count]) => (
                   <Card key={branch} className="shadow-lg border-slate-200 overflow-hidden rounded-3xl group hover:border-primary/40 transition-all bg-white">
                     <CardHeader className="bg-slate-50/50 border-b p-6 flex flex-row items-center justify-between">
                       <div>
                         <CardTitle className="text-xl font-black text-slate-900">{branch}</CardTitle>
-                        <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-1">Jurisdiction Metrics</CardDescription>
+                        <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-1">Productivity Metrics</CardDescription>
                       </div>
                       <div className="p-2.5 bg-primary/5 text-primary rounded-xl group-hover:scale-110 transition-transform">
                         <Building2 className="w-5 h-5" />

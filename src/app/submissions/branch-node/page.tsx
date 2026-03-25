@@ -3,6 +3,8 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { 
+  Check,
+  ChevronsUpDown,
   Loader2, 
   Search, 
   ShieldCheck, 
@@ -18,11 +20,18 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Bar, 
   BarChart, 
@@ -37,6 +46,7 @@ import { type ChartConfig, ChartContainer, ChartTooltipContent } from "@/compone
 import { SubmissionsPageContent } from "../submissions-content";
 import { getSubmissions } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
@@ -50,7 +60,7 @@ const STATUS_COLORS = {
 
 const chartConfig = {
   APPROVED: { label: "Approved", color: STATUS_COLORS.APPROVED },
-  SUBMITTED: { label: "Pending", color: STATUS_COLORS.SUBMITTED },
+  SUBMITTED: { label: "Unseen", color: STATUS_COLORS.SUBMITTED },
   ACTION_REQUIRED: { label: "Action Required", color: STATUS_COLORS.ACTION_REQUIRED },
   REJECTED: { label: "Rejected", color: STATUS_COLORS.REJECTED },
 } satisfies ChartConfig;
@@ -64,6 +74,9 @@ export default function BranchMonitoringPage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [staffMatrixFilter, setStaffMatrixFilter] = useState<string>("all");
+  const [staffMatrixSearch, setStaffMatrixSearch] = useState("");
+  const [staffMatrixOpen, setStaffMatrixOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
@@ -164,6 +177,24 @@ export default function BranchMonitoringPage() {
     );
   }, [submissions, searchTerm]);
 
+  const staffMatrixOptions = useMemo(() => {
+    const officers = Object.values(analytics?.officers || {}) as Array<{ name: string }>;
+    return officers.map((officer) => officer.name).sort((a, b) => a.localeCompare(b));
+  }, [analytics?.officers]);
+
+  const filteredStaffMatrixOptions = useMemo(() => {
+    const term = staffMatrixSearch.trim().toLowerCase();
+    if (!term) return staffMatrixOptions;
+    return staffMatrixOptions.filter((name) => name.toLowerCase().includes(term));
+  }, [staffMatrixOptions, staffMatrixSearch]);
+
+  useEffect(() => {
+    if (staffMatrixFilter === "all") return;
+    if (!staffMatrixOptions.includes(staffMatrixFilter)) {
+      setStaffMatrixFilter("all");
+    }
+  }, [staffMatrixFilter, staffMatrixOptions]);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -219,11 +250,11 @@ export default function BranchMonitoringPage() {
               <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-emerald-600 tracking-tighter">{analytics?.approved || 0}</span><div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
-              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Methodology Gaps</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Amendments</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-orange-600 tracking-tighter">{analytics?.amended || 0}</span><div className="p-3 bg-orange-50 rounded-2xl text-orange-600"><AlertCircle className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
-              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Pending Analysis</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Unseen Analysis</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{analytics?.pending || 0}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
             </Card>
           </div>
@@ -282,7 +313,63 @@ export default function BranchMonitoringPage() {
             <TabsContent value="officer-performance">
               <Card className="shadow-xl border-slate-200 overflow-hidden">
                 <CardHeader className="bg-slate-50/50 border-b">
-                  <CardTitle className="text-xl">Staff Productivity</CardTitle>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <CardTitle className="text-xl">Staff Productivity</CardTitle>
+                    <Popover open={staffMatrixOpen} onOpenChange={setStaffMatrixOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="h-10 w-full justify-between gap-2 border-slate-200 bg-white md:w-[280px]">
+                          <span className="truncate text-sm font-bold">
+                            {staffMatrixFilter === "all" ? "All Staff" : staffMatrixFilter}
+                          </span>
+                          <ChevronsUpDown className="h-4 w-4 text-slate-400" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-72 rounded-xl border border-slate-200 p-0 shadow-xl">
+                        <div className="relative border-b border-slate-100 p-3">
+                          <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <Input
+                            placeholder="Search staff..."
+                            value={staffMatrixSearch}
+                            onChange={(e) => setStaffMatrixSearch(e.target.value)}
+                            className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                          />
+                        </div>
+                        <ScrollArea className="max-h-64 p-2">
+                          <button
+                            type="button"
+                            className={cn(
+                              "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                              staffMatrixFilter === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                            )}
+                            onClick={() => {
+                              setStaffMatrixFilter("all");
+                              setStaffMatrixOpen(false);
+                            }}
+                          >
+                            <span>All Staff</span>
+                            {staffMatrixFilter === "all" && <Check className="h-4 w-4" />}
+                          </button>
+                          {filteredStaffMatrixOptions.map((name) => (
+                            <button
+                              key={name}
+                              type="button"
+                              className={cn(
+                                "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                                staffMatrixFilter === name ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                              )}
+                              onClick={() => {
+                                setStaffMatrixFilter(name);
+                                setStaffMatrixOpen(false);
+                              }}
+                            >
+                              <span className="truncate">{name}</span>
+                              {staffMatrixFilter === name && <Check className="h-4 w-4" />}
+                            </button>
+                          ))}
+                        </ScrollArea>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
@@ -297,7 +384,9 @@ export default function BranchMonitoringPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {Object.values(analytics?.officers || {}).map((officer) => {
+                      {Object.values(analytics?.officers || {})
+                        .filter((officer) => staffMatrixFilter === "all" || officer.name === staffMatrixFilter)
+                        .map((officer) => {
                         const efficiency = Math.round((officer.approved / (officer.total - officer.pending || 1)) * 100);
                         return (
                           <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">

@@ -92,7 +92,7 @@ export default function SystemBRDPage() {
             <CardContent className="space-y-4 pt-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-700">Approval Levels</span>
-                <Badge variant="secondary" className="bg-white border-primary/20 font-black">7 Nodes</Badge>
+                <Badge variant="secondary" className="bg-white border-primary/20 font-black">7 Branches</Badge>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-700">User Roles</span>

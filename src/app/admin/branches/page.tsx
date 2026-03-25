@@ -309,7 +309,7 @@ export default function BranchesDistrictsPage() {
                   {activeDistrict ? `${activeDistrict.name} Branches` : 'Overall Branch List'}
                 </CardTitle>
                 <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-[0.2em]">
-                  {filteredBranches.length} Nodes Discovered in Current Filter
+                  {filteredBranches.length} Branches Discovered in Current Filter
                 </CardDescription>
               </div>
               
@@ -344,7 +344,7 @@ export default function BranchesDistrictsPage() {
                     <p className="font-black text-slate-900 text-xl tracking-tight">No Branch Discovered</p>
                     <p className="text-sm text-muted-foreground mt-2 font-medium">
                       {activeDistrict 
-                        ? `Register new branch nodes under the ${activeDistrict.name} district.` 
+                        ? `Register new branches under the ${activeDistrict.name} district.` 
                         : "Adjust your search parameters or select a district to view registered branches."}
                     </p>
                     {activeDistrict && (
