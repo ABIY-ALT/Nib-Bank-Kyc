@@ -28,6 +28,12 @@ model User {
   assignedBranches    String?    // CSV of branch names
   needsPasswordChange Boolean    @default(true)
   sessionId           String?
+  
+  // Token & Activity Tracking
+  refreshToken        String?    // Hashed refresh token for rotation
+  refreshTokenExpiry  DateTime?  // When refresh token expires
+  lastActivity        DateTime   @default(now()) // Tracks idle timeout
+  
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 

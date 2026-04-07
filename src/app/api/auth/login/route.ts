@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import { LoginSchema } from "@/lib/validation";
 import { logInstitutionalError } from "@/lib/logger";
 import crypto from "crypto";
+import { randomBytes } from "crypto";
 import { normalizeInstitutionalLogin } from "@/lib/login-identifier";
 import { 
   applySecurityHeaders, 
@@ -161,10 +162,20 @@ export async function POST(req: Request) {
     // Generate unique session identifier for single-session enforcement
     const sessionId = crypto.randomUUID();
 
-    // Store sessionId in database to invalidate previous sessions
+    // Generate refresh token (1 day expiry)
+    const refreshTokenPlain = crypto.randomBytes(32).toString('hex');
+    const refreshTokenHashed = await bcrypt.hash(refreshTokenPlain, 10);
+    const refreshTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 day
+
+    // Store sessionId, refreshToken, and set last_activity in database
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
-      data: { sessionId },
+      data: { 
+        sessionId,
+        refreshToken: refreshTokenHashed,
+        refreshTokenExpiry,
+        lastActivity: new Date() // Initialize activity tracking
+      },
       select: { updatedAt: true }
     });
 
@@ -183,7 +194,7 @@ export async function POST(req: Request) {
         needsPasswordChange: user.needsPasswordChange
       },
       secret,
-      { expiresIn: "10m" }
+      { expiresIn: "15m" }
     );
 
     await prisma.auditLog.create({
@@ -199,6 +210,9 @@ export async function POST(req: Request) {
 
     const response = successResponse({
       success: true,
+      accessToken: token,
+      refreshToken: refreshTokenPlain,
+      expiresIn: 15 * 60, // 15 minutes
       user: {
         id: user.id,
         firstName: user.firstName,
@@ -218,7 +232,7 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: IS_PROD,
       sameSite: 'strict',
-      maxAge: 60 * 10,
+      maxAge: 60 * 15,
       path: '/',
     });
 

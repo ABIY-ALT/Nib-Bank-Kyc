@@ -5,8 +5,10 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AuthGuard } from '@/components/auth-guard';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { NonceProvider } from '@/lib/nonce-context';
+import { IdleTimeoutProvider } from '@/components/idle-timeout-provider';
 import { headers } from 'next/headers';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { ActivityProvider } from '@/components/activity-provider';
 
 export const metadata: Metadata = {
   title: 'Nib Bank KYC',
@@ -27,21 +29,25 @@ export default async function RootLayout({
       <body className="font-body antialiased bg-background" suppressHydrationWarning>
         <NonceProvider nonce={nonce}>
           <AuthProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="light"
-              enableSystem
-              disableTransitionOnChange
-              nonce={nonce}
-            >
-              <TooltipProvider delayDuration={200}>
-                <AuthGuard>
-                  <DashboardShell>
-                    {children}
-                  </DashboardShell>
-                </AuthGuard>
-              </TooltipProvider>
-            </ThemeProvider>
+            <ActivityProvider>
+              <IdleTimeoutProvider idleTimeoutMinutes={15}>
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="light"
+                enableSystem
+                disableTransitionOnChange
+                nonce={nonce}
+              >
+                <TooltipProvider delayDuration={200}>
+                  <AuthGuard>
+                    <DashboardShell>
+                      {children}
+                    </DashboardShell>
+                  </AuthGuard>
+                </TooltipProvider>
+              </ThemeProvider>
+            </IdleTimeoutProvider>
+            </ActivityProvider>
           </AuthProvider>
         </NonceProvider>
       </body>

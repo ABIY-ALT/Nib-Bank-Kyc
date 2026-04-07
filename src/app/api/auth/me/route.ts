@@ -21,6 +21,8 @@ import {
  */
 const IS_PROD = process.env.NODE_ENV === 'production';
 
+const IDLE_TIMEOUT_MINUTES = 15;
+
 export async function GET(req: Request) {
   try {
     // Verify authentication
@@ -52,6 +54,7 @@ export async function GET(req: Request) {
         branchId: true,
         districtName: true,
         updatedAt: true,
+        lastActivity: true,
         needsPasswordChange: true,
         assignedBranches: true,
         branch: { include: { district: true } },
@@ -66,6 +69,21 @@ export async function GET(req: Request) {
         }
       }
     });
+
+    // Check idle timeout
+    const now = new Date();
+    const lastActivityTime = user.lastActivity || user.updatedAt;
+    const idleMinutes = (now.getTime() - lastActivityTime.getTime()) / (1000 * 60);
+
+    if (idleMinutes > IDLE_TIMEOUT_MINUTES) {
+      return unauthorizedResponse('Session idle timeout exceeded');
+    }
+
+    // Update last_activity timestamp
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastActivity: now }
+    }).catch(() => {}); // Don't block response if update fails
 
     if (!user || user.status !== 'ACTIVE') {
       return unauthorizedResponse('Account is not active');
@@ -123,14 +141,14 @@ export async function GET(req: Request) {
           iat: nowSeconds 
         },
         secret,
-        { expiresIn: "10m" } 
+        { expiresIn: "15m" } 
       );
 
       response.cookies.set('nib-auth-token', newToken, {
         httpOnly: true,
         secure: IS_PROD,
         sameSite: 'strict',
-        maxAge: 60 * 10,
+        maxAge: 60 * 15,
         path: '/',
       });
     }

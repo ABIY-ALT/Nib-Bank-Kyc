@@ -14,11 +14,27 @@ export async function POST(request: Request) {
     const session = await verifyAuthentication(request);
     
     if (session) {
-      // Update timestamp to rotate version 'v', orphaning all active tokens
+      // Clear session data and invalidate all tokens
       await prisma.user.update({
         where: { id: session.id },
-        data: { updatedAt: new Date() }
+        data: {
+          sessionId: null,
+          refreshToken: null,
+          refreshTokenExpiry: null,
+          updatedAt: new Date() // Rotate version 'v', orphaning all active tokens
+        }
       });
+
+      // Log logout event
+      await prisma.auditLog.create({
+        data: {
+          userId: session.id,
+          userEmail: session.email || '',
+          action: 'LOGOUT',
+          ipAddress: (request.headers.get('x-forwarded-for') || 'unknown').split(',')[0],
+          details: 'User logged out successfully'
+        }
+      }).catch(err => console.error('Audit log error:', err));
     }
   } catch (error) {
     console.error("[Auth Gateway] Logout revocation failure:", error);
