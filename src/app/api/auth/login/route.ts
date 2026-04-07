@@ -238,6 +238,8 @@ export async function POST(req: Request) {
 
     return response;
   } catch (error: any) {
+    console.error('[LOGIN ERROR]', error?.message || error);
+    console.error('[LOGIN ERROR FULL]', JSON.stringify(error, null, 2));
     const { message } = logInstitutionalError(error, 'AUTH_GATEWAY');
     return internalErrorResponse(message);
   }
