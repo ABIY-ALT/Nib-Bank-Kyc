@@ -70,6 +70,11 @@ export async function GET(req: Request) {
       }
     });
 
+    // Check user exists
+    if (!user || user.status !== 'ACTIVE') {
+      return unauthorizedResponse('Account is not active');
+    }
+
     // Check idle timeout
     const now = new Date();
     const lastActivityTime = user.lastActivity || user.updatedAt;
@@ -84,10 +89,6 @@ export async function GET(req: Request) {
       where: { id: user.id },
       data: { lastActivity: now }
     }).catch(() => {}); // Don't block response if update fails
-
-    if (!user || user.status !== 'ACTIVE') {
-      return unauthorizedResponse('Account is not active');
-    }
 
     // Verify token version hasn't changed
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
