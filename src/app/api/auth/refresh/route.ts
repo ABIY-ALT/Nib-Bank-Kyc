@@ -22,7 +22,7 @@ import {
  * - Updates last_activity
  */
 
-const IDLE_TIMEOUT_MINUTES = 15; // User considered idle after this duration
+const IDLE_TIMEOUT_MINUTES = 30; // User considered idle after this duration
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 export async function POST(req: Request) {
@@ -188,7 +188,7 @@ export async function POST(req: Request) {
         needsPasswordChange: user.needsPasswordChange
       },
       secret,
-      { expiresIn: '15m' }
+      { expiresIn: '30m' }
     );
 
     // Generate new refresh token (1d expiry)

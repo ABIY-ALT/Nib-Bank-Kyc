@@ -28,7 +28,7 @@ export default async function RootLayout({
       <body className="font-body antialiased bg-background" suppressHydrationWarning>
         <NonceProvider nonce={nonce}>
           <AuthProvider>
-            <IdleTimeoutProvider idleTimeoutMinutes={15}>
+            <IdleTimeoutProvider idleTimeoutMinutes={30}>
               <ThemeProvider
                 attribute="class"
                 defaultTheme="light"

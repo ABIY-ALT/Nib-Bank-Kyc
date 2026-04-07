@@ -194,7 +194,7 @@ export async function POST(req: Request) {
         needsPasswordChange: user.needsPasswordChange
       },
       secret,
-      { expiresIn: "15m" }
+      { expiresIn: "30m" }
     );
 
     await prisma.auditLog.create({

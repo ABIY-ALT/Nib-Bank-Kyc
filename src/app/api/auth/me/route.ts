@@ -142,15 +142,7 @@ export async function GET(req: Request) {
           iat: nowSeconds 
         },
         secret,
-        { expiresIn: "15m" } 
-      );
-
-      response.cookies.set('nib-auth-token', newToken, {
-        httpOnly: true,
-        secure: IS_PROD,
-        sameSite: 'strict',
-        maxAge: 60 * 15,
-        path: '/',
+          { expiresIn: "30m" } 
       });
     }
 

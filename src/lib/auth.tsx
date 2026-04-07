@@ -75,6 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     hydrateSession();
+
+    // Periodic session refresh every 10 minutes to keep token alive
+    const refreshInterval = setInterval(hydrateSession, 10 * 60 * 1000);
+
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const login = async (email: string, pass: string) => {
