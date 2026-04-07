@@ -8,7 +8,6 @@ import { NonceProvider } from '@/lib/nonce-context';
 import { IdleTimeoutProvider } from '@/components/idle-timeout-provider';
 import { headers } from 'next/headers';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { ActivityProvider } from '@/components/activity-provider';
 
 export const metadata: Metadata = {
   title: 'Nib Bank KYC',
@@ -29,8 +28,7 @@ export default async function RootLayout({
       <body className="font-body antialiased bg-background" suppressHydrationWarning>
         <NonceProvider nonce={nonce}>
           <AuthProvider>
-            <ActivityProvider>
-              <IdleTimeoutProvider idleTimeoutMinutes={15}>
+            <IdleTimeoutProvider idleTimeoutMinutes={15}>
               <ThemeProvider
                 attribute="class"
                 defaultTheme="light"
@@ -47,7 +45,6 @@ export default async function RootLayout({
                 </TooltipProvider>
               </ThemeProvider>
             </IdleTimeoutProvider>
-            </ActivityProvider>
           </AuthProvider>
         </NonceProvider>
       </body>

@@ -1,57 +1,35 @@
+/**
+ * @deprecated USE useIdleTimeout INSTEAD
+ * 
+ * This hook was causing excessive token refresh attempts (every 30 seconds),
+ * leading to UI freezing and performance issues.
+ * 
+ * The useIdleTimeout hook provides a better implementation:
+ * - Schedules refresh ~14 minutes before token expiry (not every 30 seconds)
+ * - Properly handles idle timeout detection
+ * - No aggressive polling
+ * 
+ * Remove this hook from your components and use IdleTimeoutProvider instead.
+ */
 import { useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
-const CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
 const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
 
 export function useActivityTracker() {
   const router = useRouter();
   const lastActivityRef = useRef<number>(Date.now());
-  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const updateActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
   }, []);
-
-  const checkIdleTimeout = useCallback(async () => {
-    const timeSinceLastActivity = Date.now() - lastActivityRef.current;
-
-    if (timeSinceLastActivity > IDLE_TIMEOUT) {
-      // User is idle, logout
-      try {
-        await fetch('/api/auth/logout', { method: 'POST' });
-      } catch (error) {
-        console.error('Logout failed:', error);
-      }
-      router.push('/login?reason=idle_timeout');
-      return;
-    }
-
-    // User is active, try to refresh token
-    try {
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!response.ok) {
-        // Refresh failed, redirect to login
-        router.push('/login?reason=session_expired');
-      }
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-    }
-  }, [router]);
 
   useEffect(() => {
     // Add event listeners for user activity
     ACTIVITY_EVENTS.forEach((event) => {
       window.addEventListener(event, updateActivity);
     });
-
-    // Start checking idle timeout
-    checkIntervalRef.current = setInterval(checkIdleTimeout, CHECK_INTERVAL);
 
     // Initialize activity
     updateActivity();
@@ -61,11 +39,6 @@ export function useActivityTracker() {
       ACTIVITY_EVENTS.forEach((event) => {
         window.removeEventListener(event, updateActivity);
       });
-
-      // Clear interval
-      if (checkIntervalRef.current) {
-        clearInterval(checkIntervalRef.current);
-      }
     };
-  }, [updateActivity, checkIdleTimeout]);
+  }, [updateActivity]);
 }
