@@ -232,10 +232,9 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: IS_PROD,
       sameSite: 'strict',
-      maxAge: 60 * 15,
-      path: '/',
+      maxAge: 60 * 30, // 30 minutes
+      path: '/'
     });
-
     return response;
   } catch (error: any) {
     // Log detailed error server-side ONLY

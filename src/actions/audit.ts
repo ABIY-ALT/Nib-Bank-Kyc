@@ -10,10 +10,26 @@ async function getClientIp() {
   try {
     const headerList = await headers();
     const forwardedFor = headerList.get('x-forwarded-for');
+    let rawIp = '127.0.0.1';
+    
     if (forwardedFor) {
-      return forwardedFor.split(',')[0].trim();
+      rawIp = forwardedFor.split(',')[0].trim();
+    } else {
+      rawIp = headerList.get('x-real-ip') || '127.0.0.1';
     }
-    return headerList.get('x-real-ip') || '127.0.0.1';
+
+    let normalizedIp = rawIp.trim();
+    
+    // Normalize IP: Strip port numbers
+    if (normalizedIp.includes(':')) {
+      if (normalizedIp.includes('[') && normalizedIp.includes(']')) {
+        normalizedIp = normalizedIp.split(']')[0].replace('[', '');
+      } else if (normalizedIp.split(':').length === 2) {
+        normalizedIp = normalizedIp.split(':')[0];
+      }
+    }
+    
+    return normalizedIp;
   } catch {
     return '127.0.0.1';
   }

@@ -43,6 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch("/api/auth/me");
         
         if (!res.ok) {
+          if (res.status === 401 && user) {
+            // Session expired on server, sync client state
+            setUser(null);
+            window.location.href = '/login?reason=session_expired';
+          }
           setUser(null);
           setLoading(false);
           return;
@@ -76,8 +81,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     hydrateSession();
 
-    // Periodic session refresh every 10 minutes to keep token alive
-    const refreshInterval = setInterval(hydrateSession, 10 * 60 * 1000);
+    // Periodic session refresh every 5 minutes to keep token alive
+    const refreshInterval = setInterval(hydrateSession, 5 * 60 * 1000);
 
     return () => clearInterval(refreshInterval);
   }, []);

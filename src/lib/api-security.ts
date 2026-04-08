@@ -33,12 +33,27 @@ export const ALLOWED_CORS_ORIGINS = process.env.ALLOWED_ORIGINS
  */
 export function getClientIp(request: Request): string {
   const headersList = new Headers(request.headers);
-  return (
+  const rawIp = (
     headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     headersList.get('x-real-ip') ||
     headersList.get('cf-connecting-ip') ||
     '127.0.0.1'
   );
+  
+  // Normalize IP: Strip port numbers if present (e.g., "127.0.0.1:3000" -> "127.0.0.1")
+  // Handles both IPv4 (127.0.0.1:port) and IPv6 ([::1]:port)
+  if (rawIp.includes(':')) {
+    if (rawIp.includes('[') && rawIp.includes(']')) {
+      // IPv6 with port
+      return rawIp.split(']')[0].replace('[', '');
+    }
+    if (rawIp.split(':').length === 2) {
+      // IPv4 with port
+      return rawIp.split(':')[0];
+    }
+  }
+  
+  return rawIp;
 }
 
 /**

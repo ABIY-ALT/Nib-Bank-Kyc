@@ -142,8 +142,17 @@ export async function GET(req: Request) {
           iat: nowSeconds 
         },
         secret,
-          { expiresIn: "30m" } 
+        { expiresIn: "30m" } 
+      );
+
+      response.cookies.set('nib-auth-token', newToken, {
+        httpOnly: true,
+        secure: IS_PROD,
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 30 * 60 // 30 minutes
       });
+      console.log('[AUTH] Session token rotated for:', user.email);
     }
 
     return response;
