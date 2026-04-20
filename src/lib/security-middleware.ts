@@ -54,7 +54,7 @@ export function validateContentType(
 
 /**
  * Simple IP-based rate limiting engine.
- * Note: Uses in-memory Map. For multi-node production, migrate to Redis.
+ * Note: Uses an in-memory Map for the current deployment model.
  */
 const requestCounts = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute

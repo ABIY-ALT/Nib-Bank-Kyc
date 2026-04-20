@@ -5,6 +5,8 @@ import { revalidatePath } from 'next/cache';
 import fs from 'fs/promises';
 import path from 'path';
 import { signDownloadToken } from '@/lib/security';
+import { getServerSession } from './auth-server';
+import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 
 /**
  * Retrieves the institutional file inventory based on user jurisdiction.
@@ -19,6 +21,17 @@ export async function getStorageInventory(params: {
   const { isSuperAdmin, assignedBranches, branchName } = params;
 
   try {
+    // Ownership enforcement: Do not trust client-supplied `userId`.
+    const session = await getServerSession();
+    if (!session) {
+      return [];
+    }
+
+    if (session.id !== params.userId && session.role !== 'SUPER_ADMIN') {
+      // Caller attempted to request inventory for other user without privilege
+      return [];
+    }
+
     let whereClause: any = {};
 
     if (!isSuperAdmin) {
@@ -86,7 +99,7 @@ export async function deleteInstitutionalFile(memoId: string) {
 
     if (!memo) throw new Error("File record not found in the Institutional Vault.");
 
-    // 1. Delete from physical storage (root/uploads)
+    // 1. Delete from physical storage (root/secure_uploads or configured UPLOAD_DIR)
     const filePath = path.join(process.cwd(), memo.fileUrl);
     try {
       await fs.unlink(filePath);
@@ -106,6 +119,7 @@ export async function deleteInstitutionalFile(memoId: string) {
     return { success: true, kycId: memo.kycId };
   } catch (error: any) {
     console.error('[Vault Storage] Purge Failure:', error);
-    return { success: false, error: error.message };
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    return { success: false, error: getSafeErrorMessage(error) };
   }
 }

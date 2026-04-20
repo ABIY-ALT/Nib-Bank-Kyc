@@ -36,3 +36,27 @@ export function logInstitutionalError(error: any, context: string): LogResult {
     traceId
   };
 }
+
+// Logger object interface with common methods
+const logger = {
+  info: (message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] INFO: ${message}`, data || '');
+  },
+  warn: (message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    console.warn(`[${timestamp}] WARN: ${message}`, data || '');
+  },
+  error: (message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] ERROR: ${message}`, data || '');
+  },
+  debug: (message: string, data?: any) => {
+    if (process.env.NODE_ENV === 'development') {
+      const timestamp = new Date().toISOString();
+      console.debug(`[${timestamp}] DEBUG: ${message}`, data || '');
+    }
+  },
+};
+
+export default logger;

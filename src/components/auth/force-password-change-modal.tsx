@@ -13,18 +13,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { 
-  ShieldCheck, 
-  Lock, 
-  Loader2, 
   AlertCircle,
   CheckCircle2,
   ChevronRight,
   Eye,
   EyeOff,
-  X
+  ShieldCheck, 
+  Lock, 
+  Loader2, 
+  X,
+  ShieldAlert
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { isBreachedPassword } from '@/lib/breached-password';
+import { useRouter } from 'next/navigation';
 
 export function ForcePasswordChangeModal() {
   const { user, changePassword, logout } = useAuth();
@@ -52,6 +55,8 @@ export function ForcePasswordChangeModal() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isBreached, setIsBreached] = useState(false);
+  const router = useRouter();
 
   const togglePasswordVisibility = (field: 'current' | 'next' | 'confirm') => {
     setVisiblePasswords((prev) => ({
@@ -138,7 +143,29 @@ export function ForcePasswordChangeModal() {
               {error && (
                 <Alert variant="destructive" className="animate-in slide-in-from-top-2 border-red-100 bg-red-50 text-red-900">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription className="text-xs font-bold">{error}</AlertDescription>
+                  <AlertDescription className="text-xs font-bold flex flex-col gap-2">
+                    {error}
+                    {error === 'Unauthenticated session.' && (
+                      <Button 
+                        variant="link" 
+                        size="sm" 
+                        className="text-red-900 p-0 h-auto justify-start font-black text-[10px] uppercase underline"
+                        onClick={() => window.location.href = '/login'}
+                      >
+                        Return to Login
+                      </Button>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {isBreached && !loading && (
+                <Alert className="animate-in slide-in-from-top-2 border-orange-200 bg-orange-50 text-orange-900">
+                  <ShieldAlert className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-xs font-bold">
+                    SECURITY WARNING: This password was found in a public data breach.
+                    Please choose a unique institutional credential.
+                  </AlertDescription>
                 </Alert>
               )}
 
@@ -175,10 +202,18 @@ export function ForcePasswordChangeModal() {
                     placeholder="••••••••" 
                     className="pl-10 pr-10 h-12 bg-slate-50/50 border-slate-200 font-bold"
                     value={newPassword}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const pwd = e.target.value;
                       setNewPassword(pwd);
                       setPasswordValidation(validatePassword(pwd));
+                      
+                      // Check for breaches if password meets basic length
+                      if (pwd.length >= 8) {
+                        const breached = await isBreachedPassword(pwd);
+                        setIsBreached(breached);
+                      } else {
+                        setIsBreached(false);
+                      }
                     }}
                     required
                   />

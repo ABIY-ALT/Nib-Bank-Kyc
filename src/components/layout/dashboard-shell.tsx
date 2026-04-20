@@ -32,11 +32,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Don't show force password change modal on admin pages
-  const showForceChange = !!user?.needsPasswordChange && !isAdminPage;
+  // Enforcement: Force password change modal for all accounts flagged for update
+  const showForceChange = !!user?.needsPasswordChange;
 
   return (
     <SidebarProvider defaultOpen={true}>
+      {showForceChange && <ForcePasswordChangeModal />}
       <div 
         className="flex h-screen w-full overflow-hidden bg-background"
         inert={showForceChange ? true : undefined}
@@ -45,7 +46,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         
         <SidebarInset 
           className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background"
-          inert={showForceChange ? true : undefined}
         >
           {/* STICKY INSTITUTIONAL HEADER */}
           <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-6 bg-background/80 backdrop-blur-md sticky top-0 z-30">
@@ -66,9 +66,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
           </main>
         </SidebarInset>
-
-        {/* SECURITY GATE OVERLAY */}
-        {showForceChange && <ForcePasswordChangeModal />}
       </div>
       <Toaster />
     </SidebarProvider>

@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 
 export async function getFindings() {
   try {
@@ -47,7 +48,8 @@ export async function upsertFinding(data: any) {
     revalidatePath('/kyc-fq-reference');
     return { success: true, finding };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    return { success: false, error: getSafeErrorMessage(error) };
   }
 }
 
@@ -57,7 +59,8 @@ export async function deleteFinding(id: string) {
     revalidatePath('/kyc-fq-reference');
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    return { success: false, error: getSafeErrorMessage(error) };
   }
 }
 
@@ -73,6 +76,7 @@ export async function seedFindings(findings: any[]) {
     revalidatePath('/kyc-fq-reference');
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    return { success: false, error: getSafeErrorMessage(error) };
   }
 }

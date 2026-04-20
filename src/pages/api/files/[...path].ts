@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs/promises';
 import path from 'path';
+import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
+import { UPLOADS_DIR_NAME } from '@/lib/file-upload-validation';
 
 /**
  * Serves uploaded files from the uploads directory.
@@ -30,19 +32,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Handle both "uploads/filename" and just "filename" formats
+    // Handle both secure_uploads filename and plain filename formats
+    const uploadsDirName = UPLOADS_DIR_NAME;
     let finalPath = requestedPath;
-    if (!requestedPath.startsWith('uploads/')) {
-      finalPath = `uploads/${requestedPath}`;
+    if (!requestedPath.startsWith(`${uploadsDirName}/`)) {
+      finalPath = `${uploadsDirName}/${requestedPath}`;
     }
 
-    // Construct the full file path
+    // Construct the full file path (stored outside web root)
     const fullPath = path.join(process.cwd(), finalPath);
     console.log('[Files API] Full path:', fullPath);
     console.log('[Files API] CWD:', process.cwd());
 
     // Verify the resolved path is still within the uploads directory
-    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const uploadsDir = path.join(process.cwd(), uploadsDirName);
     const resolvedPath = path.resolve(fullPath);
     const resolvedUploadsDir = path.resolve(uploadsDir);
 
@@ -123,6 +126,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).send(fileStream);
   } catch (error) {
     console.error('[Files API] Unexpected error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' });
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    const safeMessage = getSafeErrorMessage(error);
+    res.status(500).json({ error: 'Internal server error', details: safeMessage });
   }
 }

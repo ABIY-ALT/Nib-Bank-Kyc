@@ -16,6 +16,7 @@ import {
   unauthorizedResponse,
   internalErrorResponse
 } from "@/lib/api-security";
+import { createUserSession } from "@/lib/concurrent-session-manager";
 
 /**
  * Institutional Authentication Gateway.
@@ -80,7 +81,7 @@ export async function POST(req: Request) {
         }
       });
       const response = NextResponse.json({ 
-        error: "Maximum login attempts reached. Access is temporarily throttled for security." 
+        error: "Account temporarily locked for security due to multiple failed login attempts. Please try again in 15 minutes or contact your system administrator." 
       }, { status: 429 });
       return applySecurityHeaders(response);
     }
@@ -159,19 +160,31 @@ export async function POST(req: Request) {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const absoluteLimit = nowSeconds + (8 * 60 * 60);
 
-    // Generate unique session identifier for single-session enforcement
-    const sessionId = crypto.randomUUID();
-
+    // ===== SECURITY FIX #7: Concurrent Session Management =====
     // Generate refresh token (1 day expiry)
     const refreshTokenPlain = crypto.randomBytes(32).toString('hex');
     const refreshTokenHashed = await bcrypt.hash(refreshTokenPlain, 10);
     const refreshTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 day
 
-    // Store sessionId, refreshToken, and set last_activity in database
+    // Create session with device fingerprint (terminates previous session from same device)
+    const deviceFingerprint = {
+      userAgent,
+      ipAddress,
+      acceptLanguage: headerList.get('accept-language') || undefined,
+    };
+
+    const sessionId = await createUserSession(
+      user.id,
+      deviceFingerprint,
+      refreshTokenHashed,
+      `Login from ${ipAddress}` // Device name
+    );
+
+    // Store refreshToken in database for rotation
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { 
-        sessionId,
+        sessionId, // Store the new session ID from Session table
         refreshToken: refreshTokenHashed,
         refreshTokenExpiry,
         lastActivity: new Date() // Initialize activity tracking
@@ -184,13 +197,9 @@ export async function POST(req: Request) {
     const token = jwt.sign(
       { 
         id: user.id, 
-        email: user.email,
-        role: roleName,
-        sid: sessionId, // Include session ID in token
-        ip: ipAddress,
-        ua: uaHash,
-        v: versionSeconds,
+        sid: sessionId, 
         abs: absoluteLimit,
+        v: versionSeconds,
         needsPasswordChange: user.needsPasswordChange
       },
       secret,

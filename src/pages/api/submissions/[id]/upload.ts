@@ -6,6 +6,8 @@ import formidable from 'formidable';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/actions/audit';
 import { hasJurisdictionalAccess, getNormalizedRole } from '@/lib/jurisdiction';
+import { UPLOADS_DIR_NAME } from '@/lib/file-upload-validation';
+import { performCompleteFileValidation } from '@/lib/file-upload-security-integration';
 
 export const config = {
   api: {
@@ -39,23 +41,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const uploaded = Array.isArray(files.files) ? files.files : [files.files];
-      const uploadDir = path.join(process.cwd(), 'uploads');
+      const uploadDir = path.join(process.cwd(), UPLOADS_DIR_NAME);
       try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
 
       const memoData: any[] = [];
 
       for (const f of uploaded) {
         if (!f || !f.originalFilename) continue;
-        if (f.size > MAX_FILE_SIZE) return res.status(400).json({ success: false, error: `${f.originalFilename} exceeds limit` });
-        if (!f.mimetype || !allowedMime.has(f.mimetype)) return res.status(400).json({ success: false, error: `Disallowed file type ${f.originalFilename}` });
+        const buffer = await fs.readFile(f.filepath);
+        const validation = await performCompleteFileValidation(f.originalFilename, f.mimetype || '', buffer, session.id);
+        
+        if (!validation.valid || !validation.secureFilename) {
+          return res.status(400).json({ success: false, error: `Security check failed for ${f.originalFilename}: ${validation.error}` });
+        }
 
-        const stored = `${Date.now()}_added_${f.originalFilename.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        await fs.copyFile(f.filepath, path.join(uploadDir, stored));
+        await fs.writeFile(path.join(uploadDir, validation.secureFilename), buffer);
 
         memoData.push({
           name: f.originalFilename,
           type: (Array.isArray(fields.types) ? fields.types.shift() : fields.types) || 'OTHER',
-          fileUrl: `uploads/${stored}`,
+          fileUrl: `${UPLOADS_DIR_NAME}/${validation.secureFilename}`,
           uploadedById: session.id,
           kycId: id,
           size: f.size

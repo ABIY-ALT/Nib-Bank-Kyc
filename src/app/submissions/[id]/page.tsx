@@ -2,18 +2,18 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
+import {
+  Card,
+  CardContent,
+  CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   ChevronLeft,
   ChevronRight,
-  FileText, 
+  FileText,
   MessageSquare,
   ArrowLeft,
   ShieldCheck,
@@ -49,12 +49,12 @@ import { deleteInstitutionalFile } from "@/actions/storage";
 import { getGlobalSettings } from "@/actions/settings";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -272,11 +272,11 @@ export default function SubmissionDetails() {
   const { user } = useAuth();
   const { hasPermission, isSuperAdmin } = usePermissions();
   const routeSubmissionId = params && Array.isArray(params.id) ? params.id[0] : params?.id;
-  
+
   const [submission, setSubmission] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
+
   const [remarks, setRemarks] = useState("");
   const [isCustomRemark, setIsCustomRemark] = useState(true);
   const [selectedScenario, setSelectedScenario] = useState("");
@@ -397,7 +397,7 @@ export default function SubmissionDetails() {
     return Array.isArray(submission.commentHistory)
       && submission.commentHistory.some((entry: any) => entry?.action === KYC_STATUS.ESCALATED);
   }, [submission]);
-  
+
   const isReviewer = useMemo(() => {
     if (isSuperAdmin) return true;
     if (isCreator) return false;
@@ -481,7 +481,7 @@ export default function SubmissionDetails() {
       toast({ variant: "destructive", title: "Document Types Required", description: "Select a type for each attached document." });
       return;
     }
-    
+
     setIsActioning("RESUBMIT");
     try {
       const formData = new FormData();
@@ -547,7 +547,7 @@ export default function SubmissionDetails() {
 
   const handleExceptionalStep = useCallback(async (nextStatus: string, actionLabel: string) => {
     if (!submission || !user || isActioning) return;
-    
+
     setIsActioning(nextStatus);
     try {
       const formData = new FormData();
@@ -629,7 +629,7 @@ export default function SubmissionDetails() {
     if (!submission) return [];
     const status = submission.status;
     const excStatus = submission.exceptionalStatus;
-    
+
     if (submission.isExceptional) {
       return [
         { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
@@ -746,7 +746,7 @@ export default function SubmissionDetails() {
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="bg-primary p-6 border-b flex flex-row items-center justify-between">
               <div className="flex items-center gap-3"><FileText className="w-5 h-5 text-white" /><CardTitle className="text-xl font-black text-white">Documentation</CardTitle></div>
-              
+
             </CardHeader>
             <CardContent className="pt-6 px-6 space-y-5">
               {submissionDocuments.length > 0 && (

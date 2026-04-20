@@ -137,11 +137,32 @@ export async function getMemoAccessUrl(memoId: string, options?: { download?: bo
 export async function getSecureMemo(token: string, userId: string) {
   // 1. Time-Limited Token Verification
   const memoId = verifyDownloadToken(token);
-  
-  // 2. User Identity Retrieval for Jurisdictional Check
-  const sessionUser = await prisma.user.findUnique({
-    where: { id: userId }
-  });
+
+  // 2. Require authenticated session and enforce ownership checks (prevent client-supplied userId abuse)
+  const session = await getServerSession();
+  if (!session) {
+    return { error: 'Forbidden', status: 403 };
+  }
+
+  // If the client supplied a userId that does not match the authenticated session
+  // and the session is not a SUPER_ADMIN, deny request. Always use server session
+  // identity for authorization decisions to prevent horizontal privilege escalation.
+  if (session.id !== userId && session.role !== 'SUPER_ADMIN') {
+    const attemptedUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, firstName: true, lastName: true } });
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'SECURITY_ALERT_IDOR',
+      details: `Client attempted memo access with mismatched userId param. Supplied: ${userId}`,
+      metadata: { suppliedUserId: userId, suppliedUserExists: Boolean(attemptedUser) },
+      severity: 'CRITICAL'
+    }).catch(() => {});
+
+    return { error: 'Forbidden', status: 403 };
+  }
+
+  // Use session.id as authoritative identity for subsequent checks
+  const sessionUser = await prisma.user.findUnique({ where: { id: session.id } });
 
   // 3. Integrity Check (Prevents IDOR / Manipulation / Expiration)
   if (!memoId) {
@@ -159,7 +180,7 @@ export async function getSecureMemo(token: string, userId: string) {
     return { error: 'Forbidden', status: 403 };
   }
 
-  const { user, memo, authorized } = await getMemoAccessContext(userId, memoId);
+  const { user, memo, authorized } = await getMemoAccessContext(session.id, memoId);
   if (!memo) {
     // Rule: Return 403 instead of 404 to prevent resource enumeration
     return { error: 'Forbidden', status: 403 };

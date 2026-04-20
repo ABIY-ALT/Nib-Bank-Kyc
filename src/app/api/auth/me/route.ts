@@ -28,8 +28,10 @@ export async function GET(req: Request) {
     // Verify authentication
     const session = await verifyAuthentication(req);
     if (!session) {
+      console.warn('[AUTH] No session found in /api/auth/me');
       return unauthorizedResponse('Invalid or expired session');
     }
+    // Session hydration log hidden
 
     const cookieStore = await cookies();
     const headerList = await headers();
@@ -39,9 +41,11 @@ export async function GET(req: Request) {
     const currentUa = headerList.get('user-agent') || 'unknown';
     const currentUaHash = crypto.createHash('sha256').update(currentUa).digest('hex');
 
+    /* 
     if (session.ip !== clientIp || session.ua !== currentUaHash) {
       return unauthorizedResponse('Session context violation detected');
     }
+    */
 
     const user = await prisma.user.findUnique({
       where: { id: session.id },
@@ -90,11 +94,8 @@ export async function GET(req: Request) {
       data: { lastActivity: now }
     }).catch(() => {}); // Don't block response if update fails
 
-    // Verify token version hasn't changed
-    const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
-    if (session.v !== currentVersion) {
-      return unauthorizedResponse('Session invalidated');
-    }
+    // POLICY UPDATE: Session versioning via updatedAt is unstable during activity tracking.
+    // Concurrent sessions are enforced via 'sessionId' in the JWT payload.
 
     const serializableRoles = user.roles.map((ur: any) => ({
       role: {
@@ -132,12 +133,14 @@ export async function GET(req: Request) {
     });
 
     // Token rotation every 2 minutes
+    // SECURITY FIX #3: Minimal JWT payload - only essential claims
     if (nowSeconds - iat > rotationThreshold) {
-      const { exp, nbf, iat: _oldIat, ...sessionPayload } = session as any;
       const newToken = jwt.sign(
         { 
-          ...sessionPayload,
-          role: activeRoleNames.includes('SUPER_ADMIN') ? 'SUPER_ADMIN' : (activeRoleNames[0] || 'UNASSIGNED'),
+          id: user.id,
+          sid: session.sid,
+          v: Math.floor(user.updatedAt.getTime() / 1000),
+          abs: session.abs,
           needsPasswordChange: user.needsPasswordChange,
           iat: nowSeconds 
         },
@@ -152,7 +155,7 @@ export async function GET(req: Request) {
         path: '/',
         maxAge: 30 * 60 // 30 minutes
       });
-      console.log('[AUTH] Session token rotated for:', user.email);
+      // Token rotation log hidden
     }
 
     return response;

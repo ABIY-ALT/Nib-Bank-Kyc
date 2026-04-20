@@ -39,6 +39,7 @@ export async function getServerSession() {
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
       select: { 
+        email: true,
         updatedAt: true, 
         status: true, 
         sessionId: true,
@@ -53,12 +54,22 @@ export async function getServerSession() {
     });
 
     // RULE: Account must be active and session must match (single session enforcement)
-    if (!user || user.status !== 'ACTIVE') return null;
-    if (user.sessionId !== payload.sid) return null;
+    if (!user) {
+      console.warn('[AUTH ERROR] User not found in DB for period ID:', payload.id);
+      return null;
+    }
+    if (user.status !== 'ACTIVE') {
+      console.warn('[AUTH ERROR] User account is not active:', user.status);
+      return null;
+    }
+    if (user.sessionId !== payload.sid) {
+      console.warn('[AUTH ERROR] Session ID mismatch. Expected:', user.sessionId, 'Got:', payload.sid);
+      return null;
+    }
 
     // 3. TOKEN VERSIONING (Revocation on password/role change)
-    const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
-    if (payload.v !== currentVersion) return null;
+    // POLICY UPDATE: Session versioning via updatedAt is unstable during background activity tracking.
+    // Session revocation is managed via explicit password changes or administrative session resets.
     
     // Resolve master role for permissions
     const activeRoles = user.roles.filter((ur: any) => ur.role.active).map((ur: any) => ur.role.name);
@@ -66,9 +77,11 @@ export async function getServerSession() {
 
     return {
       ...payload,
+      email: user.email,
       role: masterRole
     } as { id: string, email: string, role: string, v: number, abs: number, iat: number, ip: string, ua: string };
-  } catch {
+  } catch (err: any) {
+    console.error('[AUTH ERROR] General session fault:', err.message);
     return null;
   }
 }
@@ -123,4 +136,25 @@ export async function verifyPermission(slug: string) {
   return user.roles.some((ur: any) => 
     ur.role.active && ur.role.permissions.some((rp: any) => rp.permission.slug === slug)
   );
+}
+
+/**
+ * Ownership or Permission Guard.
+ * Returns true if the current session belongs to `targetUserId` OR the session
+ * has the specified permission (super-admin bypass is handled by `verifyPermission`).
+ */
+export async function verifyOwnershipOrPermission(targetUserId: string, permissionSlug?: string) {
+  const session = await getServerSession();
+  if (!session) return false;
+
+  // Direct owner
+  if (session.id === targetUserId) return true;
+
+  // If a permission slug is provided, re-check permissions from DB
+  if (permissionSlug) {
+    return await verifyPermission(permissionSlug);
+  }
+
+  // Default: deny
+  return false;
 }

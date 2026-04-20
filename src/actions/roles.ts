@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { createAuditLog } from './audit';
 import { getServerSession } from './auth-server';
+import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 
 /**
  * Institutional Capability Registry.
@@ -174,7 +175,8 @@ export async function upsertRole(data: { id?: string, name: string, description:
     revalidatePath('/admin/roles');
     return { success: true, role };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    return { success: false, error: getSafeErrorMessage(error) };
   }
 }
 

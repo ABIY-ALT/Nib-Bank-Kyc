@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { generateSecureNumericCode } from '@/lib/security';
+import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 
 export async function getDistricts() {
   try {
@@ -83,7 +84,8 @@ export async function createBranch(data: { name: string, code?: string, district
     if (error.code === 'P2002') {
       throw new Error(`Branch node "${data.name}" is already registered.`);
     }
-    throw new Error(error.message || 'Institutional database fault during branch registration.');
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    throw new Error(getSafeErrorMessage(error) || 'Institutional database fault during branch registration.');
   }
 }
 
@@ -112,7 +114,8 @@ export async function updateBranch(id: string, data: { name: string, code?: stri
     if (error.code === 'P2002') {
       throw new Error(`Another branch node with the name "${data.name}" already exists.`);
     }
-    throw new Error(error.message || 'Institutional database fault during branch update.');
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    throw new Error(getSafeErrorMessage(error) || 'Institutional database fault during branch update.');
   }
 }
 

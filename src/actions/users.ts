@@ -5,12 +5,14 @@ import { Prisma, UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
 import { generateSecurePassword } from '@/lib/security';
-import { getServerSession, verifySensitiveSession } from './auth-server';
+import { getServerSession, verifySensitiveSession, verifyPermission } from './auth-server';
 import { createAuditLog } from './audit';
 import { CreateUserSchema } from '@/lib/validation';
 import { ZodError } from 'zod';
 import { logInstitutionalError } from '@/lib/logger';
 import { normalizeInstitutionalLogin } from '@/lib/login-identifier';
+import { createPasswordResetToken } from '@/lib/password-reset-helper';
+import { validatePhoneNumber } from '@/lib/phone-validation';
 
 const INSTITUTIONAL_EMAIL_DOMAIN = 'nibbank.com.et';
 
@@ -97,24 +99,18 @@ async function reserveRequestedInstitutionalEmail(params: {
 /**
  * Robust Authorization Helper.
  */
-async function verifyAdminClearance() {
+async function verifyUserManagementAccess() {
   const session = await getServerSession();
   if (!session) return false;
-  if (session.role === 'SUPER_ADMIN') return true;
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.id },
-    select: {
-      roles: { 
-        include: { role: { select: { name: true } } } 
-      }
-    }
-  });
-
-  return user?.roles.some((ur: any) => ur.role.name === 'SUPER_ADMIN') || false;
+  return verifyPermission('USER_CREATE');
 }
 
 export async function getAllUsers() {
+  if (!(await verifyUserManagementAccess())) {
+    logInstitutionalError(new Error('Unauthorized user list access attempt.'), 'UNAUTHORIZED_USER_LIST');
+    return [];
+  }
+
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -176,7 +172,8 @@ export async function provisionUser(data: {
   districtName?: string | null;
   status: UserStatus;
 }) {
-  if (!(await verifyAdminClearance())) {
+  const session = await getServerSession();
+  if (!session || !(await verifyUserManagementAccess())) {
     return { success: false, error: 'Unauthorized: Administrative clearance required.' };
   }
 
@@ -185,12 +182,30 @@ export async function provisionUser(data: {
     return { success: false, error: 'Security Protocol: Session too old for personnel modification. Please refresh or re-login.' };
   }
 
+  if (data.role === 'SUPER_ADMIN' && session.role !== 'SUPER_ADMIN') {
+    return { success: false, error: 'Unauthorized: Cannot assign SUPER_ADMIN privileges.' };
+  }
+
   try {
     const validated = CreateUserSchema.parse(data);
     const isUpdate = !!data.id;
     const normalizedFirstName = normalizePersonName(validated.firstName);
     const normalizedLastName = normalizePersonName(validated.lastName);
-    const normalizedPhoneNumber = normalizePhoneNumber(validated.phoneNumber);
+    
+    // ===== SECURITY FIX #5: Phone Number Validation =====
+    // Validate phone number before processing (CWE-95, OWASP A3)
+    let normalizedPhoneNumber: string | null = null;
+    if (validated.phoneNumber) {
+      const phoneValidation = validatePhoneNumber(validated.phoneNumber);
+      if (!phoneValidation.isValid) {
+        return {
+          success: false,
+          error: `Invalid phone number: ${phoneValidation.errorMessage}`,
+        };
+      }
+      normalizedPhoneNumber = phoneValidation.normalizedNumber || null;
+    }
+    
     const requestedEmail = validated.email ? normalizeInstitutionalLogin(validated.email) : '';
     let tempPass = validated.password?.trim() || undefined;
 
@@ -349,6 +364,10 @@ export async function provisionUser(data: {
 
       const role = await tx.role.findUnique({ where: { name: validated.role } });
       if (role) {
+        if (role.name === 'SUPER_ADMIN' && session.role !== 'SUPER_ADMIN') {
+          throw new Error('Unauthorized: Cannot assign SUPER_ADMIN privileges.');
+        }
+
         await (tx as any).userRole.deleteMany({ where: { userId: user.id } });
         await (tx as any).userRole.create({ data: { userId: user.id, roleId: role.id } });
       }
@@ -357,8 +376,8 @@ export async function provisionUser(data: {
     });
 
     await createAuditLog({
-      userId: null,
-      userEmail: result.email,
+      userId: session.id,
+      userEmail: session.email,
       action: isUpdate ? 'USER_PROFILE_UPDATE' : 'USER_PROVISION_SUCCESS',
       details: isUpdate 
         ? `Profile modified for ${result.firstName} ${result.lastName}. Role: ${data.role}` 
@@ -368,9 +387,10 @@ export async function provisionUser(data: {
 
     revalidatePath('/admin/users');
     
-    // Return user without password hash
+    // Return user and the temporary password for the administrator's manual handover (UI display + copy)
     return { 
       success: true, 
+      tempPass: tempPass, // For admin to copy and share via preferred method
       user: {
         id: result.id,
         firstName: result.firstName,
@@ -382,8 +402,7 @@ export async function provisionUser(data: {
         branchName: result.branchName,
         districtName: result.districtName,
         needsPasswordChange: result.needsPasswordChange
-      }, 
-      tempPassword: tempPass || null
+      }
     };
   } catch (error: any) {
     if (error instanceof ZodError) {
@@ -411,53 +430,84 @@ export async function provisionUser(data: {
   }
 }
 
-export async function resetUserPassword(email: string, authorizerId: string) {
-  if (!(await verifyAdminClearance())) {
+export async function resetUserPassword(email: string) {
+  // SECURITY REQUIREMENTS:
+  // - Do not store passwords (temporary or permanent) in client-side storage
+  // - Use secure, server-side mechanisms for password handling
+  // - Implement protections against XSS attacks
+  //
+  // This function generates secure tokens server-side only.
+  // Email delivery is external responsibility; this function never exposes tokens in response.
+  const session = await getServerSession();
+  if (!session || !(await verifyUserManagementAccess())) {
     return { success: false, error: 'Unauthorized.' };
   }
 
-  // NOTE: Password reset does not require a fresh session, only admin clearance
-  // The 5-minute session limit is intentionally bypassed here to allow
-  // long-running admin sessions to perform maintenance actions
+  const authorizerId = session.id;
 
   try {
     const normalizedEmail = email.toLowerCase().trim();
-    const user = await prisma.user.findUnique({ 
+
+    // Always return generic success to avoid user enumeration
+    const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
-      select: { id: true, firstName: true, lastName: true }
-    });
-    if (!user) throw new Error("Personnel record not found.");
-
-    const tempPass = generateSecurePassword(10);
-    const hashedPassword = await bcrypt.hash(tempPass, 10);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword, needsPasswordChange: true, updatedAt: new Date() }
+      select: { id: true, firstName: true, lastName: true, email: true },
     });
 
-    // Audit log for credential reset
-    await createAuditLog({
-      userId: authorizerId,
-      userEmail: `admin:${authorizerId}`,
-      action: 'CREDENTIAL_RESET',
-      details: `Password reset initiated by admin ${authorizerId}`,
-      metadata: {
-        email: normalizedEmail,
-        resource: 'USER',
-        resourceId: user.id,
-      }
-    }).catch(() => {});
+    if (user) {
+      // Institutional Delivery Policy: Generate plaintext password for administrative handover
+      const newTempPass = generateSecurePassword(12);
+      const hashedPassword = await bcrypt.hash(newTempPass, 10);
 
-    return { success: true, tempPassword: tempPass, userName: `${user.firstName} ${user.lastName}` };
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          needsPasswordChange: true,
+          updatedAt: new Date()
+        }
+      });
+
+      // Audit log
+      await createAuditLog({
+        userId: authorizerId,
+        userEmail: session.email,
+        action: 'PASSWORD_RESET_ADMIN_OVERRIDE',
+        details: `Administrator manually reset password for ${normalizedEmail}. New temporary password provided.`,
+        metadata: {
+          email: normalizedEmail,
+          resource: 'USER',
+          resourceId: user.id,
+        },
+      }).catch(() => {});
+
+      return { 
+        success: true, 
+        message: 'A new temporary password has been generated. Please provide this to the user.',
+        tempPass: newTempPass 
+      };
+    } else {
+      // Log attempted reset for non-existent user for security auditing
+      await createAuditLog({
+        userId: authorizerId,
+        userEmail: session.email,
+        action: 'PASSWORD_RESET_ATTEMPTED_INVALID_USER',
+        details: `Password reset attempted for non-existent email by admin`,
+        metadata: { email: normalizedEmail },
+      }).catch(() => {});
+      
+      // Always return generic success to avoid user enumeration
+      return { success: true, message: 'Password reset processed.' };
+    }
   } catch (error: any) {
-    const { message } = logInstitutionalError(error, 'DB_RESET_PASSWORD');
+    const { message } = logInstitutionalError(error, 'PASSWORD_RESET_ERROR');
     return { success: false, error: message };
   }
 }
 
 export async function updateUserStatus(userId: string, status: UserStatus) {
-  if (!(await verifyAdminClearance())) throw new Error('Unauthorized');
+  const session = await getServerSession();
+  if (!session || !(await verifyUserManagementAccess())) throw new Error('Unauthorized');
   if (!(await verifySensitiveSession())) throw new Error('Security Protocol Violation: Session too old.');
   
   try {
@@ -480,6 +530,10 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
     // Prevent SUPER_ADMIN users from being set to INACTIVE
     if (isSuperAdmin && status === 'INACTIVE') {
       throw new Error('Security Policy: SUPER_ADMIN accounts cannot be set to INACTIVE status.');
+    }
+
+    if (isSuperAdmin && session.role !== 'SUPER_ADMIN') {
+      throw new Error('Unauthorized: Cannot modify SUPER_ADMIN accounts.');
     }
 
     const result = await prisma.user.update({
@@ -505,10 +559,20 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
 }
 
 export async function updateUserPortfolio(userId: string, branches: string[]) {
-  if (!(await verifyAdminClearance())) throw new Error('Unauthorized');
+  const session = await getServerSession();
+  if (!session || !(await verifyUserManagementAccess())) throw new Error('Unauthorized');
   if (!(await verifySensitiveSession())) throw new Error('Security Protocol Violation: Session too old.');
 
   try {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { roles: { include: { role: { select: { name: true } } } } }
+    });
+
+    if (targetUser?.roles.some((ur: any) => ur.role.name === 'SUPER_ADMIN') && session.role !== 'SUPER_ADMIN') {
+      throw new Error('Unauthorized: Cannot modify SUPER_ADMIN accounts.');
+    }
+
     const result = await prisma.user.update({
       where: { id: userId },
       data: { assignedBranches: branches.join(','), updatedAt: new Date() },

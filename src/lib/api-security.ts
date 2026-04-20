@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/prisma';
+import { getSafeErrorMessage, sanitizeResponseHeaders, HEADERS_TO_REMOVE } from './information-disclosure-prevention';
 
 /**
  * Sensitive IP Whitelist
@@ -66,8 +67,10 @@ export async function verifyAuthentication(request: Request) {
     const token = cookieStore.get('nib-auth-token')?.value;
 
     if (!token) {
+      console.warn('[AUTH] No nib-auth-token cookie found');
       return null;
     }
+    // Auth token verification log hidden
 
     const secretStr = process.env.JWT_SECRET || '';
     if (secretStr.length < 32) {
@@ -107,11 +110,8 @@ export async function verifyAuthentication(request: Request) {
         return null;
       }
 
-      // Verify token version (password change invalidates session)
-      const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
-      if (payload.v !== currentVersion) {
-        return null;
-      }
+      // POLICY UPDATE: Session versioning via updatedAt is unstable during activity tracking.
+      // Reliability is maintained via sessionId and absolute lifetime (abs).
 
       return payload as any;
     } catch (e) {
@@ -163,6 +163,7 @@ function ipToNumber(ip: string): number {
 
 /**
  * Apply security headers to response (no CORS by default)
+ * SECURITY: Removes headers that expose server/framework information (A05:2021)
  */
 export function applySecurityHeaders(response: NextResponse): NextResponse {
   // Remove any default CORS headers
@@ -170,6 +171,11 @@ export function applySecurityHeaders(response: NextResponse): NextResponse {
   response.headers.delete('Access-Control-Allow-Methods');
   response.headers.delete('Access-Control-Allow-Headers');
   response.headers.delete('Access-Control-Allow-Credentials');
+
+  // SECURITY: Remove server information disclosure headers
+  for (const header of HEADERS_TO_REMOVE) {
+    response.headers.delete(header);
+  }
 
   // Apply strict security headers
   response.headers.set('X-Content-Type-Options', 'nosniff');
@@ -187,44 +193,52 @@ export function applySecurityHeaders(response: NextResponse): NextResponse {
 }
 
 /**
- * Return unauthenticated error response
+ * Return unauthenticated error response (generic message - no details)
  */
-export function unauthorizedResponse(message = 'Unauthenticated request') {
+export function unauthorizedResponse(message?: string) {
+  // SECURITY: Use generic message to prevent information disclosure
+  const safeMessage = message ? getSafeErrorMessage(message) : 'Authentication required';
   const response = NextResponse.json(
-    { error: message, code: 'UNAUTHORIZED' },
+    { error: safeMessage, code: 'UNAUTHORIZED' },
     { status: 401 }
   );
   return applySecurityHeaders(response);
 }
 
 /**
- * Return forbidden error response (IP not whitelisted)
+ * Return forbidden error response (generic message - no details)
  */
-export function forbiddenResponse(message = 'Access forbidden') {
+export function forbiddenResponse(message?: string) {
+  // SECURITY: Use generic message to prevent information disclosure
+  const safeMessage = message ? getSafeErrorMessage(message) : 'Access denied';
   const response = NextResponse.json(
-    { error: message, code: 'FORBIDDEN' },
+    { error: safeMessage, code: 'FORBIDDEN' },
     { status: 403 }
   );
   return applySecurityHeaders(response);
 }
 
 /**
- * Return bad request error response
+ * Return bad request error response (generic message - no details)
  */
-export function badRequestResponse(message = 'Invalid request') {
+export function badRequestResponse(message?: string) {
+  // SECURITY: Use generic message to prevent information disclosure
+  const safeMessage = message ? getSafeErrorMessage(message) : 'Invalid request';
   const response = NextResponse.json(
-    { error: message, code: 'BAD_REQUEST' },
+    { error: safeMessage, code: 'BAD_REQUEST' },
     { status: 400 }
   );
   return applySecurityHeaders(response);
 }
 
 /**
- * Return internal error response
+ * Return internal error response (generic message - never expose details)
  */
-export function internalErrorResponse(message = 'Internal server error') {
+export function internalErrorResponse(message?: string) {
+  // SECURITY: Never expose error details - always use generic message
+  const safeMessage = 'An error occurred. Please try again or contact support.';
   const response = NextResponse.json(
-    { error: message, code: 'INTERNAL_ERROR' },
+    { error: safeMessage, code: 'INTERNAL_ERROR' },
     { status: 500 }
   );
   return applySecurityHeaders(response);

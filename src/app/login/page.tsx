@@ -57,9 +57,9 @@ function LoginContent() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      router.replace(redirectTarget);
+      window.location.href = redirectTarget;
     }
-  }, [authLoading, user, router, redirectTarget]);
+  }, [authLoading, user, redirectTarget]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +69,8 @@ function LoginContent() {
     try {
       await login(loginId, password);
       
-      router.replace(redirectTarget);
+      // Use hard redirect to ensure clean state transition
+      window.location.href = redirectTarget;
     } catch (err: any) {
       setError(err.message || "Invalid username or password.");
     } finally {

@@ -9,7 +9,7 @@ import path from 'path';
 /**
  * Institutional Memo Gateway.
  * Provides secure file streaming with IDOR protection, expiration, and audit logging.
- * Reads files from the root-level 'uploads' directory.
+ * Reads files from the secure uploads directory configured by UPLOAD_DIR.
  */
 export async function GET(
   req: Request,
@@ -52,20 +52,19 @@ export async function GET(
     try {
       const fileBuffer = await fs.readFile(filePath);
       const fileName = memo.name || 'document';
-      const extension = path.extname(fileName).toLowerCase();
       
-      let contentType = 'application/octet-stream';
-      if (extension === '.pdf') contentType = 'application/pdf';
-      else if (['.jpg', '.jpeg'].includes(extension)) contentType = 'image/jpeg';
-      else if (extension === '.png') contentType = 'image/png';
+      // SECURITY: Use the validated MIME type stored during upload (A05:2021)
+      // This prevents XSS attacks by ensuring correct Content-Type header
+      const contentType = memo.mimeType || 'application/octet-stream';
 
       const response = new Response(new Uint8Array(fileBuffer), {
         headers: {
           'Content-Type': contentType,
           'Content-Disposition': `${forceDownload ? 'attachment' : 'inline'}; filename="${fileName}"`,
-          'X-Content-Type-Options': 'nosniff',
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-          'Content-Security-Policy': "default-src 'self' blob:; frame-ancestors 'self';",
+          'X-Content-Type-Options': 'nosniff', // Prevent MIME sniffing
+          'Cache-Control': 'no-store, no-cache, must-revalidate', // Prevent caching of sensitive files
+          'Content-Security-Policy': "default-src 'self' blob:; frame-ancestors 'self';", // Prevent framing attacks
+          'Cross-Origin-Resource-Policy': 'cross-origin', // Allow resources from other origins if needed
         },
       });
 

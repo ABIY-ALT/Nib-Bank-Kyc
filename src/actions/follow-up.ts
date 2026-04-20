@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { getServerSession, verifyPermission } from './auth-server';
 import { KYC_STATUS } from '@/lib/kyc-data';
+import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 
 async function getFollowUpAccess() {
   const session = await getServerSession();
@@ -111,7 +112,8 @@ export async function seedFollowUpPool(cases: any[]) {
     revalidatePath('/head-office/follow-up');
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    return { success: false, error: getSafeErrorMessage(error) };
   }
 }
 
@@ -146,6 +148,7 @@ export async function updateFollowUp(id: string, data: any) {
     revalidatePath('/reports/follow-up');
     return { success: true, v };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
+    return { success: false, error: getSafeErrorMessage(error) };
   }
 }

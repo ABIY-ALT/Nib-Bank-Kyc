@@ -184,7 +184,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           {!isSuperAdmin && user?.districtName && (
             <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-2 font-black h-12 flex items-center gap-2 text-xs rounded-xl shadow-sm">
-              <MapPin className="w-4 h-4" /> {user.districtName} Branch
+              <MapPin className="w-4 h-4" /> {user.districtName} District
             </Badge>
           )}
           {isBranchOfficer && (
@@ -231,35 +231,35 @@ export default function Dashboard() {
                   <Loader2 className="w-8 h-8 animate-spin text-primary/30" />
                 </div>
               ) : recentSubmissions && recentSubmissions.length > 0 ? (
-                recentSubmissions.slice(0, 10).map((sub) => (
-                  <div key={sub.id} className="flex items-center justify-between p-5 hover:bg-slate-50 transition-all group">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-slate-900 group-hover:text-primary transition-colors">{sub.customerName}</p>
-                        {sub.isExceptional && (
-                          <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 text-[8px] h-4 font-black uppercase px-1.5">
-                            Hierarchy Process
-                          </Badge>
-                        )}
+                recentSubmissions.slice(0, 10).map((sub, index) => (
+                    <div key={sub.id || index} className="flex items-center justify-between p-5 hover:bg-slate-50 transition-all group border-b last:border-0">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-slate-900 group-hover:text-primary transition-colors">{sub.customerName || 'Anonymous Customer'}</p>
+                          {sub.isExceptional && (
+                            <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 text-[8px] h-4 font-black uppercase px-1.5">
+                              Hierarchy Process
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">
+                          {sub.id || 'NO_ID'} • {formatBranchName(sub.branch?.name || sub.branchName || 'Head Office')}
+                        </p>
                       </div>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">
-                        {sub.id} • {formatBranchName(sub.branch?.name || sub.branchName)}
-                      </p>
+                      <div className="flex items-center gap-4">
+                        <Badge variant="outline" className={cn(
+                          "font-black text-[9px] uppercase px-3 py-1 border-2",
+                          (sub.status || '').toUpperCase() === (KYC_STATUS.APPROVED || 'APPROVED') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                          (sub.status || '').toUpperCase() === (KYC_STATUS.ACTION_REQUIRED || 'ACTION_REQUIRED') ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                          'bg-blue-50 text-blue-700 border-blue-100'
+                        )}>
+                          {(sub.status || 'PENDING').replace(/_/g, ' ')}
+                        </Badge>
+                        <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/10 text-primary">
+                          <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <Badge variant="outline" className={cn(
-                        "font-black text-[9px] uppercase px-3 py-1 border-2",
-                        sub.status === KYC_STATUS.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-                        sub.status === KYC_STATUS.ACTION_REQUIRED ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                        'bg-blue-50 text-blue-700 border-blue-100'
-                      )}>
-                        {sub.status === KYC_STATUS.APPROVED ? 'SUCCESSFULLY AUTHORIZED' : sub.status?.replace(/_/g, ' ')}
-                      </Badge>
-                      <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/10 text-primary">
-                        <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>
-                      </Button>
-                    </div>
-                  </div>
                 ))
               ) : (
                 <div className="text-center py-20 bg-slate-50/30 rounded-2xl">

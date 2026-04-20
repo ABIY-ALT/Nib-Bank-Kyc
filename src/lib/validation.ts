@@ -69,11 +69,15 @@ export const CreateUserSchema = z.object({
     .string()
     .trim()
     .min(1, 'Phone number required')
-    .transform((value) => value.replace(/[\s()-]/g, ''))
-    .refine(
-      (val) => /^\+?[0-9]{7,15}$/.test(val),
-      'Invalid phone number format'
-    ),
+    .refine((val) => {
+      try {
+        const { parsePhoneNumber } = require('libphonenumber-js');
+        const phoneNumber = parsePhoneNumber(val, 'ET');
+        return phoneNumber.isValid();
+      } catch (e) {
+        return false;
+      }
+    }, 'Institutional policy: Provide a valid phone number (e.g. +251...)'),
   branchId: z.string().nullable().optional(),
   districtName: z.string().nullable().optional(),
   role: z.string().min(1, 'Role assignment required'),

@@ -164,25 +164,15 @@ export async function POST(req: Request) {
     }
 
     // Generate new access token (15m expiry)
+    // SECURITY FIX #3: Minimal JWT payload - only essential claims
     const nowSeconds = Math.floor(Date.now() / 1000);
     const absoluteLimit = nowSeconds + (8 * 60 * 60);
     const currentVersion = Math.floor(user.updatedAt.getTime() / 1000);
 
-    const activeRoleNames = (user.roles ?? [])
-      .filter((ur: any) => ur.role?.active)
-      .map((ur: any) => ur.role?.name || '');
-    const roleName = activeRoleNames.includes('SUPER_ADMIN')
-      ? 'SUPER_ADMIN'
-      : (activeRoleNames[0] || 'UNASSIGNED');
-
     const newAccessToken = jwt.sign(
       {
         id: user.id,
-        email: user.email,
-        role: roleName,
         sid: user.sessionId,
-        ip: clientIp,
-        ua: uaHash,
         v: currentVersion,
         abs: absoluteLimit,
         needsPasswordChange: user.needsPasswordChange

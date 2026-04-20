@@ -39,5 +39,5 @@ export function isValidInstitutionalLoginInput(value: string) {
     return false;
   }
 
-  return /^[a-z0-9]+(?:\.[a-z0-9]+)+$/.test(localPart);
+  return /^[a-z0-9]+(?:\.[a-z0-9]+)*$/.test(localPart);
 }

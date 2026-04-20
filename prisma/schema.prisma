@@ -43,6 +43,8 @@ model User {
   assignedCases       KYC[]      @relation("AssignedTo")
   uploadedMemos       Memo[]
   branch              Branch?    @relation(fields: [branchId], references: [id])
+  passwordResetTokens PasswordResetToken[]
+  sessions            Session[]
 }
 
 model Role {
@@ -131,6 +133,7 @@ model Memo {
   name         String
   type         String
   fileUrl      String
+  mimeType     String   @default("application/octet-stream")
   kycId        String
   kyc          KYC      @relation(fields: [kycId], references: [id])
   uploadedById String
@@ -185,4 +188,80 @@ model FollowUpVerification {
   result       String?
   remarks      String?
   status       String   @default("PENDING")
+}
+
+model PasswordResetToken {
+  id             String   @id @default(cuid())
+  userId         String
+  tokenHash      String   @unique
+  expiresAt      DateTime
+  used           Boolean  @default(false)
+  usedAt         DateTime?
+  authorizerId   String?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Session {
+  id                    String   @id @default(cuid())
+  userId                String
+  deviceId              String
+  deviceName            String?
+  userAgent             String?
+  ipAddress             String?
+  currentRefreshTokenId String
+  refreshTokenHash     String
+  refreshTokenFamily   String
+  isActive              Boolean  @default(true)
+  expiresAt             DateTime
+  revokedAt            DateTime?
+  revokeReason         String?
+  lastActivityAt        DateTime @default(now())
+  sessionNumber         Int
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User                   @relation(fields: [userId], references: [id])
+  auditLogs             SessionAuditLog[]
+  rotations             RefreshTokenRotation[]
+
+  @@index([userId])
+  @@index([deviceId])
+}
+
+model SessionAuditLog {
+  id        String   @id @default(cuid())
+  sessionId String
+  event     String
+  details   String?
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model RefreshTokenRotation {
+  id            String   @id @default(cuid())
+  sessionId     String
+  oldTokenId    String
+  newTokenId    String
+  tokenFamily   String
+  ipAddress     String?
+  rotatedAt     DateTime @default(now())
+  reuseDetected Boolean  @default(false)
+
+  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model TokenBlacklist {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }

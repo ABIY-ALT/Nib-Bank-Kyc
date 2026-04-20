@@ -7,6 +7,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { getServerSession } from './auth-server';
 import { createAuditLog } from './audit';
+import { isBreachedPassword } from '@/lib/breached-password';
 
 /**
  * Institutional Security: Resets user password.
@@ -61,6 +62,12 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
 
     if (!newPassword || newPassword.length < 8) {
       return { success: false, error: 'Institutional policy: Minimum 8 characters.' };
+    }
+
+    // FINAL SECURITY GATE: Breached Password Check
+    const breached = await isBreachedPassword(newPassword);
+    if (breached) {
+      return { success: false, error: 'SECURITY ALERT: This password was found in a public data breach. Please choose a unique credential.' };
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAuthentication, successResponse, unauthorizedResponse } from "@/lib/api-security";
+import { revokeAllUserSessions } from "@/lib/concurrent-session-manager";
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -8,12 +9,17 @@ const IS_PROD = process.env.NODE_ENV === 'production';
  * Institutional Logout Gateway.
  * Implements server-side session revocation via token version rotation.
  * Requires authentication.
+ * 
+ * SECURITY FIX #7: Proper concurrent session termination
  */
 export async function POST(request: Request) {
   try {
     const session = await verifyAuthentication(request);
     
     if (session) {
+      // ===== SECURITY: Revoke all sessions for user =====
+      await revokeAllUserSessions(session.id, 'USER_LOGOUT');
+
       // Clear session data and invalidate all tokens
       await prisma.user.update({
         where: { id: session.id },

@@ -19,7 +19,6 @@ import {
   ArrowLeft
 } from "lucide-react";
 import { resetUserPassword } from '@/actions/users';
-import { tempPasswordRegistry } from '@/lib/temp-password-registry';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/use-permissions';
 import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
@@ -32,7 +31,7 @@ export default function AdminPasswordResetPage() {
   
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ tempPass: string, name: string } | null>(null);
+  const [result, setResult] = useState<boolean>(false);
 
   useEffect(() => {
     if (!permissionsLoading && !isSuperAdmin) {
@@ -45,29 +44,21 @@ export default function AdminPasswordResetPage() {
     if (!email.trim() || !currentUser) return;
 
     setLoading(true);
-    setResult(null);
+    setResult(false);
     try {
-      const res = await resetUserPassword(email, currentUser.id);
+      const res = await resetUserPassword(email);
       if (res.success) {
-        setResult({ tempPass: res.tempPassword!, name: res.userName! });
-        
-        // Persist to session registry for hover view in User Directory
-        tempPasswordRegistry.add(email, res.tempPassword!);
-        
-        toast({ title: "Successful", description: `Credential rotated for ${res.userName}.` });
+        setResult(true);
+        setEmail('');
+        toast({ title: "Successful", description: res.message });
       } else {
-        toast({ variant: "destructive", title: "Reset Denied", description: res.error });
+        toast({ variant: "destructive", title: "Reset Failed", description: res.error });
       }
     } catch (e) {
       toast({ variant: "destructive", title: "System Fault", description: "Internal security service error." });
     } finally {
       setLoading(false);
     }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({ title: "Successful", description: "Credential saved to clipboard." });
   };
 
   if (permissionsLoading) {
@@ -141,32 +132,15 @@ export default function AdminPasswordResetPage() {
                   <UserCheck className="w-8 h-8" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-black uppercase text-emerald-600 tracking-widest leading-none">Discovery Successful</p>
-                  <p className="text-2xl font-black text-foreground mt-1">{result.name}</p>
+                  <p className="text-[11px] font-black uppercase text-emerald-600 tracking-widest leading-none">Reset Initiated</p>
+                  <p className="text-2xl font-black text-foreground mt-1">Password reset link sent</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
-                <div className="space-y-3">
-                  <Label className="text-[11px] font-black uppercase text-emerald-600 tracking-widest">Generated Temporary Credential</Label>
-                  <div className="flex items-center gap-4 bg-white p-5 rounded-2xl border border-emerald-200 shadow-sm group">
-                    <code className="text-3xl font-mono font-black text-[#B89334] tracking-[0.2em] flex-1 text-center">{result.tempPass}</code>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => copyToClipboard(result.tempPass)}
-                      className="h-14 w-14 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-all"
-                    >
-                      <Copy className="w-6 h-6" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-emerald-100 flex gap-5 shadow-sm">
-                  <AlertCircle className="w-6 h-6 text-emerald-500 shrink-0" />
-                  <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                    This password is valid for one-time use. The system will force a rotation upon the next login attempt at the Gateway.
-                  </p>
-                </div>
+              <div className="p-6 bg-white rounded-2xl border border-emerald-100 shadow-sm">
+                <p className="text-sm text-slate-600 leading-relaxed font-medium">
+                  A password reset link has been sent to the email address. The link is valid for 15 minutes.
+                </p>
               </div>
             </div>
           )}

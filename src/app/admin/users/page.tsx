@@ -81,9 +81,8 @@ import { getBranches, getDistricts } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
 import { USER_STATUS } from '@/lib/kyc-data';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useCopyPassword } from '@/hooks/use-copy-password';
 import { cn } from '@/lib/utils';
-import { tempPasswordRegistry } from '@/lib/temp-password-registry';
-import { TempPasswordModal } from '@/components/admin/temp-password-modal';
 import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
 
 const HQ_ONLY_ROLES = new Set([
@@ -113,19 +112,15 @@ const formatRoleLabel = (role?: string) => role?.replace(/_/g, ' ') || 'Unassign
 // Memoized UserTableRow component to prevent unnecessary re-renders
 const UserTableRow = memo(({ 
   user, 
-  tempPass,
   onEdit, 
   onReset, 
   onToggleStatus,
-  onShowCredential,
   isAdminUser,
 }: {
   user: any;
-  tempPass: string | null;
   onEdit: (user: any) => void;
   onReset: (user: any) => void;
   onToggleStatus: (user: any) => void;
-  onShowCredential: (user: any, password: string) => void;
   isAdminUser: boolean;
 }) => (
   <TableRow className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
@@ -137,23 +132,10 @@ const UserTableRow = memo(({
         <div className="flex flex-col">
           <div className="flex items-center gap-3">
             <span className={cn(
-              "font-black text-slate-900 text-lg leading-none",
-              tempPass && "text-[#B89334] underline decoration-dotted decoration-[#B89334]/50"
+              "font-black text-slate-900 text-lg leading-none"
             )}>
               {user.firstName} {user.lastName}
             </span>
-            {tempPass && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onShowCredential(user, tempPass)}
-                className="h-7 px-3 text-[10px] font-black uppercase text-[#B89334] bg-[#B89334]/5 hover:bg-[#B89334]/10 rounded-full gap-1.5"
-                title="Click to view temporary password"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                View Credential
-              </Button>
-            )}
           </div>
           <div className="flex items-center gap-2 mt-2">
             <Mail className="w-3.5 h-3.5 text-slate-300" />
@@ -259,12 +241,12 @@ export default function UserManagementPage() {
   const [userToReset, setUserToReset] = useState<any | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   
-  // Temp Password Modal State
-  const [isTempPasswordModalOpen, setIsTempPasswordModalOpen] = useState(false);
-  const [tempPasswordModalData, setTempPasswordModalData] = useState<{
-    user: any;
-    password: string;
-  } | null>(null);
+  // Temp Password Modal State - DEPRECATED
+  // const [isTempPasswordModalOpen, setIsTempPasswordModalOpen] = useState(false);
+  // const [tempPasswordModalData, setTempPasswordModalData] = useState<{
+  //   user: any;
+  //   password: string;
+  // } | null>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRoleFilter, setSelectedRoleFilter] = useState(ALL_ROLES_FILTER);
@@ -272,6 +254,36 @@ export default function UserManagementPage() {
   const itemsPerPage = 10;
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
   const [phoneNumberError, setPhoneNumberError] = useState('');
+  
+  // Credential Reveal State
+  const [isCredentialRevealOpen, setIsCredentialRevealOpen] = useState(false);
+  const [revealedCredential, setRevealedCredential] = useState<{
+    fullName: string;
+    email: string;
+    password: string;
+    type: 'PROVISION' | 'RESET';
+  } | null>(null);
+
+  // Use the reusable copy password hook
+  const { isCopying: isCopyingPassword, copySucceeded, copyPassword } = useCopyPassword();
+  
+  // Lifecycle safety: log when copy is active during dialog state changes
+  useEffect(() => {
+    if (isCopyingPassword && !isCredentialRevealOpen) {
+      console.warn('[UserManagement] ⚠️ WARNING: Copy operation active but dialog is closing!');
+    }
+  }, [isCredentialRevealOpen, isCopyingPassword]);
+
+  const handleCopyRevealedPassword = useCallback(async () => {
+    if (!revealedCredential?.password) {
+      console.log('[UserManagement] No password available to copy');
+      return;
+    }
+
+    console.log('[UserManagement] Copy initiated by user (manual, NOT automatic)');
+    await copyPassword(revealedCredential.password);
+  }, [revealedCredential?.password, copyPassword]);
+
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const canManageUsers = hasPermission('USER_CREATE');
 
@@ -328,14 +340,6 @@ export default function UserManagementPage() {
       router.push('/');
     }
   }, [canManageUsers, permissionsLoading, router]);
-
-  useEffect(() => {
-    users.forEach((userRecord) => {
-      if (!userRecord.needsPasswordChange) {
-        tempPasswordRegistry.remove(userRecord.email);
-      }
-    });
-  }, [users]);
 
   const loadInitialData = useCallback(async () => {
     setInitialLoading(true);
@@ -397,7 +401,6 @@ export default function UserManagementPage() {
       })
       .map((user) => ({
         user,
-        tempPass: user.needsPasswordChange ? tempPasswordRegistry.get(user.email) : null,
         isAdminUser: user.roles?.some((roleEntry: any) => roleEntry.role?.name === 'SUPER_ADMIN'),
       }))
       .sort((left, right) => {
@@ -488,21 +491,20 @@ export default function UserManagementPage() {
       });
       
       if (res.success) {
-        if (res.tempPassword) {
-          tempPasswordRegistry.add(res.user.email, res.tempPassword);
-          setTempPasswordModalData({
-            user: {
-              firstName: formData.firstName,
-              lastName: formData.lastName,
-              email: res.user.email
-            },
-            password: res.tempPassword
-          });
-          setIsTempPasswordModalOpen(true);
-        }
         setIsDialogOpen(false);
         refreshUsers();
-        toast({ title: "Successful" });
+        
+        if (res.tempPass) {
+          setRevealedCredential({
+            fullName: `${formData.firstName} ${formData.lastName}`,
+            email: (formData.email || generatedEmailPreview).toLowerCase().trim(),
+            password: res.tempPass,
+            type: 'PROVISION'
+          });
+          setTimeout(() => setIsCredentialRevealOpen(true), 250);
+        } else {
+          toast({ title: "Profile Updated" });
+        }
       } else {
         throw new Error(res.error);
       }
@@ -533,46 +535,48 @@ export default function UserManagementPage() {
     setIsResetConfirmOpen(true);
   }, []);
 
-  const handleShowCredential = useCallback((user: any, password: string) => {
-    setTempPasswordModalData({
-      user,
-      password
-    });
-    setIsTempPasswordModalOpen(true);
-  }, []);
-
   const handleConfirmReset = useCallback(async () => {
     if (!userToReset || !currentUser) return;
-    setIsResetConfirmOpen(false);
+
+    console.log('[UserManagement] Reset operation started for user:', userToReset.email);
     setIsResetting(true);
+
     try {
-      const res = await resetUserPassword(userToReset.email, currentUser.id);
+      console.log('[UserManagement] Calling resetUserPassword API');
+      const res = await resetUserPassword(userToReset.email);
+      console.log('[UserManagement] Reset API response:', res);
+      
+      setIsResetConfirmOpen(false);
+
       if (res.success) {
-        tempPasswordRegistry.add(userToReset.email, res.tempPassword!);
-        // Show the temporary password modal immediately
-       setTimeout(() => {
-        setTempPasswordModalData({
-          user: userToReset,
-          password: res.tempPassword!
-        });
-        setIsTempPasswordModalOpen(true);
-      }, 50);
-        
-        // Delay data refresh to avoid UI freeze (let modal display first)
-        // No need to call loadData() immediately - modal is self-contained
-        toast({ 
-          title: "Credential Rotated", 
-          description: `Temporary password displayed. User must change on next login.` 
-        });
+        if (res.tempPass) {
+          console.log('[UserManagement] Setting revealed credential with temp password');
+          setRevealedCredential({
+            fullName: `${userToReset.firstName} ${userToReset.lastName}`,
+            email: userToReset.email,
+            password: res.tempPass,
+            type: 'RESET'
+          });
+          console.log('[UserManagement] Opening credential reveal modal');
+          setTimeout(() => setIsCredentialRevealOpen(true), 250);
+        } else {
+          console.log('[UserManagement] No temp password returned, showing toast');
+          toast({
+            title: "Password Reset Processed",
+            description: res.message
+          });
+        }
       } else {
+        console.log('[UserManagement] Reset failed:', res.error);
         toast({ variant: "destructive", title: "Reset Failed", description: res.error });
       }
     } catch (e) {
+      console.error('[UserManagement] Reset operation failed:', e);
+      setIsResetConfirmOpen(false);
       toast({ variant: "destructive", title: "Reset Failed" });
     } finally {
+      console.log('[UserManagement] Reset operation complete, resetting state');
       setIsResetting(false);
-      setIsResetConfirmOpen(false);
-      setUserToReset(null);
     }
   }, [userToReset, currentUser, toast]);
 
@@ -638,20 +642,20 @@ export default function UserManagementPage() {
           <TableBody>
             {paginatedUsers.length === 0 ? (
               <TableRow><TableCell colSpan={5} className="py-32 text-center text-muted-foreground italic">No personnel records discovered.</TableCell></TableRow>
-            ) : paginatedUsers.map(({ user, tempPass, isAdminUser }) => {
-              return (
-                <UserTableRow 
-                  key={user.id} 
-                  user={user} 
-                  tempPass={tempPass}
+            ) : (
+              paginatedUsers.map(({ user, isAdminUser }) => {
+                return (
+                  <UserTableRow 
+                    key={user.id} 
+                    user={user}
                   onEdit={handleOpenDialog}
                   onReset={handleInitiateReset}
                   onToggleStatus={handleToggleStatus}
-                  onShowCredential={handleShowCredential}
                   isAdminUser={!!isAdminUser}
                 />
               );
-            })}
+            })
+            )}
           </TableBody>
         </Table>
 
@@ -870,22 +874,72 @@ export default function UserManagementPage() {
       </AlertDialog>
     
 
-      {/* TEMPORARY PASSWORD DISPLAY MODAL */}
-      {tempPasswordModalData && (
-       <TempPasswordModal
-  open={isTempPasswordModalOpen}
-  onOpenChange={(open) => {
-    setIsTempPasswordModalOpen(open);
-    if (!open) {
-      // Unmount the modal completely after it closes
-      setTempPasswordModalData(null);
-    }
-  }}
-  userName={`${tempPasswordModalData.user.firstName} ${tempPasswordModalData.user.lastName}`}
-  tempPassword={tempPasswordModalData.password}
-  email={tempPasswordModalData.user.email}
-/>
-      )}
+      <Dialog 
+        open={isCredentialRevealOpen} 
+        onOpenChange={(open) => {
+          console.log('[UserManagement] Dialog state changing:', { open, isCredentialRevealOpen });
+          setIsCredentialRevealOpen(open);
+          if (!open) {
+            console.log('[UserManagement] Dialog closed, scheduling credential cleanup');
+            setTimeout(() => {
+              console.log('[UserManagement] Clearing revealed credential');
+              setRevealedCredential(null);
+            }, 300);
+          }
+        }}
+      >
+        <DialogContent 
+          className="max-w-[400px] rounded-[24px] p-0 overflow-hidden border-none shadow-2xl bg-white"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <div className="absolute top-0 inset-x-0 h-1.5 bg-[#B89334]" />
+          
+          <div className="p-8 space-y-6">
+            <div className="space-y-1">
+              <DialogTitle className="text-xl font-black text-slate-900 tracking-tight">
+                Temporary Password
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 font-bold text-xs uppercase tracking-widest">
+                Copy the one-time password below.
+              </DialogDescription>
+            </div>
+
+            <div className="relative group bg-slate-50 rounded-2xl p-5 border border-slate-100">
+              <div className="w-full bg-white px-5 py-4 rounded-xl border border-primary/20 flex items-center justify-between shadow-sm">
+                <span className="text-lg font-black text-primary font-mono tracking-widest">
+                  {revealedCredential?.password}
+                </span>
+                <Button 
+                  type="button"
+                  onClick={handleCopyRevealedPassword}
+                  disabled={isCopyingPassword}
+                  variant={copySucceeded ? 'default' : 'ghost'} 
+                  size="icon" 
+                  className="h-10 w-10 rounded-lg hover:bg-primary/10 text-primary"
+                  title={copySucceeded ? 'Copied' : 'Copy to clipboard'}
+                >
+                  {isCopyingPassword ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : copySucceeded ? (
+                    <CheckCircle2 className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <Button 
+              type="button"
+              onClick={() => setIsCredentialRevealOpen(false)}
+              className="w-full bg-slate-900 hover:bg-black text-white font-black h-12 rounded-xl"
+            >
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -162,6 +162,15 @@ export function UserProfileDialog({ children }: { children: React.ReactNode }) {
                 </Label>
                 <p className="text-sm font-black text-slate-700">{user.branchName || 'Institutional Headquarters'}</p>
               </div>
+
+              {user.districtName && (
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2">
+                    Regional District
+                  </Label>
+                  <p className="text-sm font-black text-slate-700">{user.districtName} District</p>
+                </div>
+              )}
             </div>
           </div>
 
