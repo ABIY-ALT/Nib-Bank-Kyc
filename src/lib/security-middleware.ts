@@ -29,9 +29,6 @@ export async function validateRequestSize(req: NextRequest): Promise<boolean> {
 
   const size = parseInt(contentLength, 10);
   if (size > MAX_REQUEST_SIZE) {
-    console.error(
-      `[Security Governance] Request exceeds max size: ${(size / 1024 / 1024).toFixed(2)}MB`
-    );
     return false;
   }
   return true;

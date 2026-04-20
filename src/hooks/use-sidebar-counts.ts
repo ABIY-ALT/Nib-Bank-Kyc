@@ -58,7 +58,6 @@ export function useSidebarCounts(user: UserProfile | null) {
           setCounts(res);
         }
       } catch (error) {
-        console.error("Failed to fetch sidebar counts:", error);
       } finally {
         scheduleNextPoll();
       }

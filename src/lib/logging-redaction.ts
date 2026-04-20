@@ -120,19 +120,15 @@ export function redactObject(
  */
 export const safeLog = {
   debug: (message: string, data?: any) => {
-    console.debug(message, redactObject(data));
   },
 
   info: (message: string, data?: any) => {
-    console.info(message, redactObject(data));
   },
 
   warn: (message: string, data?: any) => {
-    console.warn(message, redactObject(data));
   },
 
   error: (message: string, data?: any) => {
-    console.error(message, redactObject(data));
   },
 };
 

@@ -65,14 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(null);
             }
           } catch (e) {
-            console.error("[Auth] Session JSON parse failure:", e);
             setUser(null);
           }
         } else {
           setUser(null);
         }
       } catch (e) {
-        console.error("Session hydration failed:", e);
         setUser(null);
       } finally {
         setLoading(false);
@@ -107,7 +105,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         data = JSON.parse(text);
       } catch (e) {
-        console.error("[Auth] Login JSON parse failure:", e);
       }
     }
 
@@ -130,7 +127,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch (e) {
-      console.error("Logout error:", e);
     }
     setUser(null);
     window.location.href = '/login';

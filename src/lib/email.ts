@@ -21,7 +21,6 @@ export async function sendPasswordResetEmail(
 
   // If SMTP not configured, log reset link to console for development.
   if (!smtpHost) {
-    console.info('[Email] SMTP not configured. Reset link (for development):', resetLink);
     return false;
   }
 

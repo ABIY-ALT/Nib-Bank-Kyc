@@ -270,17 +270,13 @@ export default function UserManagementPage() {
   // Lifecycle safety: log when copy is active during dialog state changes
   useEffect(() => {
     if (isCopyingPassword && !isCredentialRevealOpen) {
-      console.warn('[UserManagement] ⚠️ WARNING: Copy operation active but dialog is closing!');
     }
   }, [isCredentialRevealOpen, isCopyingPassword]);
 
   const handleCopyRevealedPassword = useCallback(async () => {
     if (!revealedCredential?.password) {
-      console.log('[UserManagement] No password available to copy');
       return;
     }
-
-    console.log('[UserManagement] Copy initiated by user (manual, NOT automatic)');
     await copyPassword(revealedCredential.password);
   }, [revealedCredential?.password, copyPassword]);
 
@@ -537,45 +533,35 @@ export default function UserManagementPage() {
 
   const handleConfirmReset = useCallback(async () => {
     if (!userToReset || !currentUser) return;
-
-    console.log('[UserManagement] Reset operation started for user:', userToReset.email);
     setIsResetting(true);
 
     try {
-      console.log('[UserManagement] Calling resetUserPassword API');
       const res = await resetUserPassword(userToReset.email);
-      console.log('[UserManagement] Reset API response:', res);
       
       setIsResetConfirmOpen(false);
 
       if (res.success) {
         if (res.tempPass) {
-          console.log('[UserManagement] Setting revealed credential with temp password');
           setRevealedCredential({
             fullName: `${userToReset.firstName} ${userToReset.lastName}`,
             email: userToReset.email,
             password: res.tempPass,
             type: 'RESET'
           });
-          console.log('[UserManagement] Opening credential reveal modal');
           setTimeout(() => setIsCredentialRevealOpen(true), 250);
         } else {
-          console.log('[UserManagement] No temp password returned, showing toast');
           toast({
             title: "Password Reset Processed",
             description: res.message
           });
         }
       } else {
-        console.log('[UserManagement] Reset failed:', res.error);
         toast({ variant: "destructive", title: "Reset Failed", description: res.error });
       }
     } catch (e) {
-      console.error('[UserManagement] Reset operation failed:', e);
       setIsResetConfirmOpen(false);
       toast({ variant: "destructive", title: "Reset Failed" });
     } finally {
-      console.log('[UserManagement] Reset operation complete, resetting state');
       setIsResetting(false);
     }
   }, [userToReset, currentUser, toast]);
@@ -877,12 +863,9 @@ export default function UserManagementPage() {
       <Dialog 
         open={isCredentialRevealOpen} 
         onOpenChange={(open) => {
-          console.log('[UserManagement] Dialog state changing:', { open, isCredentialRevealOpen });
           setIsCredentialRevealOpen(open);
           if (!open) {
-            console.log('[UserManagement] Dialog closed, scheduling credential cleanup');
             setTimeout(() => {
-              console.log('[UserManagement] Clearing revealed credential');
               setRevealedCredential(null);
             }, 300);
           }

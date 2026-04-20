@@ -309,7 +309,7 @@ export default function SubmissionDetails() {
         setSubmission(sub);
         setSettings(s);
       } catch (error) {
-        console.error("Load failed:", error);
+
       } finally {
         setLoading(false);
       }

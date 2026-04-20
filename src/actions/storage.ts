@@ -83,7 +83,6 @@ export async function getStorageInventory(params: {
       fileUrl: `/api/memos/${signDownloadToken(m.id)}` // Indirect route
     }));
   } catch (error) {
-    console.error('[Vault Storage] Fetch Error:', error);
     return [];
   }
 }
@@ -104,7 +103,6 @@ export async function deleteInstitutionalFile(memoId: string) {
     try {
       await fs.unlink(filePath);
     } catch (err) {
-      console.warn(`[Vault Storage] Physical file missing at path: ${memo.fileUrl}. Proceeding with record purge.`);
     }
 
     // 2. Delete the record from the database
@@ -118,7 +116,6 @@ export async function deleteInstitutionalFile(memoId: string) {
     
     return { success: true, kycId: memo.kycId };
   } catch (error: any) {
-    console.error('[Vault Storage] Purge Failure:', error);
     // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
     return { success: false, error: getSafeErrorMessage(error) };
   }

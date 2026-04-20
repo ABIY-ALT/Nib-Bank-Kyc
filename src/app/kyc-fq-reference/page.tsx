@@ -130,7 +130,6 @@ export default function KYCFFQReferencePage() {
         setAccountTypes(settingsData.entityTypes);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
       toast({ variant: "destructive", title: "Error loading data" });
     } finally {
       setLoading(false);

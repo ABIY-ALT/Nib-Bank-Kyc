@@ -30,7 +30,6 @@ export async function isBreachedPassword(password: string): Promise<boolean> {
     });
 
     if (!response.ok) {
-      console.warn('[Security Tool] Breached password service unavailable');
       return false; // Fail safe (allow password if service is down)
     }
 
@@ -40,7 +39,6 @@ export async function isBreachedPassword(password: string): Promise<boolean> {
     // 3. Check if the remaining hash suffix is in the results
     return lines.some(line => line.split(':')[0] === suffix);
   } catch (error) {
-    console.error('[Security Tool] Error checking breached passwords:', error);
     return false;
   }
 }

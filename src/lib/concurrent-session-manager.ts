@@ -87,7 +87,6 @@ export async function createUserSession(
 
     return session.id;
   } catch (error) {
-    console.error('Session creation error:', error);
     throw error;
   }
 }
@@ -149,7 +148,6 @@ export async function validateSession(
 
     return { valid: true };
   } catch (error) {
-    console.error('Session validation error:', error);
     return { valid: false, error: 'Session validation failed' };
   }
 }
@@ -181,7 +179,6 @@ export async function revokeSession(
 
     return true;
   } catch (error) {
-    console.error('Session revocation error:', error);
     return false;
   }
 }
@@ -226,7 +223,6 @@ export async function revokeAllUserSessions(
 
     return result.count;
   } catch (error) {
-    console.error('Session mass revocation error:', error);
     return 0;
   }
 }
@@ -257,7 +253,6 @@ export async function getUserActiveSessions(userId: string) {
       },
     });
   } catch (error) {
-    console.error('Error fetching user sessions:', error);
     return [];
   }
 }
@@ -283,7 +278,6 @@ export async function cleanupExpiredSessions(): Promise<number> {
 
     return result.count;
   } catch (error) {
-    console.error('Error cleaning up expired sessions:', error);
     return 0;
   }
 }

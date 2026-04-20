@@ -77,7 +77,6 @@ async function internalSeedPermissions() {
     
     return true;
   } catch (error) {
-    console.error('[RBAC Engine] Silent Provisioning Fault:', error);
     return false;
   }
 }

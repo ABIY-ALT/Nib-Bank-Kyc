@@ -207,7 +207,6 @@ export default function StorageVaultPage() {
       setDistricts(d || []);
       setBranches(b || []);
     } catch (e) {
-      console.error("Metadata load failed", e);
     }
   }, []);
 
@@ -223,7 +222,6 @@ export default function StorageVaultPage() {
       });
       setInventory(data || []);
     } catch (e) {
-      console.error("Inventory fetch failed", e);
     } finally {
       setLoading(false);
     }

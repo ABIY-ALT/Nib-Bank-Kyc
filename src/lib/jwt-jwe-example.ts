@@ -59,7 +59,6 @@ export async function createEncryptedTokenWithSensitiveClaims_DO_NOT_USE(
   userEmail: string // ❌ SENSITIVE - Should never be in token
 ): Promise<string> {
   try {
-    console.warn('⚠️  Creating JWE token with sensitive claims - ANTI-PATTERN');
 
     const secret = await getSecret('JWT_SECRET');
     const encryptionKey = new TextEncoder().encode(secret.substring(0, 32)); // 256 bits
@@ -102,7 +101,6 @@ export async function createEncryptedTokenWithSensitiveClaims_DO_NOT_USE(
  */
 export async function verifyEncryptedToken_DO_NOT_USE(token: string): Promise<any> {
   try {
-    console.warn('⚠️  Verifying JWE token - ANTI-PATTERN');
 
     const secret = await getSecret('JWT_SECRET');
     const decryptionKey = new TextEncoder().encode(secret.substring(0, 32));

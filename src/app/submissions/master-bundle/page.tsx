@@ -191,7 +191,6 @@ export default function MasterBundleDownloadPage() {
                   const blob = await fileRes.blob();
                   customerFolder?.file(doc.name, blob);
                 } catch (err) {
-                  console.error(`Failed to fetch asset: ${doc.name}`);
                 }
               }
             }
@@ -277,7 +276,6 @@ Total Records:         ${filteredSubmissions.length}
 
       toast({ title: "Successful", description: `Master bundle exported with ${filteredSubmissions.length} cases organized by district, branch, and filter criteria.` });
     } catch (error) {
-      console.error('Export error:', error);
       toast({ variant: "destructive", title: "Export Failure", description: "Could not complete the master bundle export." });
     } finally {
       setIsProcessing(false);

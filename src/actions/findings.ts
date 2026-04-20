@@ -11,7 +11,6 @@ export async function getFindings() {
       orderBy: { code: 'asc' }
     });
   } catch (error) {
-    console.error('[SQL Findings] Fetch Error:', error);
     return [];
   }
 }

@@ -424,12 +424,6 @@ const quarantineLog: QuarantineRecord[] = [];
  */
 export function quarantineFile(record: QuarantineRecord): void {
   quarantineLog.push(record);
-  console.warn('⚠️ FILE QUARANTINED:', {
-    filename: record.filename,
-    threats: record.threats,
-    reason: record.reason,
-    uploadedBy: record.uploadedBy,
-  });
 }
 
 /**

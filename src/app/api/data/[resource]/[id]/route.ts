@@ -111,7 +111,7 @@ export async function GET(
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
-    console.error('Data API GET error:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -191,7 +191,7 @@ export async function PATCH(
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
-    console.error('Data API PATCH error:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -239,7 +239,7 @@ export async function DELETE(
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
-    console.error('Data API DELETE error:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

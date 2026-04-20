@@ -280,7 +280,6 @@ async function refreshAccessToken() {
     const data = await response.json();
     setAccessToken(data.accessToken, data.expiresIn);
   } catch (error) {
-    console.error('Token refresh failed:', error);
     window.location.href = '/login';
   }
 }
@@ -341,7 +340,6 @@ export function ProtectedDashboard() {
         const userData = await response.json();
         setUser(userData);
       } catch (error) {
-        console.error('Failed to fetch user:', error);
       } finally {
         setLoading(false);
       }

@@ -77,7 +77,6 @@ export default function ExceptionalCasesPage() {
       setSubmissions(exceptional || []);
       setAvailableCases(all || []);
     } catch (error) {
-      console.error("Discovery Failure:", error);
     } finally {
       setLoading(false);
     }

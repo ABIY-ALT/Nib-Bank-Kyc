@@ -106,7 +106,6 @@ export class InstitutionalHttpClient {
         try {
           data = JSON.parse(text);
         } catch (e) {
-          console.error('[Institutional HTTP Client] Malformed JSON response:', url);
           data = text as T;
         }
       } else {
@@ -124,7 +123,6 @@ export class InstitutionalHttpClient {
         error: isValid ? undefined : `Institutional Gateway Error: ${response.status}`,
       };
     } catch (error: any) {
-      console.error('[Institutional HTTP Client] Request Fault:', { url, error: error.message });
       return {
         ok: false,
         status: 0,

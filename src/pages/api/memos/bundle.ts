@@ -118,7 +118,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Content-Disposition', `attachment; filename="${bundleName}"`);
 
     archive.on('error', (error) => {
-      console.error('ARCHIVE_ERROR', error);
       if (!res.headersSent) {
         res.status(500).end();
       }
@@ -164,11 +163,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       submissionId: memos[0].kycId,
       bundleName,
     }).catch((e) => {
-      console.error('BUNDLE_LOG_FAILED', e);
     });
 
   } catch (error: any) {
-    console.error('ZIP_HANDLER_FATAL', error);
 
     if (!res.headersSent) {
       res.status(500).json({

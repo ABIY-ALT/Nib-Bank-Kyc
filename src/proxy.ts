@@ -218,7 +218,6 @@ export async function proxy(req: NextRequest) {
 
     // SINGLE SESSION ENFORCEMENT & CONCURRENT LOGIN CONTROL (VULN #7)
     if (userWithDetails.sessionId !== payload.sid) {
-       console.warn(`[AUTH] Session conflict: User=${userWithDetails.email} CookieSID=${payload.sid} DbSID=${userWithDetails.sessionId}`);
        const response = NextResponse.redirect(new URL('/login?reason=session_conflict', req.url));
        response.cookies.set('nib-auth-token', '', { httpOnly: true, secure: IS_PROD, sameSite: 'strict', expires: new Date(0), path: '/' });
        return response;

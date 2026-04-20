@@ -54,7 +54,7 @@ export async function GET(
 
     return NextResponse.json({ data: records });
   } catch (error) {
-    console.error('Data API error:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -102,7 +102,7 @@ export async function POST(
 
     return NextResponse.json({ data: record }, { status: 201 });
   } catch (error) {
-    console.error('Data API error:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

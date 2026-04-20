@@ -300,7 +300,6 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
         setBlobUrl(url);
       } catch (err) {
         if (!active) return;
-        console.error("Fetch preview error:", err);
         setError(true);
         setIsLoaded(true);
       }
@@ -515,7 +514,6 @@ export function DocumentPreviewViewer({
         // setIsLoaded will be set by the iframe/img onLoad
       } catch (err) {
         if (!active) return;
-        console.error("Fetch preview error:", err);
         setError("Network error or security block prevented loading the preview.");
         setIsLoaded(true);
       }
@@ -743,7 +741,6 @@ export function DocumentPreviewViewer({
   const shouldShowLoader = (isPdf || isImage) && !isLoaded && !error;
 
   const handlePdfError = (e: any) => {
-    console.error("PDF loading error:", e);
     setError("Failed to load PDF preview. The file might be corrupted or the URL may be inaccessible.");
     setIsLoaded(true); // Stop the loader
   };

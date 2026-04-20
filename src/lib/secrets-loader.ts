@@ -64,7 +64,6 @@ class SecretsLoader {
         return { value: response.SecretString };
       }
     } catch (error) {
-      console.error('Failed to load secrets from AWS:', error);
       throw error;
     }
   }
@@ -110,9 +109,6 @@ class SecretsLoader {
       try {
         secrets = await this.loadFromAwsSecretsManager();
       } catch (error) {
-        console.error(
-          'AWS Secrets Manager unavailable, falling back to environment variables'
-        );
         secrets = this.loadFromEnvironment();
       }
     } else {
@@ -150,7 +146,6 @@ class SecretsLoader {
    */
   clearCache(): void {
     this.cache = null;
-    console.log('✓ Secrets cache cleared');
   }
 
   /**

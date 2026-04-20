@@ -60,25 +60,19 @@ const TempPasswordModalComponent = ({
   };
 
   const handleCopyPassword = useCallback(async () => {
-    console.log('[TempPasswordModal] Copy operation started');
     
     if (isCopying) {
-      console.log('[TempPasswordModal] Copy already in progress, ignoring click');
       return;
     }
     
     try {
       setIsCopying(true);
       setCopied(false);
-      console.log('[TempPasswordModal] Loading state set to true');
       
       if (!navigator.clipboard?.writeText) {
         throw new Error('Clipboard API not available in this browser');
       }
-      
-      console.log('[TempPasswordModal] Writing to clipboard...');
       await navigator.clipboard.writeText(tempPassword);
-      console.log('[TempPasswordModal] Successfully copied to clipboard');
       
       setCopied(true);
       toast({
@@ -91,12 +85,10 @@ const TempPasswordModalComponent = ({
       }
       copyTimeoutRef.current = window.setTimeout(() => {
         setCopied(false);
-        console.log('[TempPasswordModal] Copied state reset');
         copyTimeoutRef.current = null;
       }, 2000);
       
     } catch (error) {
-      console.error('[TempPasswordModal] Copy failed:', error);
       toast({
         title: 'Copy Failed',
         description: error instanceof Error ? error.message : 'Failed to copy password to clipboard',
@@ -104,7 +96,6 @@ const TempPasswordModalComponent = ({
       });
     } finally {
       setIsCopying(false);
-      console.log('[TempPasswordModal] Loading state reset, operation complete');
     }
   }, [tempPassword, toast, isCopying]);
 

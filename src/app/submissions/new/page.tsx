@@ -298,7 +298,6 @@ export default function NewSubmission() {
         const nextSettings = await getGlobalSettings();
         setSettings(nextSettings);
       } catch (error) {
-        console.error("Config load failed:", error);
       } finally {
         setLoadingConfig(false);
       }

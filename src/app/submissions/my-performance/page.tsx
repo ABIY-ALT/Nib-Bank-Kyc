@@ -115,7 +115,6 @@ export default function MyCasesPerformancePage() {
       const s = await getGlobalSettings();
       setSettings(s);
     } catch (e) {
-      console.error("Failed to load global config");
     }
   };
 

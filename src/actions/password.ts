@@ -117,7 +117,6 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
     revalidatePath('/admin/users');
     return { success: true };
   } catch (error: any) {
-    console.error('[Security Vault] Password Update Failure:', error);
     return { success: false, error: 'Institutional database fault.' };
   }
 }

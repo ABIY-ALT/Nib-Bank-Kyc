@@ -88,11 +88,6 @@ export async function createAndDistributeTempPassword(
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // ===== Log the creation (WITHOUT password) =====
-    console.log(`[SECURITY] Temporary password created for user ${userId}`, {
-      email: maskEmail(email),
-      expiresAt: expiresAt.toISOString(),
-      timestamp: new Date().toISOString(),
-    });
 
     // ===== Return password for admin to copy + share =====
     return {
@@ -103,7 +98,6 @@ export async function createAndDistributeTempPassword(
       message: `Temporary password generated. Copy the password below and share via your preferred channel (email, call, telegram, etc.).`,
     };
   } catch (error) {
-    console.error('Error creating temporary password:', error);
     return {
       success: false,
       tempPassword: '',

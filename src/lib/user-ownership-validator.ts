@@ -126,7 +126,6 @@ export async function verifyUserOwnership(
       error: 'You cannot access this user\'s data',
     };
   } catch (error) {
-    console.error('User ownership verification error:', error);
     return {
       authorized: false,
       error: 'Authorization check failed',
@@ -215,7 +214,6 @@ export async function verifyAdminAccess(
       userId: authenticatedUserId,
     };
   } catch (error) {
-    console.error('Admin access verification error:', error);
     return {
       authorized: false,
       error: 'Authorization check failed',
@@ -305,7 +303,6 @@ export async function verifyPermissionAccess(
       userId: authenticatedUserId,
     };
   } catch (error) {
-    console.error('Permission verification error:', error);
     return {
       authorized: false,
       error: 'Authorization check failed',

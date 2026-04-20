@@ -60,7 +60,6 @@ export async function getUserProfile(userId: string) {
       needsPasswordChange: user.needsPasswordChange
     };
   } catch (error) {
-    console.error('[Auth Action] Profile Retrieval Fault:', error);
     return null;
   }
 }

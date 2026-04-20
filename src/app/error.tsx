@@ -21,7 +21,6 @@ export default function Error({
     // Technical stack trace is logged server-side by Next.js by default.
     // Client-side, we capture the digest or generate a local reference.
     setTraceId(error.digest || `ERR_${Math.random().toString(36).substring(2, 8).toUpperCase()}`);
-    console.error('[Institutional Service Fault]:', error);
   }, [error]);
 
   return (

@@ -104,7 +104,6 @@ export default function DistrictMonitoringPage() {
         const data = await getSubmissions(filters);
         setSubmissions(data);
       } catch (error) {
-        console.error("Load failed:", error);
       } finally {
         setLoading(false);
       }

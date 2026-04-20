@@ -232,7 +232,6 @@ export async function POST(req: Request) {
 
     return response;
   } catch (error: any) {
-    console.error('[Refresh Endpoint] Error:', error);
     return internalErrorResponse('Token refresh failed');
   }
 }

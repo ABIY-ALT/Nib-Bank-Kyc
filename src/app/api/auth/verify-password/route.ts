@@ -58,7 +58,6 @@ export async function POST(request: Request) {
     // Password verified successfully
     return successResponse({ success: true, message: "Password verified" });
   } catch (error) {
-    console.error("[Password Verification] Error:", error);
     return NextResponse.json(
       { error: "Verification failed" },
       { status: 500 }

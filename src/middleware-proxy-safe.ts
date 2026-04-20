@@ -87,11 +87,6 @@ export function middleware(request: NextRequest) {
 
     // Log proxy detection (for debugging)
     if (proxyInfo.isProxy) {
-      console.log('[Security Middleware] Proxy detected:', {
-        cloudflare: proxyInfo.isCloudflare,
-        aws: proxyInfo.isAWS,
-        forwardedFor: proxyInfo.forwardedFor?.substring(0, 20) + '...',
-      });
     }
 
     return response;
@@ -100,7 +95,6 @@ export function middleware(request: NextRequest) {
     const fallbackResponse = NextResponse.next();
     fallbackResponse.headers.set('X-Content-Type-Options', 'nosniff');
     fallbackResponse.headers.set('X-Frame-Options', 'DENY');
-    console.error('[Security Middleware] Error applying headers:', error);
     return fallbackResponse;
   }
 }

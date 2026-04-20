@@ -62,9 +62,6 @@ export class InstitutionalHttpClient {
     
     // Validate request size
     if (Buffer.byteLength(body, 'utf8') > MAX_CONTENT_LENGTH) {
-      console.error(
-        `[HTTP Client Security] Request payload exceeds limit: ${(Buffer.byteLength(body, 'utf8') / 1024 / 1024).toFixed(2)}MB`
-      );
       return {
         ok: false,
         status: 413,
@@ -93,7 +90,6 @@ export class InstitutionalHttpClient {
     const body = JSON.stringify(data || {});
     
     if (Buffer.byteLength(body, 'utf8') > MAX_CONTENT_LENGTH) {
-      console.error('[HTTP Client Security] Request payload exceeds limit');
       return {
         ok: false,
         status: 413,
@@ -179,13 +175,6 @@ export class InstitutionalHttpClient {
       };
     } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      console.error('[HTTP Client Error]', {
-        url,
-        method: options.method || 'GET',
-        error: errorMessage,
-        timestamp: new Date().toISOString(),
-      });
 
       return {
         ok: false,

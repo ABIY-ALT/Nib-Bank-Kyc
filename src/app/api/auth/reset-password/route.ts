@@ -61,7 +61,6 @@ export async function POST(req: Request) {
       message: 'Password has been reset successfully. You can now log in.' 
     });
   } catch (error) {
-    console.error('Error resetting password:', error);
     return internalErrorResponse();
   }
 }

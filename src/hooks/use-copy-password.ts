@@ -38,7 +38,6 @@ export function useCopyPassword(): UseCopyPasswordReturn {
   // Cleanup on unmount: prevent setState on unmounted component
   useEffect(() => {
     return () => {
-      console.log('[useCopyPassword] Component unmounting, marking as not mounted');
       isMountedRef.current = false;
       
       // Abort any in-flight copy operations
@@ -56,20 +55,16 @@ export function useCopyPassword(): UseCopyPasswordReturn {
   }, []);
 
   const copyPassword = useCallback(async (password: string) => {
-    console.log('[useCopyPassword] Copy operation started');
 
     if (!isMountedRef.current) {
-      console.warn('[useCopyPassword] Copy requested but component is not mounted');
       return;
     }
 
     if (isCopying) {
-      console.log('[useCopyPassword] Copy already in progress, ignoring request');
       return;
     }
 
     if (!password) {
-      console.log('[useCopyPassword] No password provided');
       if (isMountedRef.current) {
         toast({
           title: 'Copy failed',
@@ -86,7 +81,6 @@ export function useCopyPassword(): UseCopyPasswordReturn {
 
     try {
       if (!isMountedRef.current) {
-        console.log('[useCopyPassword] Component unmounted before copy started');
         return;
       }
 
@@ -94,20 +88,15 @@ export function useCopyPassword(): UseCopyPasswordReturn {
       if (isMountedRef.current) {
         setIsCopying(true);
         setCopySucceeded(false);
-        console.log('[useCopyPassword] Loading state set to true');
       }
 
       if (!navigator.clipboard?.writeText) {
         throw new Error('Clipboard API not available in this browser');
       }
-
-      console.log('[useCopyPassword] Writing to clipboard...');
       await navigator.clipboard.writeText(password);
-      console.log('[useCopyPassword] Successfully copied to clipboard');
 
       // Check if component is still mounted AND operation wasn't aborted
       if (!isMountedRef.current || signal.aborted) {
-        console.log('[useCopyPassword] Component unmounted or operation aborted, skipping state updates');
         return;
       }
 
@@ -125,13 +114,11 @@ export function useCopyPassword(): UseCopyPasswordReturn {
       copySuccessTimeoutRef.current = window.setTimeout(() => {
         if (isMountedRef.current && !signal.aborted) {
           setCopySucceeded(false);
-          console.log('[useCopyPassword] Copy success state reset');
         }
         copySuccessTimeoutRef.current = null;
       }, 2000);
 
     } catch (error) {
-      console.error('[useCopyPassword] Copy failed:', error);
       if (isMountedRef.current && !signal.aborted) {
         toast({
           title: 'Copy failed',
@@ -143,7 +130,6 @@ export function useCopyPassword(): UseCopyPasswordReturn {
       // Only reset loading state if component is still mounted
       if (isMountedRef.current && !signal.aborted) {
         setIsCopying(false);
-        console.log('[useCopyPassword] Loading state reset, operation complete');
       }
       copyAbortRef.current = null;
     }

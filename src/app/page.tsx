@@ -90,7 +90,6 @@ export default function Dashboard() {
         setRecentSubmissions(subs);
         setSettings(globalSettings);
       } catch (error) {
-        console.error("Dashboard aggregation failed:", error);
       } finally {
         setLoading(false);
       }

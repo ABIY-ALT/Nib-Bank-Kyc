@@ -247,8 +247,6 @@ export async function POST(req: Request) {
     return response;
   } catch (error: any) {
     // Log detailed error server-side ONLY
-    console.error('[LOGIN ERROR]', error?.message || error);
-    console.error('[LOGIN ERROR STACK]', error?.stack);
     
     // Log to audit (without sending details to client)
     logInstitutionalError(error, 'AUTH_GATEWAY');

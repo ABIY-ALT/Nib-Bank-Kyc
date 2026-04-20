@@ -18,17 +18,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Ensure path is provided and is an array
     if (!filePath || !Array.isArray(filePath)) {
-      console.error('[Files API] Invalid file path:', filePath);
+
       return res.status(400).json({ error: 'Invalid file path' });
     }
 
     // Reconstruct the file path from the array
     const requestedPath = filePath.join('/');
-    console.log('[Files API] Requested path:', requestedPath);
+
 
     // Security: Prevent directory traversal attacks
     if (requestedPath.includes('..') || requestedPath.startsWith('/')) {
-      console.error('[Files API] Security violation - path traversal attempt:', requestedPath);
+
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -41,19 +41,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Construct the full file path (stored outside web root)
     const fullPath = path.join(process.cwd(), finalPath);
-    console.log('[Files API] Full path:', fullPath);
-    console.log('[Files API] CWD:', process.cwd());
+
 
     // Verify the resolved path is still within the uploads directory
     const uploadsDir = path.join(process.cwd(), uploadsDirName);
     const resolvedPath = path.resolve(fullPath);
     const resolvedUploadsDir = path.resolve(uploadsDir);
 
-    console.log('[Files API] Resolved path:', resolvedPath);
-    console.log('[Files API] Resolved uploads dir:', resolvedUploadsDir);
+
 
     if (!resolvedPath.startsWith(resolvedUploadsDir)) {
-      console.error('[Files API] Path outside uploads directory');
+
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -62,17 +60,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       await fs.access(fullPath);
       fileExists = true;
-      console.log('[Files API] File found:', fullPath);
+
     } catch (err) {
-      console.error('[Files API] File not found:', fullPath, err);
+
       
       // Try to list files in uploads directory for debugging
       try {
         const uploadsPath = path.join(process.cwd(), 'uploads');
         const files = await fs.readdir(uploadsPath);
-        console.log('[Files API] Files in uploads directory:', files);
+
       } catch (listErr) {
-        console.error('[Files API] Could not list uploads directory:', listErr);
+
       }
       
       return res.status(404).json({ error: 'File not found', path: finalPath });
@@ -86,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const stats = await fs.stat(fullPath);
 
     if (!stats.isFile()) {
-      console.error('[Files API] Path is not a file:', fullPath);
+
       return res.status(400).json({ error: 'Not a file' });
     }
 
@@ -113,7 +111,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       mimeType = mimeTypes[ext];
     }
 
-    console.log('[Files API] Serving file:', fullPath, 'MIME:', mimeType, 'Size:', stats.size);
+
 
     // Set response headers
     res.setHeader('Content-Type', mimeType);
@@ -125,7 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const fileStream = await fs.readFile(fullPath);
     res.status(200).send(fileStream);
   } catch (error) {
-    console.error('[Files API] Unexpected error:', error);
+
     // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
     const safeMessage = getSafeErrorMessage(error);
     res.status(500).json({ error: 'Internal server error', details: safeMessage });

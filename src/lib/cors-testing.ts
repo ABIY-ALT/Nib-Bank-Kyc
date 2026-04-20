@@ -282,23 +282,11 @@ export async function runAllCORSTests(): Promise<{
 
   const passed = results.filter((r) => r.passed).length;
   const failed = results.length - passed;
-
-  console.log('\n========== CORS SECURITY TEST REPORT ==========\n');
   results.forEach((result) => {
     const status = result.passed ? '✅ PASS' : '❌ FAIL';
-    console.log(`${status}: ${result.testName}`);
-    console.log(`   ${result.message}`);
     if (result.details) {
-      console.log(`   Details:`, JSON.stringify(result.details, null, 2));
     }
-    console.log();
   });
-
-  console.log(`========== SUMMARY ==========`);
-  console.log(`Total Tests: ${results.length}`);
-  console.log(`Passed: ${passed} ✅`);
-  console.log(`Failed: ${failed} ${failed > 0 ? '❌' : '✅'}`);
-  console.log(`========== END REPORT ==========\n`);
 
   return {
     allPassed: failed === 0,

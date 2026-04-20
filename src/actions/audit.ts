@@ -69,7 +69,6 @@ export async function getGlobalAuditLogs(params: {
 
     return { logs, total };
   } catch (error) {
-    console.error('[Audit Action] Fetch Error:', error);
     return { logs: [], total: 0 };
   }
 }
@@ -94,7 +93,6 @@ export async function createAuditLog(data: {
 
     // INTEGRATION: High-severity event alerting logic
     if (severity === 'CRITICAL' || severity === 'HIGH') {
-      console.warn(`[SECURITY_ALERT] ${data.action}: ${data.details} | User: ${data.userEmail} | IP: ${ipAddress}`);
       // In a production environment, this would trigger an SMTP/SMS alert to the Security Officer.
     }
 
@@ -107,6 +105,5 @@ export async function createAuditLog(data: {
       }
     });
   } catch (error) {
-    console.error('[Vault Audit] Log Failure:', error);
   }
 }

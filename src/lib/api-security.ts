@@ -67,7 +67,6 @@ export async function verifyAuthentication(request: Request) {
     const token = cookieStore.get('nib-auth-token')?.value;
 
     if (!token) {
-      console.warn('[AUTH] No nib-auth-token cookie found');
       return null;
     }
     // Auth token verification log hidden

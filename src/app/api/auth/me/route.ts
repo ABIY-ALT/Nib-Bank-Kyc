@@ -28,7 +28,6 @@ export async function GET(req: Request) {
     // Verify authentication
     const session = await verifyAuthentication(req);
     if (!session) {
-      console.warn('[AUTH] No session found in /api/auth/me');
       return unauthorizedResponse('Invalid or expired session');
     }
     // Session hydration log hidden
@@ -160,7 +159,6 @@ export async function GET(req: Request) {
 
     return response;
   } catch (error) {
-    console.error('[Session Verification] Error:', error);
     return unauthorizedResponse('Session validation failed');
   }
 }

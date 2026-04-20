@@ -68,7 +68,6 @@ export async function POST(req: Request) {
       message: 'Show this token to the user ONCE. Do not store it.',
     });
   } catch (error) {
-    console.error('Error creating reset token:', error);
     return internalErrorResponse();
   }
 }

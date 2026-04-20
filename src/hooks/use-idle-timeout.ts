@@ -66,7 +66,6 @@ export function useIdleTimeout(options: UseIdleTimeoutOptions = {}) {
         signal: controller.signal,
       });
     } catch (error) {
-      console.warn('[IdleTimeout] heartbeat failed', error);
     } finally {
       if (heartbeatAbortRef.current === controller) {
         heartbeatAbortRef.current = null;

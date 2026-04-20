@@ -55,15 +55,12 @@ export async function getServerSession() {
 
     // RULE: Account must be active and session must match (single session enforcement)
     if (!user) {
-      console.warn('[AUTH ERROR] User not found in DB for period ID:', payload.id);
       return null;
     }
     if (user.status !== 'ACTIVE') {
-      console.warn('[AUTH ERROR] User account is not active:', user.status);
       return null;
     }
     if (user.sessionId !== payload.sid) {
-      console.warn('[AUTH ERROR] Session ID mismatch. Expected:', user.sessionId, 'Got:', payload.sid);
       return null;
     }
 
@@ -81,7 +78,6 @@ export async function getServerSession() {
       role: masterRole
     } as { id: string, email: string, role: string, v: number, abs: number, iat: number, ip: string, ua: string };
   } catch (err: any) {
-    console.error('[AUTH ERROR] General session fault:', err.message);
     return null;
   }
 }

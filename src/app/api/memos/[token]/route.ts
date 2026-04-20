@@ -70,11 +70,11 @@ export async function GET(
 
       return response;
     } catch (err) {
-      console.error(`[Memo Gateway] File Access Error at ${filePath}:`, err);
+
       return forbiddenResponse('File access denied');
     }
   } catch (e) {
-    console.error('[Memo API] Security Gateway Fault:', e);
+
     return internalErrorResponse('Session validation failed');
   }
 }

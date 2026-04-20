@@ -95,7 +95,6 @@ export async function authenticateRequest(request: NextRequest) {
     };
   } catch (error) {
     // Log error for security monitoring (without sensitive data)
-    console.error('Authentication error:', error instanceof Error ? error.message : 'Unknown error');
     return null;
   }
 }

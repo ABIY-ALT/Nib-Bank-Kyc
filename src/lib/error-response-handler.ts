@@ -226,12 +226,6 @@ export async function logEndpointError(
     const errorMessage = ERROR_MESSAGES[errorCode] || ERROR_MESSAGES.SERVER_ERROR;
 
     // You could log to database here if needed
-    console.error(`[${endpoint}] Error (${errorCode}): ${errorMessage}`, {
-      userId,
-      ipAddress,
-      timestamp: new Date().toISOString(),
-    });
   } catch (err) {
-    console.error('Error logging endpoint error:', err);
   }
 }

@@ -47,9 +47,6 @@ export function getCORSConfig(): CORSConfig {
         new URL(origin);
         return true;
       } catch {
-        console.warn(
-          `[CORS] Invalid origin format in ALLOWED_ORIGINS: ${origin}`
-        );
         return false;
       }
     });
@@ -247,19 +244,12 @@ export async function corsMiddleware(
 
   // Log CORS validation in debug mode
   if (corsConfig.enableLogging) {
-    console.log('[CORS] Request:', {
-      method: request.method,
-      origin: request.headers.get('origin'),
-      host: request.headers.get('host'),
-      pathname: request.nextUrl.pathname,
-    });
   }
 
   // Handle preflight requests
   if (isPreflightRequest(request.method)) {
     const preflightResponse = handleCORSPreflight(request, corsConfig);
     if (corsConfig.enableLogging) {
-      console.log('[CORS] Preflight response:', preflightResponse.status);
     }
     return preflightResponse;
   }
@@ -271,9 +261,6 @@ export async function corsMiddleware(
   // If CORS is configured but origin is invalid, reject
   if (corsConfig.allowedOrigins.length > 0 && origin && !validatedOrigin) {
     if (corsConfig.enableLogging) {
-      console.warn(
-        `[CORS] Request rejected - invalid origin: ${origin} from ${request.nextUrl.pathname}`
-      );
     }
     return new NextResponse('Forbidden: Invalid origin', {
       status: 403,
@@ -298,11 +285,6 @@ export async function corsMiddleware(
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 
   if (corsConfig.enableLogging) {
-    console.log('[CORS] Response headers applied:', {
-      method: request.method,
-      status: response.status,
-      hasAccessControlOrigin: response.headers.has('Access-Control-Allow-Origin'),
-    });
   }
 
   return response;
@@ -367,9 +349,6 @@ export function validateCredentialSharing(config?: CORSConfig): boolean {
 
   // Credentials require explicit allowed origins (no wildcard)
   if (corsConfig.allowedOrigins.length === 0) {
-    console.warn(
-      '[CORS] WARNING: Credentials enabled but no ALLOWED_ORIGINS configured. This may allow unauthorized access.'
-    );
     return false;
   }
 

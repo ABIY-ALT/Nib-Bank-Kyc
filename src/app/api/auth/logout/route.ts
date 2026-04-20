@@ -40,10 +40,9 @@ export async function POST(request: Request) {
           ipAddress: (request.headers.get('x-forwarded-for') || 'unknown').split(',')[0],
           details: 'User logged out successfully'
         }
-      }).catch(err => console.error('Audit log error:', err));
+      }).catch(() => {});
     }
   } catch (error) {
-    console.error("[Auth Gateway] Logout revocation failure:", error);
   }
 
   const response = successResponse({ success: true });

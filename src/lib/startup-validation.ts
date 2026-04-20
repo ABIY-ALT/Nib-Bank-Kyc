@@ -241,7 +241,6 @@ export function validateNoHardcodedSecrets(): ValidationResult['checks'][0] {
  * FAILS if ANY check fails
  */
 export async function runStartupValidations(): Promise<ValidationResult> {
-  console.log('\n✓ Skipping SECURITY VALIDATION\n');
   return {
     success: true,
     checks: [],

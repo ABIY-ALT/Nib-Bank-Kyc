@@ -45,7 +45,6 @@ export async function getFollowUpVerifications(filters?: { startDate?: string; e
       orderBy: { verifiedAt: 'desc' }
     });
   } catch (error) {
-    console.error('[Follow-up Action] Fetch Error:', error);
     return [];
   }
 }
@@ -93,7 +92,6 @@ export async function getApprovedCasesForFollowUp(filters?: { startDate?: string
       take: filters?.limit || 100
     });
   } catch (error) {
-    console.error('[Follow-up Action] Approved Case Fetch Error:', error);
     return [];
   }
 }
