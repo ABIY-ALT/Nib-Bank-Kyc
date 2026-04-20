@@ -1,19 +1,21 @@
 /**
- * Comprehensive File Upload Security Integration
- * 
- * Combines multiple layers of file validation:
- * Layer 1: File metadata validation (extension, MIME type, size)
- * Layer 2: Content signature validation (magic bytes)
- * Layer 3: Advanced threat detection (executable, scripts, polyglots)
- * Layer 4: Content-based inspection (code injection, archive bombs)
- * Layer 5: Quarantine system (suspicious files for review)
- * 
- * This creates defense-in-depth protection against:
- * - File type spoofing attacks
- * - Executable uploads disguised as documents
- * - Polyglot files (multiple formats in one)
- * - Script injection attacks
- * - Archive bombs (compression bombs)
+ * File Upload Security Integration — Production-Grade Pipeline
+ *
+ * Orchestrates the complete upload validation flow:
+ *
+ *   ┌────────────────────────────────────────────────────────┐
+ *   │ Layer 1 — Metadata: extension, MIME, size             │
+ *   │ Layer 2 — Magic-byte type detection (ground truth)    │
+ *   │ Layer 3 — Threat detection (executable / script scan) │
+ *   │ Layer 4 — Image re-encoding via sharp (strip payloads)│
+ *   │ Layer 5 — Hash, secure filename, quarantine / audit   │
+ *   └────────────────────────────────────────────────────────┘
+ *
+ * Key design decisions:
+ *   • Binary files (JPEG, PNG, PDF) are NEVER regex-scanned
+ *   • Images are re-encoded to strip EXIF / embedded scripts
+ *   • Threat detection only uses regex on unknown (text) files
+ *   • Every file gets a SHA-256 hash for audit trails
  */
 
 import {
@@ -26,17 +28,24 @@ import {
 
 import {
   performThreatDetection,
+  sanitiseImageBuffer,
+  computeFileHash,
   quarantineFile,
   exportThreatDetectionReport,
-  ThreatDetectionResult,
+  type ThreatDetectionResult,
+  type DetectedFileType,
 } from './file-content-threat-detection';
 
 import crypto from 'crypto';
 import logger from './logger';
 
-/**
- * Complete file upload security validation result
- */
+// Re-export UPLOADS_DIR_NAME for consumers
+export { UPLOADS_DIR_NAME };
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 export interface SecureFileValidationResult {
   valid: boolean;
   error?: string;
@@ -48,32 +57,30 @@ export interface SecureFileValidationResult {
   recommendations?: string[];
   secureFilename?: string;
   fileHash?: string;
+  /** The (possibly re-encoded) buffer to persist. Use this instead of the original. */
+  sanitisedBuffer?: Buffer;
 }
 
-/**
- * Calculates SHA-256 hash of file for integrity verification
- * @param buffer - File contents
- * @returns Hex-encoded hash
- */
+// ---------------------------------------------------------------------------
+// Hash helper (kept for backward compat)
+// ---------------------------------------------------------------------------
+
 export function calculateFileHash(buffer: Buffer): string {
-  return crypto.createHash('sha256').update(buffer).digest('hex');
+  return computeFileHash(buffer);
 }
 
+// ---------------------------------------------------------------------------
+// Main validation pipeline
+// ---------------------------------------------------------------------------
+
 /**
- * Comprehensive file upload validation - All layers
- * 
- * Performs complete security validation:
- * 1. File metadata validation (type, size, count)
- * 2. Magic byte validation
- * 3. Threat detection (executables, scripts, polyglots)
- * 4. Content inspection (injection, archive bombs)
- * 5. Quarantine flagging
- * 
- * @param filename - Original filename
- * @param mimeType - MIME type from upload
- * @param buffer - File contents
- * @param uploadedBy - User ID (for quarantine logging)
- * @returns Complete validation result
+ * Performs the complete file validation pipeline.
+ *
+ * @param filename    Original filename from the client
+ * @param mimeType    Client-declared MIME type
+ * @param buffer      Raw file bytes
+ * @param uploadedBy  User ID for audit / quarantine
+ * @returns           Validation result (includes sanitised buffer on success)
  */
 export async function performCompleteFileValidation(
   filename: string,
@@ -84,9 +91,10 @@ export async function performCompleteFileValidation(
   const warnings: string[] = [];
 
   try {
-    // ==========================================
-    // LAYER 1: Basic metadata validation
-    // ==========================================
+    // ================================================================
+    // LAYER 1 — Basic metadata validation (extension, MIME, size,
+    //           magic-byte match via validateFile)
+    // ================================================================
     const basicValidation = validateFile(filename, mimeType, buffer);
     if (!basicValidation.valid) {
       return {
@@ -96,98 +104,99 @@ export async function performCompleteFileValidation(
       };
     }
 
-    // ==========================================
-    // LAYER 2: Advanced threat detection
-    // ==========================================
-    const threatDetection = performThreatDetection(buffer, filename, mimeType);
+    // ================================================================
+    // LAYER 2 + 3 — Threat detection (magic-byte routing + scanning)
+    // ================================================================
+    const threatResult = performThreatDetection(buffer, filename, mimeType);
 
-    // If critical threats detected, block immediately
-    if (threatDetection.riskLevel === 'critical') {
-      logger.warn('🚨 CRITICAL FILE UPLOAD THREAT DETECTED', {
-        filename,
-        uploadedBy,
-        threats: threatDetection.threats,
-        riskLevel: threatDetection.riskLevel,
-      });
-
-      // Quarantine the file
-      const fileHash = calculateFileHash(buffer);
+    // Critical → block + quarantine
+    if (threatResult.riskLevel === 'critical') {
+      const fileHash = computeFileHash(buffer);
       quarantineFile({
         fileId: fileHash,
         filename,
         uploadedAt: new Date(),
         fileHash,
         threatLevel: 'critical',
-        threats: threatDetection.threats,
+        threats: threatResult.threats,
         uploadedBy: uploadedBy || 'unknown',
-        reason: threatDetection.threats.join('; '),
+        reason: threatResult.threats.join('; '),
+      });
+
+      logger.warn('CRITICAL_FILE_THREAT', {
+        filename,
+        uploadedBy,
+        threats: threatResult.threats,
       });
 
       return {
         valid: false,
-        error: `File contains critical security threats: ${threatDetection.threats[0]}`,
-        threats: threatDetection.threats,
-        recommendations: threatDetection.recommendations,
+        error: `Security check failed: ${threatResult.threats[0]}`,
+        threats: threatResult.threats,
+        recommendations: threatResult.recommendations,
         threatLevel: 'critical',
       };
     }
 
-    // High risk - block but log for review
-    if (threatDetection.riskLevel === 'high') {
-      logger.warn('⚠️ HIGH-RISK FILE UPLOAD DETECTED', {
-        filename,
-        uploadedBy,
-        threats: threatDetection.threats,
-        riskLevel: threatDetection.riskLevel,
-      });
-
-      const fileHash = calculateFileHash(buffer);
+    // High → block + quarantine
+    if (threatResult.riskLevel === 'high') {
+      const fileHash = computeFileHash(buffer);
       quarantineFile({
         fileId: fileHash,
         filename,
         uploadedAt: new Date(),
         fileHash,
         threatLevel: 'high',
-        threats: threatDetection.threats,
+        threats: threatResult.threats,
         uploadedBy: uploadedBy || 'unknown',
-        reason: threatDetection.threats.join('; '),
+        reason: threatResult.threats.join('; '),
+      });
+
+      logger.warn('HIGH_RISK_FILE', {
+        filename,
+        uploadedBy,
+        threats: threatResult.threats,
       });
 
       return {
         valid: false,
-        error: `File poses high security risk: ${threatDetection.threats[0]}`,
-        threats: threatDetection.threats,
-        recommendations: threatDetection.recommendations,
+        error: `File poses high security risk: ${threatResult.threats[0]}`,
+        threats: threatResult.threats,
+        recommendations: threatResult.recommendations,
         threatLevel: 'high',
       };
     }
 
-    // Medium risk - allow but warn
-    if (threatDetection.riskLevel === 'medium') {
-      logger.info('ℹ️ MEDIUM-RISK FILE DETECTED - ALLOWING', {
-        filename,
-        uploadedBy,
-        threats: threatDetection.threats,
-      });
-
+    // Medium → allow with warnings
+    if (threatResult.riskLevel === 'medium') {
       warnings.push(
-        `File has potential security concerns: ${threatDetection.threats.join(', ')}`
+        `File has potential concerns: ${threatResult.threats.join(', ')}`
       );
     }
 
-    // ==========================================
-    // All validations passed
-    // ==========================================
-    const secureFilename = generateSecureFilename(filename);
-    const fileHash = calculateFileHash(buffer);
+    // ================================================================
+    // LAYER 4 — Image sanitisation (re-encode to strip payloads)
+    // ================================================================
+    let finalBuffer = buffer;
+    const detectedType = threatResult.detectedType as DetectedFileType;
 
-    logger.info('✅ FILE VALIDATION PASSED', {
+    if (detectedType === 'jpeg' || detectedType === 'png') {
+      finalBuffer = await sanitiseImageBuffer(buffer, detectedType);
+    }
+
+    // ================================================================
+    // LAYER 5 — Secure filename + hash
+    // ================================================================
+    const secureFilename = generateSecureFilename(filename);
+    const fileHash = computeFileHash(finalBuffer);
+
+    logger.info('FILE_VALIDATION_PASSED', {
       filename,
       secureFilename,
-      fileHash,
+      fileHash: fileHash.substring(0, 16) + '…',
       uploadedBy,
       fileType: basicValidation.fileType,
-      threatLevel: threatDetection.riskLevel,
+      threatLevel: threatResult.riskLevel,
     });
 
     return {
@@ -195,14 +204,15 @@ export async function performCompleteFileValidation(
       warnings: warnings.length > 0 ? warnings : undefined,
       fileType: basicValidation.fileType,
       category: basicValidation.category,
-      threatLevel: threatDetection.riskLevel,
-      threats: threatDetection.threats.length > 0 ? threatDetection.threats : undefined,
-      recommendations: threatDetection.recommendations.length > 0 ? threatDetection.recommendations : undefined,
+      threatLevel: threatResult.riskLevel,
+      threats: threatResult.threats.length > 0 ? threatResult.threats : undefined,
+      recommendations: threatResult.recommendations.length > 0 ? threatResult.recommendations : undefined,
       secureFilename,
       fileHash,
+      sanitisedBuffer: finalBuffer,
     };
   } catch (error) {
-    logger.error('FILE VALIDATION EXCEPTION', {
+    logger.error('FILE_VALIDATION_EXCEPTION', {
       filename,
       uploadedBy,
       error: error instanceof Error ? error.message : String(error),
@@ -210,48 +220,32 @@ export async function performCompleteFileValidation(
 
     return {
       valid: false,
-      error: 'File validation error - please try again',
+      error: 'File validation error — please try again',
       threatLevel: 'critical',
     };
   }
 }
 
-/**
- * Batch validation for multiple files
- * Validates file count, total size, then each file individually
- * 
- * @param files - Array of file info (filename, mimeType, buffer)
- * @param uploadedBy - User ID
- * @returns Array of validation results
- */
+// ---------------------------------------------------------------------------
+// Batch validation
+// ---------------------------------------------------------------------------
+
 export async function performBatchFileValidation(
   files: Array<{ filename: string; mimeType: string; buffer: Buffer }>,
   uploadedBy?: string
 ): Promise<SecureFileValidationResult[]> {
-  // Check file count
-  const countValidation = validateFileCount(files.length);
-  if (!countValidation.valid) {
-    return [
-      {
-        valid: false,
-        error: countValidation.error,
-        threatLevel: 'critical',
-      },
-    ];
+  // File count check
+  const countCheck = validateFileCount(files.length);
+  if (!countCheck.valid) {
+    return [{ valid: false, error: countCheck.error, threatLevel: 'critical' }];
   }
 
-  // Check total size
-  const sizeValidation = validateTotalUploadSize(
+  // Total size check
+  const sizeCheck = validateTotalUploadSize(
     files.map(f => ({ size: f.buffer.length } as File))
   );
-  if (!sizeValidation.valid) {
-    return [
-      {
-        valid: false,
-        error: sizeValidation.error,
-        threatLevel: 'critical',
-      },
-    ];
+  if (!sizeCheck.valid) {
+    return [{ valid: false, error: sizeCheck.error, threatLevel: 'critical' }];
   }
 
   // Validate each file
@@ -269,9 +263,10 @@ export async function performBatchFileValidation(
   return results;
 }
 
-/**
- * Security audit log for file uploads
- */
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
 export interface FileUploadAuditEntry {
   timestamp: Date;
   filename: string;
@@ -287,14 +282,8 @@ export interface FileUploadAuditEntry {
 
 const auditLog: FileUploadAuditEntry[] = [];
 
-/**
- * Log file upload for audit trail
- * @param entry - Audit entry
- */
 export function logFileUploadAudit(entry: FileUploadAuditEntry): void {
   auditLog.push(entry);
-
-  // Also log to persistent logger
   logger.info('FILE_UPLOAD_AUDIT', {
     filename: entry.filename,
     validationResult: entry.validationResult,
@@ -303,11 +292,6 @@ export function logFileUploadAudit(entry: FileUploadAuditEntry): void {
   });
 }
 
-/**
- * Get file upload audit log (admin only)
- * @param filters - Optional filters
- * @returns Filtered audit entries
- */
 export function getFileUploadAuditLog(filters?: {
   uploadedBy?: string;
   validationResult?: 'passed' | 'failed' | 'flagged';
@@ -315,67 +299,47 @@ export function getFileUploadAuditLog(filters?: {
   endDate?: Date;
 }): FileUploadAuditEntry[] {
   let results = auditLog;
-
-  if (filters?.uploadedBy) {
-    results = results.filter(e => e.uploadedBy === filters.uploadedBy);
-  }
-
-  if (filters?.validationResult) {
-    results = results.filter(e => e.validationResult === filters.validationResult);
-  }
-
-  if (filters?.startDate) {
-    results = results.filter(e => e.timestamp >= filters.startDate!);
-  }
-
-  if (filters?.endDate) {
-    results = results.filter(e => e.timestamp <= filters.endDate!);
-  }
-
+  if (filters?.uploadedBy)        results = results.filter(e => e.uploadedBy === filters.uploadedBy);
+  if (filters?.validationResult)  results = results.filter(e => e.validationResult === filters.validationResult);
+  if (filters?.startDate)         results = results.filter(e => e.timestamp >= filters.startDate!);
+  if (filters?.endDate)           results = results.filter(e => e.timestamp <= filters.endDate!);
   return results;
 }
 
-/**
- * Generate security compliance report
- * Shows validation statistics and risk assessment
- */
+// ---------------------------------------------------------------------------
+// Compliance report
+// ---------------------------------------------------------------------------
+
 export function generateFileUploadSecurityReport(): Record<string, unknown> {
   const totalUploads = auditLog.length;
-  const passedValidation = auditLog.filter(e => e.validationResult === 'passed').length;
-  const failedValidation = auditLog.filter(e => e.validationResult === 'failed').length;
-  const flaggedFiles = auditLog.filter(e => e.validationResult === 'flagged').length;
+  const passed  = auditLog.filter(e => e.validationResult === 'passed').length;
+  const failed  = auditLog.filter(e => e.validationResult === 'failed').length;
+  const flagged = auditLog.filter(e => e.validationResult === 'flagged').length;
 
   const uniqueThreats = new Set<string>();
-  auditLog.forEach(e => {
-    e.threats?.forEach(t => uniqueThreats.add(t));
-  });
+  auditLog.forEach(e => e.threats?.forEach(t => uniqueThreats.add(t)));
 
-  const successRate = totalUploads > 0 ? (passedValidation / totalUploads) * 100 : 0;
+  const successRate = totalUploads > 0 ? (passed / totalUploads) * 100 : 0;
 
   return {
     generatedAt: new Date().toISOString(),
-    statistics: {
-      totalUploads,
-      passedValidation,
-      failedValidation,
-      flaggedFiles,
-      successRate: successRate.toFixed(2) + '%',
-    },
+    statistics: { totalUploads, passed, failed, flagged, successRate: successRate.toFixed(2) + '%' },
     security: {
       uniqueThreatsDetected: Array.from(uniqueThreats),
       threatCount: uniqueThreats.size,
       criticalIncidents: auditLog.filter(e => e.threatLevel === 'critical').length,
-      highRiskIncidents: auditLog.filter(e => e.threatLevel === 'high').length,
+      highRiskIncidents:  auditLog.filter(e => e.threatLevel === 'high').length,
     },
     compliance: {
       cweCoverage: 'CWE-434 (Unrestricted Upload)',
       validationLayers: 5,
       defenseMechanisms: [
-        'Magic byte validation',
-        'Executable signature detection',
-        'Script injection detection',
-        'Archive bomb detection',
-        'Polyglot file detection',
+        'Magic-byte type detection',
+        'Executable signature blocking',
+        'Image re-encoding via sharp',
+        'Extension block list',
+        'Secure filename generation',
+        'SHA-256 file hashing',
         'Quarantine system',
         'Audit logging',
       ],
@@ -383,9 +347,10 @@ export function generateFileUploadSecurityReport(): Record<string, unknown> {
   };
 }
 
-/**
- * Export validation result for API response
- */
+// ---------------------------------------------------------------------------
+// Export helpers
+// ---------------------------------------------------------------------------
+
 export function exportValidationResult(
   result: SecureFileValidationResult
 ): Record<string, unknown> {
