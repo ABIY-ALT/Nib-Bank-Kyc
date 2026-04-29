@@ -5,7 +5,7 @@ import { getServerSession } from '@/actions/auth-server';
 import { createAuditLog } from '@/actions/audit';
 import { hasJurisdictionalAccess, getNormalizedRole } from '@/lib/jurisdiction';
 import { prisma } from '@/lib/prisma';
-import { createUploadRateLimitMiddleware } from '@/lib/rate-limiting';
+import { checkUploadRateLimit } from '@/lib/rate-limiting';
 import {
   validateFileCount,
   validateTotalUploadSize,
@@ -93,7 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ success: false, error: 'Unauthenticated' });
   }
 
-  const rateLimitResponse = await createUploadRateLimitMiddleware(session.id);
+  const rateLimitResponse = await checkUploadRateLimit(session.id);
   if (rateLimitResponse) {
     await auditUploadEvent(
       session,

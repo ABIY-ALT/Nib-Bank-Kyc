@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { createAccessRateLimitMiddleware } from '@/lib/rate-limiting';
+import { checkAccessRateLimit } from '@/lib/rate-limiting';
 import { createReadStream } from '@/lib/secure-file-storage';
 import { createAuditLog } from '@/actions/audit';
 import { getServerSession } from '@/actions/auth-server';
@@ -51,7 +51,7 @@ export async function GET(
     }
 
     // 2. Rate Limiting
-    const rateLimitResponse = await createAccessRateLimitMiddleware(session.id);
+    const rateLimitResponse = await checkAccessRateLimit(session.id);
     if (rateLimitResponse) return rateLimitResponse;
 
     // 3. Jurisdictional Access Control

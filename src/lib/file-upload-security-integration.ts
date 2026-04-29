@@ -25,6 +25,7 @@ import {
   validateTotalUploadSize,
   UPLOADS_DIR_NAME,
 } from './file-upload-validation';
+import { generateStorageKey } from './secure-file-storage';
 
 import {
   performThreatDetection,
@@ -38,6 +39,7 @@ import {
 
 import crypto from 'crypto';
 import logger from './logger';
+import sharp from 'sharp';
 
 // Re-export UPLOADS_DIR_NAME for consumers
 export { UPLOADS_DIR_NAME };
@@ -181,7 +183,7 @@ export async function performCompleteFileValidation(
     const detectedType = threatResult.detectedType as DetectedFileType;
 
     if (detectedType === 'jpeg' || detectedType === 'png') {
-      const metadata = await require('sharp')(buffer).metadata();
+      const metadata = await sharp(buffer).metadata();
       if ((metadata.width || 0) > 5000 || (metadata.height || 0) > 5000) {
         return {
           valid: false,
@@ -195,7 +197,7 @@ export async function performCompleteFileValidation(
     // ================================================================
     // LAYER 5 — Secure storage key + hash
     // ================================================================
-    const storageKey = require('./secure-file-storage').generateStorageKey();
+    const storageKey = generateStorageKey();
     const fileHash = computeFileHash(finalBuffer);
 
     logger.info('FILE_VALIDATION_PASSED', {

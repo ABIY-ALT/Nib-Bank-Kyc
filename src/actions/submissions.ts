@@ -3,21 +3,18 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { signDownloadToken } from '@/lib/security';
+import { signDownloadToken, generateSecureString } from '@/lib/security';
 import { getServerSession } from './auth-server';
 import { SubmissionSchema } from '@/lib/validation';
 import { KYC_STATUS, EXCEPTIONAL_STATUS } from '@/lib/kyc-data';
 import { createAuditLog } from './audit';
 import { logInstitutionalError } from '@/lib/logger';
-import { handleServerActionError, getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
-import fs from 'fs/promises';
-import path from 'path';
 import {
   validateFileCount,
   validateTotalUploadSize,
-  UPLOADS_DIR_NAME,
 } from '@/lib/file-upload-validation';
 import { performCompleteFileValidation } from '@/lib/file-upload-security-integration';
+import { writeSecureUploadedFile } from '@/lib/secure-file-storage';
 
 import { 
   DIRECT_BRANCH_ROLES, 
@@ -134,9 +131,9 @@ function formatKYC(kyc: any) {
         id: m.id,
         name: m.name,
         type: m.type,
-        // Use the file serving API route for all files (PDFs, images, etc.)
-        previewUrl: m.fileUrl ? `/api/files/${m.fileUrl}` : `/api/memos/${signDownloadToken(m.id)}`,
-        mimeType: inferMimeTypeFromName(m.name),
+        // Always use signed/tokenized gateway for least-privilege file access.
+        previewUrl: `/api/memos/${signDownloadToken(m.id)}`,
+        mimeType: m.mimeType,
       })) || [],
   };
 }
@@ -358,15 +355,12 @@ export async function createSubmission(formData: FormData) {
       update: {},
       create: { 
         name: validated.branchName, 
-        code: `BR-${Math.floor(100 + Math.random() * 900)}`,
+        code: `BR-${generateSecureString(3, '0123456789')}`,
         districtId: district.id
       }
     });
 
     const memoData = [];
-    const uploadDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'secure_uploads');
-    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i] || 'OTHER';
@@ -375,7 +369,7 @@ export async function createSubmission(formData: FormData) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const validation = await performCompleteFileValidation(file.name, file.type, buffer, session.id);
       
-      if (!validation.valid || !validation.secureFilename) {
+      if (!validation.valid || !validation.storageKey) {
         await createAuditLog({
           userId: session.id,
           userEmail: session.email || 'unknown@nibbank.com.et',
@@ -386,14 +380,18 @@ export async function createSubmission(formData: FormData) {
         return { success: false, error: `Security check failed: ${validation.error}` };
       }
 
-      await fs.writeFile(path.join(uploadDir, validation.secureFilename), buffer);
+      const persistableBuffer = validation.sanitisedBuffer || buffer;
+      await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
 
       memoData.push({ 
-        name: file.name, 
+        name: file.name.split('.').slice(0, -1).join('.'), // Display name
+        originalName: file.name, 
         type: type, 
-        fileUrl: `${UPLOADS_DIR_NAME}/${validation.secureFilename}`, 
+        storageKey: validation.storageKey!, 
+        fileHash: validation.fileHash,
         uploadedById: session.id,
-        mimeType: file.type, // Use the verified MIME type
+        mimeType: validation.fileType || file.type, // Use the verified MIME type
+        size: persistableBuffer.length,
       });
     }
 
@@ -475,9 +473,6 @@ export async function resubmitSubmission(formData: FormData) {
     }
 
     const memoData = [];
-    const uploadDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'secure_uploads');
-    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i] || 'OTHER';
@@ -486,7 +481,7 @@ export async function resubmitSubmission(formData: FormData) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const validation = await performCompleteFileValidation(file.name, file.type, buffer, session.id);
       
-      if (!validation.valid || !validation.secureFilename) {
+      if (!validation.valid || !validation.storageKey) {
         await createAuditLog({
           userId: session.id,
           userEmail: session.email,
@@ -497,15 +492,18 @@ export async function resubmitSubmission(formData: FormData) {
         return { success: false, error: `Security check failed: ${validation.error}` };
       }
 
-      await fs.writeFile(path.join(uploadDir, validation.secureFilename), buffer);
+      const persistableBuffer = validation.sanitisedBuffer || buffer;
+      await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
       
       memoData.push({ 
-        name: file.name, 
+        name: file.name.split('.').slice(0, -1).join('.'), 
+        originalName: file.name, 
         type: type, 
-        fileUrl: `${UPLOADS_DIR_NAME}/${validation.secureFilename}`, 
+        storageKey: validation.storageKey!, 
         uploadedById: session.id,
         kycId: id,
-        mimeType: file.type,
+        mimeType: validation.fileType || file.type,
+        size: persistableBuffer.length,
       });
     }
 
@@ -655,13 +653,10 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       throw new Error("Unauthorized case access.");
     }
 
-    const uploadDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'secure_uploads');
-    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-
     const buffer = Buffer.from(await memo.arrayBuffer());
     const validation = await performCompleteFileValidation(memo.name, memo.type, buffer, session.id);
     
-    if (!validation.valid || !validation.secureFilename) {
+    if (!validation.valid || !validation.storageKey) {
       await createAuditLog({ 
         userId: session.id, 
         userEmail: session.email, 
@@ -672,8 +667,9 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       throw new Error(`Security check failed: ${validation.error}`);
     }
 
-    const storedFileName = validation.secureFilename;
-    await fs.writeFile(path.join(uploadDir, storedFileName), buffer);
+    const storedKey = validation.storageKey!;
+    const persistableBuffer = validation.sanitisedBuffer || buffer;
+    await writeSecureUploadedFile(storedKey, persistableBuffer);
 
     const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
     const newEntry = {
@@ -687,11 +683,14 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     await prisma.$transaction([
       prisma.memo.create({
         data: {
-          name: memo.name,
+          name: memo.name.split('.').slice(0, -1).join('.'),
+          originalName: memo.name,
           type: 'GOVERNANCE_MEMO',
-          fileUrl: `${UPLOADS_DIR_NAME}/${storedFileName}`,
+          storageKey: storedKey,
           uploadedById: session.id,
-          kycId: id
+          kycId: id,
+          mimeType: validation.fileType || memo.type,
+          size: persistableBuffer.length
         }
       }),
       prisma.kYC.update({
@@ -878,9 +877,6 @@ export async function uploadAdditionalDocuments(formData: FormData) {
     }
 
     const memoData = [];
-    const uploadDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'secure_uploads');
-    try { await fs.access(uploadDir); } catch { await fs.mkdir(uploadDir, { recursive: true }); }
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i] || 'OTHER';
@@ -888,7 +884,7 @@ export async function uploadAdditionalDocuments(formData: FormData) {
 
       const validation = await performCompleteFileValidation(file.name, file.type, buffer, session.id);
       
-      if (!validation.valid || !validation.secureFilename) {
+      if (!validation.valid || !validation.storageKey) {
         await createAuditLog({ 
           userId: session.id, 
           userEmail: session.email || 'unknown@nibbank.com.et', 
@@ -899,15 +895,19 @@ export async function uploadAdditionalDocuments(formData: FormData) {
         return { success: false, error: `Security check failed: ${validation.error}` };
       }
 
-      await fs.writeFile(path.join(uploadDir, validation.secureFilename), buffer);
+      const storedKey = validation.storageKey!;
+      const persistableBuffer = validation.sanitisedBuffer || buffer;
+      await writeSecureUploadedFile(storedKey, persistableBuffer);
       
       memoData.push({ 
-        name: file.name, 
+        name: file.name.split('.').slice(0, -1).join('.'),
+        originalName: file.name,
         type: type, 
-        fileUrl: `${UPLOADS_DIR_NAME}/${validation.secureFilename}`, 
+        storageKey: storedKey,
         uploadedById: session.id,
         kycId: id,
-        mimeType: file.type,
+        mimeType: validation.fileType || file.type,
+        size: persistableBuffer.length,
       });
     }
 
