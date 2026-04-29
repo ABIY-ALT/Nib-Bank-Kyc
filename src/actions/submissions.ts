@@ -360,7 +360,7 @@ export async function createSubmission(formData: FormData) {
       }
     });
 
-    const memoData = [];
+    const memoData: any[] = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i] || 'OTHER';
@@ -384,13 +384,13 @@ export async function createSubmission(formData: FormData) {
       await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
 
       memoData.push({ 
-        name: file.name.split('.').slice(0, -1).join('.'), // Display name
+        name: file.name.split('.').slice(0, -1).join('.'), 
         originalName: file.name, 
         type: type, 
         storageKey: validation.storageKey!, 
         fileHash: validation.fileHash,
-        uploadedById: session.id,
-        mimeType: validation.fileType || file.type, // Use the verified MIME type
+        uploadedBy: { connect: { id: session.id } },
+        mimeType: validation.fileType || file.type,
         size: persistableBuffer.length,
       });
     }
@@ -472,7 +472,7 @@ export async function resubmitSubmission(formData: FormData) {
       }
     }
 
-    const memoData = [];
+    const memoData: any[] = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i] || 'OTHER';
@@ -500,6 +500,7 @@ export async function resubmitSubmission(formData: FormData) {
         originalName: file.name, 
         type: type, 
         storageKey: validation.storageKey!, 
+        fileHash: validation.fileHash,
         uploadedById: session.id,
         kycId: id,
         mimeType: validation.fileType || file.type,
@@ -687,7 +688,8 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
           originalName: memo.name,
           type: 'GOVERNANCE_MEMO',
           storageKey: storedKey,
-          uploadedById: session.id,
+          fileHash: validation.fileHash,
+          uploadedBy: { connect: { id: session.id } },
           kycId: id,
           mimeType: validation.fileType || memo.type,
           size: persistableBuffer.length
@@ -876,7 +878,7 @@ export async function uploadAdditionalDocuments(formData: FormData) {
       throw new Error("Unauthorized case access.");
     }
 
-    const memoData = [];
+    const memoData: any[] = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i] || 'OTHER';

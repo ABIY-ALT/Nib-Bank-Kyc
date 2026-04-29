@@ -130,10 +130,13 @@ model KYC {
 
 model Memo {
   id           String   @id @default(cuid())
-  name         String
+  name         String   // This will be used as a display name
+  originalName String   // The original filename from the user
   type         String
-  fileUrl      String
+  storageKey   String   @unique // UUID or random hash for physical storage
+  fileHash     String?  // SHA-256 hash for integrity and deduplication
   mimeType     String   @default("application/octet-stream")
+  size         Int      @default(0)
   kycId        String
   kyc          KYC      @relation(fields: [kycId], references: [id])
   uploadedById String
