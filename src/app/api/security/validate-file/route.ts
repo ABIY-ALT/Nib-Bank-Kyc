@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     logFileUploadAudit({
       timestamp: new Date(),
       filename: file.name,
-      secureFilename: validation.secureFilename,
+      secureFilename: validation.storageKey,
       fileHash: validation.fileHash || calculateFileHash(buffer),
       uploadedBy: session.id,
       validationResult: validation.valid ? (validation.threats && validation.threats.length > 0 ? 'flagged' : 'passed') : 'failed',

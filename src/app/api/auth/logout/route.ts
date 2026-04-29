@@ -47,8 +47,16 @@ export async function POST(request: Request) {
 
   const response = successResponse({ success: true });
   
-  // Clear the secure cookie with Strict alignment
+  // Clear the secure cookies with Strict alignment
   response.cookies.set('nib-auth-token', '', {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: 'strict',
+    expires: new Date(0),
+    path: '/',
+  });
+
+  response.cookies.set('nib-refresh-token', '', {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: 'strict',

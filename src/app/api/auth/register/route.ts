@@ -20,6 +20,12 @@ import {
   PHONE_ERROR_MESSAGES,
 } from '@/lib/phone-constants';
 import { safeLog } from '@/lib/logging-redaction';
+import { 
+  successResponse, 
+  badRequestResponse, 
+  internalErrorResponse, 
+  unauthorizedResponse 
+} from '@/lib/api-security';
 
 const prisma = new PrismaClient();
 
@@ -34,19 +40,13 @@ export async function GET(request: NextRequest) {
     const phone = searchParams.get('phone');
 
     if (!phone) {
-      return NextResponse.json(
-        { error: 'Phone number required' },
-        { status: 400 }
-      );
+      return badRequestResponse('Phone number required');
     }
 
     // Validate format
     const validation = validatePhoneNumber(phone);
     if (!validation.isValid) {
-      return NextResponse.json(
-        { error: validation.errorMessage, available: false },
-        { status: 400 }
-      );
+      return badRequestResponse(validation.errorMessage);
     }
 
     // Check if already registered
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       select: { id: true },
     });
 
-    return NextResponse.json({
+    return successResponse({
       available: !existingUser,
       phoneNumber: validation.normalizedNumber,
     });
@@ -64,10 +64,7 @@ export async function GET(request: NextRequest) {
       error: String(error).substring(0, 100),
     });
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return internalErrorResponse('Internal server error');
   }
 }
 
@@ -98,10 +95,7 @@ export async function POST(request: NextRequest) {
 
     // ===== STEP 1: Validate inputs =====
     if (!email || !password || !phone || !name) {
-      return NextResponse.json(
-        { error: 'Email, password, phone, and name are required' },
-        { status: 400 }
-      );
+      return badRequestResponse('Email, password, phone, and name are required');
     }
 
     // ===== STEP 2: Validate phone BEFORE any DB operations =====
@@ -112,10 +106,7 @@ export async function POST(request: NextRequest) {
         error: phoneValidation.error,
       });
 
-      return NextResponse.json(
-        { error: phoneValidation.errorMessage },
-        { status: 400 }
-      );
+      return badRequestResponse(phoneValidation.errorMessage);
     }
 
     const normalizedPhone = phoneValidation.normalizedNumber!;
@@ -131,10 +122,7 @@ export async function POST(request: NextRequest) {
         phone: normalizedPhone.substring(0, 5),
       });
 
-      return NextResponse.json(
-        { error: PHONE_ERROR_MESSAGES.ALREADY_REGISTERED },
-        { status: 409 }
-      );
+      return badRequestResponse(PHONE_ERROR_MESSAGES.ALREADY_REGISTERED);
     }
 
     // ===== STEP 4: Validate email =====
@@ -144,10 +132,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUserWithEmail) {
-      return NextResponse.json(
-        { error: 'Email already registered' },
-        { status: 409 }
-      );
+      return badRequestResponse('Email already registered');
     }
 
     // ===== STEP 5: Hash password =====
@@ -180,7 +165,7 @@ export async function POST(request: NextRequest) {
     });
 
     // ===== STEP 8: Return success =====
-    return NextResponse.json(
+    return successResponse(
       {
         success: true,
         userId: user.id,
@@ -189,7 +174,7 @@ export async function POST(request: NextRequest) {
         name: `${user.firstName} ${user.lastName}`.trim(),
         message: 'Registration successful. Please verify your phone number.',
       },
-      { status: 201 }
+      201
     );
   } catch (error) {
     // Database error or unexpected error
@@ -199,19 +184,13 @@ export async function POST(request: NextRequest) {
         error: String(error).substring(0, 100),
       });
 
-      return NextResponse.json(
-        { error: 'This phone number is already registered' },
-        { status: 409 }
-      );
+      return badRequestResponse('This phone number is already registered');
     }
 
     safeLog.error('Registration failed', {
       error: String(error).substring(0, 100),
     });
 
-    return NextResponse.json(
-      { error: 'Registration failed. Please try again.' },
-      { status: 500 }
-    );
+    return internalErrorResponse('Registration failed. Please try again.');
   }
 }

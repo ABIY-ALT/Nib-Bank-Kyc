@@ -1,12 +1,24 @@
+const MAX_BUNDLE_SEGMENT_INPUT_LENGTH = 512;
+const MAX_BUNDLE_SEGMENT_LENGTH = 80;
+
+function trimTrailingDots(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 46) {
+    end -= 1;
+  }
+
+  return end === value.length ? value : value.slice(0, end);
+}
+
 export function sanitizeBundleSegment(value: string | null | undefined, fallback: string) {
   const normalized = (value || '')
+    .slice(0, MAX_BUNDLE_SEGMENT_INPUT_LENGTH)
     .trim()
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
     .replace(/\s+/g, '_')
-    .replace(/\.+$/g, '')
-    .slice(0, 80);
+  const trimmedDots = trimTrailingDots(normalized).slice(0, MAX_BUNDLE_SEGMENT_LENGTH);
 
-  return normalized || fallback;
+  return trimmedDots || fallback;
 }
 
 export function getSubmissionDistrictName(submission: any) {

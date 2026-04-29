@@ -3,9 +3,7 @@
  * PostgreSQL/Prisma data access layer
  * 
  * SECURITY FIX #15: User ID Manipulation Prevention
- * - All GET/PATCH/DELETE operations require authentication
- * - User-specific resources (users, profiles) require ownership verification
- * - Admin operations require ADMIN_ACCESS permission
+ * SECURITY FIX: Automatic Data Sanitization (OWASP A02:2021)
  * 
  * Usage:
  * GET    /api/data/submissions/{id} - Requires auth + ownership/permission
@@ -14,8 +12,15 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { verifyUserOwnership, verifyAdminAccess } from '@/lib/user-ownership-validator';
+import { 
+  successResponse, 
+  badRequestResponse, 
+  internalErrorResponse, 
+  unauthorizedResponse,
+  forbiddenResponse 
+} from '@/lib/api-security';
 
 // Map resource names to Prisma models
 const RESOURCE_MODELS: Record<string, string> = {
@@ -46,56 +51,35 @@ export async function GET(
     const modelName = RESOURCE_MODELS[resourceLower];
 
     if (!modelName) {
-      return NextResponse.json(
-        { error: 'Resource not found' },
-        { status: 404 }
-      );
+      return badRequestResponse('Resource not found');
     }
 
     if (!id) {
-      return NextResponse.json(
-        { error: 'ID parameter required' },
-        { status: 400 }
-      );
+      return badRequestResponse('ID parameter required');
     }
 
     // ===== AUTHORIZATION CHECK =====
-    // Single-user resources require ownership verification
     if (SINGLE_USER_RESOURCES.has(resourceLower)) {
       const ownership = await verifyUserOwnership(request, id);
       if (!ownership.authorized) {
-        return NextResponse.json(
-          { error: 'Access denied' },
-          { status: 403 }
-        );
+        return forbiddenResponse('Access denied');
       }
     } else if (ADMIN_ONLY_RESOURCES.has(resourceLower)) {
-      // Admin-only resources
       const adminAccess = await verifyAdminAccess(request);
       if (!adminAccess.authorized) {
-        return NextResponse.json(
-          { error: 'Access denied' },
-          { status: 403 }
-        );
+        return forbiddenResponse('Access denied');
       }
     } else {
-      // For other resources, just verify authentication
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        );
+        return unauthorizedResponse('Unauthorized');
       }
     }
 
     // ===== FETCH DATA =====
     const model = (prisma as any)[modelName];
     if (!model) {
-      return NextResponse.json(
-        { error: 'Resource not found' },
-        { status: 404 }
-      );
+      return badRequestResponse('Resource not found');
     }
 
     const data = await model.findUnique({
@@ -103,19 +87,12 @@ export async function GET(
     });
 
     if (!data) {
-      return NextResponse.json(
-        { error: 'Record not found' },
-        { status: 404 }
-      );
+      return badRequestResponse('Record not found');
     }
 
-    return NextResponse.json({ data }, { status: 200 });
+    return successResponse({ data });
   } catch (error) {
-
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return internalErrorResponse('Internal server error');
   }
 }
 
@@ -129,39 +106,24 @@ export async function PATCH(
     const modelName = RESOURCE_MODELS[resourceLower];
 
     if (!modelName) {
-      return NextResponse.json(
-        { error: 'Resource not found' },
-        { status: 404 }
-      );
+      return badRequestResponse('Resource not found');
     }
 
     // ===== AUTHORIZATION CHECK =====
-    // Single-user resources require ownership verification
     if (SINGLE_USER_RESOURCES.has(resourceLower)) {
       const ownership = await verifyUserOwnership(request, id);
       if (!ownership.authorized) {
-        return NextResponse.json(
-          { error: 'Access denied' },
-          { status: 403 }
-        );
+        return forbiddenResponse('Access denied');
       }
     } else if (ADMIN_ONLY_RESOURCES.has(resourceLower)) {
-      // Admin-only resources
       const adminAccess = await verifyAdminAccess(request);
       if (!adminAccess.authorized) {
-        return NextResponse.json(
-          { error: 'Access denied' },
-          { status: 403 }
-        );
+        return forbiddenResponse('Access denied');
       }
     } else {
-      // For other resources, just verify authentication
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        );
+        return unauthorizedResponse('Unauthorized');
       }
     }
 
@@ -169,17 +131,13 @@ export async function PATCH(
     const body = await request.json();
     const model = (prisma as any)[modelName];
     if (!model) {
-      return NextResponse.json(
-        { error: 'Resource not found' },
-        { status: 404 }
-      );
+      return badRequestResponse('Resource not found');
     }
 
     // IMPORTANT: Prevent users from changing their own role via API
     if (resourceLower === 'users' && body.roles) {
       const ownership = await verifyUserOwnership(request, id);
       if (!ownership.isAdmin) {
-        // Non-admin cannot modify roles
         delete body.roles;
       }
     }
@@ -189,13 +147,9 @@ export async function PATCH(
       data: body,
     });
 
-    return NextResponse.json({ data }, { status: 200 });
+    return successResponse({ data });
   } catch (error) {
-
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return internalErrorResponse('Internal server error');
   }
 }
 
@@ -209,40 +163,27 @@ export async function DELETE(
     const modelName = RESOURCE_MODELS[resourceLower];
 
     if (!modelName) {
-      return NextResponse.json(
-        { error: 'Resource not found' },
-        { status: 404 }
-      );
+      return badRequestResponse('Resource not found');
     }
 
     // ===== AUTHORIZATION CHECK: Admin only =====
     const adminAccess = await verifyAdminAccess(request);
     if (!adminAccess.authorized) {
-      return NextResponse.json(
-        { error: 'Access denied' },
-        { status: 403 }
-      );
+      return forbiddenResponse('Access denied');
     }
 
     // ===== DELETE DATA =====
     const model = (prisma as any)[modelName];
     if (!model) {
-      return NextResponse.json(
-        { error: 'Resource not found' },
-        { status: 404 }
-      );
+      return badRequestResponse('Resource not found');
     }
 
     const data = await model.delete({
       where: { id },
     });
 
-    return NextResponse.json({ data }, { status: 200 });
+    return successResponse({ data });
   } catch (error) {
-
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return internalErrorResponse('Internal server error');
   }
 }

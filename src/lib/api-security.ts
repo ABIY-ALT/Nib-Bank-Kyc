@@ -1,29 +1,19 @@
-/**
- * API Security Utilities
- * Provides authentication, authorization, IP whitelist, and CORS protection
- */
-
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/prisma';
-import { getSafeErrorMessage, sanitizeResponseHeaders, HEADERS_TO_REMOVE } from './information-disclosure-prevention';
+import { 
+  getSafeErrorMessage, 
+  sanitizeResponseHeaders, 
+  HEADERS_TO_REMOVE,
+  sanitizeData 
+} from './information-disclosure-prevention';
+import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
-/**
- * Sensitive IP Whitelist
- * Only these IPs can access highly sensitive operations
- * Configure via SENSITIVE_OPERATIONS_IP_WHITELIST environment variable
- */
 export const SENSITIVE_IP_WHITELIST = process.env.SENSITIVE_OPERATIONS_IP_WHITELIST
   ?.split(',')
   .map(ip => ip.trim())
   .filter(Boolean) || [];
 
-/**
- * Allowed Origins for CORS
- * Empty by default (disables CORS entirely)
- * Configure via ALLOWED_ORIGINS environment variable
- */
 export const ALLOWED_CORS_ORIGINS = process.env.ALLOWED_ORIGINS
   ?.split(',')
   .map(o => o.trim())
@@ -198,7 +188,7 @@ export function unauthorizedResponse(message?: string) {
   // SECURITY: Use generic message to prevent information disclosure
   const safeMessage = message ? getSafeErrorMessage(message) : 'Authentication required';
   const response = NextResponse.json(
-    { error: safeMessage, code: 'UNAUTHORIZED' },
+    sanitizeData({ error: safeMessage, code: 'UNAUTHORIZED' }),
     { status: 401 }
   );
   return applySecurityHeaders(response);
@@ -211,7 +201,7 @@ export function forbiddenResponse(message?: string) {
   // SECURITY: Use generic message to prevent information disclosure
   const safeMessage = message ? getSafeErrorMessage(message) : 'Access denied';
   const response = NextResponse.json(
-    { error: safeMessage, code: 'FORBIDDEN' },
+    sanitizeData({ error: safeMessage, code: 'FORBIDDEN' }),
     { status: 403 }
   );
   return applySecurityHeaders(response);
@@ -224,7 +214,7 @@ export function badRequestResponse(message?: string) {
   // SECURITY: Use generic message to prevent information disclosure
   const safeMessage = message ? getSafeErrorMessage(message) : 'Invalid request';
   const response = NextResponse.json(
-    { error: safeMessage, code: 'BAD_REQUEST' },
+    sanitizeData({ error: safeMessage, code: 'BAD_REQUEST' }),
     { status: 400 }
   );
   return applySecurityHeaders(response);
@@ -237,7 +227,7 @@ export function internalErrorResponse(message?: string) {
   // SECURITY: Never expose error details - always use generic message
   const safeMessage = 'An error occurred. Please try again or contact support.';
   const response = NextResponse.json(
-    { error: safeMessage, code: 'INTERNAL_ERROR' },
+    sanitizeData({ error: safeMessage, code: 'INTERNAL_ERROR' }),
     { status: 500 }
   );
   return applySecurityHeaders(response);
@@ -247,6 +237,7 @@ export function internalErrorResponse(message?: string) {
  * Create success response with security headers applied
  */
 export function successResponse(data: any, status = 200) {
-  const response = NextResponse.json(data, { status });
+  const sanitizedData = sanitizeData(data);
+  const response = NextResponse.json(sanitizedData, { status });
   return applySecurityHeaders(response);
 }

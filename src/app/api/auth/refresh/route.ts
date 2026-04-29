@@ -46,9 +46,11 @@ export async function POST(req: Request) {
     }
 
     const refreshTokenFromBody = body.refreshToken;
+    const refreshTokenFromCookie = cookieStore.get('nib-refresh-token')?.value;
+    const refreshToken = refreshTokenFromBody || refreshTokenFromCookie;
     const accessTokenCookie = cookieStore.get('nib-auth-token')?.value;
 
-    if (!refreshTokenFromBody && !accessTokenCookie) {
+    if (!refreshToken && !accessTokenCookie) {
       return badRequestResponse('Missing refresh token');
     }
 
@@ -126,7 +128,7 @@ export async function POST(req: Request) {
 
     // Verify refresh token matches (compare with hashed)
     const refreshTokenValid = await bcrypt.compare(
-      refreshTokenFromBody || '',
+      refreshToken || '',
       user.refreshToken
     );
 
@@ -209,7 +211,6 @@ export async function POST(req: Request) {
     const response = successResponse({
       success: true,
       accessToken: newAccessToken,
-      refreshToken: newRefreshTokenPlain,
       expiresIn: 15 * 60,
       user: {
         id: user.id,
@@ -227,6 +228,15 @@ export async function POST(req: Request) {
       secure: IS_PROD,
       sameSite: 'strict',
       maxAge: 60 * 15,
+      path: '/',
+    });
+
+    // SECURITY: Rotate refresh token cookie
+    response.cookies.set('nib-refresh-token', newRefreshTokenPlain, {
+      httpOnly: true,
+      secure: IS_PROD,
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60, // 1 day
       path: '/',
     });
 

@@ -220,7 +220,6 @@ export async function POST(req: Request) {
     const response = successResponse({
       success: true,
       accessToken: token,
-      refreshToken: refreshTokenPlain,
       expiresIn: 15 * 60, // 15 minutes
       user: {
         id: user.id,
@@ -242,6 +241,15 @@ export async function POST(req: Request) {
       secure: IS_PROD,
       sameSite: 'strict',
       maxAge: 60 * 30, // 30 minutes
+      path: '/'
+    });
+
+    // SECURITY: Store refresh token in a separate HttpOnly cookie
+    response.cookies.set('nib-refresh-token', refreshTokenPlain, {
+      httpOnly: true,
+      secure: IS_PROD,
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60, // 1 day
       path: '/'
     });
     return response;

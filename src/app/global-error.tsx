@@ -4,6 +4,10 @@ import { Button } from '@/components/ui/button';
 import { ShieldAlert, Landmark } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+function createClientTraceId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+}
+
 /**
  * Critical Gateway Error Page.
  * Standardized fallback for root-level failures with no disclosure.
@@ -18,7 +22,7 @@ export default function GlobalError({
   const [traceId, setTraceId] = useState("");
 
   useEffect(() => {
-    setTraceId(error.digest || `FATAL_${Math.random().toString(36).substring(2, 8).toUpperCase()}`);
+    setTraceId(error.digest || createClientTraceId('FATAL'));
   }, [error]);
 
   return (

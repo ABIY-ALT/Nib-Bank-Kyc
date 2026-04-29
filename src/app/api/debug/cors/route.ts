@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(diagnosticReport, { status: 200 });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Diagnostic error', details: String(error) },
+      { error: 'Diagnostic error' },
       { status: 500 }
     );
   }
@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(testResult, { status: 200 });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Test error', details: String(error) },
+      { error: 'Test error' },
       { status: 500 }
     );
   }

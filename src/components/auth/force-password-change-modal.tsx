@@ -104,8 +104,9 @@ export function ForcePasswordChangeModal() {
       await changePassword(newPassword, currentPassword);
       toast({
         title: "Security Profile Updated",
-        description: "Your new institutional credential has been established.",
+        description: "Your password was changed successfully. Please sign in again with your new password.",
       });
+      logout('Password updated. Please sign in again.');
     } catch (err: any) {
       setError(err.message || "Database fault during credential reset.");
     } finally {

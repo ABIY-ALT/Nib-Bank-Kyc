@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ShieldAlert, RotateCcw } from 'lucide-react';
 
+function createClientTraceId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+}
+
 /**
  * Institutional Error Boundary.
  * Displays a generic, secure error interface without exposing stack traces.
@@ -20,7 +24,7 @@ export default function Error({
   useEffect(() => {
     // Technical stack trace is logged server-side by Next.js by default.
     // Client-side, we capture the digest or generate a local reference.
-    setTraceId(error.digest || `ERR_${Math.random().toString(36).substring(2, 8).toUpperCase()}`);
+    setTraceId(error.digest || createClientTraceId('ERR'));
   }, [error]);
 
   return (

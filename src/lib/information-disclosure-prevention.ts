@@ -1,21 +1,25 @@
-/**
- * Information Disclosure Prevention Module
- * SECURITY FOCUS: A05:2021 – Security Misconfiguration + A03:2021 – Injection
- * 
- * Prevents exposure of sensitive information through:
- * - Error messages and stack traces
- * - HTTP response headers
- * - API response metadata
- * - Database error details
- * - Framework/library version information
- * 
- * Attack Scenarios Prevented:
- * ✅ Database error reveals table/column names → Attacker learns schema
- * ✅ Stack trace reveals source code paths → Attacker finds vulnerabilities
- * ✅ Server header reveals nginx version → Attacker exploits known CVEs
- * ✅ Error message contains user data → Attacker learns sensitive info
- * ✅ X-Powered-By header exposes framework → Attacker targets framework vulnerabilities
- */
+export const SENSITIVE_FIELDS = [
+  'password',
+  'passwordHash',
+  'password_hash',
+  'refreshToken',
+  'refresh_token',
+  'refreshTokenHash',
+  'tokenHash',
+  'token_hash',
+  'sessionId',
+  'session_id',
+  'secret',
+  'apiKey',
+  'api_key',
+  'privateKey',
+  'private_key',
+  'auth_secret',
+  'salt',
+  'checksum',
+  'token_family',
+  'refreshTokenFamily',
+];
 
 /**
  * Internal error information - stored server-side only, not exposed to clients
@@ -277,7 +281,8 @@ export function createSafeErrorResponse(
 export function sanitizeErrorForLogging(message: string): string {
   if (!message) return '';
 
-  let sanitized = message;
+  // Bound input size before regex processing to mitigate ReDoS on large payloads.
+  let sanitized = message.slice(0, 10_000);
 
   // Remove common sensitive patterns
   const sensitivePatterns = [
@@ -324,28 +329,31 @@ export function findSensitiveDataInError(error: any): string[] {
 
   if (!error) return sensitive;
 
+  const safeMessage = typeof error.message === 'string' ? error.message.slice(0, 10_000) : '';
+  const safeStack = typeof error.stack === 'string' ? error.stack.slice(0, 10_000) : '';
+
   // Check for database connection strings
-  if (error.message?.includes('postgresql://') || error.message?.includes('mysql://')) {
+  if (safeMessage.includes('postgresql://') || safeMessage.includes('mysql://')) {
     sensitive.push('DATABASE_URL');
   }
 
   // Check for API keys
-  if (error.message?.includes('api_key') || error.message?.includes('API_KEY')) {
+  if (safeMessage.includes('api_key') || safeMessage.includes('API_KEY')) {
     sensitive.push('API_KEY');
   }
 
   // Check for JWT tokens
-  if (error.message?.includes('eyJ') || error.message?.includes('JWT')) {
+  if (safeMessage.includes('eyJ') || safeMessage.includes('JWT')) {
     sensitive.push('JWT_TOKEN');
   }
 
   // Check for file paths (potential source disclosure)
-  if (error.stack?.includes('/usr/') || error.stack?.includes('C:\\')) {
+  if (safeStack.includes('/usr/') || safeStack.includes('C:\\')) {
     sensitive.push('FILE_PATHS');
   }
 
   // Check for email addresses
-  if (error.message?.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)) {
+  if (/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(safeMessage)) {
     sensitive.push('EMAIL_ADDRESSES');
   }
 
@@ -481,4 +489,46 @@ export const HEADERS_TO_REMOVE = [
 export function isErrorSafe(error: any): boolean {
   const sensitiveData = findSensitiveDataInError(error);
   return sensitiveData.length === 0;
+}
+
+/**
+ * Recursively removes sensitive fields from an object or array.
+ * SECURITY: Prevents accidental exposure of secrets (OWASP A02:2021)
+ * @param data The data object to sanitize
+ * @returns A deep copy of the data with sensitive fields removed
+ */
+export function sanitizeData(data: any): any {
+  if (data === null || data === undefined) {
+    return data;
+  }
+
+  // Handle arrays
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeData(item));
+  }
+
+  // Handle objects
+  if (typeof data === 'object') {
+    // If it's a Date or other non-plain object we want to keep, return as is
+    if (data instanceof Date) {
+      return data;
+    }
+
+    const sanitized: Record<string, any> = {};
+    
+    for (const [key, value] of Object.entries(data)) {
+      // Skip sensitive fields
+      if (SENSITIVE_FIELDS.some(sf => key.toLowerCase() === sf.toLowerCase())) {
+        continue;
+      }
+      
+      // Recursively sanitize nested objects/arrays
+      sanitized[key] = sanitizeData(value);
+    }
+    
+    return sanitized;
+  }
+
+  // Return primitives as is
+  return data;
 }

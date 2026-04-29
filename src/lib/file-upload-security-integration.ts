@@ -55,7 +55,7 @@ export interface SecureFileValidationResult {
   threatLevel?: 'safe' | 'low' | 'medium' | 'high' | 'critical';
   threats?: string[];
   recommendations?: string[];
-  secureFilename?: string;
+  storageKey?: string; // Random UUID/hash for storage
   fileHash?: string;
   /** The (possibly re-encoded) buffer to persist. Use this instead of the original. */
   sanitisedBuffer?: Buffer;
@@ -181,18 +181,26 @@ export async function performCompleteFileValidation(
     const detectedType = threatResult.detectedType as DetectedFileType;
 
     if (detectedType === 'jpeg' || detectedType === 'png') {
+      const metadata = await require('sharp')(buffer).metadata();
+      if ((metadata.width || 0) > 5000 || (metadata.height || 0) > 5000) {
+        return {
+          valid: false,
+          error: 'Image dimensions exceed safety limits (max 5000px)',
+          threatLevel: 'high',
+        };
+      }
       finalBuffer = await sanitiseImageBuffer(buffer, detectedType);
     }
 
     // ================================================================
-    // LAYER 5 — Secure filename + hash
+    // LAYER 5 — Secure storage key + hash
     // ================================================================
-    const secureFilename = generateSecureFilename(filename);
+    const storageKey = require('./secure-file-storage').generateStorageKey();
     const fileHash = computeFileHash(finalBuffer);
 
     logger.info('FILE_VALIDATION_PASSED', {
       filename,
-      secureFilename,
+      storageKey,
       fileHash: fileHash.substring(0, 16) + '…',
       uploadedBy,
       fileType: basicValidation.fileType,
@@ -207,7 +215,7 @@ export async function performCompleteFileValidation(
       threatLevel: threatResult.riskLevel,
       threats: threatResult.threats.length > 0 ? threatResult.threats : undefined,
       recommendations: threatResult.recommendations.length > 0 ? threatResult.recommendations : undefined,
-      secureFilename,
+      storageKey,
       fileHash,
       sanitisedBuffer: finalBuffer,
     };
@@ -363,6 +371,6 @@ export function exportValidationResult(
     threatLevel: result.threatLevel,
     threats: result.threats,
     recommendations: result.recommendations,
-    secureFilename: result.secureFilename,
+    storageKey: result.storageKey,
   };
 }

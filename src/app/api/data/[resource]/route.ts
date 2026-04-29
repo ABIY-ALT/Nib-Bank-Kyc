@@ -1,11 +1,19 @@
 /**
  * Generic Data API Routes (without ID)
  * Handles GET, POST for collections
+ * 
+ * SECURITY: Automatically sanitizes sensitive data (OWASP A02:2021)
  */
 
 import { prisma } from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth-handlers';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { 
+  successResponse, 
+  badRequestResponse, 
+  internalErrorResponse, 
+  unauthorizedResponse 
+} from '@/lib/api-security';
 
 // Map resource names to Prisma models
 const RESOURCE_MODELS: Record<string, string> = {
@@ -29,18 +37,12 @@ export async function GET(
     const modelName = RESOURCE_MODELS[resource];
 
     if (!modelName) {
-      return NextResponse.json(
-        { error: `Unknown resource: ${resource}` },
-        { status: 400 }
-      );
+      return badRequestResponse(`Unknown resource: ${resource}`);
     }
 
     const model = (prisma as any)[modelName];
     if (!model) {
-      return NextResponse.json(
-        { error: `Model not found: ${modelName}` },
-        { status: 400 }
-      );
+      return badRequestResponse(`Model not found: ${modelName}`);
     }
 
     // Fetch multiple records with filtering
@@ -52,13 +54,9 @@ export async function GET(
       take: 100,
     });
 
-    return NextResponse.json({ data: records });
+    return successResponse({ data: records });
   } catch (error) {
-
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return internalErrorResponse('Internal server error');
   }
 }
 
@@ -69,25 +67,19 @@ export async function POST(
   try {
     const user = await authenticateRequest(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorizedResponse('Unauthorized');
     }
 
     const resource = (await params).resource.toLowerCase();
     const modelName = RESOURCE_MODELS[resource];
 
     if (!modelName) {
-      return NextResponse.json(
-        { error: `Unknown resource: ${resource}` },
-        { status: 400 }
-      );
+      return badRequestResponse(`Unknown resource: ${resource}`);
     }
 
     const model = (prisma as any)[modelName];
     if (!model) {
-      return NextResponse.json(
-        { error: `Model not found: ${modelName}` },
-        { status: 400 }
-      );
+      return badRequestResponse(`Model not found: ${modelName}`);
     }
 
     const data = await request.json();
@@ -100,13 +92,8 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ data: record }, { status: 201 });
+    return successResponse({ data: record }, 201);
   } catch (error) {
-
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return internalErrorResponse('Internal server error');
   }
 }
-
