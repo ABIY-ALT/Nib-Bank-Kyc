@@ -98,8 +98,17 @@ async function main() {
 
   // 4. Provision Master Admin Account
   // RULE: Utilize environment variables for passwords. Set rotation flag to true.
+  // SECURITY FIX: Never fall back to a hardcoded password. The seed MUST receive
+  // the initial admin password via the ADMIN_PASSWORD environment variable.
   const adminEmail = 'admin.user@nibbank.com.et';
-  const rawAdminPassword = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
+  const rawAdminPassword = process.env.ADMIN_PASSWORD;
+  if (!rawAdminPassword) {
+    throw new Error(
+      'FATAL: ADMIN_PASSWORD environment variable is not set. ' +
+      'Set it before running the seed to avoid hardcoded credentials. ' +
+      'Example: ADMIN_PASSWORD="YourStr0ng!Pass" npx prisma db seed'
+    );
+  }
   const defaultPassword = await bcrypt.hash(rawAdminPassword, 10);
   
   const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });

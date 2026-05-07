@@ -64,7 +64,12 @@ async function getMemoAccessContext(userId: string, memoId: string) {
 
   const memo = await prisma.memo.findUnique({
     where: { id: memoId },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      originalName: true,
+      storageKey: true,
+      mimeType: true,
       kyc: true
     }
   });

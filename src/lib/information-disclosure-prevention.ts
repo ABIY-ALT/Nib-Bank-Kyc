@@ -425,17 +425,27 @@ export function handleServerActionError(
   const errorType = detectErrorType(error);
   const statusCode = getStatusCodeForError(errorType);
 
+  // SECURITY FIX: Log internal diagnostics server-side only.
+  // Previously, an `_internal` object (statusCode, shouldLog, sensitiveData,
+  // context) was included in the return value. If any caller serialised that
+  // to a client response it would leak server internals (OWASP A01:2021).
+  if (shouldLogError(error)) {
+    try {
+      console.error('[ServerActionError]', {
+        code: errorType,
+        statusCode,
+        sensitiveData: findSensitiveDataInError(error),
+        context,
+      });
+    } catch (_) {
+      // Swallow logging failures – never let them propagate.
+    }
+  }
+
   return {
     success: false,
     error: getSafeErrorMessage(error, errorType),
     code: errorType,
-    // Internal: this would be logged server-side
-    _internal: {
-      statusCode,
-      shouldLog: shouldLogError(error),
-      sensitiveData: findSensitiveDataInError(error),
-      context,
-    },
   };
 }
 

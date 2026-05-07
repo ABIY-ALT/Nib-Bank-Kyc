@@ -108,7 +108,10 @@ export function checkLocalWindowsSMBSigning(): SMBSecurityCheckResult {
       Write-Output "EnableSecuritySignature: $signingEnabled"
     `;
 
-    const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', psCommand], {
+    // SECURITY FIX #4: Use absolute path for powershell.exe
+    // WHY: Relative command names are vulnerable to PATH hijacking attacks.
+    // An attacker could place a malicious powershell.exe earlier in the PATH.
+    const result = spawnSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', ['-NoProfile', '-Command', psCommand], {
       encoding: 'utf-8',
       timeout: 10000,
       maxBuffer: 10 * 1024 * 1024,
@@ -233,7 +236,10 @@ export function checkRemoteSMBSigning(
     // Note: Requires nmap to be installed on the system
     const nmapCommand = `nmap -p ${port} --script smb-security-mode ${host}`;
 
-    const result = spawnSync('cmd.exe', ['/c', nmapCommand], {
+    // SECURITY FIX #5: Use absolute path for cmd.exe
+    // WHY: Relative command names are vulnerable to PATH hijacking attacks.
+    // An attacker could place a malicious cmd.exe earlier in the PATH.
+    const result = spawnSync('C:\\Windows\\System32\\cmd.exe', ['/c', nmapCommand], {
       encoding: 'utf-8',
       timeout: 30000,
       maxBuffer: 10 * 1024 * 1024,

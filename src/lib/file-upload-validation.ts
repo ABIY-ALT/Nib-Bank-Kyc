@@ -64,24 +64,9 @@ export const ALLOWED_FILE_TYPES: Record<string, FileTypeDefinition> = {
         signature: Buffer.from('%PDF', 'utf8'), // Starts with %PDF
       },
     ],
-    maxSizeBytes: 25 * 1024 * 1024, // 25 MB
+    maxSizeBytes: 5 * 1024 * 1024, // 5 MB (Banking Standard)
     category: 'document',
     description: 'PDF Document',
-  },
-
-  // Microsoft Word
-  docx: {
-    extensions: ['docx'],
-    mimeTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-    magicBytes: [
-      {
-        offset: 0,
-        signature: Buffer.from([0x50, 0x4b, 0x03, 0x04]), // ZIP file signature
-      },
-    ],
-    maxSizeBytes: 20 * 1024 * 1024, // 20 MB
-    category: 'document',
-    description: 'Microsoft Word Document',
   },
 
   // PNG Image
@@ -94,7 +79,7 @@ export const ALLOWED_FILE_TYPES: Record<string, FileTypeDefinition> = {
         signature: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), // PNG signature
       },
     ],
-    maxSizeBytes: 10 * 1024 * 1024, // 10 MB
+    maxSizeBytes: 5 * 1024 * 1024, // 5 MB
     category: 'image',
     description: 'PNG Image',
   },
@@ -109,7 +94,7 @@ export const ALLOWED_FILE_TYPES: Record<string, FileTypeDefinition> = {
         signature: Buffer.from([0xff, 0xd8, 0xff]), // JPEG start marker
       },
     ],
-    maxSizeBytes: 10 * 1024 * 1024, // 10 MB
+    maxSizeBytes: 5 * 1024 * 1024, // 5 MB
     category: 'image',
     description: 'JPEG Image',
   },
@@ -128,7 +113,7 @@ export const ALLOWED_FILE_TYPES: Record<string, FileTypeDefinition> = {
         signature: Buffer.from([0x4d, 0x4d, 0x00, 0x2a]), // TIFF big-endian
       },
     ],
-    maxSizeBytes: 50 * 1024 * 1024, // 50 MB for high-quality scans
+    maxSizeBytes: 5 * 1024 * 1024, // 5 MB
     category: 'image',
     description: 'TIFF Image',
   },
@@ -243,11 +228,20 @@ export function validateFile(
   mimeType: string,
   buffer: Buffer
 ): FileValidationResult {
-  // 1. Validate extension
+  // 1. Validate extension and check for double extensions
   if (!isExtensionAllowed(filename)) {
     return {
       valid: false,
       error: `File extension not allowed. Allowed types: ${getAllowedExtensions().join(', ')}`,
+    };
+  }
+
+  // Security: Prevent double extensions (e.g. file.pdf.exe)
+  const parts = filename.split('.');
+  if (parts.length > 2) {
+    return {
+      valid: false,
+      error: 'Security risk: Double extensions are prohibited.',
     };
   }
 
@@ -340,7 +334,11 @@ export function sanitizeFilename(filename: string): string {
   sanitized = sanitized.replace(/[._]{2,}/g, '_');
 
   // Remove leading/trailing dots and dashes
-  sanitized = sanitized.replace(/^[\._-]+|[\._-]+$/g, '');
+  // SECURITY FIX: Split alternation regex to prevent ReDoS (super-linear backtracking).
+  // WHY: /^[\._-]+|[\._-]+$/g uses alternation with quantifiers that can cause
+  // catastrophic backtracking on crafted input, leading to denial of service.
+  sanitized = sanitized.replace(/^[\._-]+/, '');
+  sanitized = sanitized.replace(/[\._-]+$/, '');
 
   return sanitized || 'file';
 }

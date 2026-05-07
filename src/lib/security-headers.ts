@@ -56,7 +56,10 @@ export function getContentSecurityPolicy(config: SecurityHeadersConfig): string 
     `font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com`,
     
     // Connect: API calls, WebSockets (restrict to your domain)
-    `connect-src 'self' https://${config.domain} wss://${config.domain}${isDev ? ' http://localhost:* ws://localhost:*' : ''}`,
+    // SECURITY FIX #6: CSP connect-src hardened.
+    // WHY: localhost and wildcard ports must NEVER appear in production CSP.
+    // isDev is strictly gated on config.environment === 'development'.
+    `connect-src 'self'${config.environment === 'production' ? '' : ` https://${config.domain} wss://${config.domain}`}${config.environment === 'development' ? ' http://localhost:* ws://localhost:*' : ''}`,
     
     // Media: audio/video from self + EXPLICIT trusted sources ONLY (NO wildcard https:)
     `media-src 'self' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com`,

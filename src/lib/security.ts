@@ -110,7 +110,8 @@ export function secureShuffle<T>(array: T[]): T[] {
  */
 export function signDownloadToken(memoId: string, ttlSeconds: number = 3600): string {
   const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
-  const secret = process.env.JWT_SECRET || 'institutional-default-secret-do-not-use-in-prod';
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('FATAL: JWT_SECRET environment variable is not set. Cannot sign download tokens.');
   
   const payload = Buffer.from(JSON.stringify({ memoId, exp: expiresAt })).toString('base64url');
   const signature = crypto
@@ -129,7 +130,8 @@ export function verifyDownloadToken(token: string): string | null {
     const [payloadB64, signature] = token.split('.');
     if (!payloadB64 || !signature) return null;
     
-    const secret = process.env.JWT_SECRET || 'institutional-default-secret-do-not-use-in-prod';
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error('FATAL: JWT_SECRET environment variable is not set. Cannot verify download tokens.');
     const expectedSignature = crypto
       .createHmac('sha256', secret)
       .update(payloadB64)

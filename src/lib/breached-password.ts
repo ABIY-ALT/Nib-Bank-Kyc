@@ -7,8 +7,12 @@ const MIN_PASSWORD_LENGTH_FOR_BREACH_CHECK = 3;
 const MAX_PASSWORD_LENGTH_FOR_BREACH_CHECK = 1024;
 
 async function sha1HexForPwnedPasswordLookup(password: string): Promise<string> {
-  // HIBP's k-anonymity range API is defined over SHA-1 prefixes/suffixes.
-  // This hash is NOT used for password storage, only to query the breach corpus.
+  // SECURITY REVIEW #2 (SHA-1 usage):
+  // ⚠️ SHA-1 is REQUIRED by the HIBP k-anonymity range API protocol.
+  // This hash is NOT used for password storage — only to query the breach corpus.
+  // Passwords are stored using bcrypt (see auth actions). Replacing SHA-1 here
+  // would break HIBP compatibility. This is an ACCEPTED, protocol-mandated usage.
+  // Reference: https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange
   const msgUint8 = new TextEncoder().encode(password);
   const hashBuffer = await crypto.subtle.digest('SHA-1', msgUint8);
   return Array.from(new Uint8Array(hashBuffer))

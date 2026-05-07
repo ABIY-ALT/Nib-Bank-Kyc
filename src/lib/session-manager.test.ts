@@ -24,6 +24,9 @@ const sessionManager = new SessionManager();
 describe('SessionManager', () => {
   const testUserId = 'test-user-123';
   const testDeviceId = 'device-xyz';
+  // SECURITY FIX #3: Moved hardcoded IP '192.168.1.100' to env variable.
+  // WHY: Hardcoded IPs expose internal infrastructure in source control.
+  const testIpAddress = process.env.TEST_TARGET_IP || '10.0.0.1';
 
   beforeEach(async () => {
     // Clear test data before each test
@@ -41,7 +44,7 @@ describe('SessionManager', () => {
         deviceId: testDeviceId,
         deviceName: 'Web Browser',
         userAgent: 'Mozilla/5.0',
-        ipAddress: '192.168.1.100',
+        ipAddress: testIpAddress,
       });
 
       expect(result.accessToken).toBeDefined();
@@ -135,7 +138,7 @@ describe('SessionManager', () => {
       const result = await sessionManager.rotateRefreshToken(
         initialSession.id,
         initialRefreshToken,
-        '192.168.1.100'
+        testIpAddress
       );
 
       expect(result.accessToken).toBeDefined();

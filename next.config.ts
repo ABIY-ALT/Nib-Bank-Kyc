@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     // Allow only approved quality settings to avoid warnings
-    qualities: [75, 85],
+    qualities: [75, 85, 100],
     // Use modern image formats for better compression (only these are configurable)
     // PNG/JPEG fallback is automatic for older browsers
     formats: ['image/webp', 'image/avif'],

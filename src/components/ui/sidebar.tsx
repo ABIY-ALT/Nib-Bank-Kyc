@@ -651,8 +651,13 @@ const SidebarMenuSkeleton = React.forwardRef<
   }
 >(({ className, showIcon = false, ...props }, ref) => {
   // Random width between 50 to 90%.
+  // SECURITY FIX #1: Replaced Math.random() with crypto.getRandomValues()
+  // WHY: Math.random() is not cryptographically secure and uses a weak PRNG.
+  // Even for UI purposes, we enforce CSPRNG across the entire codebase.
   const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
+    const array = new Uint32Array(1)
+    crypto.getRandomValues(array)
+    return `${(array[0] % 40) + 50}%`
   }, [])
 
   return (

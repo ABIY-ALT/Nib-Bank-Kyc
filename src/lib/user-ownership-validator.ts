@@ -12,7 +12,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/prisma';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret');
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is not set. Cannot initialise ownership validator.');
+}
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 /**
  * Verify that authenticated user can access the requested resource ID
