@@ -228,6 +228,21 @@ const ROUTE_RULES: RouteRule[] = [
     requireAnyPermission: [...REPORTING_ACCESS_PERMISSIONS, ...PERFORMANCE_ACCESS_PERMISSIONS],
     requiredLabel: "REPORTING_ACCESS",
   },
+  {
+    matches: (pathname) => pathname.startsWith("/api/data/users") || 
+                         pathname.startsWith("/api/data/roles") ||
+                         pathname.startsWith("/api/data/permissions") ||
+                         pathname.startsWith("/api/data/branches") ||
+                         pathname.startsWith("/api/data/audit_logs") ||
+                         pathname.startsWith("/api/data/settings"),
+    requireAnyRole: ["SUPER_ADMIN"],
+    requiredLabel: "ADMIN_ACCESS",
+  },
+  {
+    matches: (pathname) => pathname.startsWith("/api/data/submissions"),
+    requireAnyPermission: ["CASE_VIEW_OWN", "CASE_VIEW_BRANCH", "KYC_VIEW_QUEUE"],
+    requiredLabel: "CASE_ACCESS",
+  },
 ];
 
 function normalizeRoleName(roleName?: string | null) {

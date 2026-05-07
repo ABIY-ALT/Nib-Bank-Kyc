@@ -689,7 +689,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
           type: 'GOVERNANCE_MEMO',
           storageKey: storedKey,
           fileHash: validation.fileHash,
-          uploadedBy: { connect: { id: session.id } },
+          uploadedById: session.id,
           kycId: id,
           mimeType: validation.fileType || memo.type,
           size: persistableBuffer.length

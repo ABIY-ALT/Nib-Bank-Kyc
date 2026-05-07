@@ -11,13 +11,15 @@ export interface LogResult {
 export function logInstitutionalError(error: any, context: string): LogResult {
   const isProd = process.env.NODE_ENV === 'production';
   const timestamp = new Date().toISOString();
-  const traceId = `ERR_${Math.random().toString(36).substring(2, 8).toUpperCase()}_${Date.now().toString().slice(-4)}`;
+  const traceId = `ERR_${require('./security').generateSecureString(6, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')}_${Date.now().toString().slice(-4)}`;
 
   // SERVER-SIDE LOGGING (Detailed)
 
   if (!isProd) {
+    // SECURITY FIX: Never return raw error.message — callers serialize this to client responses.
+    // Full error details are available in server-side logs only.
     return {
-      message: error instanceof Error ? error.message : String(error),
+      message: "An internal service exception occurred.",
       traceId
     };
   }

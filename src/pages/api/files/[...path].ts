@@ -1,131 +1,15 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import fs from 'fs/promises';
-import path from 'path';
-import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
-import { UPLOADS_DIR_NAME } from '@/lib/file-upload-validation';
 
 /**
- * Serves uploaded files from the uploads directory.
- * Supports PDFs, images, and other file types with proper MIME type headers.
+ * Legacy endpoint intentionally disabled.
+ * Files must be served via signed access route: /api/memos/[token]
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  try {
-    const { path: filePath } = req.query;
-
-    // Ensure path is provided and is an array
-    if (!filePath || !Array.isArray(filePath)) {
-
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-
-    // Reconstruct the file path from the array
-    const requestedPath = filePath.join('/');
-
-
-    // Security: Prevent directory traversal attacks
-    if (requestedPath.includes('..') || requestedPath.startsWith('/')) {
-
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    // Handle both secure_uploads filename and plain filename formats
-    const uploadsDirName = UPLOADS_DIR_NAME;
-    let finalPath = requestedPath;
-    if (!requestedPath.startsWith(`${uploadsDirName}/`)) {
-      finalPath = `${uploadsDirName}/${requestedPath}`;
-    }
-
-    // Construct the full file path (stored outside web root)
-    const fullPath = path.join(process.cwd(), finalPath);
-
-
-    // Verify the resolved path is still within the uploads directory
-    const uploadsDir = path.join(process.cwd(), uploadsDirName);
-    const resolvedPath = path.resolve(fullPath);
-    const resolvedUploadsDir = path.resolve(uploadsDir);
-
-
-
-    if (!resolvedPath.startsWith(resolvedUploadsDir)) {
-
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    // Check if file exists
-    let fileExists = false;
-    try {
-      await fs.access(fullPath);
-      fileExists = true;
-
-    } catch (err) {
-
-      
-      // Try to list files in uploads directory for debugging
-      try {
-        const uploadsPath = path.join(process.cwd(), 'uploads');
-        const files = await fs.readdir(uploadsPath);
-
-      } catch (listErr) {
-
-      }
-      
-      return res.status(404).json({ error: 'File not found', path: finalPath });
-    }
-
-    if (!fileExists) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    // Get file stats
-    const stats = await fs.stat(fullPath);
-
-    if (!stats.isFile()) {
-
-      return res.status(400).json({ error: 'Not a file' });
-    }
-
-    // Determine MIME type based on file extension
-    const ext = path.extname(fullPath).toLowerCase();
-    let mimeType = 'application/octet-stream';
-
-    const mimeTypes: Record<string, string> = {
-      '.pdf': 'application/pdf',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp',
-      '.bmp': 'image/bmp',
-      '.txt': 'text/plain',
-      '.doc': 'application/msword',
-      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      '.xls': 'application/vnd.ms-excel',
-      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    };
-
-    if (mimeTypes[ext]) {
-      mimeType = mimeTypes[ext];
-    }
-
-
-
-    // Set response headers
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Length', stats.size);
-    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
-    res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
-
-    // Stream the file
-    const fileStream = await fs.readFile(fullPath);
-    res.status(200).send(fileStream);
-  } catch (error) {
-
-    // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
-    const safeMessage = getSafeErrorMessage(error);
-    res.status(500).json({ error: 'Internal server error', details: safeMessage });
-  }
+  return res.status(410).json({
+    error: 'This endpoint is no longer available.',
+  });
 }

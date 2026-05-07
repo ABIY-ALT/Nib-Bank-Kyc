@@ -13,7 +13,8 @@ import { safeLog } from '@/lib/logging-redaction';
 import { 
   successResponse, 
   badRequestResponse, 
-  unauthorizedResponse 
+  unauthorizedResponse,
+  tooManyRequestsResponse 
 } from '@/lib/api-security';
 
 /**
@@ -95,7 +96,7 @@ export function createLoginRateLimitMiddleware() {
 
     if (!allowed) {
       safeLog.warn('Login rate limit exceeded', { ip: clientIp, resetAt: resetAt.toISOString() });
-      const response = badRequestResponse('Too many login attempts.', 429);
+      const response = tooManyRequestsResponse('Too many login attempts.');
       addRateLimitHeaders(response, allowed, remaining, resetAt, RATE_LIMIT_CONFIG.LOGIN.maxAttempts);
       return response;
     }
@@ -108,7 +109,7 @@ export async function checkRefreshRateLimit(userId: string) {
   const { allowed, remaining, resetAt } = checkRateLimit(key, RATE_LIMIT_CONFIG.REFRESH.maxAttempts, RATE_LIMIT_CONFIG.REFRESH.windowMs);
 
   if (!allowed) {
-    const response = badRequestResponse('Too many refresh attempts.', 429);
+    const response = tooManyRequestsResponse('Too many refresh attempts.');
     addRateLimitHeaders(response, allowed, remaining, resetAt, RATE_LIMIT_CONFIG.REFRESH.maxAttempts);
     return response;
   }
@@ -120,7 +121,7 @@ export async function checkUploadRateLimit(userId: string) {
   const { allowed, remaining, resetAt } = checkRateLimit(key, RATE_LIMIT_CONFIG.MEMO_UPLOAD.maxAttempts, RATE_LIMIT_CONFIG.MEMO_UPLOAD.windowMs);
 
   if (!allowed) {
-    const response = badRequestResponse('Upload limit exceeded. Try again in an hour.', 429);
+    const response = tooManyRequestsResponse('Upload limit exceeded. Try again in an hour.');
     addRateLimitHeaders(response, allowed, remaining, resetAt, RATE_LIMIT_CONFIG.MEMO_UPLOAD.maxAttempts);
     return response;
   }
@@ -132,7 +133,7 @@ export async function checkAccessRateLimit(userId: string) {
   const { allowed, remaining, resetAt } = checkRateLimit(key, RATE_LIMIT_CONFIG.MEMO_ACCESS.maxAttempts, RATE_LIMIT_CONFIG.MEMO_ACCESS.windowMs);
 
   if (!allowed) {
-    const response = badRequestResponse('Access limit exceeded.', 429);
+    const response = tooManyRequestsResponse('Access limit exceeded.');
     addRateLimitHeaders(response, allowed, remaining, resetAt, RATE_LIMIT_CONFIG.MEMO_ACCESS.maxAttempts);
     return response;
   }

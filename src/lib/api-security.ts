@@ -234,6 +234,18 @@ export function internalErrorResponse(message?: string) {
 }
 
 /**
+ * Return too many requests error response (generic message - 429)
+ */
+export function tooManyRequestsResponse(message?: string) {
+  const safeMessage = message ? getSafeErrorMessage(message) : 'Rate limit exceeded';
+  const response = NextResponse.json(
+    sanitizeData({ error: safeMessage, code: 'TOO_MANY_REQUESTS' }),
+    { status: 429 }
+  );
+  return applySecurityHeaders(response);
+}
+
+/**
  * Create success response with security headers applied
  */
 export function successResponse(data: any, status = 200) {

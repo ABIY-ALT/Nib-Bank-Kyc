@@ -55,10 +55,10 @@ export class InstitutionalHttpClient {
       ];
 
       if (blockedPatterns.some(pattern => hostname.includes(pattern))) {
-        throw new Error(`[Security Alert] SSRF attempt blocked: ${hostname}`);
+        throw new Error('Request to restricted destination blocked');
       }
     } catch (error: any) {
-      throw new Error(error.message || `Invalid or restricted destination: ${url}`);
+      throw new Error('Invalid request destination');
     }
   }
 
@@ -129,7 +129,7 @@ export class InstitutionalHttpClient {
         statusText: 'Network Error',
         headers: new Headers(),
         data: null as T,
-        error: error.message.includes('abort') ? 'Request timeout' : error.message,
+        error: error.message?.includes('abort') ? 'Request timeout' : 'Request failed',
       };
     }
   }

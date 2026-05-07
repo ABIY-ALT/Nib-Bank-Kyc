@@ -312,3 +312,48 @@ export async function verifyPermissionAccess(
     };
   }
 }
+
+/**
+ * Verify that the authenticated user owns a specific record in the database.
+ */
+export async function verifyRecordOwnership(
+  request: NextRequest,
+  modelName: string,
+  recordId: string,
+  ownerField: string
+): Promise<{ authorized: boolean; isAdmin: boolean; userId?: string }> {
+  try {
+    const identity = await verifyUserOwnership(request, '');
+    
+    // Identity.authorized will be false if the ID match failed, but we only care about if they are logged in
+    // and if they are an admin.
+    const userId = identity.userId;
+    const isAdmin = identity.isAdmin || false;
+
+    if (!userId) {
+      return { authorized: false, isAdmin: false };
+    }
+
+    if (isAdmin) {
+      return { authorized: true, isAdmin: true, userId };
+    }
+
+    const model = (prisma as any)[modelName];
+    if (!model) return { authorized: false, isAdmin: false };
+
+    const record = await model.findUnique({
+      where: { id: recordId },
+      select: { [ownerField]: true }
+    });
+
+    if (!record) return { authorized: false, isAdmin: false };
+
+    return { 
+      authorized: record[ownerField] === userId, 
+      isAdmin: false, 
+      userId 
+    };
+  } catch (error) {
+    return { authorized: false, isAdmin: false };
+  }
+}

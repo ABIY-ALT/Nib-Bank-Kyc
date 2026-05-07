@@ -39,12 +39,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
       } catch (e: any) {
-        results.push({ id, success: false, error: e.message });
+        results.push({ id, success: false, error: 'Operation failed' });
       }
     }
 
     return res.status(200).json({ success: true, results });
   } catch (e: any) {
-    return res.status(500).json({ success: false, error: e.message || 'Server error' });
+    return res.status(500).json({ success: false, error: 'An error occurred. Please try again.' });
   }
 }

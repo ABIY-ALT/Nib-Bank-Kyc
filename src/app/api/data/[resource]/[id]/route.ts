@@ -13,7 +13,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { NextRequest } from 'next/server';
-import { verifyUserOwnership, verifyAdminAccess } from '@/lib/user-ownership-validator';
+import { verifyUserOwnership, verifyAdminAccess, verifyRecordOwnership } from '@/lib/user-ownership-validator';
 import { 
   successResponse, 
   badRequestResponse, 
@@ -58,11 +58,24 @@ export async function GET(
       return badRequestResponse('ID parameter required');
     }
 
+    // Resources where user can only access their own data (owned resources)
+    const OWNED_RESOURCES: Record<string, string> = {
+      'submissions': 'createdById',
+      'kyc_findings': 'userId',
+      'submissions_docs': 'uploadedById',
+      'audit_logs': 'userId'
+    };
+
     // ===== AUTHORIZATION CHECK =====
     if (SINGLE_USER_RESOURCES.has(resourceLower)) {
       const ownership = await verifyUserOwnership(request, id);
       if (!ownership.authorized) {
         return forbiddenResponse('Access denied');
+      }
+    } else if (OWNED_RESOURCES[resourceLower]) {
+      const ownership = await verifyRecordOwnership(request, resourceLower, id, OWNED_RESOURCES[resourceLower]);
+      if (!ownership.authorized) {
+        return forbiddenResponse('Access denied: You do not own this record.');
       }
     } else if (ADMIN_ONLY_RESOURCES.has(resourceLower)) {
       const adminAccess = await verifyAdminAccess(request);
@@ -109,11 +122,24 @@ export async function PATCH(
       return badRequestResponse('Resource not found');
     }
 
+    // Resources where user can only access their own data (owned resources)
+    const OWNED_RESOURCES: Record<string, string> = {
+      'submissions': 'createdById',
+      'kyc_findings': 'userId',
+      'submissions_docs': 'uploadedById',
+      'audit_logs': 'userId'
+    };
+
     // ===== AUTHORIZATION CHECK =====
     if (SINGLE_USER_RESOURCES.has(resourceLower)) {
       const ownership = await verifyUserOwnership(request, id);
       if (!ownership.authorized) {
         return forbiddenResponse('Access denied');
+      }
+    } else if (OWNED_RESOURCES[resourceLower]) {
+      const ownership = await verifyRecordOwnership(request, resourceLower, id, OWNED_RESOURCES[resourceLower]);
+      if (!ownership.authorized) {
+        return forbiddenResponse('Access denied: You do not own this record.');
       }
     } else if (ADMIN_ONLY_RESOURCES.has(resourceLower)) {
       const adminAccess = await verifyAdminAccess(request);
@@ -134,11 +160,26 @@ export async function PATCH(
       return badRequestResponse('Resource not found');
     }
 
-    // IMPORTANT: Prevent users from changing their own role via API
-    if (resourceLower === 'users' && body.roles) {
+    // ===== SECURITY FIX: PREVENT PRIVILEGE ESCALATION VIA NESTED WRITES =====
+    // Use a strict allow-list for non-admin users instead of a deny-list
+    if (resourceLower === 'users') {
       const ownership = await verifyUserOwnership(request, id);
       if (!ownership.isAdmin) {
-        delete body.roles;
+        const ALLOWED_USER_FIELDS = ['firstName', 'lastName', 'phoneNumber'];
+        const sanitizedBody: any = {};
+        
+        ALLOWED_USER_FIELDS.forEach(field => {
+          if (body[field] !== undefined) {
+            sanitizedBody[field] = body[field];
+          }
+        });
+        
+        // Replace original body with sanitized version
+        for (const key in body) {
+          if (!ALLOWED_USER_FIELDS.includes(key)) {
+            delete body[key];
+          }
+        }
       }
     }
 

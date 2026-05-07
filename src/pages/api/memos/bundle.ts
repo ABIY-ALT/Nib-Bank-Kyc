@@ -1,12 +1,12 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from '@/actions/auth-server';
 import { prisma } from '@/lib/prisma';
-import fs from 'fs';
-import path from 'path';
 import archiver from 'archiver';
 import { logBundleDownload } from '@/actions/submissions';
 import { hasJurisdictionalAccess, getNormalizedRole } from '@/lib/jurisdiction';
 import { format } from 'date-fns';
+import { readSecureUploadedFile } from '@/lib/secure-file-storage';
+import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 
 export const config = { api: { bodyParser: false } };
 
@@ -75,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!m.kyc) {
         return res.status(404).json({
           success: false,
-          error: `Case record missing for memo ${m.id}`,
+          error: 'One or more requested records could not be found',
         });
       }
 
@@ -140,16 +140,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? `${districtName} ${branchName} ${dateLabel} ${timeLabel}/${customerName}`
         : `${districtName}/${branchName} ${dateLabel} ${timeLabel}/${customerName}`;
 
-      const relativePath = m.fileUrl?.replace(/^\/?/, '') || '';
-      const filePath = path.join(process.cwd(), relativePath);
-
       const safeFileName = sanitize(m.name || 'file');
       // ZIP standards require forward slashes for internal paths
       const nameInZip = folderPath + '/' + safeFileName;
 
-      if (fs.existsSync(filePath)) {
-        archive.file(filePath, { name: nameInZip });
-      } else {
+      try {
+        const fileBuffer = await readSecureUploadedFile(m.storageKey);
+        archive.append(fileBuffer, { name: nameInZip });
+      } catch {
         archive.append(`Missing file for memo ${m.id}\n`, {
           name: `${nameInZip}.missing.txt`,
         });
@@ -170,7 +168,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
-        error: error?.message || 'Server error',
+        error: getSafeErrorMessage(error),
       });
     }
   }

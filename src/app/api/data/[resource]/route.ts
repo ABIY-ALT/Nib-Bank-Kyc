@@ -45,9 +45,26 @@ export async function GET(
       return badRequestResponse(`Model not found: ${modelName}`);
     }
 
+    // ===== AUTHORIZATION & FILTERING =====
+    const user = await authenticateRequest(request);
+    const isAdmin = user?.role === 'SUPER_ADMIN';
+
+    const OWNED_RESOURCES: Record<string, string> = {
+      'submissions': 'createdById',
+      'kyc_findings': 'userId',
+      'submissions_docs': 'uploadedById',
+      'audit_logs': 'userId'
+    };
+
     // Fetch multiple records with filtering
     const filterParam = request.nextUrl.searchParams.get('filter');
-    const filter = filterParam ? JSON.parse(filterParam) : {};
+    let filter = filterParam ? JSON.parse(filterParam) : {};
+
+    // For owned resources, non-admins can only see their own records
+    if (OWNED_RESOURCES[resource] && !isAdmin) {
+      if (!user) return unauthorizedResponse('Unauthorized');
+      filter[OWNED_RESOURCES[resource]] = user.id;
+    }
 
     const records = await model.findMany({
       where: filter,
@@ -82,13 +99,35 @@ export async function POST(
       return badRequestResponse(`Model not found: ${modelName}`);
     }
 
-    const data = await request.json();
+    const body = await request.json();
 
+    // ===== RBAC ENFORCEMENT: Sensitive Resource Creation =====
+    const ADMIN_ONLY_RESOURCES = ['users', 'roles', 'permissions', 'branches', 'settings', 'audit_logs'];
+    if (ADMIN_ONLY_RESOURCES.includes(resource) && user.role !== 'SUPER_ADMIN') {
+      return unauthorizedResponse('Administrative privilege required to create this resource.');
+    }
+
+    // Map ownership field based on resource type
+    const OWNED_RESOURCES_MAPPING: Record<string, string> = {
+      'submissions': 'createdById',
+      'kyc_findings': 'userId',
+      'submissions_docs': 'uploadedById',
+      'audit_logs': 'userId'
+    };
+
+    const ownerField = OWNED_RESOURCES_MAPPING[resource];
+    const data = { ...body };
+
+    // Automatically set the owner field to the current user and remove any spoofed ID
+    if (ownerField) {
+      data[ownerField] = user.id;
+    }
+
+    // Always set creation metadata
     const record = await model.create({
       data: {
         ...data,
         createdAt: new Date(),
-        createdBy: user.id,
       },
     });
 
