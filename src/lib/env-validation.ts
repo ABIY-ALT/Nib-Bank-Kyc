@@ -24,10 +24,6 @@ const EnvSchema = z.object({
     .startsWith(
       'postgresql://',
       'DATABASE_URL must be a PostgreSQL connection string'
-    )
-    .refine(
-      (url) => !url.includes('password@'),
-      'DATABASE_URL cannot contain password in plain text - use secret manager'
     ),
 
   // JWT SECRET - CRITICAL SECURITY
