@@ -16,8 +16,10 @@ export async function getServerSession() {
     const token = cookieStore.get('nib-auth-token')?.value;
     if (!token) return null;
 
-    const secretStr = process.env.JWT_SECRET || "";
-    if (secretStr.length < 32) return null;
+    const secretStr = process.env.JWT_SECRET;
+    if (!secretStr || secretStr.length < 32) {
+      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure.");
+    }
 
     const secret = new TextEncoder().encode(secretStr);
     

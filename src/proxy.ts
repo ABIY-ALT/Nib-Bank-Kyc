@@ -1,47 +1,3 @@
-// Proxy middleware for authentication and security
-// SECURITY REQUIREMENTS:
-// - Replace wildcard (*) directives with explicitly trusted domains
-// - Restrict resource loading (scripts, styles, images, etc.) to known and trusted sources only
-// - Implement a least-privilege CSP policy tailored to application requirements
-// - Enable HSTS to enforce secure (HTTPS) connections
-// - Prevent Man-in-the-Middle (MITM) attacks
-// - Prevent SSL stripping and protocol downgrade attacks
-// - Enforce strict server-side authorization checks on all endpoints (RBAC)
-// - Prevent privilege escalation via forced browsing
-// - Monitor and log unauthorized access attempts
-//
-// CSP Policy enforces:
-// - No inline scripts (except with nonce)
-// - Scripts only from self + nonce + strict-dynamic
-// - Styles only from self + Google Fonts
-// - Images only from self + trusted CDNs (NOT wildcard *)
-// - Fonts only from self + Google Fonts
-// - Connections only to self + own domain
-//
-// HSTS Policy enforces:
-// - All connections must use HTTPS
-// - Browser remembers for 1 year (31536000 seconds)
-// - Applies to all subdomains (includeSubDomains)
-// - Production: HSTS preload list enabled for maximum security
-//
-// RBAC Authorization enforces (BROKEN ACCESS CONTROL PREVENTION):
-// - Route-based access control on ALL routes
-// - Admin routes (/admin/*): SUPER_ADMIN role or specific permissions required
-// - Submission routes (/submissions/*): Specific permissions required
-// - Reporting routes (/reports/*): Specific permissions required
-// - Performance routes (/performance/*): Specific permissions required
-// - Fetch user roles/permissions from database at middleware level
-// - No client-side restrictions - all checks server-side
-// - Log all unauthorized access attempts for monitoring
-//
-// Attack Mitigations:
-// ✅ MITM Prevention: HSTS forces HTTPS
-// ✅ SSL Stripping Prevention: Browser won't accept HTTP
-// ✅ Downgrade Attacks: Strict HTTPS enforcement
-// ✅ Privilege Escalation Prevention: Role checks at middleware level
-// ✅ Forced Browsing Prevention: Route-based access control
-// ✅ Unauthorized Access Logging: All attempts tracked in audit logs
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
@@ -105,7 +61,7 @@ export async function proxy(req: NextRequest) {
 
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-nonce', nonce);
-  
+
   // Security headers for all responses
   // CSP: Prevent XSS and injection attacks
   // HSTS: Enforce HTTPS, prevent MITM and SSL stripping
@@ -124,12 +80,12 @@ export async function proxy(req: NextRequest) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set('Content-Security-Policy', cspHeader);
     response.headers.set('Strict-Transport-Security', hstsHeader);
-    
+
     // SECURITY: SUPPRESS SENSITIVE HEADERS (VULN #6 / CWE-933)
     response.headers.delete('X-AspNet-Version');
     response.headers.delete('X-Powered-By');
     response.headers.delete('Server');
-    
+
     return response;
   }
 
@@ -146,12 +102,22 @@ export async function proxy(req: NextRequest) {
   }
 
   try {
-    const secretStr = process.env.JWT_SECRET || "";
-    if (secretStr.length < 32) {
-      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET missing or insecure.");
+    const secretStr = process.env.JWT_SECRET;
+    if (!secretStr || secretStr.length < 64) {
+      throw new Error("SECURE_AUTH_FAULT: JWT_SECRET missing or insecure (min 64 chars required).");
     }
     const secret = new TextEncoder().encode(secretStr);
-    const { payload } = await jwtVerify(token, secret);
+    
+    let payload;
+    try {
+      const verified = await jwtVerify(token, secret);
+      payload = verified.payload;
+    } catch (err) {
+      // SECURITY: Explicit rejection of tampered tokens
+      const response = NextResponse.redirect(new URL('/login?reason=session_tampered', req.url));
+      response.cookies.set('nib-auth-token', '', { httpOnly: true, secure: IS_PROD, sameSite: 'strict', expires: new Date(0), path: '/' });
+      return response;
+    }
 
     const nowSeconds = Math.floor(Date.now() / 1000);
 
@@ -165,7 +131,7 @@ export async function proxy(req: NextRequest) {
 
     const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || '127.0.0.1';
     let clientIp = rawIp.trim();
-    
+
     // Normalize IP: Strip port numbers (VULN #1 - Improved logging)
     if (clientIp.includes(':')) {
       if (clientIp.includes('[') && clientIp.includes(']')) {
@@ -218,9 +184,9 @@ export async function proxy(req: NextRequest) {
 
     // SINGLE SESSION ENFORCEMENT & CONCURRENT LOGIN CONTROL (VULN #7)
     if (userWithDetails.sessionId !== payload.sid) {
-       const response = NextResponse.redirect(new URL('/login?reason=session_conflict', req.url));
-       response.cookies.set('nib-auth-token', '', { httpOnly: true, secure: IS_PROD, sameSite: 'strict', expires: new Date(0), path: '/' });
-       return response;
+      const response = NextResponse.redirect(new URL('/login?reason=session_conflict', req.url));
+      response.cookies.set('nib-auth-token', '', { httpOnly: true, secure: IS_PROD, sameSite: 'strict', expires: new Date(0), path: '/' });
+      return response;
     }
 
     // MANDATORY SECURITY: Force Password Change (VULN #4)
@@ -239,11 +205,11 @@ export async function proxy(req: NextRequest) {
         metadata: {
           pathname,
           resource: 'PAGE_ACCESS',
-          reason: accessDecision.redirectTo?.includes('required=') 
+          reason: accessDecision.redirectTo?.includes('required=')
             ? 'INSUFFICIENT_PERMISSIONS'
             : 'ACCESS_DENIED',
         },
-      }).catch(() => {});
+      }).catch(() => { });
 
       const redirectUrl = accessDecision.redirectTo || '/unauthorized';
       const response = NextResponse.redirect(new URL(redirectUrl, req.url));
@@ -255,7 +221,7 @@ export async function proxy(req: NextRequest) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set('Content-Security-Policy', cspHeader);
     response.headers.set('Strict-Transport-Security', hstsHeader);
-    
+
     // SECURITY: SUPPRESS SENSITIVE HEADERS (VULN #6 / CWE-933)
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('X-Frame-Options', 'SAMEORIGIN');

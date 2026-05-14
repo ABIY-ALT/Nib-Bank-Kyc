@@ -61,9 +61,9 @@ export async function verifyAuthentication(request: Request) {
     }
     // Auth token verification log hidden
 
-    const secretStr = process.env.JWT_SECRET || '';
-    if (secretStr.length < 32) {
-      throw new Error('JWT_SECRET not configured securely');
+    const secretStr = process.env.JWT_SECRET;
+    if (!secretStr || secretStr.length < 64) {
+      throw new Error('SECURE_AUTH_FAULT: JWT_SECRET not configured securely (min 64 chars)');
     }
 
     const secret = new TextEncoder().encode(secretStr);
