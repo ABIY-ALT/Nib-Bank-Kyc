@@ -26,7 +26,11 @@ export async function getStorageInventory(params: {
       throw new Error("Authentication required");
     }
 
-    // SECURITY: Ignore privilege flags from client. Derive solely from verified session.
+    // SECURITY: Strict parameter validation. Rejects privilege escalation attempts.
+    if (params.isSuperAdmin === true && session.role !== 'SUPER_ADMIN') {
+      throw new Error("Unauthorized: Privilege escalation detected.");
+    }
+
     const isSuperAdmin = session.role === 'SUPER_ADMIN';
 
     if (session.id !== params.userId && !isSuperAdmin) {

@@ -728,7 +728,18 @@ export async function getWorkflowCounts(params: { userId: string, branchName?: s
     throw new Error("Authentication required");
   }
 
-  // SECURITY: Ignore privilege flags from client. Derive solely from verified session.
+  // SECURITY: Strict parameter validation. Rejects privilege escalation attempts.
+  if (params.isSuperAdmin === true && session.role !== 'SUPER_ADMIN') {
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'SECURITY_ALERT_PRIVILEGE_ESCALATION',
+      details: 'User attempted to claim Super Admin status in getWorkflowCounts parameter.',
+      severity: 'CRITICAL'
+    }).catch(() => {});
+    throw new Error("Unauthorized: Privilege escalation detected.");
+  }
+
   const isSuperAdmin = session.role === 'SUPER_ADMIN';
   
   try {

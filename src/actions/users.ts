@@ -183,7 +183,7 @@ export async function provisionUser(data: {
   }
 
   if (data.role === 'SUPER_ADMIN' && session.role !== 'SUPER_ADMIN') {
-    return { success: false, error: 'Unauthorized: Cannot assign SUPER_ADMIN privileges.' };
+    throw new Error('Unauthorized: Cannot assign SUPER_ADMIN privileges.');
   }
 
   try {
