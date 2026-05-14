@@ -96,23 +96,36 @@ export type EnvConfig = z.infer<typeof EnvSchema>;
  * This prevents the app from starting with invalid or missing secrets
  */
 export function validateEnv(): EnvConfig {
-  const env = {
-    NODE_ENV: (process.env.NODE_ENV || 'development') as any,
-    DATABASE_URL: process.env.DATABASE_URL as any,
-    JWT_SECRET: (process.env.JWT_SECRET || 'secret') as any,
-    SECURE_COOKIE_SAME_SITE: (process.env.SECURE_COOKIE_SAME_SITE || 'Strict') as any,
+  const rawEnv = {
+    NODE_ENV: process.env.NODE_ENV,
+    DATABASE_URL: process.env.DATABASE_URL,
+    JWT_SECRET: process.env.JWT_SECRET,
+    SECURE_COOKIE_SAME_SITE: process.env.SECURE_COOKIE_SAME_SITE,
     CREDENTIAL_SHARING: process.env.CREDENTIAL_SHARING === 'true',
-    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(v => v.trim()) : ['http://localhost:3000'],
-    CORS_MAX_AGE: process.env.CORS_MAX_AGE ? parseInt(process.env.CORS_MAX_AGE, 10) : 86400,
-    CORS_EXPOSED_HEADERS: process.env.CORS_EXPOSED_HEADERS ? process.env.CORS_EXPOSED_HEADERS.split(',').map(v => v.trim()) : ['Content-Type', 'Authorization'],
-    LOG_LEVEL: (process.env.LOG_LEVEL || 'info') as any,
-    AWS_REGION: process.env.AWS_REGION as any,
-    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID as any,
-    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY as any,
-    SECRET_NAME: process.env.SECRET_NAME as any,
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
+    CORS_MAX_AGE: process.env.CORS_MAX_AGE,
+    CORS_EXPOSED_HEADERS: process.env.CORS_EXPOSED_HEADERS,
+    LOG_LEVEL: process.env.LOG_LEVEL,
+    AWS_REGION: process.env.AWS_REGION,
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+    SECRET_NAME: process.env.SECRET_NAME,
   };
 
-  return env as any;
+  const result = EnvSchema.safeParse(rawEnv);
+
+  if (!result.success) {
+    const errors = result.error.flatten().fieldErrors;
+    const errorMsg = Object.entries(errors)
+      .map(([field, msgs]) => `  - ${field}: ${msgs?.join(', ')}`)
+      .join('\n');
+
+    console.error('\x1b[31m%s\x1b[0m', 'FATAL: Environment validation failed:');
+    console.error(errorMsg);
+    throw new Error('Institutional configuration fault. Application cannot start.');
+  }
+
+  return result.data;
 }
 
 /**

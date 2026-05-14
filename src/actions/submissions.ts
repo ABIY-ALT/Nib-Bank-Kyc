@@ -728,6 +728,18 @@ export async function getWorkflowCounts(params: { userId: string, branchName?: s
     throw new Error("Authentication required");
   }
 
+  // SECURITY: Strict identity verification. Rejects attempts to query other users' data.
+  if (params.userId && params.userId !== session.id && session.role !== 'SUPER_ADMIN') {
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'SECURITY_ALERT_IDENTITY_TAMPERING',
+      details: `User attempted to query workflow counts for target user ${params.userId}.`,
+      severity: 'CRITICAL'
+    }).catch(() => {});
+    throw new Error("Unauthorized: Identity mismatch detected.");
+  }
+
   // SECURITY: Strict parameter validation. Rejects privilege escalation attempts.
   if (params.isSuperAdmin === true && session.role !== 'SUPER_ADMIN') {
     await createAuditLog({
