@@ -4,12 +4,12 @@ import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { 
-  verifyAuthentication, 
-  applySecurityHeaders, 
+import {
+  verifyAuthentication,
+  applySecurityHeaders,
   unauthorizedResponse,
   successResponse,
-  getClientIp 
+  getClientIp
 } from "@/lib/api-security";
 
 /**
@@ -61,14 +61,14 @@ export async function GET(req: Request) {
         needsPasswordChange: true,
         assignedBranches: true,
         branch: { include: { district: true } },
-        roles: { 
-          include: { 
-            role: { 
-              include: { 
-                permissions: { include: { permission: true } } 
-              } 
-            } 
-          } 
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: { include: { permission: true } }
+              }
+            }
+          }
         }
       }
     });
@@ -91,7 +91,7 @@ export async function GET(req: Request) {
     await prisma.user.update({
       where: { id: user.id },
       data: { lastActivity: now }
-    }).catch(() => {}); // Don't block response if update fails
+    }).catch(() => { }); // Don't block response if update fails
 
     // POLICY UPDATE: Session versioning via updatedAt is unstable during activity tracking.
     // Concurrent sessions are enforced via 'sessionId' in the JWT payload.
@@ -135,16 +135,16 @@ export async function GET(req: Request) {
     // SECURITY FIX #3: Minimal JWT payload - only essential claims
     if (nowSeconds - iat > rotationThreshold) {
       const newToken = jwt.sign(
-        { 
+        {
           id: user.id,
           sid: session.sid,
           v: Math.floor(user.updatedAt.getTime() / 1000),
           abs: session.abs,
           needsPasswordChange: user.needsPasswordChange,
-          iat: nowSeconds 
+          iat: nowSeconds
         },
         secret,
-        { expiresIn: "30m" } 
+        { algorithm: 'HS512', expiresIn: "30m" }
       );
 
       response.cookies.set('nib-auth-token', newToken, {

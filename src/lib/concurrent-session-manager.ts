@@ -56,10 +56,13 @@ export async function createUserSession(
     });
 
     // ===== STEP 2: Create new session =====
+    // SECURITY: Use cryptographically secure 256-bit random ID for the session
+    const sessionId = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     
     const session = await prisma.session.create({
       data: {
+        id: sessionId,
         userId,
         deviceId,
         deviceName: deviceName || extractDeviceName(fingerprint.userAgent),

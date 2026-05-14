@@ -1,10 +1,10 @@
 import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/prisma';
-import { 
-  getSafeErrorMessage, 
-  sanitizeResponseHeaders, 
+import {
+  getSafeErrorMessage,
+  sanitizeResponseHeaders,
   HEADERS_TO_REMOVE,
-  sanitizeData 
+  sanitizeData
 } from './information-disclosure-prevention';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -30,7 +30,7 @@ export function getClientIp(request: Request): string {
     headersList.get('cf-connecting-ip') ||
     '127.0.0.1'
   );
-  
+
   // Normalize IP: Strip port numbers if present (e.g., "127.0.0.1:3000" -> "127.0.0.1")
   // Handles both IPv4 (127.0.0.1:port) and IPv6 ([::1]:port)
   if (rawIp.includes(':')) {
@@ -43,7 +43,7 @@ export function getClientIp(request: Request): string {
       return rawIp.split(':')[0];
     }
   }
-  
+
   return rawIp;
 }
 
@@ -123,7 +123,7 @@ export function verifyIpWhitelist(clientIp: string): boolean {
   // Check if IP is in whitelist (supports exact match and CIDR)
   return SENSITIVE_IP_WHITELIST.some(allowedIp => {
     if (allowedIp === clientIp) return true;
-    
+
     // Basic CIDR support (e.g., "192.168.1.0/24")
     if (allowedIp.includes('/')) {
       const [subnet, maskBits] = allowedIp.split('/');

@@ -8,8 +8,8 @@ import { logInstitutionalError } from "@/lib/logger";
 import crypto from "crypto";
 import { randomBytes } from "crypto";
 import { normalizeInstitutionalLogin } from "@/lib/login-identifier";
-import { 
-  applySecurityHeaders, 
+import {
+  applySecurityHeaders,
   badRequestResponse,
   successResponse,
   getClientIp,
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   const headerList = await headers();
   const ipAddress = getClientIp(req);
   const userAgent = headerList.get('user-agent') || 'unknown';
-  
+
   const uaHash = crypto.createHash('sha256').update(userAgent).digest('hex');
   const genericErrorMessage = "Invalid username or password.";
 
@@ -80,8 +80,8 @@ export async function POST(req: Request) {
           details: `Account temporarily locked due to ${recentFailures} failed attempts.`
         }
       });
-      const response = NextResponse.json({ 
-        error: "Account temporarily locked for security due to multiple failed login attempts. Please try again in 15 minutes or contact your system administrator." 
+      const response = NextResponse.json({
+        error: "Account temporarily locked for security due to multiple failed login attempts. Please try again in 15 minutes or contact your system administrator."
       }, { status: 429 });
       return applySecurityHeaders(response);
     }
@@ -100,18 +100,18 @@ export async function POST(req: Request) {
         assignedBranches: true,
         branchId: true,
         districtName: true,
-        roles: { 
-          include: { 
-            role: { 
-              include: { 
-                permissions: { 
-                  include: { 
-                    permission: true 
-                  } 
-                } 
-              } 
-            } 
-          } 
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
         },
         branch: { include: { district: true } }
       }
@@ -129,7 +129,7 @@ export async function POST(req: Request) {
     }
 
     const secret = process.env.JWT_SECRET;
-    
+
     if (!secret || secret.length < 32) {
       throw new Error("SECURE_AUTH_FAULT: JWT_SECRET environment variable is missing or insecure.");
     }
@@ -140,10 +140,10 @@ export async function POST(req: Request) {
         name: ur.role?.name ?? 'UNKNOWN',
         active: ur.role?.active ?? false,
         permissions: (ur.role?.permissions ?? []).map((p: any) => ({
-          permission: { 
-            slug: p.permission?.slug ?? '', 
-            name: p.permission?.name ?? '', 
-            group: p.permission?.group ?? '' 
+          permission: {
+            slug: p.permission?.slug ?? '',
+            name: p.permission?.name ?? '',
+            group: p.permission?.group ?? ''
           }
         }))
       }
@@ -153,8 +153,8 @@ export async function POST(req: Request) {
       .filter((r: any) => r.role.active)
       .map((r: any) => r.role.name);
 
-    const roleName = activeRoleNames.includes('SUPER_ADMIN') 
-      ? 'SUPER_ADMIN' 
+    const roleName = activeRoleNames.includes('SUPER_ADMIN')
+      ? 'SUPER_ADMIN'
       : (activeRoleNames[0] || 'UNASSIGNED');
 
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -183,7 +183,7 @@ export async function POST(req: Request) {
     // Store refreshToken in database for rotation
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
-      data: { 
+      data: {
         sessionId, // Store the new session ID from Session table
         refreshToken: refreshTokenHashed,
         refreshTokenExpiry,
@@ -195,15 +195,15 @@ export async function POST(req: Request) {
     const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
 
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        sid: sessionId, 
+      {
+        id: user.id,
+        sid: sessionId,
         abs: absoluteLimit,
         v: versionSeconds,
         needsPasswordChange: user.needsPasswordChange
       },
       secret,
-      { expiresIn: "30m" }
+      { algorithm: 'HS512', expiresIn: "30m" }
     );
 
     await prisma.auditLog.create({
@@ -255,10 +255,10 @@ export async function POST(req: Request) {
     return response;
   } catch (error: any) {
     // Log detailed error server-side ONLY
-    
+
     // Log to audit (without sending details to client)
     logInstitutionalError(error, 'AUTH_GATEWAY');
-    
+
     // Return generic error to client (no details exposed)
     return internalErrorResponse('Authentication service error');
   }
@@ -274,5 +274,5 @@ async function logFailure(email: string, ip: string, reason: string) {
         details: `Failed authentication attempt. Reason: ${reason}`
       }
     });
-  } catch (e) {}
+  } catch (e) { }
 }

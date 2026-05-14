@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { getServerSession } from './auth-server';
 import { createAuditLog } from './audit';
 import { isBreachedPassword } from '@/lib/breached-password';
+import { sessionAuthCookieDefaults } from '@/lib/server-session-auth';
 
 /**
  * Institutional Security: Resets user password.
@@ -84,25 +85,26 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
     if (session.id === userId) {
       const secret = process.env.JWT_SECRET || "";
       const versionSeconds = Math.floor(updatedUser.updatedAt.getTime() / 1000);
-      const { iat, exp, ...sessionData } = session as any;
+      const sid = (session as { sid?: string }).sid;
+      const abs = (session as { abs?: number }).abs;
 
       const newToken = jwt.sign(
-        { 
-          ...sessionData,
+        {
+          id: session.id,
+          sub: session.id,
+          sid,
+          abs,
           v: versionSeconds,
-          needsPasswordChange: false
+          needsPasswordChange: false,
         },
         secret,
-        { expiresIn: "10m" }
+        { algorithm: 'HS512', expiresIn: "10m" }
       );
 
       const cookieStore = await cookies();
       cookieStore.set('nib-auth-token', newToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'strict', // ALIGNED: Strict policy applied during credential rotation
+        ...sessionAuthCookieDefaults(),
         maxAge: 60 * 10,
-        path: '/',
       });
     }
 

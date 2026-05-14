@@ -74,7 +74,7 @@ function applyJsonSecurityHeaders(res: NextResponse, cspHeader: string, hstsHead
   res.headers.delete('Server');
 }
 
-export async function proxy(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get('nib-auth-token')?.value;
 
@@ -102,10 +102,12 @@ export async function proxy(req: NextRequest) {
 
   const hstsHeader = getHstsHeader();
 
+  const isPublicAuth = isPublicAuthApiPath(pathname);
   const isPublicImageAsset = PUBLIC_IMAGE_ASSET.test(pathname);
+
   if (
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/api/auth') ||
+    (isPublicAuth && (pathname === '/api/auth/login' || pathname === '/api/auth/register' || pathname.startsWith('/api/auth/reset-password') || pathname.startsWith('/api/auth/complete-password-reset') || pathname === '/api/auth/request-password-reset')) ||
     pathname === '/favicon.ico' ||
     pathname === '/login' ||
     pathname === '/unauthorized' ||

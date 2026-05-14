@@ -1,9 +1,7 @@
-import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAuthentication, successResponse, unauthorizedResponse } from "@/lib/api-security";
+import { sessionAuthCookieDefaults } from "@/lib/server-session-auth";
 import { revokeAllUserSessions } from "@/lib/concurrent-session-manager";
-
-const IS_PROD = process.env.NODE_ENV === 'production';
 
 /**
  * Institutional Logout Gateway.
@@ -48,21 +46,9 @@ export async function POST(request: Request) {
   const response = successResponse({ success: true });
   
   // Clear the secure cookies with Strict alignment
-  response.cookies.set('nib-auth-token', '', {
-    httpOnly: true,
-    secure: IS_PROD,
-    sameSite: 'strict',
-    expires: new Date(0),
-    path: '/',
-  });
-
-  response.cookies.set('nib-refresh-token', '', {
-    httpOnly: true,
-    secure: IS_PROD,
-    sameSite: 'strict',
-    expires: new Date(0),
-    path: '/',
-  });
+  const cleared = { ...sessionAuthCookieDefaults(), expires: new Date(0), maxAge: 0 };
+  response.cookies.set('nib-auth-token', '', cleared);
+  response.cookies.set('nib-refresh-token', '', cleared);
 
   return response;
 }

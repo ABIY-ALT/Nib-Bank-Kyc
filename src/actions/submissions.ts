@@ -722,34 +722,11 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
   }
 }
 
-export async function getWorkflowCounts(params: { userId: string, branchName?: string, branches?: string[], isSuperAdmin?: boolean }) {
+export async function getWorkflowCounts(params: any) {
+  // SECURITY: Ownership enforcement. Never trust client-supplied jurisdiction or identity.
   const session = await getServerSession();
   if (!session) {
     throw new Error("Authentication required");
-  }
-
-  // SECURITY: Strict identity verification. Rejects attempts to query other users' data.
-  if (params.userId && params.userId !== session.id && session.role !== 'SUPER_ADMIN') {
-    await createAuditLog({
-      userId: session.id,
-      userEmail: session.email,
-      action: 'SECURITY_ALERT_IDENTITY_TAMPERING',
-      details: `User attempted to query workflow counts for target user ${params.userId}.`,
-      severity: 'CRITICAL'
-    }).catch(() => {});
-    throw new Error("Unauthorized: Identity mismatch detected.");
-  }
-
-  // SECURITY: Strict parameter validation. Rejects privilege escalation attempts.
-  if (params.isSuperAdmin === true && session.role !== 'SUPER_ADMIN') {
-    await createAuditLog({
-      userId: session.id,
-      userEmail: session.email,
-      action: 'SECURITY_ALERT_PRIVILEGE_ESCALATION',
-      details: 'User attempted to claim Super Admin status in getWorkflowCounts parameter.',
-      severity: 'CRITICAL'
-    }).catch(() => {});
-    throw new Error("Unauthorized: Privilege escalation detected.");
   }
 
   const isSuperAdmin = session.role === 'SUPER_ADMIN';
@@ -767,8 +744,8 @@ export async function getWorkflowCounts(params: { userId: string, branchName?: s
     let scopeUnavailable = false;
     const normalizedRole = getNormalizedRole(session.role);
     const restrictedScope = buildRestrictedJurisdictionFilter(user, normalizedRole, [], undefined);
-    const branchName = getResolvedUserBranchName(user);
-    const districtName = getResolvedUserDistrictName(user);
+    const dbBranchName = getResolvedUserBranchName(user);
+    const dbDistrictName = getResolvedUserDistrictName(user);
 
     if (!isSuperAdmin) {
       if (restrictedScope?.denied) {
@@ -781,10 +758,10 @@ export async function getWorkflowCounts(params: { userId: string, branchName?: s
         const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
         if (assignedBranches.length > 0) {
           scopeFilter = { branchName: { in: assignedBranches } };
-        } else if (branchName) {
-          scopeFilter = { branchName };
-        } else if (normalizedRole === DISTRICT_DIRECTOR_ROLE && districtName) {
-          scopeFilter = { districtName };
+        } else if (dbBranchName) {
+          scopeFilter = { branchName: dbBranchName };
+        } else if (normalizedRole === DISTRICT_DIRECTOR_ROLE && dbDistrictName) {
+          scopeFilter = { districtName: dbDistrictName };
         } else {
           scopeUnavailable = true;
         }

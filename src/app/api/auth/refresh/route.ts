@@ -4,8 +4,8 @@ import { headers, cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { 
-  applySecurityHeaders, 
+import {
+  applySecurityHeaders,
   unauthorizedResponse,
   successResponse,
   getClientIp,
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     // Get refresh token from request body (for API clients) or attempt from cookie
     const text = await req.text();
     let body: any = {};
-    
+
     if (text) {
       try {
         body = JSON.parse(text);
@@ -65,7 +65,9 @@ export async function POST(req: Request) {
 
     if (accessTokenCookie) {
       try {
-        const decoded: any = jwt.verify(accessTokenCookie, secret);
+        const decoded: any = jwt.verify(accessTokenCookie, secret, {
+          algorithms: ['HS512']
+        });
         userId = decoded.id;
         sessionId = decoded.sid;
       } catch {
@@ -96,14 +98,14 @@ export async function POST(req: Request) {
         districtName: true,
         assignedBranches: true,
         branch: { include: { district: true } },
-        roles: { 
-          include: { 
-            role: { 
-              include: { 
-                permissions: { include: { permission: true } } 
-              } 
-            } 
-          } 
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: { include: { permission: true } }
+              }
+            }
+          }
         }
       }
     });
@@ -180,7 +182,7 @@ export async function POST(req: Request) {
         needsPasswordChange: user.needsPasswordChange
       },
       secret,
-      { expiresIn: '30m' }
+      { algorithm: 'HS512', expiresIn: '30m' }
     );
 
     // Generate new refresh token (1d expiry)

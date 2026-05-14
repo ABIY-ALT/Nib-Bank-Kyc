@@ -22,7 +22,7 @@ export async function getServerSession() {
     }
 
     const secret = new TextEncoder().encode(secretStr);
-    
+
     let payload: any;
     try {
       const { payload: verifiedPayload }: any = await jwtVerify(token, secret);
@@ -31,7 +31,7 @@ export async function getServerSession() {
       // STRICT: DETECTED TAMPERING OR SIGNATURE MISMATCH
       return null;
     }
-    
+
     const nowSeconds = Math.floor(Date.now() / 1000);
 
     // 1. ABSOLUTE LIFETIME ENFORCEMENT
@@ -40,18 +40,18 @@ export async function getServerSession() {
     // 2. SERVER-SIDE BINDING & ROLE VALIDATION
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
-      select: { 
+      select: {
         email: true,
-        updatedAt: true, 
-        status: true, 
+        updatedAt: true,
+        status: true,
         sessionId: true,
-        roles: { 
-          include: { 
+        roles: {
+          include: {
             role: {
               select: { name: true, active: true }
-            } 
-          } 
-        } 
+            }
+          }
+        }
       }
     });
 
@@ -69,7 +69,7 @@ export async function getServerSession() {
     // 3. TOKEN VERSIONING (Revocation on password/role change)
     // POLICY UPDATE: Session versioning via updatedAt is unstable during background activity tracking.
     // Session revocation is managed via explicit password changes or administrative session resets.
-    
+
     // Resolve master role for permissions
     const activeRoles = user.roles.filter((ur: any) => ur.role.active).map((ur: any) => ur.role.name);
     const masterRole = activeRoles.includes('SUPER_ADMIN') ? 'SUPER_ADMIN' : (activeRoles[0] || 'UNASSIGNED');
@@ -131,7 +131,7 @@ export async function verifyPermission(slug: string) {
 
   if (!user || user.status !== 'ACTIVE') return false;
 
-  return user.roles.some((ur: any) => 
+  return user.roles.some((ur: any) =>
     ur.role.active && ur.role.permissions.some((rp: any) => rp.permission.slug === slug)
   );
 }

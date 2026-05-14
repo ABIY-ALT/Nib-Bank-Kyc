@@ -20,7 +20,7 @@ export async function getStorageInventory(params: {
   const { isSuperAdmin, assignedBranches, branchName } = params;
 
   try {
-    // Ownership enforcement: Do not trust client-supplied `userId`.
+    // SECURITY: Ownership enforcement. Never trust client-supplied jurisdiction or identity.
     const session = await getServerSession();
     if (!session) {
       throw new Error("Authentication required");
@@ -37,16 +37,31 @@ export async function getStorageInventory(params: {
       throw new Error("Access denied");
     }
 
+    // Fetch actual jurisdiction from DB to prevent parameter tampering
+    const user = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { branchId: true, assignedBranches: true, branch: { select: { name: true } } }
+    });
+
+    if (!user) {
+      return [];
+    }
+
     let whereClause: any = {};
 
     if (!isSuperAdmin) {
-      if (assignedBranches && assignedBranches.length > 0) {
+      const dbAssignedBranches = user.assignedBranches 
+        ? user.assignedBranches.split(',').map(b => b.trim()).filter(Boolean)
+        : [];
+      const dbBranchName = user.branch?.name;
+
+      if (dbAssignedBranches.length > 0) {
         whereClause.kyc = {
-          branchName: { in: assignedBranches }
+          branchName: { in: dbAssignedBranches }
         };
-      } else if (branchName) {
+      } else if (dbBranchName) {
         whereClause.kyc = {
-          branchName: branchName
+          branchName: dbBranchName
         };
       } else {
         // Restricted access
@@ -122,7 +137,7 @@ export async function deleteInstitutionalFile(memoId: string) {
     // 3. Clear relevant caches
     revalidatePath('/admin/storage');
     revalidatePath(`/submissions/${memo.kycId}`);
-    
+
     return { success: true, kycId: memo.kycId };
   } catch (error: any) {
     // SECURITY: Use generic safe error message (A03:2021 - Information Disclosure)
