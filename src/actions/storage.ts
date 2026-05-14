@@ -2,11 +2,10 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import fs from 'fs/promises';
-import path from 'path';
 import { signDownloadToken } from '@/lib/security';
 import { getServerSession } from './auth-server';
 import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
+import { deleteSecureUploadedFile } from '@/lib/secure-file-storage';
 
 /**
  * Retrieves the institutional file inventory based on user jurisdiction.
@@ -24,12 +23,14 @@ export async function getStorageInventory(params: {
     // Ownership enforcement: Do not trust client-supplied `userId`.
     const session = await getServerSession();
     if (!session) {
-      return [];
+      throw new Error("Authentication required");
     }
 
-    if (session.id !== params.userId && session.role !== 'SUPER_ADMIN') {
-      // Caller attempted to request inventory for other user without privilege
-      return [];
+    // SECURITY: Ignore privilege flags from client. Derive solely from verified session.
+    const isSuperAdmin = session.role === 'SUPER_ADMIN';
+
+    if (session.id !== params.userId && !isSuperAdmin) {
+      throw new Error("Access denied");
     }
 
     let whereClause: any = {};
@@ -91,6 +92,11 @@ export async function getStorageInventory(params: {
  * Purges a file from the physical storage and removes its record from the Vault.
  */
 export async function deleteInstitutionalFile(memoId: string) {
+  const session = await getServerSession();
+  if (!session || session.role !== 'SUPER_ADMIN') {
+    throw new Error('Unauthorized: Administrative clearance required.');
+  }
+
   try {
     const memo = await prisma.memo.findUnique({
       where: { id: memoId }
@@ -98,10 +104,9 @@ export async function deleteInstitutionalFile(memoId: string) {
 
     if (!memo) throw new Error("File record not found in the Institutional Vault.");
 
-    // 1. Delete from physical storage (root/secure_uploads or configured UPLOAD_DIR)
-    const filePath = path.join(process.cwd(), memo.fileUrl);
+    // 1. Delete from physical storage with strict path resolution
     try {
-      await fs.unlink(filePath);
+      await deleteSecureUploadedFile(memo.storageKey);
     } catch (err) {
     }
 

@@ -722,11 +722,14 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
   }
 }
 
-export async function getWorkflowCounts(params: { userId: string, branchName?: string, branches?: string[], isSuperAdmin: boolean }) {
+export async function getWorkflowCounts(params: { userId: string, branchName?: string, branches?: string[], isSuperAdmin?: boolean }) {
   const session = await getServerSession();
-  if (!session) return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
+  if (!session) {
+    throw new Error("Authentication required");
+  }
 
-  const { isSuperAdmin } = params;
+  // SECURITY: Ignore privilege flags from client. Derive solely from verified session.
+  const isSuperAdmin = session.role === 'SUPER_ADMIN';
   
   try {
     const user = await prisma.user.findUnique({

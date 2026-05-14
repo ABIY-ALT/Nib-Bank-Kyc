@@ -108,7 +108,7 @@ async function verifyUserManagementAccess() {
 export async function getAllUsers() {
   if (!(await verifyUserManagementAccess())) {
     logInstitutionalError(new Error('Unauthorized user list access attempt.'), 'UNAUTHORIZED_USER_LIST');
-    return [];
+    throw new Error("Access denied: Administrative clearance required.");
   }
 
   try {
@@ -174,7 +174,7 @@ export async function provisionUser(data: {
 }) {
   const session = await getServerSession();
   if (!session || !(await verifyUserManagementAccess())) {
-    return { success: false, error: 'Unauthorized: Administrative clearance required.' };
+    throw new Error('Unauthorized: Administrative clearance required.');
   }
 
   // SENSITIVE ACTION GUARD: Requires fresh session context
@@ -440,7 +440,7 @@ export async function resetUserPassword(email: string) {
   // Email delivery is external responsibility; this function never exposes tokens in response.
   const session = await getServerSession();
   if (!session || !(await verifyUserManagementAccess())) {
-    return { success: false, error: 'Unauthorized.' };
+    throw new Error('Unauthorized.');
   }
 
   const authorizerId = session.id;

@@ -82,6 +82,9 @@ async function internalSeedPermissions() {
 }
 
 export async function getAllPermissions() {
+  const session = await getServerSession();
+  if (!session) throw new Error('Unauthenticated');
+
   try {
     const permissions = await prisma.permission.findMany({
       orderBy: [{ group: 'asc' }, { name: 'asc' }]
@@ -101,6 +104,9 @@ export async function getAllPermissions() {
 }
 
 export async function getRoleDefinitions() {
+  const session = await getServerSession();
+  if (!session || session.role !== 'SUPER_ADMIN') throw new Error('Unauthorized');
+
   try {
     return await prisma.role.findMany({
       include: { permissions: { include: { permission: true } } },
@@ -114,7 +120,7 @@ export async function getRoleDefinitions() {
 export async function seedInstitutionalPermissions() {
   const session = await getServerSession();
   if (!session || session.role !== 'SUPER_ADMIN') {
-    return { success: false, error: 'Unauthorized' };
+    throw new Error('Unauthorized');
   }
 
   const success = await internalSeedPermissions();
@@ -135,7 +141,7 @@ export async function seedInstitutionalPermissions() {
 export async function upsertRole(data: { id?: string, name: string, description: string, permissionIds: string[] }) {
   const session = await getServerSession();
   if (!session || session.role !== 'SUPER_ADMIN') {
-    return { success: false, error: 'Unauthorized' };
+    throw new Error('Unauthorized');
   }
 
   try {
@@ -181,7 +187,7 @@ export async function upsertRole(data: { id?: string, name: string, description:
 
 export async function toggleRoleStatus(id: string, currentStatus: boolean) {
   const session = await getServerSession();
-  if (!session || session.role !== 'SUPER_ADMIN') return { success: false };
+  if (!session || session.role !== 'SUPER_ADMIN') throw new Error('Unauthorized');
 
   try {
     const role = await prisma.role.update({

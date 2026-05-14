@@ -18,6 +18,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import bcrypt from 'bcryptjs';
 import { createTokenPair, verifyRefreshToken, generateAccessToken } from '@/lib/jwt-secure';
 import { revokeUserTokens, revokeToken } from '@/lib/token-revocation';
 import { safeLog } from '@/lib/logging-redaction';
@@ -84,10 +85,12 @@ export async function loginAction(
       return { success: false, error: 'Account is inactive' };
     }
 
-    // 3. Verify password (import bcryptjs for real implementation)
-    // TODO: Implement actual password verification
-    // const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    // For now, assuming password verification succeeds
+    // 3. Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      safeLog.warn('Login attempt: invalid password', { email: email.split('@')[0] });
+      return { success: false, error: 'Invalid credentials' };
+    }
 
     // 4. Get user role
     const userRole: JwtRole = user.roles?.[0]?.role?.name === 'ADMIN' ? 'ADMIN' : 'USER';

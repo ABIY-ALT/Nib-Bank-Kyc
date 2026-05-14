@@ -27,7 +27,7 @@ export async function getFollowUpVerifications(filters?: { startDate?: string; e
   try {
     const { canWorkPool, canViewLogs } = await getFollowUpAccess();
     if (!canWorkPool && !canViewLogs) {
-      return [];
+      throw new Error('Unauthorized');
     }
 
     let dateFilter = undefined;
@@ -53,7 +53,7 @@ export async function getFollowUpById(id: string) {
   try {
     const { canWorkPool } = await getFollowUpAccess();
     if (!canWorkPool) {
-      return null;
+      throw new Error('Unauthorized');
     }
 
     return await prisma.followUpVerification.findUnique({
@@ -68,7 +68,7 @@ export async function getApprovedCasesForFollowUp(filters?: { startDate?: string
   try {
     const { canWorkPool } = await getFollowUpAccess();
     if (!canWorkPool) {
-      return [];
+      throw new Error('Unauthorized');
     }
 
     let dateFilter = undefined;
@@ -100,7 +100,7 @@ export async function seedFollowUpPool(cases: any[]) {
   try {
     const { canWorkPool } = await getFollowUpAccess();
     if (!canWorkPool) {
-      return { success: false, error: 'Unauthorized' };
+      throw new Error('Unauthorized');
     }
 
     await prisma.followUpVerification.createMany({
@@ -119,7 +119,7 @@ export async function updateFollowUp(id: string, data: any) {
   try {
     const { canWorkPool } = await getFollowUpAccess();
     if (!canWorkPool) {
-      return { success: false, error: 'Unauthorized' };
+      throw new Error('Unauthorized');
     }
 
     const current = await prisma.followUpVerification.findUnique({

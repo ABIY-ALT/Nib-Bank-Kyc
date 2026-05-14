@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/auth-handlers';
 import {
   performSMBSecurityHealthCheck,
   checkLocalWindowsSMBSigning,
@@ -55,6 +56,15 @@ function isRateLimited(clientId: string): boolean {
  */
 export async function GET(request: NextRequest) {
   try {
+    // ===== SECURITY CHECK: SUPER_ADMIN ONLY =====
+    const user = await authenticateRequest(request);
+    if (!user || user.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { error: 'Unauthorized: Infrastructure clearance required.' },
+        { status: 403 }
+      );
+    }
+
     // Get client IP for rate limiting
     const clientIp = request.headers.get('x-forwarded-for') ||
                     request.headers.get('x-real-ip') ||
@@ -193,6 +203,15 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // ===== SECURITY CHECK: SUPER_ADMIN ONLY =====
+    const user = await authenticateRequest(request);
+    if (!user || user.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { error: 'Unauthorized: Infrastructure clearance required.' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const remoteServers = body.remoteServers || [];
 

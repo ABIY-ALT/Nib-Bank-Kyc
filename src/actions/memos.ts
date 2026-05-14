@@ -122,7 +122,7 @@ async function getMemoAccessContext(userId: string, memoId: string) {
 export async function getMemoAccessUrl(memoId: string, options?: { download?: boolean }) {
   const session = await getServerSession();
   if (!session) {
-    return { success: false, error: 'Unauthorized' };
+    throw new Error('Authentication required');
   }
 
   const { memo, authorized } = await getMemoAccessContext(session.id, memoId);

@@ -163,27 +163,40 @@ export async function PATCH(
       return badRequestResponse('Resource not found');
     }
 
-    // ===== SECURITY FIX: PREVENT PRIVILEGE ESCALATION VIA NESTED WRITES =====
-    // Use a strict allow-list for non-admin users instead of a deny-list
-    if (resourceLower === 'users') {
-      const ownership = await verifyUserOwnership(request, id);
-      if (!ownership.isAdmin) {
-        const ALLOWED_USER_FIELDS = ['firstName', 'lastName', 'phoneNumber'];
-        const sanitizedBody: any = {};
-        
-        ALLOWED_USER_FIELDS.forEach(field => {
-          if (body[field] !== undefined) {
-            sanitizedBody[field] = body[field];
-          }
-        });
-        
-        // Replace original body with sanitized version
-        for (const key in body) {
-          if (!ALLOWED_USER_FIELDS.includes(key)) {
-            delete body[key];
-          }
+    // ===== SECURITY FIX: PREVENT PRIVILEGE ESCALATION VIA MASS ASSIGNMENT =====
+    // Use a strict allow-list for non-admin users across all resources
+    const user = await authenticateRequest(request);
+    const isAdmin = user?.role === 'SUPER_ADMIN';
+
+    if (!isAdmin) {
+      const RESOURCE_ALLOW_LISTS: Record<string, string[]> = {
+        'submissions': ['remarks', 'customerName', 'entityType'],
+        'users': ['firstName', 'lastName', 'phoneNumber'],
+        'kyc_findings': ['finding', 'severity', 'notes'],
+        'submissions_docs': ['name', 'type'],
+      };
+
+      const allowedFields = RESOURCE_ALLOW_LISTS[resourceLower] || [];
+      const sanitizedBody: any = {};
+      
+      allowedFields.forEach(field => {
+        if (body[field] !== undefined) {
+          sanitizedBody[field] = body[field];
         }
+      });
+      
+      // If the resource is not in the whitelist or has no allowed fields for non-admins,
+      // and it's a sensitive resource, we should be even stricter.
+      if (allowedFields.length === 0 && !isAdmin) {
+        return forbiddenResponse('You do not have permission to update this resource type.');
       }
+
+      // Replace original body with sanitized version to prevent mass assignment
+      Object.keys(body).forEach(key => {
+        if (!allowedFields.includes(key)) {
+          delete body[key];
+        }
+      });
     }
 
     const data = await model.update({
