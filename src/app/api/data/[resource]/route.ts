@@ -47,7 +47,13 @@ export async function GET(
 
     // ===== AUTHORIZATION & FILTERING =====
     const user = await authenticateRequest(request);
-    const isAdmin = user?.role === 'SUPER_ADMIN';
+    
+    // SECURITY: Mandatory authentication for all resources
+    if (!user) {
+      return unauthorizedResponse('Authentication required');
+    }
+
+    const isAdmin = user.role === 'SUPER_ADMIN';
 
     const OWNED_RESOURCES: Record<string, string> = {
       'submissions': 'createdById',
@@ -62,7 +68,6 @@ export async function GET(
 
     // For owned resources, non-admins can only see their own records
     if (OWNED_RESOURCES[resource] && !isAdmin) {
-      if (!user) return unauthorizedResponse('Unauthorized');
       filter[OWNED_RESOURCES[resource]] = user.id;
     }
 

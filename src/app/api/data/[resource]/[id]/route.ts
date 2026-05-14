@@ -14,6 +14,7 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest } from 'next/server';
 import { verifyUserOwnership, verifyAdminAccess, verifyRecordOwnership } from '@/lib/user-ownership-validator';
+import { authenticateRequest } from '@/lib/auth-handlers';
 import { 
   successResponse, 
   badRequestResponse, 
@@ -83,9 +84,10 @@ export async function GET(
         return forbiddenResponse('Access denied');
       }
     } else {
-      const authHeader = request.headers.get('Authorization');
-      if (!authHeader?.startsWith('Bearer ')) {
-        return unauthorizedResponse('Unauthorized');
+      // SECURITY: Mandatory token verification for all other resources
+      const user = await authenticateRequest(request);
+      if (!user) {
+        return unauthorizedResponse('Authentication required');
       }
     }
 
@@ -147,9 +149,10 @@ export async function PATCH(
         return forbiddenResponse('Access denied');
       }
     } else {
-      const authHeader = request.headers.get('Authorization');
-      if (!authHeader?.startsWith('Bearer ')) {
-        return unauthorizedResponse('Unauthorized');
+      // SECURITY: Mandatory token verification for all other resources
+      const user = await authenticateRequest(request);
+      if (!user) {
+        return unauthorizedResponse('Authentication required');
       }
     }
 
