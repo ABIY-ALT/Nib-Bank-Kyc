@@ -7,12 +7,14 @@
 
 import { prisma } from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth-handlers';
+import { assertNoPrivilegeParams } from '@/actions/rbac';
+import { getServerSession } from '@/actions/auth-server';
 import { NextRequest } from 'next/server';
-import { 
-  successResponse, 
-  badRequestResponse, 
-  internalErrorResponse, 
-  unauthorizedResponse 
+import {
+  successResponse,
+  badRequestResponse,
+  internalErrorResponse,
+  unauthorizedResponse
 } from '@/lib/api-security';
 
 // Map resource names to Prisma models
@@ -66,6 +68,17 @@ export async function GET(
     const filterParam = request.nextUrl.searchParams.get('filter');
     let filter = filterParam ? JSON.parse(filterParam) : {};
 
+    // SECURITY: Reject any filter that contains privilege-related keys
+    const session = await getServerSession();
+    const { tampered, blockedKey } = await assertNoPrivilegeParams(
+      filter,
+      session ? { id: session.id, email: session.email, role: session.role } : null,
+      `GET /api/data/${resource}`
+    );
+    if (tampered) {
+      return badRequestResponse(`Forbidden: client-supplied field '${blockedKey}' is not permitted in filters.`);
+    }
+
     // For owned resources, non-admins can only see their own records
     if (OWNED_RESOURCES[resource] && !isAdmin) {
       filter[OWNED_RESOURCES[resource]] = user.id;
@@ -105,6 +118,17 @@ export async function POST(
     }
 
     const body = await request.json();
+
+    // SECURITY: Reject any body containing privilege-related keys
+    const session = await getServerSession();
+    const { tampered, blockedKey } = await assertNoPrivilegeParams(
+      body,
+      session ? { id: session.id, email: session.email, role: session.role } : null,
+      `POST /api/data/${resource}`
+    );
+    if (tampered) {
+      return badRequestResponse(`Forbidden: client-supplied field '${blockedKey}' is not permitted.`);
+    }
 
     // ===== RBAC ENFORCEMENT: Sensitive Resource Creation =====
     const ADMIN_ONLY_RESOURCES = ['users', 'roles', 'permissions', 'branches', 'settings', 'audit_logs'];

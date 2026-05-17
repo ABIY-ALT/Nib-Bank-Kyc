@@ -722,8 +722,8 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
   }
 }
 
-export async function getWorkflowCounts(params: any) {
-  // SECURITY: Ownership enforcement. Never trust client-supplied jurisdiction or identity.
+export async function getWorkflowCounts() {
+  // SECURITY: No parameters accepted — all identity/jurisdiction derived from server session.
   const session = await getServerSession();
   if (!session) {
     throw new Error("Authentication required");

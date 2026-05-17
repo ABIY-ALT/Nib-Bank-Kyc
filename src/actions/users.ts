@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { generateSecurePassword } from '@/lib/security';
 import { getServerSession, verifySensitiveSession, verifyPermission } from './auth-server';
 import { createAuditLog } from './audit';
+import { logPrivilegeChange } from './rbac';
 import { CreateUserSchema } from '@/lib/validation';
 import { ZodError } from 'zod';
 import { logInstitutionalError } from '@/lib/logger';
@@ -375,12 +376,34 @@ export async function provisionUser(data: {
       return user;
     });
 
+    // Log role assignment as a privilege-change event
+    const assignedRole = validated.role;
+    if (assignedRole === 'SUPER_ADMIN') {
+      await logPrivilegeChange({
+        actorId: session.id,
+        actorEmail: session.email,
+        targetUserId: result.id,
+        targetUserEmail: result.email,
+        changeType: 'SUPER_ADMIN_GRANTED',
+        details: `SUPER_ADMIN role assigned to user during ${isUpdate ? 'profile update' : 'provisioning'}.`,
+      });
+    } else {
+      await logPrivilegeChange({
+        actorId: session.id,
+        actorEmail: session.email,
+        targetUserId: result.id,
+        targetUserEmail: result.email,
+        changeType: 'ROLE_ASSIGNED',
+        details: `Role '${assignedRole}' assigned during ${isUpdate ? 'profile update' : 'provisioning'}.`,
+      });
+    }
+
     await createAuditLog({
       userId: session.id,
       userEmail: session.email,
       action: isUpdate ? 'USER_PROFILE_UPDATE' : 'USER_PROVISION_SUCCESS',
-      details: isUpdate 
-        ? `Profile modified for ${result.firstName} ${result.lastName}. Role: ${data.role}` 
+      details: isUpdate
+        ? `Profile modified for ${result.firstName} ${result.lastName}. Role: ${data.role}`
         : `New personnel provisioned: ${result.firstName} ${result.lastName}. Role: ${data.role}`,
       severity: 'MEDIUM'
     });
@@ -540,17 +563,22 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
       where: { id: userId },
       data: { status, updatedAt: new Date() },
       select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        status: true,
-        branchId: true,
-        branchName: true,
-        districtName: true,
-        needsPasswordChange: true
+        id: true, firstName: true, lastName: true, email: true,
+        status: true, branchId: true, branchName: true,
+        districtName: true, needsPasswordChange: true
       }
     });
+
+    // Log status change as privilege-change event
+    await logPrivilegeChange({
+      actorId: session.id,
+      actorEmail: session.email,
+      targetUserId: result.id,
+      targetUserEmail: result.email,
+      changeType: 'STATUS_CHANGED',
+      details: `User status changed to '${status}' by admin.`,
+    });
+
     return result;
   } catch (error) {
     logInstitutionalError(error, 'DB_UPDATE_STATUS');

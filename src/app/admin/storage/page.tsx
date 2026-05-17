@@ -211,28 +211,23 @@ export default function StorageVaultPage() {
   }, []);
 
   const loadInventory = useCallback(async () => {
-    if (!user) return;
     setLoading(true);
     try {
-      const data = await getStorageInventory({
-        userId: user.id,
-        isSuperAdmin,
-        assignedBranches: user.assignedBranches || [],
-        branchName: user.branchName || undefined
-      });
+      // SECURITY: No client-side privilege params — server derives all from session
+      const data = await getStorageInventory();
       setInventory(data || []);
     } catch (e) {
     } finally {
       setLoading(false);
     }
-  }, [isSuperAdmin, user]);
+  }, []);
 
   useEffect(() => {
-    if (user && canManageVaultStorage) {
+    if (canManageVaultStorage) {
       loadMetadata();
       loadInventory();
     }
-  }, [canManageVaultStorage, loadInventory, loadMetadata, user]);
+  }, [canManageVaultStorage, loadInventory, loadMetadata]);
 
   // Grouping & Filtering Logic
   const groupedInventory = useMemo(() => {

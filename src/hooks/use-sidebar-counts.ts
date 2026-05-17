@@ -15,7 +15,6 @@ const SIDEBAR_COUNTS_POLL_MS = 30000;
  * Polls every 30s and pauses while the tab is hidden to reduce request churn.
  */
 export function useSidebarCounts(user: UserProfile | null) {
-  const { isSuperAdmin } = usePermissions();
   const pathname = usePathname();
   const [counts, setCounts] = useState({
     mySubmissions: 0,
@@ -47,12 +46,8 @@ export function useSidebarCounts(user: UserProfile | null) {
       }
 
       try {
-        const res = await getWorkflowCounts({
-          userId: user.id,
-          branchName: user.branchName || undefined,
-          branches: user.assignedBranches,
-          isSuperAdmin
-        });
+        // SECURITY: No client-side privilege params — server derives all from session
+        const res = await getWorkflowCounts();
 
         if (isActive) {
           setCounts(res);
@@ -83,7 +78,7 @@ export function useSidebarCounts(user: UserProfile | null) {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, isSuperAdmin, pathname]);
+  }, [user, pathname]);
 
   return counts;
 }
