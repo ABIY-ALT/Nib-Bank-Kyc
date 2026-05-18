@@ -1,4 +1,3 @@
-import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/prisma';
 import {
   getSafeErrorMessage,
@@ -8,6 +7,7 @@ import {
 } from './information-disclosure-prevention';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { jwtVerifyStrict } from '@/lib/strict-jwt';
 
 export const SENSITIVE_IP_WHITELIST = process.env.SENSITIVE_OPERATIONS_IP_WHITELIST
   ?.split(',')
@@ -69,7 +69,7 @@ export async function verifyAuthentication(request: Request) {
     const secret = new TextEncoder().encode(secretStr);
 
     try {
-      const { payload } = await jwtVerify(token, secret);
+      const { payload } = await jwtVerifyStrict(token, secret);
       const nowSeconds = Math.floor(Date.now() / 1000);
 
       // Check absolute lifetime

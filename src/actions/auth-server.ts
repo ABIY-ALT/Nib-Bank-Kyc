@@ -1,8 +1,8 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/prisma';
+import { jwtVerifyStrict } from '@/lib/strict-jwt';
 
 /**
  * Institutional Session Resolver.
@@ -25,7 +25,7 @@ export async function getServerSession() {
 
     let payload: any;
     try {
-      const { payload: verifiedPayload }: any = await jwtVerify(token, secret);
+      const { payload: verifiedPayload }: any = await jwtVerifyStrict(token, secret);
       payload = verifiedPayload;
     } catch (e) {
       // STRICT: DETECTED TAMPERING OR SIGNATURE MISMATCH

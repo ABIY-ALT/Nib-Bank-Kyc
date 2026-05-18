@@ -3,6 +3,7 @@ import * as jose from 'jose';
 import { v4 as uuidv4 } from 'uuid';
 import { getSecret } from './secrets-loader';
 import { safeLog } from './logging-redaction';
+import { jwtVerifyStrict } from './strict-jwt';
 import {
   AccessTokenPayload,
   JwtRole,
@@ -193,7 +194,7 @@ export async function verifyAccessToken(
 
     const secret = await getJwtSecret();
 
-    const verified = await jose.jwtVerify(token, secret, {
+    const verified = await jwtVerifyStrict(token, secret, {
       issuer: DEFAULT_TOKEN_CONFIG.issuer,
       audience: DEFAULT_TOKEN_CONFIG.audience,
     });
@@ -248,7 +249,7 @@ export async function verifyRefreshToken(
 
     const secret = await getJwtSecret();
 
-    const verified = await jose.jwtVerify(token, secret, {
+    const verified = await jwtVerifyStrict(token, secret, {
       issuer: DEFAULT_TOKEN_CONFIG.issuer,
       audience: DEFAULT_TOKEN_CONFIG.audience,
     });

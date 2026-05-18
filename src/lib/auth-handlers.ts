@@ -6,8 +6,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
 import { PrismaClient } from '@prisma/client';
+import { jwtVerifyStrict } from '@/lib/strict-jwt';
 
 const prisma = new PrismaClient();
 
@@ -50,7 +50,7 @@ export async function authenticateRequest(request: NextRequest) {
 
     // Verify JWT token
     const secret = getJWTSecret();
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerifyStrict(token, secret);
     
     if (!payload.sub) {
       return null;
@@ -109,7 +109,7 @@ export async function authenticateRequest(request: NextRequest) {
 export async function verifyJWT(token: string) {
   try {
     const secret = getJWTSecret();
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerifyStrict(token, secret);
     return payload;
   } catch {
     return null;

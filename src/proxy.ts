@@ -163,7 +163,7 @@ export async function proxy(req: NextRequest) {
       if (wantJson) {
         const res = NextResponse.json(
           { error: 'Unauthorized', code: 'INVALID_SESSION', reason: phase.code },
-          { status: 401, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+          { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
         );
         clearSessionAuthCookies(res);
         applyJsonSecurityHeaders(res, cspHeader, hstsHeader);
@@ -189,7 +189,7 @@ export async function proxy(req: NextRequest) {
       if (wantJson) {
         const res = NextResponse.json(
           { error: 'Unauthorized', code: 'INVALID_CLAIMS' },
-          { status: 401, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+          { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
         );
         clearSessionAuthCookies(res);
         applyJsonSecurityHeaders(res, cspHeader, hstsHeader);
@@ -206,7 +206,7 @@ export async function proxy(req: NextRequest) {
       if (wantJson) {
         const res = NextResponse.json(
           { error: 'Unauthorized', code: 'SESSION_EXPIRED', reason: 'abs_timeout' },
-          { status: 401, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+          { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
         );
         clearSessionAuthCookies(res);
         applyJsonSecurityHeaders(res, cspHeader, hstsHeader);
@@ -331,7 +331,7 @@ export async function proxy(req: NextRequest) {
     if (wantJson) {
       const res = NextResponse.json(
         { error: 'Unauthorized', code: 'SESSION_INVALID' },
-        { status: 401, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+        { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
       );
       clearSessionAuthCookies(res);
       applyJsonSecurityHeaders(res, cspHeader, hstsHeader);

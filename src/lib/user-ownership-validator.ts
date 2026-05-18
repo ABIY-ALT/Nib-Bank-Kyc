@@ -9,8 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/prisma';
+import { jwtVerifyStrict } from '@/lib/strict-jwt';
 
 if (!process.env.JWT_SECRET) {
   throw new Error('FATAL: JWT_SECRET environment variable is not set. Cannot initialise ownership validator.');
@@ -48,7 +48,7 @@ export async function verifyUserOwnership(
     // ===== STEP 2: Verify JWT signature =====
     let decoded: any;
     try {
-      const verified = await jwtVerify(token, JWT_SECRET);
+      const verified = await jwtVerifyStrict(token, JWT_SECRET);
       decoded = verified.payload;
     } catch (err) {
       return {
@@ -159,7 +159,7 @@ export async function verifyAdminAccess(
 
     let decoded: any;
     try {
-      const verified = await jwtVerify(token, JWT_SECRET);
+      const verified = await jwtVerifyStrict(token, JWT_SECRET);
       decoded = verified.payload;
     } catch (err) {
       return {
@@ -248,7 +248,7 @@ export async function verifyPermissionAccess(
 
     let decoded: any;
     try {
-      const verified = await jwtVerify(token, JWT_SECRET);
+      const verified = await jwtVerifyStrict(token, JWT_SECRET);
       decoded = verified.payload;
     } catch (err) {
       return {

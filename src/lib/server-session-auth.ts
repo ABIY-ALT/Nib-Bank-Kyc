@@ -3,8 +3,9 @@
  * Cryptographic verification runs before any database access.
  */
 
-import { jwtVerify, errors, type JWTPayload } from 'jose';
+import { errors, type JWTPayload } from 'jose';
 import type { NextResponse } from 'next/server';
+import { jwtVerifyStrict, StrictJwtFormatError } from './strict-jwt';
 
 export const MIN_JWT_SECRET_LENGTH = 64;
 
@@ -50,11 +51,14 @@ export async function verifyAccessTokenJwtOnly(
   }
   const secret = new TextEncoder().encode(secretStr);
   try {
-    const { payload } = await jwtVerify(token, secret, {
+    const { payload } = await jwtVerifyStrict(token, secret, {
       algorithms: ['HS512'],
     });
     return { ok: true, payload };
   } catch (e) {
+    if (e instanceof StrictJwtFormatError) {
+      return { ok: false, code: 'INVALID_JWT' };
+    }
     if (e instanceof errors.JWSSignatureVerificationFailed) {
       return { ok: false, code: 'BAD_SIGNATURE' };
     }

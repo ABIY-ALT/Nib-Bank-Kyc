@@ -7,6 +7,22 @@
 
 import crypto from 'crypto';
 
+const BASE64URL_SEGMENT_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+function decodeStrictBase64UrlSegment(segment: string): Buffer | null {
+  if (!segment || segment.includes('=') || !BASE64URL_SEGMENT_PATTERN.test(segment) || segment.length % 4 === 1) {
+    return null;
+  }
+  try {
+    const decoded = Buffer.from(segment, 'base64url');
+    if (decoded.length === 0) return null;
+    if (decoded.toString('base64url') !== segment) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Generates a cryptographically secure, URL-safe random token.
  * Default entropy: 256 bits (32 bytes)
@@ -127,21 +143,32 @@ export function signDownloadToken(memoId: string, ttlSeconds: number = 3600): st
  */
 export function verifyDownloadToken(token: string): string | null {
   try {
-    const [payloadB64, signature] = token.split('.');
-    if (!payloadB64 || !signature) return null;
-    
+    const parts = token.split('.');
+    if (parts.length !== 2) return null;
+    const [payloadB64, signatureB64] = parts;
+
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('FATAL: JWT_SECRET environment variable is not set. Cannot verify download tokens.');
-    const expectedSignature = crypto
+    const payloadBytes = decodeStrictBase64UrlSegment(payloadB64);
+    const signatureBytes = decodeStrictBase64UrlSegment(signatureB64);
+    if (!payloadBytes || !signatureBytes) return null;
+
+    const expectedSignatureB64 = crypto
       .createHmac('sha256', secret)
       .update(payloadB64)
       .digest('base64url');
-      
-    if (signature !== expectedSignature) return null;
-    
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+
+    const expectedSignatureBytes = decodeStrictBase64UrlSegment(expectedSignatureB64);
+    if (!expectedSignatureBytes) return null;
+    if (signatureBytes.length !== expectedSignatureBytes.length) return null;
+    if (!crypto.timingSafeEqual(signatureBytes, expectedSignatureBytes)) return null;
+
+    const payload = JSON.parse(payloadBytes.toString('utf8'));
+    if (!payload || typeof payload !== 'object') return null;
+    if (typeof payload.memoId !== 'string' || payload.memoId.length === 0) return null;
+    if (typeof payload.exp !== 'number') return null;
     if (payload.exp < Math.floor(Date.now() / 1000)) return null;
-    
+
     return payload.memoId;
   } catch {
     return null;
