@@ -20,6 +20,7 @@ import { writeSecureUploadedFile } from '@/lib/secure-file-storage';
 import { 
   DIRECT_BRANCH_ROLES, 
   PORTFOLIO_BRANCH_ROLES, 
+  GLOBAL_OVERSIGHT_ROLES, 
   DISTRICT_DIRECTOR_ROLE, 
   normalizeAssignedBranches, 
   getResolvedUserBranchName, 
@@ -83,7 +84,13 @@ function buildRestrictedJurisdictionFilter(
       };
     }
 
-    if (!branchName) return { denied: true };
+    if (!branchName) {
+      if (GLOBAL_OVERSIGHT_ROLES.has(role)) {
+        return { filter: {} };
+      }
+      return { denied: true };
+    }
+
     if (requestedBranches.length > 0 && !requestedBranches.includes(branchName)) return { denied: true };
     if (requestedDistrict && districtName && requestedDistrict !== districtName) return { denied: true };
     return { filter: { branchName } };

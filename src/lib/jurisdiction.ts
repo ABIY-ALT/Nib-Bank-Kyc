@@ -1,6 +1,7 @@
 
 export const DIRECT_BRANCH_ROLES = new Set(['BRANCH_MANAGER', 'BRANCH_OFFICER']);
 export const PORTFOLIO_BRANCH_ROLES = new Set(['KYC_OFFICER', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER', 'SUPERVISOR']);
+export const GLOBAL_OVERSIGHT_ROLES = new Set(['SUPERVISOR']);
 export const DISTRICT_DIRECTOR_ROLE = 'DISTRICT_DIRECTOR';
 
 export function normalizeAssignedBranches(value: unknown): string[] {
@@ -48,6 +49,9 @@ export function hasJurisdictionalAccess(user: any, role: string, sessionId: stri
   }
 
   if (PORTFOLIO_BRANCH_ROLES.has(role)) {
+    if (role === 'SUPERVISOR' && assignedBranches.length === 0 && !branchName) {
+      return true;
+    }
     return assignedBranches.length > 0 ? matchesPortfolio : matchesBranch;
   }
 
