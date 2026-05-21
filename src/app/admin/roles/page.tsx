@@ -108,7 +108,7 @@ export default function StaffRolesPage() {
   const handleOpenEdit = (role: any) => {
     setSelectedRole(role);
     setRoleName(role.name);
-    setPermissionsForm(role.permissions.map((rp: any) => rp.permissionId));
+    setPermissionsForm(role.permissions.map((rp: any) => rp.permission?.id || rp.permissionId));
     setIsDialogOpen(true);
   };
 

@@ -58,19 +58,23 @@ export default function ExceptionalCasesPage() {
     setLoading(true);
     try {
       const assignedBranches = user.assignedBranches || [];
+      const isDistrictDirector = user.roles?.some((ur: any) => ur.role?.name === 'DISTRICT_DIRECTOR');
       const branchContext = isAdmin ? undefined : (user.branchName || "RESTRICTED_BRANCH");
       const branchesContext = isAdmin ? undefined : (assignedBranches.length > 0 ? assignedBranches : undefined);
+      const districtContext = isDistrictDirector ? user.districtName : undefined;
 
       const exceptionalPromise = getSubmissions({ 
         isExceptional: true,
-        branch: branchContext,
-        branches: branchesContext
+        branch: !isDistrictDirector ? branchContext : undefined,
+        branches: !isDistrictDirector ? branchesContext : undefined,
+        district: districtContext
       });
 
       const availablePromise = getSubmissions({ 
         isExceptional: false, 
-        branch: branchContext,
-        branches: branchesContext
+        branch: !isDistrictDirector ? branchContext : undefined,
+        branches: !isDistrictDirector ? branchesContext : undefined,
+        district: districtContext
       });
 
       const [exceptional, all] = await Promise.all([exceptionalPromise, availablePromise]);
