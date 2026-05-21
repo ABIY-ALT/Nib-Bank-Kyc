@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Download, FileText, Loader2, CheckCircle2, A
 import { Badge } from "@/components/ui/badge";
 
 import { Button } from "@/components/ui/button";
+import { PdfPreview } from "@/components/submissions/pdf-preview";
 import { cn } from "@/lib/utils";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
@@ -188,21 +189,26 @@ function ZoomSurface({
 }
 
 import {
+  blobForDocumentPreview,
+  downloadDocumentFile,
   formatFileSize,
   getPreviewFormatLabel,
   isImageDocument,
+  isPdfBuffer,
   isPdfDocument,
+  getDocumentDownloadUrl,
+  resolveDownloadFileName,
+  type PreviewableDocument,
 } from "@/lib/documents";
 
-export interface PreviewableDocument {
-  id: string;
-  name: string;
-  previewUrl: string;
-  mimeType?: string;
-  documentType?: string;
-  size?: number;
-  status?: string;
+async function triggerDocumentDownload(file: PreviewableDocument) {
+  await downloadDocumentFile(
+    getDocumentDownloadUrl(file),
+    resolveDownloadFileName(file.name, file.originalName, file.mimeType)
+  );
 }
+
+export type { PreviewableDocument };
 
 interface DocumentPreviewViewerProps {
   file?: PreviewableDocument | null;
@@ -293,8 +299,24 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
           return;
         }
 
-        const blob = await response.blob();
+        const rawBlob = await response.blob();
         if (!active) return;
+
+        const blob = await blobForDocumentPreview(
+          rawBlob,
+          file.mimeType,
+          file.name,
+          response.headers.get("content-type")
+        );
+
+        if (isPdf) {
+          const buffer = await blob.arrayBuffer();
+          if (!isPdfBuffer(buffer)) {
+            setError(true);
+            setIsLoaded(true);
+            return;
+          }
+        }
 
         const url = URL.createObjectURL(blob);
         setBlobUrl(url);
@@ -310,16 +332,11 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
     return () => {
       active = false;
     };
-  }, [file?.id, file?.previewUrl, isPdf, isImage]);
+  }, [file?.id, file?.previewUrl, file?.mimeType, file?.name, isPdf, isImage]);
 
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const link = document.createElement('a');
-    link.href = file.previewUrl;
-    link.download = file.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    void triggerDocumentDownload(file);
   };
 
   return (
@@ -349,16 +366,12 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
             </div>
           </div>
         ) : isPdf && blobUrl ? (
-          <iframe
-            src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+          <PdfPreview
+            blobUrl={blobUrl}
+            previewUrl={file.previewUrl}
+            className="pointer-events-none h-full min-h-0"
             title={`Thumbnail of ${file.name}`}
-            loading="lazy"
-            onLoad={() => setIsLoaded(true)}
-            onError={() => { setError(true); setIsLoaded(true); }}
-            className={cn(
-              "pointer-events-none h-full w-full border-0 transition-opacity duration-300",
-              isLoaded ? "opacity-100" : "opacity-0"
-            )}
+            onReady={() => setIsLoaded(true)}
           />
         ) : isImage && blobUrl ? (
           <img
@@ -506,12 +519,27 @@ export function DocumentPreviewViewer({
           return;
         }
 
-        const blob = await response.blob();
+        const rawBlob = await response.blob();
         if (!active) return;
+
+        const blob = await blobForDocumentPreview(
+          rawBlob,
+          file.mimeType,
+          file.name,
+          response.headers.get("content-type")
+        );
+
+        if (isPdfDocument(file)) {
+          const buffer = await blob.arrayBuffer();
+          if (!isPdfBuffer(buffer)) {
+            setError("This file is not a valid PDF.");
+            setIsLoaded(true);
+            return;
+          }
+        }
 
         const url = URL.createObjectURL(blob);
         setBlobUrl(url);
-        // setIsLoaded will be set by the iframe/img onLoad
       } catch (err) {
         if (!active) return;
         setError("Network error or security block prevented loading the preview.");
@@ -524,7 +552,7 @@ export function DocumentPreviewViewer({
     return () => {
       active = false;
     };
-  }, [file?.id, file?.previewUrl]);
+  }, [file?.id, file?.previewUrl, file?.mimeType, file?.name]);
 
   useEffect(() => {
     resetZoomWithSignal();
@@ -599,10 +627,11 @@ export function DocumentPreviewViewer({
                 {selectedFile ? (
                   <>
                     {isPdfDocument(selectedFile) ? (
-                      <iframe
-                        src={`${selectedFile.previewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                      <PdfPreview
+                        blobUrl=""
+                        previewUrl={selectedFile.previewUrl}
                         title={`Preview of ${selectedFile.name}`}
-                        className="h-full w-full border-0"
+                        className="min-h-0"
                       />
                     ) : isImageDocument(selectedFile) ? (
                       <img
@@ -644,15 +673,14 @@ export function DocumentPreviewViewer({
                   </div>
                   {selectedFile && (
                     <Button
-                      asChild
+                      type="button"
                       variant="outline"
                       size="sm"
                       className="rounded-lg border-primary/20 text-primary hover:bg-primary/5 font-bold"
+                      onClick={() => void triggerDocumentDownload(selectedFile)}
                     >
-                      <a href={selectedFile.previewUrl} download={selectedFile.name}>
-                        <Download className="h-4 w-4 mr-1" />
-                        Download
-                      </a>
+                      <Download className="h-4 w-4 mr-1" />
+                      Download
                     </Button>
                   )}
                 </div>
@@ -740,11 +768,6 @@ export function DocumentPreviewViewer({
   const isImage = isImageDocument(file);
   const shouldShowLoader = (isPdf || isImage) && !isLoaded && !error;
 
-  const handlePdfError = (e: any) => {
-    setError("Failed to load PDF preview. The file might be corrupted or the URL may be inaccessible.");
-    setIsLoaded(true); // Stop the loader
-  };
-
   return (
     <div
       className={cn(
@@ -770,35 +793,27 @@ export function DocumentPreviewViewer({
             <p className="text-xl font-black text-slate-900">Preview Error</p>
             <p className="max-w-md text-sm font-medium text-slate-500">{error}</p>
           </div>
-          <Button asChild className="h-11 rounded-full bg-primary px-6 font-bold text-white shadow-lg">
-            <a href={file.previewUrl} download={file.name}>
-              <Download className="h-4 w-4" />
-              Download Original
-            </a>
+          <Button
+            type="button"
+            className="h-11 rounded-full bg-primary px-6 font-bold text-white shadow-lg"
+            onClick={() => void triggerDocumentDownload(file)}
+          >
+            <Download className="h-4 w-4" />
+            Download Original
           </Button>
         </div>
       ) : isPdf ? (
-        <ZoomSurface
-          className="h-full min-h-[420px] w-full"
-          zoomLevel={zoomLevel}
-          onWheel={(event) => handleWheelZoom(event, true)}
-          onDoubleClick={resetZoomWithSignal}
-          resetSignal={zoomResetSignal}
-          verticalAlign="start"
-        >
-          <iframe
-            key={file.id}
-            src={blobUrl ? `${blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width&pagemode=none` : undefined}
-            title={`Preview of ${file.name}`}
-            loading="lazy"
-            onLoad={() => setIsLoaded(true)}
-            onError={handlePdfError}
-            className={cn(
-              "h-full min-h-[420px] w-full border-0 transition-opacity duration-300",
-              isLoaded ? "opacity-100" : "opacity-0"
-            )}
-          />
-        </ZoomSurface>
+        <div className="h-full min-h-[420px] w-full overflow-hidden rounded-2xl bg-white">
+          {blobUrl ? (
+            <PdfPreview
+              key={`${file.id}-${blobUrl}`}
+              blobUrl={blobUrl}
+              previewUrl={file.previewUrl}
+              title={`Preview of ${file.name}`}
+              onReady={() => setIsLoaded(true)}
+            />
+          ) : null}
+        </div>
       ) : isImage ? (
         <ZoomSurface
           className="h-full min-h-[420px] w-full p-6 sm:p-8"
@@ -834,11 +849,13 @@ export function DocumentPreviewViewer({
               This document format does not have an in-browser preview. Download the original file to review it.
             </p>
           </div>
-          <Button asChild className="h-11 rounded-full bg-primary px-6 font-bold text-white shadow-lg">
-            <a href={file.previewUrl} download={file.name}>
-              <Download className="h-4 w-4" />
-              Download Original
-            </a>
+          <Button
+            type="button"
+            className="h-11 rounded-full bg-primary px-6 font-bold text-white shadow-lg"
+            onClick={() => void triggerDocumentDownload(file)}
+          >
+            <Download className="h-4 w-4" />
+            Download Original
           </Button>
         </div>
       )}

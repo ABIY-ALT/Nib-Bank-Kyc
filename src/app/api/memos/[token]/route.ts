@@ -6,6 +6,7 @@ import { getServerSession } from '@/actions/auth-server';
 import { prisma } from '@/lib/prisma';
 import { verifyDownloadToken } from '@/lib/security';
 import { getNormalizedRole, hasJurisdictionalAccess } from '@/lib/jurisdiction';
+import { resolvePreviewMimeType } from '@/lib/documents';
 
 /**
  * Institutional Memo Gateway.
@@ -81,10 +82,18 @@ export async function GET(
       kycId: memo.kycId 
     });
 
+    const contentType =
+      resolvePreviewMimeType(memo.mimeType, memo.originalName, memo.name) ||
+      "application/octet-stream";
+
+    const forceDownload = request.nextUrl.searchParams.get("download") === "1";
+    const safeFilename = (memo.originalName || memo.name || "document").replace(/"/g, "'");
+    const disposition = forceDownload ? "attachment" : "inline";
+
     return new Response(stream as any, {
       headers: {
-        "Content-Type": memo.mimeType || "application/octet-stream",
-        "Content-Disposition": `inline; filename="${memo.originalName}"`,
+        "Content-Type": contentType,
+        "Content-Disposition": `${disposition}; filename="${safeFilename}"`,
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "default-src 'none'; sandbox",
         "Cache-Control": "no-store, max-age=0",

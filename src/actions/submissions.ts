@@ -13,6 +13,7 @@ import {
   validateFileCount,
   validateTotalUploadSize,
 } from '@/lib/file-upload-validation';
+import { resolvePreviewMimeType } from '@/lib/documents';
 import { performCompleteFileValidation } from '@/lib/file-upload-security-integration';
 import { writeSecureUploadedFile } from '@/lib/secure-file-storage';
 
@@ -104,37 +105,25 @@ function buildRestrictedJurisdictionFilter(
 }
 
 
-/**
- * Format helper to ensure JSON fields are valid and safe.
- */
-function inferMimeTypeFromName(name: string | null | undefined) {
-  if (!name) return undefined;
-  const lower = name.toLowerCase();
-
-  if (lower.endsWith('.pdf')) return 'application/pdf';
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
-  if (lower.endsWith('.png')) return 'image/png';
-  if (lower.endsWith('.gif')) return 'image/gif';
-  if (lower.endsWith('.webp')) return 'image/webp';
-  if (lower.endsWith('.bmp')) return 'image/bmp';
-
-  return undefined;
-}
-
 function formatKYC(kyc: any) {
   return {
     ...kyc,
     checklistState: kyc.checklistState || {},
     commentHistory: Array.isArray(kyc.commentHistory) ? kyc.commentHistory : [],
     documents:
-      kyc.memos?.map((m: any) => ({
-        id: m.id,
-        name: m.name,
-        type: m.type,
-        // Always use signed/tokenized gateway for least-privilege file access.
-        previewUrl: `/api/memos/${signDownloadToken(m.id)}`,
-        mimeType: m.mimeType,
-      })) || [],
+      kyc.memos?.map((m: any) => {
+        const tokenPath = `/api/memos/${signDownloadToken(m.id)}`;
+        return {
+          id: m.id,
+          name: m.name,
+          originalName: m.originalName,
+          type: m.type,
+          previewUrl: tokenPath,
+          downloadUrl: `${tokenPath}?download=1`,
+          mimeType: resolvePreviewMimeType(m.mimeType, m.originalName, m.name),
+          size: m.size,
+        };
+      }) || [],
   };
 }
 

@@ -79,7 +79,12 @@ import {
   DocumentPreviewViewer,
   type PreviewableDocument,
 } from "@/components/submissions/document-preview";
-import { formatFileSize, getPreviewFormatLabel } from "@/lib/documents";
+import {
+  downloadDocumentFile,
+  formatFileSize,
+  getPreviewFormatLabel,
+  resolveDownloadFileName,
+} from "@/lib/documents";
 
 const KYC_CHECKLIST_ITEMS = [
   { id: 'id_verified', label: 'Identity Document Authenticity' },
@@ -297,6 +302,7 @@ export default function SubmissionDetails() {
 
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [isDocPreviewModalOpen, setIsDocPreviewModalOpen] = useState(false);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -347,15 +353,40 @@ export default function SubmissionDetails() {
   }, [submission?.documents]);
 
   const previewableDocuments: PreviewableDocument[] = useMemo(() => {
-    return submissionDocuments.map((doc: any) => ({
-      id: doc.id,
-      name: doc.name,
-      previewUrl: doc.previewUrl || doc.url,
-      mimeType: doc.mimeType,
-      size: doc.size,
-      documentType: doc.type,
-    }));
+    return submissionDocuments.map((doc: any) => {
+      const previewUrl = doc.previewUrl || doc.url;
+      return {
+        id: doc.id,
+        name: doc.name,
+        originalName: doc.originalName,
+        previewUrl,
+        downloadUrl: doc.downloadUrl || (previewUrl ? `${previewUrl}?download=1` : undefined),
+        mimeType: doc.mimeType,
+        size: doc.size,
+        documentType: doc.type,
+      };
+    });
   }, [submissionDocuments]);
+
+  const handleDownloadDocument = useCallback(
+    async (doc: PreviewableDocument) => {
+      const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : "");
+      if (!downloadUrl) {
+        toast({ title: "Download failed", description: "File URL is missing.", variant: "destructive" });
+        return;
+      }
+
+      setDownloadingDocId(doc.id);
+      const filename = resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType);
+      const result = await downloadDocumentFile(downloadUrl, filename);
+      setDownloadingDocId(null);
+
+      if (!result.ok) {
+        toast({ title: "Download failed", description: result.error, variant: "destructive" });
+      }
+    },
+    [toast]
+  );
 
   const handleDocumentSelect = useCallback((doc: PreviewableDocument) => {
     setActiveDocId(doc.id);
@@ -808,8 +839,22 @@ export default function SubmissionDetails() {
                           <Button variant="ghost" size="icon" type="button" className="h-10 w-10 rounded-full text-slate-500 hover:bg-primary/5 hover:text-primary" onClick={() => { setActiveDocId(doc.id); setIsDocPreviewModalOpen(true); }}>
                             <Eye className="h-5 w-5" />
                           </Button>
-                          <Button variant="ghost" size="icon" asChild className="h-10 w-10 rounded-full text-slate-500 hover:bg-primary/5 hover:text-primary">
-                            <a href={doc.url} download={doc.name}><Download className="h-5 w-5" /></a>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            type="button"
+                            className="h-10 w-10 rounded-full text-slate-500 hover:bg-primary/5 hover:text-primary"
+                            disabled={downloadingDocId === doc.id}
+                            onClick={() => {
+                              const previewDoc = previewableDocuments.find((d) => d.id === doc.id);
+                              if (previewDoc) void handleDownloadDocument(previewDoc);
+                            }}
+                          >
+                            {downloadingDocId === doc.id ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                              <Download className="h-5 w-5" />
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -867,15 +912,19 @@ export default function SubmissionDetails() {
                     </Button>
                     {activeDocPreview && (
                       <Button
-                        asChild
+                        type="button"
                         variant="outline"
                         size="sm"
                         className="h-6 rounded-full border-white/25 bg-white/10 px-2 text-[9px] font-bold text-white hover:bg-white/20 hover:text-white sm:h-7 sm:px-2.5"
+                        disabled={downloadingDocId === activeDocPreview.id}
+                        onClick={() => void handleDownloadDocument(activeDocPreview)}
                       >
-                        <a href={activeDocPreview.previewUrl} download={activeDocPreview.name}>
+                        {downloadingDocId === activeDocPreview.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin sm:mr-1" />
+                        ) : (
                           <Download className="h-3.5 w-3.5 sm:mr-1" />
-                          <span className="hidden lg:inline">Download</span>
-                        </a>
+                        )}
+                        <span className="hidden lg:inline">Download</span>
                       </Button>
                     )}
                   </div>

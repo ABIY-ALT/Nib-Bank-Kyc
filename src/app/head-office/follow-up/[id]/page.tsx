@@ -166,17 +166,11 @@ export default function FollowUpVerificationDetail() {
   };
 
   const previewableDocuments: PreviewableDocument[] = (submission?.documents || []).map((doc: any) => {
-    const lowerName = (doc.name || "").toLowerCase();
-    let inferredMime: string | undefined;
-    if (lowerName.endsWith(".pdf")) inferredMime = "application/pdf";
-    else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) inferredMime = "image/jpeg";
-    else if (lowerName.endsWith(".png")) inferredMime = "image/png";
-
     return {
       id: doc.id,
       name: doc.name,
       previewUrl: previewUrls[doc.id] || "",
-      mimeType: inferredMime,
+      mimeType: doc.mimeType,
       size: doc.size,
       documentType: doc.type,
     };
