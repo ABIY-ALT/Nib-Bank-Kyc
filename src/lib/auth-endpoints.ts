@@ -17,11 +17,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { sessionManager } from '@/lib/session-manager';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import * as bcrypt from 'bcryptjs';
 import { safeLog } from '@/lib/logging-redaction';
-
-const prisma = new PrismaClient();
 
 /**
  * Utility: Get client IP address

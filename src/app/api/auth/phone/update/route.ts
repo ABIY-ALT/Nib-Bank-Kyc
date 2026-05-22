@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { validatePhoneNumber } from '@/lib/phone-validation';
 import {
   PHONE_ERROR_MESSAGES,
@@ -20,8 +20,6 @@ import {
 } from '@/lib/phone-constants';
 import { safeLog } from '@/lib/logging-redaction';
 import { authenticateRequest } from '@/lib/auth-handlers';
-
-const prisma = new PrismaClient();
 
 /**
  * REST API for authenticated users

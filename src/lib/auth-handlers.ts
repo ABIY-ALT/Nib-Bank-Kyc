@@ -6,10 +6,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { jwtVerifyStrict } from '@/lib/strict-jwt';
-
-const prisma = new PrismaClient();
 
 /**
  * Get JWT secret from environment

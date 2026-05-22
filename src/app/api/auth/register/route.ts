@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { validatePhoneFromRequest } from '@/middleware/phone-validation.middleware';
@@ -26,8 +26,6 @@ import {
   internalErrorResponse, 
   unauthorizedResponse 
 } from '@/lib/api-security';
-
-const prisma = new PrismaClient();
 
 /**
  * GET /api/auth/register - Check availability

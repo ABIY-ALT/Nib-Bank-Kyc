@@ -11,13 +11,12 @@
  * - Complete audit trail
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { createTokenPair, verifyRefreshToken } from '@/lib/jwt-secure';
 import { safeLog } from '@/lib/logging-redaction';
 
-const prisma = new PrismaClient();
 const db = prisma as any;
 
 /**

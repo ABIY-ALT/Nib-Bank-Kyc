@@ -19,11 +19,10 @@
  * - Separate timeouts for different environments
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { sessionManager } from '@/lib/session-manager';
 import { safeLog } from '@/lib/logging-redaction';
 
-const prisma = new PrismaClient();
 const db = prisma as any;
 
 /**
