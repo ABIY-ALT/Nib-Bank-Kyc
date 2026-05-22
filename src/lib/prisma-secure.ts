@@ -12,20 +12,20 @@ import { safeLog } from './logging-redaction';
  * - Connection pooling configured
  */
 
-let prismaClient: PrismaClient | null = null;
+const globalForPrismaSecure = global as unknown as { prismaSecure: PrismaClient };
 
 /**
  * Initialize Prisma with securely loaded connection string
  */
 export async function initializePrisma(): Promise<PrismaClient> {
   try {
-    if (prismaClient) {
-      return prismaClient;
+    if (globalForPrismaSecure.prismaSecure) {
+      return globalForPrismaSecure.prismaSecure;
     }
 
     const databaseUrl = await getSecret('DATABASE_URL');
 
-    prismaClient = new PrismaClient({
+    const prismaClient = new PrismaClient({
       datasources: {
         db: {
           url: databaseUrl,
@@ -63,14 +63,9 @@ export async function initializePrisma(): Promise<PrismaClient> {
       });
     });
 
-    // Handle graceful shutdown
-    const handleShutdown = async () => {
-      await prismaClient?.$disconnect();
-      safeLog.info('Prisma client disconnected');
-    };
-
-    process.on('SIGTERM', handleShutdown);
-    process.on('SIGINT', handleShutdown);
+    if (process.env.NODE_ENV !== 'production') {
+      globalForPrismaSecure.prismaSecure = prismaClient;
+    }
 
     safeLog.info('✓ Prisma client initialized');
     return prismaClient;
@@ -86,19 +81,21 @@ export async function initializePrisma(): Promise<PrismaClient> {
  * Get Prisma client (lazy initialize)
  */
 export async function getPrisma(): Promise<PrismaClient> {
-  if (!prismaClient) {
+  if (!globalForPrismaSecure.prismaSecure) {
     return initializePrisma();
   }
-  return prismaClient;
+  return globalForPrismaSecure.prismaSecure;
 }
 
 /**
  * Disconnect Prisma client
  */
 export async function disconnectPrisma(): Promise<void> {
-  if (prismaClient) {
-    await prismaClient.$disconnect();
-    prismaClient = null;
+  if (globalForPrismaSecure.prismaSecure) {
+    await globalForPrismaSecure.prismaSecure.$disconnect();
+    if (process.env.NODE_ENV !== 'production') {
+      (globalForPrismaSecure as any).prismaSecure = null;
+    }
   }
 }
 

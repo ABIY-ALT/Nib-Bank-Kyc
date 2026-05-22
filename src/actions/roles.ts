@@ -67,39 +67,55 @@ async function internalSeedPermissions() {
   try {
     const validSlugs = SYSTEM_CAPABILITIES.map(p => p.slug);
 
-    // 1. Remove orphaned relations first to avoid foreign key violations
-    await prisma.rolePermission.deleteMany({
-      where: {
-        permission: {
+    await prisma.$transaction(async (tx) => {
+      // 1. Remove orphaned relations first to avoid foreign key violations
+      await tx.rolePermission.deleteMany({
+        where: {
+          permission: {
+            slug: { notIn: validSlugs }
+          }
+        }
+      });
+
+      // 2. Remove permissions that are no longer in the master registry
+      await tx.permission.deleteMany({
+        where: {
           slug: { notIn: validSlugs }
         }
-      }
-    });
-
-    // 2. Remove permissions that are no longer in the master registry
-    await prisma.permission.deleteMany({
-      where: {
-        slug: { notIn: validSlugs }
-      }
-    });
-
-    // 3. Upsert current capabilities
-    for (const p of SYSTEM_CAPABILITIES) {
-      await prisma.permission.upsert({
-        where: { slug: p.slug },
-        update: { name: p.name, group: p.group },
-        create: p,
       });
-    }
 
-    const superAdminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
-    if (superAdminRole) {
-      const allPerms = await prisma.permission.findMany();
-      await prisma.rolePermission.deleteMany({ where: { roleId: superAdminRole.id } });
-      await prisma.rolePermission.createMany({
-        data: allPerms.map((p: any) => ({ roleId: superAdminRole.id, permissionId: p.id }))
-      });
-    }
+      // 3. Upsert current capabilities (this keeps IDs stable for existing slugs)
+      for (const p of SYSTEM_CAPABILITIES) {
+        await tx.permission.upsert({
+          where: { slug: p.slug },
+          update: { name: p.name, group: p.group },
+          create: p,
+        });
+      }
+
+      // 4. Ensure Super Admin always has all permissions
+      const superAdminRole = await tx.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
+      if (superAdminRole) {
+        const allPerms = await tx.permission.findMany();
+        
+        // Only add missing ones instead of deleting everything
+        const existingRPs = await tx.rolePermission.findMany({
+          where: { roleId: superAdminRole.id },
+          select: { permissionId: true }
+        });
+        const existingPermIds = new Set(existingRPs.map((rp: any) => rp.permissionId));
+        
+        const missingPerms = allPerms.filter((p: any) => !existingPermIds.has(p.id));
+        
+        if (missingPerms.length > 0) {
+          await tx.rolePermission.createMany({
+            data: missingPerms.map((p: any) => ({ roleId: superAdminRole.id, permissionId: p.id }))
+          });
+        }
+      }
+    }, {
+      timeout: 30000 // Increase timeout for heavy operation
+    });
     
     return true;
   } catch (error) {
@@ -113,20 +129,6 @@ export async function getAllPermissions() {
   if (!session) throw new Error('Unauthenticated');
 
   try {
-    // Proactively sync permissions if there's any mismatch in slugs
-    const dbSlugs = await prisma.permission.findMany({ select: { slug: true } });
-    const dbSlugList = dbSlugs.map(s => s.slug);
-    const validSlugs = SYSTEM_CAPABILITIES.map(p => p.slug);
-
-    const needsSync = 
-      validSlugs.length !== dbSlugList.length || 
-      validSlugs.some(s => !dbSlugList.includes(s)) ||
-      dbSlugList.some(s => !validSlugs.includes(s));
-
-    if (needsSync) {
-      await internalSeedPermissions();
-    }
-
     const permissions = await prisma.permission.findMany({
       orderBy: [{ group: 'asc' }, { name: 'asc' }]
     });
