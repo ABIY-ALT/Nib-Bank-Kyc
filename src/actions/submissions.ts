@@ -19,15 +19,13 @@ import { writeSecureUploadedFile } from '@/lib/secure-file-storage';
 import { getExceptionalWorkflowStage, getExceptionalWorkflowAction, getActionsForCase } from '@/lib/exceptional-workflow';
 
 import { 
-  DIRECT_BRANCH_ROLES, 
-  PORTFOLIO_BRANCH_ROLES, 
-  GLOBAL_OVERSIGHT_ROLES, 
-  DISTRICT_DIRECTOR_ROLE, 
   normalizeAssignedBranches, 
   getResolvedUserBranchName, 
   getResolvedUserDistrictName, 
   getNormalizedRole, 
-  hasJurisdictionalAccess 
+  hasJurisdictionalAccess,
+  GLOBAL_SCOPE_PERMISSIONS,
+  PORTFOLIO_SCOPE_PERMISSIONS
 } from '@/lib/jurisdiction';
 
 
@@ -50,66 +48,6 @@ async function hasFollowUpCaseAccess(user: any, submissionId: string) {
   });
 
   return Boolean(followUpRecord);
-}
-
-
-function buildRestrictedJurisdictionFilter(
-  user: any,
-  role: string,
-  requestedBranches: string[],
-  requestedDistrict?: string
-) {
-  const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
-  const branchName = getResolvedUserBranchName(user);
-  const districtName = getResolvedUserDistrictName(user);
-
-  if (DIRECT_BRANCH_ROLES.has(role)) {
-    if (!branchName) return { denied: true };
-    if (requestedBranches.length > 0 && !requestedBranches.includes(branchName)) return { denied: true };
-    if (requestedDistrict && districtName && requestedDistrict !== districtName) return { denied: true };
-    return { filter: { branchName } };
-  }
-
-  if (PORTFOLIO_BRANCH_ROLES.has(role)) {
-    if (assignedBranches.length > 0) {
-      const visibleBranches = requestedBranches.length > 0
-        ? assignedBranches.filter((branch) => requestedBranches.includes(branch))
-        : assignedBranches;
-
-      if (visibleBranches.length === 0) return { denied: true };
-
-      return {
-        filter: {
-          branchName: visibleBranches.length === 1 ? visibleBranches[0] : { in: visibleBranches }
-        }
-      };
-    }
-
-    if (!branchName) {
-      if (GLOBAL_OVERSIGHT_ROLES.has(role)) {
-        return { filter: {} };
-      }
-      return { denied: true };
-    }
-
-    if (requestedBranches.length > 0 && !requestedBranches.includes(branchName)) return { denied: true };
-    if (requestedDistrict && districtName && requestedDistrict !== districtName) return { denied: true };
-    return { filter: { branchName } };
-  }
-
-  if (role === DISTRICT_DIRECTOR_ROLE) {
-    if (!districtName) return { denied: true };
-    if (requestedDistrict && requestedDistrict !== districtName) return { denied: true };
-
-    const filter: any = { districtName };
-    if (requestedBranches.length > 0) {
-      filter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
-    }
-
-    return { filter };
-  }
-
-  return null;
 }
 
 
@@ -162,64 +100,68 @@ export async function getSubmissions(filters?: any) {
     if (session.role !== 'SUPER_ADMIN' && !isOwnSubmissionRequest) {
       const user = await prisma.user.findUnique({
         where: { id: session.id },
-        include: { branch: { include: { district: true } } }
+        include: { 
+          roles: {
+            include: {
+              role: {
+                include: {
+                  permissions: {
+                    include: {
+                      permission: true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          branch: { include: { district: true } } 
+        }
       });
       if (!user) return [];
 
-      const restrictedScope = buildRestrictedJurisdictionFilter(user, normalizedRole, requestedBranches, requestedDistrict);
-      if (restrictedScope?.denied) {
-        return [];
-      }
+      const userPermissions = user.roles.flatMap((ur: any) => 
+        ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+      );
 
-      if (restrictedScope?.filter) {
-        jurisdictionalFilter = restrictedScope.filter;
+      // Check for global oversight first
+      if (userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
+        jurisdictionalFilter = {}; // No restriction
       } else {
         const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
         const branchName = getResolvedUserBranchName(user);
         const districtName = getResolvedUserDistrictName(user);
-      
-        if (assignedBranches.length > 0) {
-          const visibleBranches = requestedBranches.length > 0
-            ? assignedBranches.filter(branch => requestedBranches.includes(branch))
-            : assignedBranches;
 
-          if (visibleBranches.length === 0) return [];
-          jurisdictionalFilter.branchName = visibleBranches.length === 1 ? visibleBranches[0] : { in: visibleBranches };
-        } else if (branchName) {
-          if (requestedBranches.length > 0 && !requestedBranches.includes(branchName)) {
-            return [];
-          }
+        const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
+        const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
 
-          if (requestedDistrict && districtName && requestedDistrict !== districtName) {
-            return [];
-          }
-
-          jurisdictionalFilter.branchName = branchName;
-        } else if (districtName) {
-          if (requestedDistrict && requestedDistrict !== districtName) {
-            return [];
-          }
-
+        if (isDistrictAdmin && districtName) {
           jurisdictionalFilter.districtName = districtName;
-
           if (requestedBranches.length > 0) {
             jurisdictionalFilter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
           }
-        } else {
-          if (requestedBranches.length > 0) {
-            jurisdictionalFilter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
-          } else if (requestedDistrict) {
-            jurisdictionalFilter.districtName = requestedDistrict;
+        } else if (isPortfolioStaff) {
+          if (assignedBranches.length > 0) {
+            const visibleBranches = requestedBranches.length > 0
+              ? assignedBranches.filter(branch => requestedBranches.includes(branch))
+              : assignedBranches;
+            if (visibleBranches.length === 0) return [];
+            jurisdictionalFilter.branchName = visibleBranches.length === 1 ? visibleBranches[0] : { in: visibleBranches };
+          } else if (branchName) {
+            jurisdictionalFilter.branchName = branchName;
           } else {
             return [];
           }
+        } else {
+          // Direct Branch Staff
+          if (!branchName) return [];
+          jurisdictionalFilter.branchName = branchName;
         }
       }
     } else {
+      // Admin/Global View: Apply requested filters directly if provided
       if (requestedDistrict) {
         jurisdictionalFilter.districtName = requestedDistrict;
       }
-
       if (requestedBranches.length > 0) {
         jurisdictionalFilter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
       }
@@ -296,9 +238,13 @@ export async function getSubmissionById(id: string) {
     });
     if (!user) return null;
 
+    const userPermissions = user.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    );
+
     if (
       session.role === 'SUPER_ADMIN' ||
-      hasJurisdictionalAccess(user, getNormalizedRole(session.role), session.id, kyc) ||
+      hasJurisdictionalAccess(user, userPermissions, session.id, kyc) ||
       await hasFollowUpCaseAccess(user, kyc.id)
     ) {
       return formatKYC(kyc);
@@ -449,8 +395,30 @@ export async function resubmitSubmission(formData: FormData) {
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
-    const actor = await prisma.user.findUnique({ where: { id: session.id } });
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
+    const actor = await prisma.user.findUnique({ 
+      where: { id: session.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const userPermissions = actor?.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    ) || [];
+
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
       throw new Error("Unauthorized case access.");
     }
 
@@ -563,9 +531,30 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   }
 
   const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
-  const reviewer = await prisma.user.findUnique({ where: { id: session.id } });
+  const reviewer = await prisma.user.findUnique({ 
+    where: { id: session.id },
+    include: {
+      roles: {
+        include: {
+          role: {
+            include: {
+              permissions: {
+                include: {
+                  permission: true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
 
-  if (!reviewer || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(reviewer, getNormalizedRole(session.role), session.id, current))) {
+  const userPermissions = reviewer?.roles.flatMap((ur: any) => 
+    ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+  ) || [];
+
+  if (!reviewer || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(reviewer, userPermissions, session.id, current))) {
     throw new Error("Unauthorized case access.");
   }
 
@@ -608,14 +597,35 @@ export async function updateSubmissionChecklist(id: string, state: any) {
   try {
     const [currentKyc, actor] = await Promise.all([
       prisma.kYC.findUnique({ where: { id } }),
-      prisma.user.findUnique({ where: { id: session.id } })
+      prisma.user.findUnique({ 
+        where: { id: session.id },
+        include: {
+          roles: {
+            include: {
+              role: {
+                include: {
+                  permissions: {
+                    include: {
+                      permission: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
     ]);
 
     if (!currentKyc) {
       throw new Error("KYC record not found");
     }
 
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, currentKyc))) {
+    const userPermissions = actor?.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    ) || [];
+
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, currentKyc))) {
       throw new Error("Unauthorized case access.");
     }
 
@@ -665,7 +675,11 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       }
     });
 
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
+    const userPermissions = actor?.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    ) || [];
+
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
       throw new Error("Unauthorized case access.");
     }
 
@@ -754,36 +768,63 @@ export async function getWorkflowCounts() {
   try {
     const user = await prisma.user.findUnique({
       where: { id: session.id },
-      include: { branch: { include: { district: true } } }
+      include: { 
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        branch: { include: { district: true } } 
+      }
     });
     if (!user) {
       return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
     }
 
+    const userPermissions = user.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    );
+
     let scopeFilter: any = {};
     let scopeUnavailable = false;
-    const normalizedRole = getNormalizedRole(session.role);
-    const restrictedScope = buildRestrictedJurisdictionFilter(user, normalizedRole, [], undefined);
-    const dbBranchName = getResolvedUserBranchName(user);
-    const dbDistrictName = getResolvedUserDistrictName(user);
 
     if (!isSuperAdmin) {
-      if (restrictedScope?.denied) {
-        scopeUnavailable = true;
-      }
-
-      if (!scopeUnavailable && restrictedScope?.filter) {
-        scopeFilter = restrictedScope.filter;
-      } else if (!scopeUnavailable) {
+      // Check for global oversight first
+      if (userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
+        scopeFilter = {}; // No restriction
+      } else {
         const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
-        if (assignedBranches.length > 0) {
-          scopeFilter = { branchName: { in: assignedBranches } };
-        } else if (dbBranchName) {
-          scopeFilter = { branchName: dbBranchName };
-        } else if (normalizedRole === DISTRICT_DIRECTOR_ROLE && dbDistrictName) {
-          scopeFilter = { districtName: dbDistrictName };
+        const branchName = getResolvedUserBranchName(user);
+        const districtName = getResolvedUserDistrictName(user);
+
+        const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
+        const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
+
+        if (isDistrictAdmin && districtName) {
+          scopeFilter = { districtName };
+        } else if (isPortfolioStaff) {
+          if (assignedBranches.length > 0) {
+            scopeFilter = { branchName: { in: assignedBranches } };
+          } else if (branchName) {
+            scopeFilter = { branchName };
+          } else {
+            scopeUnavailable = true;
+          }
         } else {
-          scopeUnavailable = true;
+          // Direct Branch Staff
+          if (!branchName) {
+            scopeUnavailable = true;
+          } else {
+            scopeFilter = { branchName };
+          }
         }
       }
     }
@@ -847,7 +888,11 @@ export async function processExceptionalStep(formData: FormData) {
       }
     });
 
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
+    const userPermissions = actor?.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    ) || [];
+
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
       throw new Error("Unauthorized case access.");
     }
 
@@ -975,8 +1020,30 @@ export async function uploadAdditionalDocuments(formData: FormData) {
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
-    const actor = await prisma.user.findUnique({ where: { id: session.id } });
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
+    const actor = await prisma.user.findUnique({ 
+      where: { id: session.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const userPermissions = actor?.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    ) || [];
+
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
       throw new Error("Unauthorized case access.");
     }
 

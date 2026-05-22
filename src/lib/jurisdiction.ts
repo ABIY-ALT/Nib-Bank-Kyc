@@ -1,7 +1,32 @@
 
-export const DIRECT_BRANCH_ROLES = new Set(['BRANCH_MANAGER', 'BRANCH_OFFICER']);
-export const PORTFOLIO_BRANCH_ROLES = new Set(['KYC_OFFICER', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER', 'SUPERVISOR']);
-export const GLOBAL_OVERSIGHT_ROLES = new Set(['SUPERVISOR']);
+/**
+ * Permission-based Scope Definitions
+ */
+export const GLOBAL_SCOPE_PERMISSIONS = new Set([
+  'DASHBOARD_VIEW_SYSTEM',
+  'REPORT_VIEW_SYSTEM',
+  'VIEW_SPECIALIST_PRODUCTIVITY',
+  'MANAGE_VAULT_STORAGE',
+  'KYC_DIRECTOR_APPROVAL',
+  'CHIEF_RETAIL_REVIEW',
+  'VIEW_SYSTEM_AUDIT'
+]);
+
+export const PORTFOLIO_SCOPE_PERMISSIONS = new Set([
+  'KYC_VIEW_QUEUE',
+  'VIEW_AMENDMENT_QUEUE',
+  'VIEW_ESCALATED_CASES',
+  'SUPERVISOR_FORWARD',
+  'KYC_OFFICER_PROCESS',
+  'MAP_USERS_TO_BRANCH'
+]);
+
+export const BRANCH_SCOPE_PERMISSIONS = new Set([
+  'CASE_SUBMIT',
+  'CASE_VIEW_OWN',
+  'CASE_VIEW_ACTION_REQUIRED'
+]);
+
 export const DISTRICT_DIRECTOR_ROLE = 'DISTRICT_DIRECTOR';
 
 export function normalizeAssignedBranches(value: unknown): string[] {
@@ -28,36 +53,47 @@ export function getNormalizedRole(role?: string | null) {
   return role?.toUpperCase() || '';
 }
 
-export function hasJurisdictionalAccess(user: any, role: string, sessionId: string, kyc: any) {
+/**
+ * Checks if a user has jurisdictional access to a specific KYC case based on their permissions.
+ */
+export function hasJurisdictionalAccess(user: any, userPermissions: string[], sessionId: string, kyc: any) {
   const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
   const branchName = getResolvedUserBranchName(user);
   const districtName = getResolvedUserDistrictName(user);
-  
-  const matchesBranch = Boolean(
-    (user?.branchId && kyc.branchId === user.branchId) ||
-    (branchName && kyc.branchName === branchName)
-  );
-  
-  const matchesPortfolio = assignedBranches.includes(kyc.branchName);
-  
-  const matchesDistrict = role === DISTRICT_DIRECTOR_ROLE
-    && !!districtName
-    && (kyc.districtName === districtName || kyc.branch?.district?.name === districtName);
 
-  if (DIRECT_BRANCH_ROLES.has(role)) {
-    return matchesBranch;
+  // 1. Global Oversight Check (Highest Priority)
+  if (userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
+    return true; 
   }
 
-  if (PORTFOLIO_BRANCH_ROLES.has(role)) {
-    if (role === 'SUPERVISOR' && assignedBranches.length === 0 && !branchName) {
+  // 2. Ownership Check
+  if (kyc.createdById === sessionId || kyc.assignedToId === sessionId) {
+    return true;
+  }
+
+  // 3. District Director Logic (Dynamic based on permission or legacy role)
+  const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
+  if (isDistrictAdmin && districtName) {
+    if (kyc.districtName === districtName || kyc.branch?.district?.name === districtName) {
       return true;
     }
-    return assignedBranches.length > 0 ? matchesPortfolio : matchesBranch;
   }
 
-  if (role === DISTRICT_DIRECTOR_ROLE) {
-    return matchesDistrict;
+  // 4. Portfolio / Specialist Logic
+  if (userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p))) {
+    if (assignedBranches.length > 0) {
+      return assignedBranches.includes(kyc.branchName);
+    }
+    // Fallback to primary branch if no portfolio mapped
+    if (branchName && kyc.branchName === branchName) {
+      return true;
+    }
   }
 
-  return matchesBranch || matchesPortfolio || matchesDistrict || kyc.createdById === sessionId || kyc.assignedToId === sessionId;
+  // 5. Direct Branch Logic
+  if (userPermissions.some(p => BRANCH_SCOPE_PERMISSIONS.has(p))) {
+    return branchName && kyc.branchName === branchName;
+  }
+
+  return false;
 }

@@ -56,11 +56,31 @@ export async function GET(
     if (rateLimitResponse) return rateLimitResponse;
 
     // 3. Jurisdictional Access Control
-    const user = await prisma.user.findUnique({ where: { id: session.id } });
+    const user = await prisma.user.findUnique({ 
+      where: { id: session.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 401 });
 
-    const role = getNormalizedRole(session.role);
-    if (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(user, role, session.id, memo.kyc)) {
+    const userPermissions = user.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    );
+
+    if (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(user, userPermissions, session.id, memo.kyc)) {
       await createAuditLog({ 
         userId: session.id, 
         userEmail: session.email, 

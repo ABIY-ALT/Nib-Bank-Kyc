@@ -121,8 +121,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ success: false, error: 'Case not found' });
     }
 
-    const actor = await prisma.user.findUnique({ where: { id: session.id } });
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
+    const actor = await prisma.user.findUnique({ 
+      where: { id: session.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const userPermissions = actor?.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    ) || [];
+
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 

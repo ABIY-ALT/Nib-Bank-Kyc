@@ -103,7 +103,8 @@ async function reserveRequestedInstitutionalEmail(params: {
 async function verifyUserManagementAccess() {
   const session = await getServerSession();
   if (!session) return false;
-  return verifyPermission('USER_CREATE');
+  // Allow access if user has USER_CREATE or VIEW_SPECIALIST_PRODUCTIVITY (for monitoring)
+  return verifyPermission('USER_CREATE') || verifyPermission('VIEW_SPECIALIST_PRODUCTIVITY');
 }
 
 export async function getAllUsers() {

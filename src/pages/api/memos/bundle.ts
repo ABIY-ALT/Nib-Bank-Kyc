@@ -42,13 +42,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     //  Fetch actor ONCE
     const actor = await prisma.user.findUnique({
       where: { id: session.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     });
 
     if (!actor) {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 
-    const normalizedRole = getNormalizedRole(session.role);
+    const userPermissions = actor.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    );
 
     //  Fetch memos
     const memos = await prisma.memo.findMany({
@@ -81,7 +98,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (
         session.role !== 'SUPER_ADMIN' &&
-        !hasJurisdictionalAccess(actor, normalizedRole, session.id, m.kyc as any)
+        !hasJurisdictionalAccess(actor, userPermissions, session.id, m.kyc as any)
       ) {
         return res.status(403).json({
           success: false,

@@ -140,7 +140,7 @@ export default function KYCOperationsMonitoringPage() {
       ]);
       const kycPersonnel = u.filter((usr: any) => 
         usr.roles?.some((r: any) => 
-          ['KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER'].includes(r.role.name)
+          ['KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER', 'CHECKER', 'MAKER', 'GOVERNANCE'].includes(r.role.name)
         )
       );
       setOfficers(kycPersonnel);
