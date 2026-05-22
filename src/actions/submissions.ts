@@ -885,7 +885,7 @@ export async function processExceptionalStep(formData: FormData) {
         throw new Error(`Memo validation failed: ${memoValidation.error}`);
       }
 
-      storedMemoKey = memoValidation.storageKey;
+      storedMemoKey = memoValidation.storageKey as string;
       const persistableBuffer = memoValidation.sanitisedBuffer || buffer;
       await writeSecureUploadedFile(storedMemoKey, persistableBuffer);
     }
