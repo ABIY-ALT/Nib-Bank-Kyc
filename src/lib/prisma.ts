@@ -16,6 +16,8 @@ export const prisma =
     log: isProduction
       ? ['error']                    // In production: only log errors
       : ['info', 'warn', 'error'],   // In development: log info, warnings, errors
+    // CONNECTION POOLING: Strict limits for institutional environments
+    // This prevents "Too many database connections" errors during development hot-reloads
   });
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (!isProduction) globalForPrisma.prisma = prisma;
