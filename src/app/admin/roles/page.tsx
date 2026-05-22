@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getRoleDefinitions, getAllPermissions, upsertRole, toggleRoleStatus } from '@/actions/roles';
+import { getRoleDefinitions, getAllPermissions, upsertRole, toggleRoleStatus, seedInstitutionalPermissions } from '@/actions/roles';
 import {
   Dialog,
   DialogContent,
@@ -73,6 +73,7 @@ export default function StaffRolesPage() {
   const [selectedRole, setSelectedRole] = useState<any>(null);
   const [roleName, setRoleName] = useState("");
   const [permissionsForm, setPermissionsForm] = useState<string[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('ROLE_CREATE')) {
@@ -97,6 +98,22 @@ export default function StaffRolesPage() {
     }
   };
 
+  const handleSyncPermissions = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await seedInstitutionalPermissions();
+      if (res.success) {
+        toast({ title: "Permissions Synchronized", description: "Master capability registry updated." });
+        await loadData();
+      } else {
+        toast({ variant: "destructive", title: "Sync Failed" });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Sync Error" });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleOpenAdd = () => {
     setSelectedRole(null);
@@ -199,9 +216,6 @@ export default function StaffRolesPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-primary text-white rounded-lg shadow-lg">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">{SYSTEM_SECTION_COPY.ROLE_CREATE.label}</h1>
           </div>
           <p className="text-muted-foreground text-lg font-medium">{SYSTEM_SECTION_COPY.ROLE_CREATE.description}</p>

@@ -59,6 +59,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { usePermissions } from "@/hooks/use-permissions";
 import { AMENDMENT_SCENARIOS, KYC_STATUS, EXCEPTIONAL_STATUS } from "@/lib/kyc-data";
+import { getActionsForCase, getExceptionalWorkflowStage } from "@/lib/exceptional-workflow";
 import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
@@ -576,25 +577,47 @@ export default function SubmissionDetails() {
     setResubmitFiles(prev => prev.map(f => f.id === id ? { ...f, type } : f));
   }, []);
 
-  const handleExceptionalStep = useCallback(async (nextStatus: string, actionLabel: string) => {
+  const handleExceptionalStep = useCallback(async (nextStatus: string, actionLabel: string, actionDetails?: any) => {
     if (!submission || !user || isActioning) return;
+
+    if (actionDetails?.requiresRemarks && !remarks.trim()) {
+      toast({ 
+        variant: "destructive", 
+        title: "Remarks Required", 
+        description: "Please provide a rationale for this governance decision." 
+      });
+      return;
+    }
+
+    if (actionDetails?.requiresMemo && !govMemo) {
+      toast({ 
+        variant: "destructive", 
+        title: "Memo Required", 
+        description: "A PDF authorization memo is mandatory for this action." 
+      });
+      return;
+    }
 
     setIsActioning(nextStatus);
     try {
       const formData = new FormData();
       formData.append('id', submission.id);
       formData.append('nextStatus', nextStatus);
-      formData.append('remarks', remarks);
+      formData.append('remarks', remarks.trim());
       formData.append('actionLabel', actionLabel);
       if (govMemo) formData.append('memo', govMemo);
 
-      await processExceptionalStep(formData);
-      toast({ title: "Successful" });
-      await refreshSubmission(submission.id);
-      setRemarks("");
-      setGovMemo(null);
+      const res = await processExceptionalStep(formData);
+      if (res.success) {
+        toast({ title: "Successful" });
+        await refreshSubmission(submission.id);
+        setRemarks("");
+        setGovMemo(null);
+      } else {
+        throw new Error("Transition failed");
+      }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Transition Failed" });
+      toast({ variant: "destructive", title: "Transition Failed", description: error.message });
     } finally {
       setIsActioning(null);
     }
@@ -1091,6 +1114,115 @@ export default function SubmissionDetails() {
                     <Button onClick={() => handleAction(KYC_STATUS.ESCALATED)} className="bg-slate-900 hover:bg-black text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Escalate</Button>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {submission.isExceptional && !isTerminal && (
+            <Card className="border-yellow-200 shadow-2xl rounded-3xl overflow-hidden bg-white">
+              <CardHeader className="bg-[#B89334] text-white border-b py-5">
+                <CardTitle className="text-lg font-black text-white">Governance Verdict</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-6 px-6 pb-8">
+                {(() => {
+                  const stage = getExceptionalWorkflowStage(submission.exceptionalStatus);
+                  const actions = getActionsForCase(submission.exceptionalStatus, submission.commentHistory || []);
+                  const canPerform = hasPermission(stage?.permission || '');
+
+                  if (!canPerform) {
+                    return (
+                      <div className="p-6 bg-slate-50 border border-slate-100 rounded-2xl text-center space-y-3">
+                        <ShieldAlert className="w-10 h-10 text-slate-300 mx-auto" />
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                          Requires {stage?.label || 'Governance'} Permission
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400">
+                          Your role does not have {stage?.permission || 'the required'} permission for this stage.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Reviewer Comments</Label>
+                        <Textarea 
+                          placeholder="Provide your decision rationale..." 
+                          value={remarks} 
+                          onChange={(e) => setRemarks(e.target.value)} 
+                          className="min-h-[140px] rounded-2xl bg-slate-50/50 font-medium" 
+                        />
+                      </div>
+
+                      {actions.some(a => a.requiresMemo || a.allowOptionalMemo) && (
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            {actions.some(a => a.requiresMemo) ? 'Supporting Memo (PDF)' : 'Optional Memo (PDF)'}
+                          </Label>
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="file" 
+                              id="govMemo" 
+                              className="hidden" 
+                              accept=".pdf"
+                              onChange={(e) => setGovMemo(e.target.files?.[0] || null)}
+                            />
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              className={cn(
+                                "flex-1 h-12 rounded-xl border-dashed border-2 font-bold",
+                                govMemo ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200"
+                              )}
+                              onClick={() => document.getElementById('govMemo')?.click()}
+                            >
+                              <Upload className="w-5 h-5 mr-2" />
+                              {govMemo ? govMemo.name : (actions.some(a => a.requiresMemo) ? "Attach Authorization Memo" : "Attach Decision Memo (Optional)")}
+                            </Button>
+                            {govMemo && (
+                              <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-12 w-12 rounded-xl text-red-500 hover:bg-red-50"
+                                onClick={() => setGovMemo(null)}
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                            {actions.some(a => a.requiresMemo) 
+                              ? "Mandatory for Approvals and Higher-Level Escalations" 
+                              : "Optional documentation for this decision stage"}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 gap-3">
+                        {actions.map((action, idx) => (
+                          <Button 
+                            key={idx}
+                            onClick={() => handleExceptionalStep(action.nextStatus, action.label, action)}
+                            className={cn(
+                              "font-black h-12 rounded-xl shadow-lg transition-all active:scale-95",
+                              action.actionType === 'APPROVE' && "bg-emerald-600 hover:bg-emerald-700 text-white",
+                              action.actionType === 'FORWARD' && "bg-primary hover:bg-primary/90 text-white",
+                              action.actionType === 'RETURN' && "bg-orange-600 hover:bg-orange-700 text-white",
+                              action.actionType === 'COMPLETE' && "bg-slate-900 hover:bg-black text-white",
+                              action.actionType === 'RESUBMIT' && "bg-blue-600 hover:bg-blue-700 text-white"
+                            )}
+                            disabled={!!isActioning}
+                          >
+                            {isActioning === action.nextStatus ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            {action.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           )}

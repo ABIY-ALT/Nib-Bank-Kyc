@@ -291,6 +291,12 @@ export function getPermissionSlugs(user: AccessUserLike) {
   return slugs;
 }
 
+export function hasPermission(user: AccessUserLike, permission: string) {
+  if (isSuperAdminUser(user)) return true;
+  const slugs = getPermissionSlugs(user);
+  return slugs.has(permission);
+}
+
 function buildUnauthorizedPath(params: { required?: string; reason?: string }) {
   const query = new URLSearchParams();
 

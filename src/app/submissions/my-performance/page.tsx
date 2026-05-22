@@ -92,9 +92,20 @@ export default function MyCasesPerformancePage() {
     setLoading(true);
     try {
       let filters: any = {
-        assignedToId: user.id,
         limit: 1000
       };
+
+      // Jurisdiction: KYC Officers and Specialists see their mapped branches
+      if (!isSuperAdmin) {
+        if (user.assignedBranches && user.assignedBranches.length > 0) {
+          filters.branches = user.assignedBranches;
+        } else if (user.branchName) {
+          filters.branch = user.branchName;
+        } else {
+          // If no assignment, fallback to assignedToId to at least show their own cases if any
+          filters.assignedToId = user.id;
+        }
+      }
 
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();

@@ -16,6 +16,7 @@ import {
 import { resolvePreviewMimeType } from '@/lib/documents';
 import { performCompleteFileValidation } from '@/lib/file-upload-security-integration';
 import { writeSecureUploadedFile } from '@/lib/secure-file-storage';
+import { getExceptionalWorkflowStage, getExceptionalWorkflowAction, getActionsForCase } from '@/lib/exceptional-workflow';
 
 import { 
   DIRECT_BRANCH_ROLES, 
@@ -645,9 +646,32 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
-    const actor = await prisma.user.findUnique({ where: { id: session.id } });
+    const actor = await prisma.user.findUnique({ 
+      where: { id: session.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
     if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
       throw new Error("Unauthorized case access.");
+    }
+
+    // Dynamic Permission Check
+    if (session.role !== 'SUPER_ADMIN' && !hasPermission(actor, 'BRANCH_CASE_CREATE')) {
+      throw new Error("Insufficient permissions. Required: BRANCH_CASE_CREATE");
     }
 
     const buffer = Buffer.from(await memo.arrayBuffer());
@@ -799,15 +823,71 @@ export async function processExceptionalStep(formData: FormData) {
     const nextStatus = formData.get('nextStatus') as string;
     const remarks = formData.get('remarks') as string;
     const actionLabel = formData.get('actionLabel') as string;
+    const memo = formData.get('memo') as File | null;
 
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
-    const history = Array.isArray(current?.commentHistory) ? (current.commentHistory as any[]) : [];
-    const actor = await prisma.user.findUnique({ where: { id: session.id } });
+    const actor = await prisma.user.findUnique({ 
+      where: { id: session.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
 
     if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, getNormalizedRole(session.role), session.id, current))) {
       throw new Error("Unauthorized case access.");
+    }
+
+    const stage = getExceptionalWorkflowStage(current.exceptionalStatus);
+    if (!stage) throw new Error("Invalid workflow stage.");
+
+    // Dynamic Permission Check
+    if (session.role !== 'SUPER_ADMIN' && !hasPermission(actor, stage.permission)) {
+      throw new Error(`Insufficient permissions. Required: ${stage.permission}`);
+    }
+
+    const history = Array.isArray(current?.commentHistory) ? (current.commentHistory as any[]) : [];
+    const availableActions = getActionsForCase(current.exceptionalStatus, history);
+    const action = availableActions.find(a => a.nextStatus === nextStatus);
+
+    if (!action) throw new Error("Invalid workflow action.");
+
+    // Validate mandatory requirements
+    if (action.requiresRemarks && !remarks) {
+      throw new Error("Remarks are mandatory for this action.");
+    }
+
+    let storedMemoKey: string | null = null;
+    let memoValidation: any = null;
+
+    if (action.requiresMemo || (action.allowOptionalMemo && memo && memo.size > 0)) {
+      if (action.requiresMemo && (!memo || memo.size === 0)) {
+        throw new Error("A PDF memo attachment is mandatory for this action.");
+      }
+
+      const buffer = Buffer.from(await memo!.arrayBuffer());
+      memoValidation = await performCompleteFileValidation(memo!.name, memo!.type, buffer, session.id);
+      
+      if (!memoValidation.valid || !memoValidation.storageKey) {
+        throw new Error(`Memo validation failed: ${memoValidation.error}`);
+      }
+
+      storedMemoKey = memoValidation.storageKey;
+      const persistableBuffer = memoValidation.sanitisedBuffer || buffer;
+      await writeSecureUploadedFile(storedMemoKey, persistableBuffer);
     }
 
     const data: any = { 
@@ -818,27 +898,50 @@ export async function processExceptionalStep(formData: FormData) {
         performedBy: `${actor?.firstName} ${actor?.lastName}`, 
         timestamp: new Date().toISOString(), 
         comment: remarks || actionLabel, 
-        action: actionLabel 
+        action: actionLabel,
+        actionType: action.actionType
       }]
     };
     
-    if (nextStatus === EXCEPTIONAL_STATUS.COMPLETED) data.status = KYC_STATUS.APPROVED;
+    if (nextStatus === EXCEPTIONAL_STATUS.COMPLETED) {
+      data.status = KYC_STATUS.APPROVED;
+    }
 
-    const kyc = await prisma.kYC.update({ where: { id }, data });
+    // Use transaction if memo is uploaded
+    if (storedMemoKey && memo) {
+      await prisma.$transaction([
+        prisma.memo.create({
+          data: {
+            name: memo.name.split('.').slice(0, -1).join('.'),
+            originalName: memo.name,
+            type: 'GOVERNANCE_MEMO',
+            storageKey: storedMemoKey,
+            fileHash: memoValidation.fileHash,
+            uploadedById: session.id,
+            kycId: id,
+            mimeType: memoValidation.fileType || memo.type,
+            size: memo.size
+          }
+        }),
+        prisma.kYC.update({ where: { id }, data })
+      ]);
+    } else {
+      await prisma.kYC.update({ where: { id }, data });
+    }
 
     await createAuditLog({
       userId: session.id,
       userEmail: session.email,
       action: `GOVERNANCE_STEP_${nextStatus}`,
-      details: `Governance step advanced to ${nextStatus}. Decision: ${actionLabel}`,
+      details: `Governance step advanced from ${current.exceptionalStatus} to ${nextStatus}. Action: ${actionLabel}. Permission used: ${stage.permission}`,
       kycId: id
     });
 
     revalidatePath(`/submissions/${id}`);
-    return kyc;
-  } catch (error) {
+    return { success: true };
+  } catch (error: any) {
     logInstitutionalError(error, 'DB_PROCESS_EXCEPTIONAL');
-    throw new Error("Institutional database fault.");
+    throw new Error(error.message || "Institutional database fault.");
   }
 }
 export async function logBundleDownload(data: any) {

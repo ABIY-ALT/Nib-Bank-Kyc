@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { getPrimaryRoleDisplayName } from "@/lib/access-control";
+import { useState, useEffect } from "react";
 
 export default function UnauthorizedPage() {
   const router = useRouter();
@@ -17,6 +18,12 @@ export default function UnauthorizedPage() {
   const reason = searchParams?.get('reason');
   const roleName = getPrimaryRoleDisplayName(user);
   const isUnassignedRole = reason === 'ROLE_UNASSIGNED';
+
+  const [refId, setRefId] = useState<string>('');
+
+  useEffect(() => {
+    setRefId(Date.now().toString().slice(-6));
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
@@ -70,7 +77,7 @@ export default function UnauthorizedPage() {
         </div>
 
         <p className="text-[10px] font-mono font-bold text-muted-foreground uppercase">
-          Ref ID: ERR_AUTH_RESTRICTED_{Date.now().toString().slice(-6)}
+          Ref ID: ERR_AUTH_RESTRICTED_{refId || '......'}
         </p>
       </div>
     </div>

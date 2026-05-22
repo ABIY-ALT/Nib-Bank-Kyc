@@ -155,6 +155,48 @@ export const ACCESS_CAPABILITY_CATALOG = [
     group: "WORKFLOWS",
   },
   {
+    slug: "DISTRICT_DIRECTOR_REVIEW",
+    label: "District Director Review",
+    description: "Regional oversight and exceptional case review permissions.",
+    group: "WORKFLOWS",
+  },
+  {
+    slug: "KYC_DIRECTOR_APPROVAL",
+    label: "KYC Director Approval",
+    description: "Review case details, attachments, and prior governance decisions.",
+    group: "WORKFLOWS",
+  },
+  {
+    slug: "CHIEF_RETAIL_REVIEW",
+    label: "Chief Retail & SME Review",
+    description: "High-level review of exceptional approvals and recommendations.",
+    group: "WORKFLOWS",
+  },
+  {
+    slug: "DIVISION_MANAGER_REVIEW",
+    label: "Division Manager Review",
+    description: "Operational review and forwarding decision in governance.",
+    group: "WORKFLOWS",
+  },
+  {
+    slug: "SUPERVISOR_FORWARD",
+    label: "Supervisor Forward",
+    description: "Verify workflow completion and dispatch to KYC Officer.",
+    group: "WORKFLOWS",
+  },
+  {
+    slug: "KYC_OFFICER_PROCESS",
+    label: "KYC Officer Process",
+    description: "Final operational processing and exceptional case closure.",
+    group: "WORKFLOWS",
+  },
+  {
+    slug: "CREATE_GOVERNANCE_MEMO",
+    label: "Create Governance Memo",
+    description: "Upload and attach formal memos to governance cases.",
+    group: "WORKFLOWS",
+  },
+  {
     slug: "CASE_VIEW_BRANCH",
     label: "Branch Monitoring",
     description: "Monitor case activity for a branch.",

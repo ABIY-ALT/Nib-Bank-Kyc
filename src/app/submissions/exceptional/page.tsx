@@ -51,7 +51,7 @@ export default function ExceptionalCasesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = isSuperAdmin;
-  const canTrigger = hasPermission('TRIGGER_GOVERNANCE_FLOW');
+  const canTrigger = hasPermission('BRANCH_CASE_CREATE');
 
   const loadData = async () => {
     if (!user) return;
@@ -164,9 +164,6 @@ export default function ExceptionalCasesPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-yellow-600 text-white rounded-lg shadow-lg">
-              <Zap className="w-6 h-6" />
-            </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Exceptional Approvals</h1>
           </div>
           <p className="text-muted-foreground text-lg font-medium">Hierarchy oversight for high-risk and non-standard verification requests.</p>

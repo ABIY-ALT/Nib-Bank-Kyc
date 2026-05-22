@@ -293,8 +293,21 @@ export default function UserManagementPage() {
     branchId: '',
     districtName: ''
   });
-  const isHqOnly = isHqOnlyRole(formData.role);
-  const isDistrictDirector = isDistrictDirectorRole(formData.role);
+  const isHqOnly = useMemo(() => {
+    const selectedRole = roleDefinitions.find(r => r.name === formData.role);
+    const perms = selectedRole?.permissions?.map((p: any) => p.permission.slug) || [];
+    return perms.includes('KYC_DIRECTOR_APPROVAL') || 
+           perms.includes('KYC_VIEW_QUEUE') || 
+           formData.role === 'KYC_DIRECTOR' || 
+           formData.role === 'KYC_OFFICER' || 
+           formData.role === 'SUPERVISOR';
+  }, [formData.role, roleDefinitions]);
+
+  const isDistrictDirector = useMemo(() => {
+    const selectedRole = roleDefinitions.find(r => r.name === formData.role);
+    const perms = selectedRole?.permissions?.map((p: any) => p.permission.slug) || [];
+    return perms.includes('DISTRICT_DIRECTOR_REVIEW') || formData.role === 'DISTRICT_DIRECTOR';
+  }, [formData.role, roleDefinitions]);
   const generatedEmailPreview = useMemo(() => {
     const firstNamePart = buildEmailPreviewSegment(formData.firstName || '');
     const lastNamePart = buildEmailPreviewSegment(formData.lastName || '');
@@ -773,12 +786,22 @@ export default function UserManagementPage() {
                 <Label className="text-[10px] font-black uppercase text-slate-500">Role</Label>
                 <Select
                   value={formData.role}
-                  onValueChange={val => setFormData((prev: typeof formData) => ({
-                    ...prev,
-                    role: val,
-                    branchId: isDistrictDirectorRole(val) || isHqOnlyRole(val) ? 'none' : prev.branchId,
-                    districtName: isDistrictDirectorRole(val) ? prev.districtName : ''
-                  }))}
+                  onValueChange={val => {
+                    const selectedRole = roleDefinitions.find(r => r.name === val);
+                    const perms = selectedRole?.permissions?.map((p: any) => p.permission.slug) || [];
+                    
+                    // Business Rules: Automatic HQ detection based on permissions
+                    const isDirector = perms.includes('KYC_DIRECTOR_APPROVAL') || val === 'KYC_DIRECTOR';
+                    const isDistrict = perms.includes('DISTRICT_DIRECTOR_REVIEW') || val === 'DISTRICT_DIRECTOR';
+                    const isHqOnly = perms.includes('KYC_VIEW_QUEUE') || val === 'KYC_OFFICER' || val === 'SUPERVISOR';
+
+                    setFormData((prev: typeof formData) => ({
+                      ...prev,
+                      role: val,
+                      branchId: (isDirector || isDistrict || isHqOnly) ? 'none' : prev.branchId,
+                      districtName: isDistrict ? prev.districtName : ''
+                    }));
+                  }}
                 >
                   <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Select Role" /></SelectTrigger>
                   <SelectContent>{roleDefinitions.map(r => <SelectItem key={r.id} value={r.name}>{r.name.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>

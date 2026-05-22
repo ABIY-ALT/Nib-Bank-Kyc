@@ -21,8 +21,15 @@ const SYSTEM_CAPABILITIES = [
   { slug: 'VIEW_AMENDMENT_QUEUE', name: 'Access Amendment Review', group: 'WORKFLOWS' },
   { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Returned Cases', group: 'WORKFLOWS' },
   { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
-  { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'WORKFLOWS' },
+  { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'Access Exceptional Cases', group: 'WORKFLOWS' },
   { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
+  { slug: 'DISTRICT_DIRECTOR_REVIEW', name: 'District Director Review', group: 'WORKFLOWS' },
+  { slug: 'KYC_DIRECTOR_APPROVAL', name: 'KYC Director Approval', group: 'WORKFLOWS' },
+  { slug: 'CHIEF_RETAIL_REVIEW', name: 'Chief Retail & SME Review', group: 'WORKFLOWS' },
+  { slug: 'DIVISION_MANAGER_REVIEW', name: 'Division Manager Review', group: 'WORKFLOWS' },
+  { slug: 'SUPERVISOR_FORWARD', name: 'Supervisor Forward', group: 'WORKFLOWS' },
+  { slug: 'KYC_OFFICER_PROCESS', name: 'KYC Officer Process', group: 'WORKFLOWS' },
+  { slug: 'CREATE_GOVERNANCE_MEMO', name: 'Create Governance Memo', group: 'WORKFLOWS' },
   
   // MONITORING
   { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },
@@ -58,6 +65,25 @@ const SYSTEM_CAPABILITIES = [
  */
 async function internalSeedPermissions() {
   try {
+    const validSlugs = SYSTEM_CAPABILITIES.map(p => p.slug);
+
+    // 1. Remove orphaned relations first to avoid foreign key violations
+    await prisma.rolePermission.deleteMany({
+      where: {
+        permission: {
+          slug: { notIn: validSlugs }
+        }
+      }
+    });
+
+    // 2. Remove permissions that are no longer in the master registry
+    await prisma.permission.deleteMany({
+      where: {
+        slug: { notIn: validSlugs }
+      }
+    });
+
+    // 3. Upsert current capabilities
     for (const p of SYSTEM_CAPABILITIES) {
       await prisma.permission.upsert({
         where: { slug: p.slug },
@@ -77,6 +103,7 @@ async function internalSeedPermissions() {
     
     return true;
   } catch (error) {
+    console.error('Permission Sync Error:', error);
     return false;
   }
 }
@@ -86,16 +113,23 @@ export async function getAllPermissions() {
   if (!session) throw new Error('Unauthenticated');
 
   try {
+    // Proactively sync permissions if there's any mismatch in slugs
+    const dbSlugs = await prisma.permission.findMany({ select: { slug: true } });
+    const dbSlugList = dbSlugs.map(s => s.slug);
+    const validSlugs = SYSTEM_CAPABILITIES.map(p => p.slug);
+
+    const needsSync = 
+      validSlugs.length !== dbSlugList.length || 
+      validSlugs.some(s => !dbSlugList.includes(s)) ||
+      dbSlugList.some(s => !validSlugs.includes(s));
+
+    if (needsSync) {
+      await internalSeedPermissions();
+    }
+
     const permissions = await prisma.permission.findMany({
       orderBy: [{ group: 'asc' }, { name: 'asc' }]
     });
-
-    if (permissions.length === 0) {
-      await internalSeedPermissions();
-      return await prisma.permission.findMany({
-        orderBy: [{ group: 'asc' }, { name: 'asc' }]
-      });
-    }
 
     return permissions;
   } catch (e) {
