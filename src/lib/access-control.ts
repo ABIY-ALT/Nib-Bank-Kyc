@@ -249,6 +249,10 @@ function normalizeRoleName(roleName?: string | null) {
   return roleName?.trim().toUpperCase() || "";
 }
 
+export function normalizePermissionSlug(slug?: string | null) {
+  return slug?.trim().toUpperCase() || "";
+}
+
 export function getActiveRoleNames(user: AccessUserLike) {
   return (user?.roles || [])
     .map((relation) => relation?.role)
@@ -281,7 +285,7 @@ export function getPermissionSlugs(user: AccessUserLike) {
     if (!role?.name || role.active === false) continue;
 
     for (const permissionRelation of role.permissions || []) {
-      const slug = permissionRelation?.permission?.slug?.trim();
+      const slug = normalizePermissionSlug(permissionRelation?.permission?.slug);
       if (slug) {
         slugs.add(slug);
       }
@@ -294,7 +298,7 @@ export function getPermissionSlugs(user: AccessUserLike) {
 export function hasPermission(user: AccessUserLike, permission: string) {
   if (isSuperAdminUser(user)) return true;
   const slugs = getPermissionSlugs(user);
-  return slugs.has(permission);
+  return slugs.has(normalizePermissionSlug(permission));
 }
 
 function buildUnauthorizedPath(params: { required?: string; reason?: string }) {

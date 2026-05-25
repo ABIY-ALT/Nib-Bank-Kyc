@@ -8,6 +8,7 @@ import { resolveRbacContext, requireRole, logPrivilegeChange } from './rbac';
 import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 import { deleteSecureUploadedFile } from '@/lib/secure-file-storage';
 import { createAuditLog } from './audit';
+import { GLOBAL_SCOPE_PERMISSIONS } from '@/lib/jurisdiction';
 
 /**
  * Retrieves the institutional file inventory based on user jurisdiction.
@@ -47,9 +48,13 @@ export async function getStorageInventory() {
 
     if (!user) return [];
 
+    // Check if user has global scope access via permissions (e.g. MANAGE_VAULT_STORAGE)
+    const hasGlobalScope = ctx.isSuperAdmin || 
+      ctx.permissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p));
+
     let whereClause: any = {};
 
-    if (!ctx.isSuperAdmin) {
+    if (!hasGlobalScope) {
       const dbAssignedBranches = user.assignedBranches
         ? user.assignedBranches.split(',').map((b: string) => b.trim()).filter(Boolean)
         : [];

@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { jwtVerifyStrict } from '@/lib/strict-jwt';
+import { normalizePermissionSlug } from '@/lib/access-control';
 
 /**
  * Institutional Session Resolver.
@@ -131,8 +132,9 @@ export async function verifyPermission(slug: string) {
 
   if (!user || user.status !== 'ACTIVE') return false;
 
+  const normalizedPermission = normalizePermissionSlug(slug);
   return user.roles.some((ur: any) =>
-    ur.role.active && ur.role.permissions.some((rp: any) => rp.permission.slug === slug)
+    ur.role.active && ur.role.permissions.some((rp: any) => normalizePermissionSlug(rp.permission?.slug) === normalizedPermission)
   );
 }
 

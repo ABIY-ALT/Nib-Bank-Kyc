@@ -3,7 +3,7 @@
 
 import { useAuth } from "@/lib/auth";
 import { useMemo, useCallback } from "react";
-import { getPermissionSlugs, isSuperAdminUser } from "@/lib/access-control";
+import { getPermissionSlugs, isSuperAdminUser, normalizePermissionSlug } from "@/lib/access-control";
 
 /**
  * Production-ready Permission Engine.
@@ -23,7 +23,7 @@ export function usePermissions() {
   const hasPermission = useCallback((slug: string) => {
     // RULE: Master Override for Super Admin (Full Access)
     if (isSuperAdmin) return true;
-    return permissionsSlugs.has(slug);
+    return permissionsSlugs.has(normalizePermissionSlug(slug));
   }, [isSuperAdmin, permissionsSlugs]);
   
   const hasAnyInGroup = useCallback((group: string) => {

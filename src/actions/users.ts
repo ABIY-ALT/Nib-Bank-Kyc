@@ -104,7 +104,13 @@ async function verifyUserManagementAccess() {
   const session = await getServerSession();
   if (!session) return false;
   // Allow access if user has USER_CREATE or VIEW_SPECIALIST_PRODUCTIVITY (for monitoring)
-  return verifyPermission('USER_CREATE') || verifyPermission('VIEW_SPECIALIST_PRODUCTIVITY');
+  // IMPORTANT: Each verifyPermission call is async and must be awaited individually.
+  // Using `promiseA || promiseB` would always return the first Promise (truthy object),
+  // never actually checking the second permission.
+  const hasUserCreate = await verifyPermission('USER_CREATE');
+  if (hasUserCreate) return true;
+  const hasProductivity = await verifyPermission('VIEW_SPECIALIST_PRODUCTIVITY');
+  return hasProductivity;
 }
 
 export async function getAllUsers() {

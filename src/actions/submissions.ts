@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { signDownloadToken, generateSecureString } from '@/lib/security';
 import { getServerSession } from './auth-server';
+import { normalizePermissionSlug } from '@/lib/access-control';
 import { SubmissionSchema } from '@/lib/validation';
 import { KYC_STATUS, EXCEPTIONAL_STATUS } from '@/lib/kyc-data';
 import { createAuditLog } from './audit';
@@ -120,7 +121,7 @@ export async function getSubmissions(filters?: any) {
       if (!user) return [];
 
       const userPermissions = user.roles.flatMap((ur: any) => 
-        ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+        ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
       );
 
       // Check for global oversight first
@@ -239,7 +240,7 @@ export async function getSubmissionById(id: string) {
     if (!user) return null;
 
     const userPermissions = user.roles.flatMap((ur: any) => 
-      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+      ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     );
 
     if (
@@ -415,7 +416,7 @@ export async function resubmitSubmission(formData: FormData) {
     });
 
     const userPermissions = actor?.roles.flatMap((ur: any) => 
-      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+      ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
     if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
@@ -551,7 +552,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   });
 
   const userPermissions = reviewer?.roles.flatMap((ur: any) => 
-    ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+    ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
   ) || [];
 
   if (!reviewer || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(reviewer, userPermissions, session.id, current))) {
@@ -622,7 +623,7 @@ export async function updateSubmissionChecklist(id: string, state: any) {
     }
 
     const userPermissions = actor?.roles.flatMap((ur: any) => 
-      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+      ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
     if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, currentKyc))) {
@@ -790,7 +791,7 @@ export async function getWorkflowCounts() {
     }
 
     const userPermissions = user.roles.flatMap((ur: any) => 
-      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+      ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     );
 
     let scopeFilter: any = {};
@@ -889,7 +890,7 @@ export async function processExceptionalStep(formData: FormData) {
     });
 
     const userPermissions = actor?.roles.flatMap((ur: any) => 
-      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+      ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
     if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
@@ -1040,7 +1041,7 @@ export async function uploadAdditionalDocuments(formData: FormData) {
     });
 
     const userPermissions = actor?.roles.flatMap((ur: any) => 
-      ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
+      ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
     if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
