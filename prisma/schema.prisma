@@ -41,6 +41,7 @@ model User {
   roles               UserRole[]
   submissions         KYC[]      @relation("CreatedBy")
   assignedCases       KYC[]      @relation("AssignedTo")
+  urgentFlaggedCases  KYC[]      @relation("UrgentFlaggedBy")
   uploadedMemos       Memo[]
   branch              Branch?    @relation(fields: [branchId], references: [id])
   passwordResetTokens PasswordResetToken[]
@@ -122,6 +123,9 @@ model KYC {
   amendCycles       Int      @default(0)
   checklistState    Json?    @default("{}")
   commentHistory    Json?    @default("[]")
+  isUrgent          Boolean  @default(false)
+  urgentFlaggedById String?
+  urgentFlaggedBy   User?    @relation("UrgentFlaggedBy", fields: [urgentFlaggedById], references: [id])
   active            Boolean  @default(true)
   submittedAt       DateTime @default(now())
   updatedAt         DateTime @updatedAt

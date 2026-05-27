@@ -78,8 +78,12 @@ export default function ExceptionalCasesPage() {
       });
 
       const [exceptional, all] = await Promise.all([exceptionalPromise, availablePromise]);
-      setSubmissions(exceptional || []);
-      setAvailableCases(all || []);
+      const activeExceptional = exceptional || [];
+      const available = (all || []).filter((candidate: any) =>
+        !activeExceptional.some((existing: any) => existing.id === candidate.id)
+      );
+      setSubmissions(activeExceptional);
+      setAvailableCases(available);
     } catch (error) {
     } finally {
       setLoading(false);

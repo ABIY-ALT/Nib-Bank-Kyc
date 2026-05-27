@@ -38,13 +38,14 @@ import {
   Upload,
   ShieldAlert,
   X,
-  History
+  History,
+  Flame
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissionById, updateSubmissionStatus, updateSubmissionChecklist, processExceptionalStep, resubmitSubmission } from "@/actions/submissions";
+import { getSubmissionById, updateSubmissionStatus, updateSubmissionChecklist, processExceptionalStep, resubmitSubmission, toggleSubmissionUrgentFlag } from "@/actions/submissions";
 import { deleteInstitutionalFile } from "@/actions/storage";
 import { getGlobalSettings } from "@/actions/settings";
 import { Label } from "@/components/ui/label";
@@ -73,9 +74,12 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   DocumentPreviewViewer,
   type PreviewableDocument,
@@ -285,7 +289,11 @@ export default function SubmissionDetails() {
 
   const [remarks, setRemarks] = useState("");
   const [isCustomRemark, setIsCustomRemark] = useState(true);
-  const [selectedScenario, setSelectedScenario] = useState("");
+  const [selectedScenario, setSelectedScenario] = useState<string[]>([]);
+  const [scenarioPopoverOpen, setScenarioPopoverOpen] = useState(false);
+  const [isTogglingUrgent, setIsTogglingUrgent] = useState(false);
+  const [isUrgentDialogOpen, setIsUrgentDialogOpen] = useState(false);
+  const [urgentRemark, setUrgentRemark] = useState("");
   const [isActioning, setIsActioning] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const checklistSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -435,6 +443,10 @@ export default function SubmissionDetails() {
     if (isCreator) return false;
     return hasPermission('KYC_VIEW_QUEUE') || (submission?.status === KYC_STATUS.ESCALATED && hasPermission('VIEW_ESCALATED_CASES'));
   }, [hasPermission, isSuperAdmin, isCreator, submission?.status]);
+
+  const canFlagUrgent = useMemo(() => {
+    return isSuperAdmin || hasPermission('CASE_FLAG_URGENT');
+  }, [hasPermission, isSuperAdmin]);
 
   const canBulkManageChecklist = useMemo(() => {
     if (isSuperAdmin) return true;
@@ -672,12 +684,56 @@ export default function SubmissionDetails() {
     scheduleChecklistSync(submission.id, nextState);
   }, [canBulkManageChecklist, isTerminal, scheduleChecklistSync, submission?.id]);
 
-  const handleScenarioChange = useCallback((value: string) => {
-    const requiresCustomRemark = /\bother\b/i.test(value);
-    setSelectedScenario(value);
-    setIsCustomRemark(requiresCustomRemark);
-    setRemarks(requiresCustomRemark ? "" : value);
+  const toggleScenarioSelection = useCallback((scenario: string) => {
+    setSelectedScenario((prev) => {
+      const exists = prev.includes(scenario);
+      const next = exists ? prev.filter((s) => s !== scenario) : [...prev, scenario];
+      const requiresCustomRemark = next.some((v) => /\bother\b/i.test(v));
+      setIsCustomRemark(requiresCustomRemark);
+      setRemarks(requiresCustomRemark ? "" : next.join('; '));
+      return next;
+    });
   }, []);
+
+  const handleOpenUrgentDialog = useCallback(() => {
+    if (!submission || !user || isTogglingUrgent) return;
+    setUrgentRemark("");
+    setIsUrgentDialogOpen(true);
+  }, [isTogglingUrgent, submission, user]);
+
+  const handleToggleUrgent = useCallback(async () => {
+    if (!submission || !user || isTogglingUrgent) return;
+    const trimmedRemark = urgentRemark.trim();
+
+    if (!trimmedRemark) {
+      toast({
+        variant: "destructive",
+        title: "Remark Required",
+        description: "Add a short reason before changing the urgent flag.",
+      });
+      return;
+    }
+
+    setIsTogglingUrgent(true);
+    try {
+      const res = await toggleSubmissionUrgentFlag(submission.id, trimmedRemark);
+      if (res.success) {
+        toast({ 
+          title: "Successful", 
+          description: res.isUrgent ? "Case flagged as urgent." : "Urgent flag removed." 
+        });
+        setIsUrgentDialogOpen(false);
+        setUrgentRemark("");
+        await refreshSubmission(submission.id);
+      } else {
+        toast({ variant: "destructive", title: "Failed", description: res.error });
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsTogglingUrgent(false);
+    }
+  }, [submission, user, isTogglingUrgent, urgentRemark, refreshSubmission, toast]);
 
   const workflowSteps = useMemo(() => {
     if (!submission) return [];
@@ -732,9 +788,18 @@ export default function SubmissionDetails() {
     ];
   }, [submission, isTerminal]);
 
+  const latestUrgentRemark = useMemo(() => {
+    if (!submission?.commentHistory || !Array.isArray(submission.commentHistory)) return null;
+    return [...submission.commentHistory]
+      .filter((entry: any) => entry?.action === 'URGENT_FLAG_SET')
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+  }, [submission?.commentHistory]);
+
   const sortedHistory = useMemo(() => {
     if (!submission?.commentHistory || !Array.isArray(submission.commentHistory)) return [];
-    return [...submission.commentHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return [...submission.commentHistory]
+      .filter((entry: any) => !String(entry?.action || '').startsWith('URGENT_FLAG_'))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [submission?.commentHistory]);
 
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
@@ -762,11 +827,100 @@ export default function SubmissionDetails() {
               )}>
                 {submission.status.replace(/_/g, ' ')}
               </Badge>
+              {submission.isUrgent && (
+                <Badge variant="outline" className="font-black px-3 py-1 uppercase text-[10px] tracking-widest border-red-200 bg-red-50 text-red-700">
+                  <Flame className="w-3 h-3 mr-1" />
+                  Urgent
+                </Badge>
+              )}
+              {canFlagUrgent && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenUrgentDialog}
+                  disabled={isTogglingUrgent}
+                  aria-label={submission.isUrgent ? "Remove urgent flag" : "Flag urgent case"}
+                  title={submission.isUrgent ? "Remove urgent flag" : "Flag urgent case"}
+                  className={cn(
+                    "ml-auto h-10 rounded-full px-4 font-black text-[10px] uppercase tracking-widest border-red-200",
+                    submission.isUrgent
+                      ? "bg-red-50 text-red-700 hover:bg-red-100"
+                      : "bg-white text-red-600 hover:bg-red-50"
+                  )}
+                >
+                  {isTogglingUrgent ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <Flame className="w-4 h-4 mr-2" />
+                  )}
+                  {submission.isUrgent ? "Remove Urgent" : "Flag Urgent"}
+                </Button>
+              )}
             </div>
+            {submission.isUrgent && latestUrgentRemark && (
+              <div className="mt-2 max-w-3xl rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+                <div className="flex items-start gap-2">
+                  <Flame className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest">Urgent Remark</p>
+                    <p className="mt-1 text-sm font-semibold leading-relaxed">
+                      {String(latestUrgentRemark.comment || '').replace(/^Urgent flag added:\s*/i, '')}
+                    </p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-red-700/70">
+                      {latestUrgentRemark.performedBy} | {new Date(latestUrgentRemark.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <p className="text-muted-foreground font-bold text-sm uppercase tracking-wider">{submission.customerName} | {submission.branchName}</p>
           </div>
         </div>
       </div>
+
+      <Dialog open={isUrgentDialogOpen} onOpenChange={(open) => !isTogglingUrgent && setIsUrgentDialogOpen(open)}>
+        <DialogContent className="max-w-lg rounded-3xl border-slate-200 p-0 shadow-2xl">
+          <DialogHeader className="border-b bg-red-50 px-6 py-5">
+            <DialogTitle className="flex items-center gap-2 text-lg font-black text-red-700">
+              <Flame className="h-5 w-5" />
+              {submission.isUrgent ? "Remove Urgent Flag" : "Flag Case as Urgent"}
+            </DialogTitle>
+            <DialogDescription className="text-sm font-medium text-red-700/70">
+              This note will be visible in Verdict History for every user who can view the case.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 px-6 py-5">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Urgent Remark</Label>
+            <Textarea
+              value={urgentRemark}
+              onChange={(e) => setUrgentRemark(e.target.value)}
+              placeholder={submission.isUrgent ? "Explain why the urgent flag is being removed..." : "Explain why this case needs urgent attention..."}
+              className="min-h-[130px] rounded-2xl bg-slate-50/70 font-medium"
+              maxLength={600}
+            />
+          </div>
+          <DialogFooter className="border-t bg-slate-50 px-6 py-5">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsUrgentDialogOpen(false)}
+              disabled={isTogglingUrgent}
+              className="font-bold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleToggleUrgent}
+              disabled={isTogglingUrgent || !urgentRemark.trim()}
+              className="bg-red-600 font-black text-white hover:bg-red-700"
+            >
+              {isTogglingUrgent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Flame className="mr-2 h-4 w-4" />}
+              {submission.isUrgent ? "Remove Urgent" : "Flag Urgent"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="border-slate-200 shadow-lg overflow-hidden rounded-3xl bg-white">
         <CardContent className="p-8">
@@ -1105,7 +1259,31 @@ export default function SubmissionDetails() {
             <Card className="border-primary/20 shadow-2xl rounded-3xl overflow-hidden bg-white">
               <CardHeader className="bg-primary text-white border-b py-5"><CardTitle className="text-lg font-black text-white">{isEscalated ? 'Senior Assessment' : 'Technical Verdict'}</CardTitle></CardHeader>
               <CardContent className="space-y-6 pt-6 px-6 pb-8">
-                <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scenario Library</Label><Select value={selectedScenario} onValueChange={handleScenarioChange}><SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Select Findings..." /></SelectTrigger><SelectContent>{AMENDMENT_SCENARIOS.map((s, i) => <SelectItem key={i} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scenario Library</Label>
+                  <Popover open={scenarioPopoverOpen} onOpenChange={setScenarioPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button type="button" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-left font-bold">
+                        <span className={cn("line-clamp-1", selectedScenario.length ? "text-slate-900" : "text-slate-400")}>
+                          {selectedScenario.length ? selectedScenario.join(', ') : 'Select Findings...'}
+                        </span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[320px] p-2">
+                      <div className="max-h-64 overflow-auto space-y-1">
+                        {AMENDMENT_SCENARIOS.map((s, i) => (
+                          <label key={i} className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-50">
+                            <Checkbox checked={selectedScenario.includes(s)} onCheckedChange={() => toggleScenarioSelection(s)} />
+                            <span className="text-sm font-bold">{s}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex justify-end">
+                        <Button size="sm" onClick={() => setScenarioPopoverOpen(false)}>Done</Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isEscalated ? 'Senior Assessment Remarks' : 'Final Determination Remarks'}</Label><Textarea placeholder={isCustomRemark ? "Write a new comment..." : "Selected finding will appear here..."} value={remarks} onChange={(e) => setRemarks(e.target.value)} readOnly={!isCustomRemark} className="min-h-[140px] rounded-2xl bg-slate-50/50 font-medium" /></div>
                 <div className={cn("grid grid-cols-1 gap-3", isEscalated ? "md:grid-cols-2" : "md:grid-cols-3")}>
                   <Button onClick={() => handleAction(KYC_STATUS.APPROVED)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Authorize</Button>

@@ -25,7 +25,8 @@ import {
   XCircle,
   ShieldAlert,
   Building2,
-  MapPin
+  MapPin,
+  Flame
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -48,6 +49,7 @@ import {
   getSubmissionDistrictName,
   sanitizeBundleSegment,
 } from "@/lib/bundle-path";
+import { cn } from "@/lib/utils";
 
 export function SubmissionsPageContent({ submissions }: { submissions: any[] }) {
   const { toast } = useToast();
@@ -191,10 +193,26 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
           {submissions.length === 0 ? (
             <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No institutional records discovered.</TableCell></TableRow>
           ) : submissions.map((sub) => (
-            <TableRow key={sub.id} className="hover:bg-slate-50 transition-colors group">
+            <TableRow
+              key={sub.id}
+              className={cn(
+                "transition-colors group",
+                sub.isUrgent
+                  ? "bg-red-50/45 hover:bg-red-50 border-l-4 border-l-red-500"
+                  : "hover:bg-slate-50"
+              )}
+            >
               <TableCell className="font-black text-primary tabular-nums pl-8">
                 <div className="flex flex-col gap-1">
-                  <span>{sub.id}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{sub.id}</span>
+                    {sub.isUrgent && (
+                      <Badge className="border-red-200 bg-red-100 text-red-700 shadow-none font-black text-[8px] uppercase tracking-widest px-2 py-0.5 flex items-center gap-1">
+                        <Flame className="w-2.5 h-2.5" />
+                        Urgent
+                      </Badge>
+                    )}
+                  </div>
                   {(sub.amendCycles || 0) > 0 && (
                     <div className="flex items-center gap-1 text-[8px] text-orange-600 font-black uppercase tracking-tighter">
                       <RefreshCw className="w-2 h-2" /> Cycle {sub.amendCycles}

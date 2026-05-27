@@ -155,6 +155,12 @@ export const ACCESS_CAPABILITY_CATALOG = [
     group: "WORKFLOWS",
   },
   {
+    slug: "CASE_FLAG_URGENT",
+    label: "Flag Urgent Cases",
+    description: "Mark cases as urgent or remove the urgent flag.",
+    group: "WORKFLOWS",
+  },
+  {
     slug: "DISTRICT_DIRECTOR_REVIEW",
     label: "District Director Review",
     description: "Regional oversight and exceptional case review permissions.",

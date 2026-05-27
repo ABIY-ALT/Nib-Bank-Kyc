@@ -22,6 +22,7 @@ async function main() {
     { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
     { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'View Exceptional Cases', group: 'WORKFLOWS' },
     { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
+    { slug: 'CASE_FLAG_URGENT', name: 'Flag Case as Urgent', group: 'WORKFLOWS' },
     
     // WORKFLOWS - Monitoring
     { slug: 'CASE_VIEW_BRANCH', name: 'Access Branch Monitoring', group: 'MONITORING' },

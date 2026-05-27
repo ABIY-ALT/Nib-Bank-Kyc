@@ -1117,3 +1117,101 @@ export async function uploadAdditionalDocuments(formData: FormData) {
     return { success: false, error: message };
   }
 }
+
+export async function toggleSubmissionUrgentFlag(id: string, urgentRemark?: string) {
+  const session = await getServerSession();
+  if (!session) throw new Error("Unauthorized");
+
+  try {
+    const remark = urgentRemark?.trim();
+    if (!remark) {
+      throw new Error("Urgent remark is required.");
+    }
+    if (remark.length > 600) {
+      throw new Error("Urgent remark must be 600 characters or less.");
+    }
+
+    const current = await prisma.kYC.findUnique({ where: { id } });
+    if (!current) throw new Error("KYC record not found");
+
+    const actor = await prisma.user.findUnique({ 
+      where: { id: session.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!actor) throw new Error("User not found");
+
+    // Check permission
+    const hasUrgentPermission = hasPermission(actor, 'CASE_FLAG_URGENT');
+    if (!hasUrgentPermission && session.role !== 'SUPER_ADMIN') {
+      throw new Error("You do not have permission to flag cases as urgent.");
+    }
+
+    // Jurisdictional access check
+    const userPermissions = actor.roles.flatMap((ur: any) => 
+      ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
+    ) || [];
+
+    if (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current)) {
+      throw new Error("Unauthorized case access.");
+    }
+
+    // Toggle urgent flag
+    const newUrgentStatus = !current.isUrgent;
+    const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
+    const urgentHistoryEntry = {
+      role: session.role || 'OFFICER',
+      performedBy: `${actor.firstName || ''} ${actor.lastName || ''}`.trim() || session.email.split('@')[0],
+      timestamp: new Date().toISOString(),
+      comment: `${newUrgentStatus ? 'Urgent flag added' : 'Urgent flag removed'}: ${remark}`,
+      action: `URGENT_FLAG_${newUrgentStatus ? 'SET' : 'CLEARED'}`
+    };
+
+    const updatedKyc = await prisma.kYC.update({
+      where: { id },
+      data: {
+        isUrgent: newUrgentStatus,
+        urgentFlaggedById: newUrgentStatus ? session.id : null,
+        commentHistory: [...history, urgentHistoryEntry],
+        updatedAt: new Date(),
+      },
+      include: {
+        urgentFlaggedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        }
+      }
+    });
+
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: `URGENT_FLAG_${newUrgentStatus ? 'SET' : 'CLEARED'}`,
+      details: `Case ${newUrgentStatus ? 'flagged as' : 'unmarked as'} urgent by ${actor.firstName} ${actor.lastName}. Remark: ${remark}`,
+      kycId: id
+    });
+
+    revalidatePath(`/submissions/${id}`);
+    return { 
+      success: true, 
+      isUrgent: newUrgentStatus,
+      urgentFlaggedBy: newUrgentStatus ? updatedKyc.urgentFlaggedBy : null
+    };
+  } catch (error: any) {
+    const { message } = logInstitutionalError(error, 'TOGGLE_URGENT_FLAG');
+    return { success: false, error: message };
+  }
+}

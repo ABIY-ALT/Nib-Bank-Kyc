@@ -23,6 +23,7 @@ const SYSTEM_CAPABILITIES = [
   { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
   { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'Access Exceptional Cases', group: 'WORKFLOWS' },
   { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
+  { slug: 'CASE_FLAG_URGENT', name: 'Flag Case as Urgent', group: 'WORKFLOWS' },
   { slug: 'DISTRICT_DIRECTOR_REVIEW', name: 'District Director Review', group: 'WORKFLOWS' },
   { slug: 'KYC_DIRECTOR_APPROVAL', name: 'KYC Director Approval', group: 'WORKFLOWS' },
   { slug: 'CHIEF_RETAIL_REVIEW', name: 'Chief Retail & SME Review', group: 'WORKFLOWS' },
@@ -65,26 +66,8 @@ const SYSTEM_CAPABILITIES = [
  */
 async function internalSeedPermissions() {
   try {
-    const validSlugs = SYSTEM_CAPABILITIES.map(p => p.slug);
-
     await prisma.$transaction(async (tx) => {
-      // 1. Remove orphaned relations first to avoid foreign key violations
-      await tx.rolePermission.deleteMany({
-        where: {
-          permission: {
-            slug: { notIn: validSlugs }
-          }
-        }
-      });
-
-      // 2. Remove permissions that are no longer in the master registry
-      await tx.permission.deleteMany({
-        where: {
-          slug: { notIn: validSlugs }
-        }
-      });
-
-      // 3. Upsert current capabilities (this keeps IDs stable for existing slugs)
+      // Upsert current capabilities without pruning existing operational permissions.
       for (const p of SYSTEM_CAPABILITIES) {
         await tx.permission.upsert({
           where: { slug: p.slug },
@@ -93,7 +76,7 @@ async function internalSeedPermissions() {
         });
       }
 
-      // 4. Ensure Super Admin always has all permissions
+      // Ensure Super Admin always has all permissions.
       const superAdminRole = await tx.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
       if (superAdminRole) {
         const allPerms = await tx.permission.findMany();
@@ -129,6 +112,14 @@ export async function getAllPermissions() {
   if (!session) throw new Error('Unauthenticated');
 
   try {
+    for (const p of SYSTEM_CAPABILITIES) {
+      await prisma.permission.upsert({
+        where: { slug: p.slug },
+        update: { name: p.name, group: p.group },
+        create: p,
+      });
+    }
+
     const permissions = await prisma.permission.findMany({
       orderBy: [{ group: 'asc' }, { name: 'asc' }]
     });
