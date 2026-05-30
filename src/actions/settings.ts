@@ -9,21 +9,100 @@ import { revalidatePath } from 'next/cache';
  */
 const INITIAL_ENTITY_TYPES = [
   { id: "individual", label: "Individual" },
-  { id: "company", label: "Company" },
-  { id: "association", label: "Association" },
-  { id: "foreign_ngo", label: "Foreign NGO" },
-  { id: "foreign_employment_agency", label: "Foreign Employment Agency" },
+  { id: "joint", label: "Joint" },
+  { id: "sole_proprietorship", label: "Sole Proprietorship" },
+  { id: "corporate", label: "Corporate" },
+  { id: "associations_organisations", label: "Associations & Organisations" },
+  { id: "institutions", label: "Institutions" },
+  { id: "ngos", label: "NGOs" },
+  { id: "other", label: "Other" },
 ];
 
 const INITIAL_DOC_TYPES = [
-  { id: "id_card", label: "ID Card / National ID" },
-  { id: "passport", label: "Passport" },
-  { id: "utility_bill", label: "Utility Bill" },
-  { id: "bank_statement", label: "Bank Statement" },
-  { id: "incorporation", label: "Certificate of Incorporation" },
-  { id: "tax_cert", label: "Tax Certificate" },
-  { id: "other", label: "Other Document" },
+  { id: "national_id_verified", label: "National ID (Fayda) – Verified" },
+  { id: "account_opening_form", label: "Account Opening Form" },
+  { id: "joint_account_undertaking", label: "Joint Account Undertaking" },
+  { id: "witness_id_copy", label: "Witness ID copy" },
+  { id: "court_appointment_letter", label: "Court appointment letter" },
+  { id: "business_license_employment_letter", label: "Business license or employment letter showing leadership position" },
+  { id: "renewed_business_license", label: "Renewed business license" },
+  { id: "valid_student_id_card", label: "Valid student ID card" },
+  { id: "tin_certificate", label: "TIN certificate" },
+  { id: "business_registration_certificate", label: "Business registration certificate" },
+  { id: "memorandum_articles_of_association", label: "Memorandum & Articles of Association (attested or system‑verified)" },
+  { id: "application_letter_company_stamp", label: "Application letter with company stamp" },
+  { id: "supporting_letter_higher_authority", label: "Supporting letter from higher authority" },
+  { id: "employer_letter_confirming_position", label: "Letter from employer confirming position (CEO, GM, DGM, Finance Manager)" },
+  { id: "proof_of_foreign_residence", label: "Proof of foreign residence" },
+  { id: "valid_foreign_passport", label: "Valid foreign passport" },
+  { id: "valid_ethiopian_work_or_resident_permit", label: "Valid Ethiopian work or resident permit" },
+  { id: "refuge_id", label: "Refuge ID" },
 ];
+
+const LEGACY_ENTITY_TYPE_MAP: Record<string, string | null> = {
+  individual: 'individual',
+  joint: 'joint',
+  sole_proprietorship: 'sole_proprietorship',
+  corporate: 'corporate',
+  association: 'associations_organisations',
+  institutions: 'institutions',
+  ngo: 'ngos',
+  foreign_ngo: 'ngos',
+  foreign_employment_agency: null,
+  other: 'other',
+};
+
+function normalizeEntityTypeId(rawId: string) {
+  return rawId
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function mergeEntityTypes(existing: any[] | undefined) {
+  if (!Array.isArray(existing) || existing.length === 0) {
+    return INITIAL_ENTITY_TYPES;
+  }
+
+  const mappedExisting: Record<string, any> = {};
+
+  for (const item of existing) {
+    const normalizedId = normalizeEntityTypeId(item.id || '');
+    const targetId = LEGACY_ENTITY_TYPE_MAP[normalizedId];
+    if (!targetId) continue;
+    mappedExisting[targetId] = { ...INITIAL_ENTITY_TYPES.find((type) => type.id === targetId) };
+  }
+
+  return INITIAL_ENTITY_TYPES.map((type) => mappedExisting[type.id] || type);
+}
+
+function mergeDocumentTypes(existing: any[] | undefined) {
+  if (!Array.isArray(existing) || existing.length === 0) {
+    return INITIAL_DOC_TYPES;
+  }
+
+  const existingById = new Map(existing.map((item: any) => [item.id, item]));
+  const merged: any[] = [];
+
+  for (const defaultType of INITIAL_DOC_TYPES) {
+    const existingType = existingById.get(defaultType.id);
+    if (existingType) {
+      merged.push({ ...defaultType, label: existingType.label || defaultType.label });
+      existingById.delete(defaultType.id);
+    } else {
+      merged.push(defaultType);
+    }
+  }
+
+  for (const extraType of existing) {
+    if (!INITIAL_DOC_TYPES.some((defaultType) => defaultType.id === extraType.id)) {
+      merged.push(extraType);
+    }
+  }
+
+  return merged;
+}
 
 export async function getGlobalSettings() {
   try {
@@ -41,6 +120,19 @@ export async function getGlobalSettings() {
           lastUpdated: new Date()
         }
       });
+    } else {
+      const mergedEntityTypes = mergeEntityTypes(settings.entityTypes as any[]);
+      const mergedDocumentTypes = mergeDocumentTypes(settings.documentTypes as any[]);
+      if (JSON.stringify(mergedEntityTypes) !== JSON.stringify(settings.entityTypes) || JSON.stringify(mergedDocumentTypes) !== JSON.stringify(settings.documentTypes)) {
+        settings = await prisma.globalSetting.update({
+          where: { id: 'global' },
+          data: {
+            entityTypes: mergedEntityTypes,
+            documentTypes: mergedDocumentTypes,
+            lastUpdated: new Date()
+          }
+        });
+      }
     }
 
     return settings;

@@ -56,6 +56,8 @@ export default function SystemSettingsPage() {
   const [newDocLabel, setNewDocLabel] = useState("");
   const [newEntityLabel, setNewEntityLabel] = useState("");
   const [newGuideline, setNewGuideline] = useState<any>({ title: "", description: "", type: 'info' });
+  const [currentDocPage, setCurrentDocPage] = useState(1);
+  const docPageSize = 10;
 
   useEffect(() => {
     if (!permissionsLoading && !hasPermission('EDIT_SLA_POLICY')) {
@@ -73,6 +75,14 @@ export default function SystemSettingsPage() {
     if (s) setLocalSettings(s);
     setLoading(false);
   };
+
+  const documentTypeCount = localSettings.documentTypes?.length || 0;
+  const totalDocPages = Math.max(1, Math.ceil(documentTypeCount / docPageSize));
+  const documentTypesPage = localSettings.documentTypes?.slice((currentDocPage - 1) * docPageSize, currentDocPage * docPageSize) || [];
+
+  useEffect(() => {
+    setCurrentDocPage((page) => Math.max(1, Math.min(page, totalDocPages)));
+  }, [totalDocPages]);
 
   const handleSavePolicies = async () => {
     await updateGlobalSettings({
@@ -166,11 +176,11 @@ export default function SystemSettingsPage() {
           </Card>
 
           <Card className="shadow-lg border-slate-200 overflow-hidden">
-            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2"><Building2 className="w-5 h-5 text-white" /> Account Classifications</CardTitle></CardHeader>
+            <CardHeader className="bg-primary text-white border-b"><CardTitle className="text-xl flex items-center gap-2"><Building2 className="w-5 h-5 text-white" /> Customer Classifications</CardTitle></CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div className="flex gap-2">
                 <Input 
-                  placeholder="New account category (e.g. Individual)..." 
+                  placeholder="New customer classification (e.g. Individual)..." 
                   value={newEntityLabel} 
                   onChange={(e) => setNewEntityLabel(e.target.value)} 
                   onKeyDown={(e) => e.key === 'Enter' && handleAddEntityType()}
@@ -216,8 +226,8 @@ export default function SystemSettingsPage() {
                 </Button>
               </div>
               <div className="grid gap-2">
-                {localSettings.documentTypes?.length > 0 ? (
-                  localSettings.documentTypes.map((type: any) => (
+                {documentTypesPage.length > 0 ? (
+                  documentTypesPage.map((type: any) => (
                     <div key={type.id} className="flex items-center justify-between p-3 border rounded-lg bg-white group hover:border-primary/30 transition-all">
                       <div className="flex items-center gap-3">
                         <div className="p-1.5 bg-slate-50 rounded text-slate-400"><FileText className="w-3.5 h-3.5" /></div>
@@ -232,6 +242,31 @@ export default function SystemSettingsPage() {
                   <p className="text-center py-6 text-muted-foreground italic border-2 border-dashed rounded-lg">No document types defined.</p>
                 )}
               </div>
+              {documentTypeCount > docPageSize && (
+                <div className="flex items-center justify-between gap-3 pt-4">
+                  <div className="text-sm text-slate-500">Page {currentDocPage} of {totalDocPages}</div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentDocPage((page) => Math.max(1, page - 1))}
+                      disabled={currentDocPage === 1}
+                      className="h-9 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentDocPage((page) => Math.min(totalDocPages, page + 1))}
+                      disabled={currentDocPage >= totalDocPages}
+                      className="h-9 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:text-primary"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

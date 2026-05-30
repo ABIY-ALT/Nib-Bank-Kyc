@@ -61,7 +61,7 @@ const STATUS_COLORS = {
 const chartConfig = {
   APPROVED: { label: "Approved", color: STATUS_COLORS.APPROVED },
   SUBMITTED: { label: "Unseen", color: STATUS_COLORS.SUBMITTED },
-  ACTION_REQUIRED: { label: "Action Required", color: STATUS_COLORS.ACTION_REQUIRED },
+  ACTION_REQUIRED: { label: "Need Amendment", color: STATUS_COLORS.ACTION_REQUIRED },
   REJECTED: { label: "Rejected", color: STATUS_COLORS.REJECTED },
 } satisfies ChartConfig;
 

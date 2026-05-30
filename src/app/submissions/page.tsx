@@ -43,6 +43,7 @@ import { getSubmissions } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import { format } from "date-fns";
+import { sortSubmissionsOldestFirst } from "@/lib/submission-sort";
 
 const STATUS_OPTIONS = [
   { id: KYC_STATUS.APPROVED, label: 'Authorized' },
@@ -115,6 +116,11 @@ export default function CaseArchivePage() {
       return matchesSearch && matchesStatus && matchesDistrict && matchesBranch;
     });
   }, [submissions, searchTerm, selectedStatuses, selectedDistricts, selectedBranches]);
+
+  // Ensure oldest-first ordering (first submitted at top)
+  const orderedFilteredSubmissions = useMemo(() => {
+    return sortSubmissionsOldestFirst(filteredSubmissions || []);
+  }, [filteredSubmissions]);
 
   const handleExportCSV = () => {
     if (filteredSubmissions.length === 0) return;
@@ -267,9 +273,9 @@ export default function CaseArchivePage() {
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={6} className="text-center py-20"><Loader2 className="animate-spin inline-block w-6 h-6 text-primary" /></TableCell></TableRow>
-            ) : filteredSubmissions.length === 0 ? (
+            ) : orderedFilteredSubmissions.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="text-center py-20">No records found matching your selection.</TableCell></TableRow>
-            ) : filteredSubmissions.map((sub) => (
+            ) : orderedFilteredSubmissions.map((sub) => (
               <TableRow key={sub.id} className="group hover:bg-slate-50">
                 <TableCell className="font-bold text-primary py-4">{sub.id}</TableCell>
                 <TableCell><div className="flex flex-col"><span className="font-bold text-slate-900 leading-tight">{sub.customerName}</span><span className="text-[10px] text-muted-foreground uppercase">{sub.entityType || 'Individual'}</span></div></TableCell>

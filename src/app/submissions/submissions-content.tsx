@@ -40,9 +40,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { format } from "date-fns";
 import JSZip from 'jszip';
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { logBundleDownload, getSubmissionById } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
+import { sortSubmissionsOldestFirst } from "@/lib/submission-sort";
 import {
   buildBundleRootName,
   getSubmissionBranchName,
@@ -55,6 +56,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
   const { toast } = useToast();
   const { user } = useAuth();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const sortedSubmissions = useMemo(() => sortSubmissionsOldestFirst(submissions || []), [submissions]);
 
   const handleDownloadBundle = async (sub: any) => {
     if (!user) return;
@@ -161,7 +163,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
           </Badge>;
       case KYC_STATUS.ACTION_REQUIRED: 
         return <Badge className="bg-orange-50 text-orange-700 border-orange-200 flex items-center gap-1.5 font-black text-[9px] px-3 py-1 uppercase animate-pulse">
-          <AlertCircle className="w-3 h-3" /> Action Required
+          <AlertCircle className="w-3 h-3" /> Need Amendment
         </Badge>;
       case KYC_STATUS.REJECTED: 
         return <Badge className="bg-red-50 text-red-700 border-red-200 font-black text-[9px] px-3 py-1 uppercase flex items-center gap-1.5">
@@ -190,9 +192,9 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
           </TableRow>
         </TableHeader>
         <TableBody>
-          {submissions.length === 0 ? (
+          {sortedSubmissions.length === 0 ? (
             <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No institutional records discovered.</TableCell></TableRow>
-          ) : submissions.map((sub) => (
+          ) : sortedSubmissions.map((sub) => (
             <TableRow
               key={sub.id}
               className={cn(

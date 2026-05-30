@@ -42,6 +42,7 @@ import { getSubmissions, getSubmissionById } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
+import { sortSubmissionsOldestFirst } from "@/lib/submission-sort";
 import {
   buildBundleRootName,
   getSubmissionBranchName,
@@ -52,7 +53,7 @@ import {
 const STATUS_OPTIONS = [
   { id: KYC_STATUS.APPROVED, label: 'Approved' },
   { id: KYC_STATUS.SUBMITTED, label: 'Submitted / In Review' },
-  { id: KYC_STATUS.ACTION_REQUIRED, label: 'Action Required' },
+  { id: KYC_STATUS.ACTION_REQUIRED, label: 'Need Amendment' },
   { id: KYC_STATUS.REJECTED, label: 'Rejected' },
   { id: KYC_STATUS.ESCALATED, label: 'Escalated' }
 ];
@@ -115,6 +116,10 @@ export default function MasterBundleDownloadPage() {
       return matchesStatus && matchesDistrict && matchesBranch;
     });
   }, [allSubmissions, selectedStatuses, selectedDistrict, selectedBranch]);
+
+  const orderedFilteredSubmissions = useMemo(() => {
+    return sortSubmissionsOldestFirst(filteredSubmissions || []);
+  }, [filteredSubmissions]);
 
   const handleToggleStatus = (statusId: string) => {
     setSelectedStatuses(prev => 
@@ -377,7 +382,7 @@ Total Records:         ${filteredSubmissions.length}
             <Button 
               className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg shadow-xl gap-3"
               onClick={handleDownloadMasterBundle}
-              disabled={isProcessing || filteredSubmissions.length === 0}
+              disabled={isProcessing || orderedFilteredSubmissions.length === 0}
             >
               {isProcessing ? (
                 <div className="flex flex-col items-center">
@@ -388,7 +393,7 @@ Total Records:         ${filteredSubmissions.length}
                   <span className="text-[9px] font-bold uppercase mt-1 opacity-70 truncate max-w-[200px]">{currentActionLabel}</span>
                 </div>
               ) : (
-                <><FileArchive className="w-6 h-6" /> Export {filteredSubmissions.length} Cases</>
+                <><FileArchive className="w-6 h-6" /> Export {orderedFilteredSubmissions.length} Cases</>
               )}
             </Button>
           </CardFooter>
@@ -401,7 +406,7 @@ Total Records:         ${filteredSubmissions.length}
                 <div className="p-2 bg-white/10 rounded-lg"><FileArchive className="w-5 h-5 text-emerald-400" /></div>
                 <div><CardTitle className="text-xl">Export Discovery Queue</CardTitle></div>
               </div>
-              <Badge className="bg-emerald-600 text-white font-black px-4 py-1">{filteredSubmissions.length} Records</Badge>
+              <Badge className="bg-emerald-600 text-white font-black px-4 py-1">{orderedFilteredSubmissions.length} Records</Badge>
             </CardHeader>
             <CardContent className="p-0">
               {loading ? (
@@ -409,9 +414,9 @@ Total Records:         ${filteredSubmissions.length}
                   <Loader2 className="w-10 h-10 animate-spin text-primary" />
                   <p className="font-black uppercase tracking-widest text-xs">Synchronizing Archive Registry...</p>
                 </div>
-              ) : filteredSubmissions.length > 0 ? (
+              ) : orderedFilteredSubmissions.length > 0 ? (
                 <div className="divide-y divide-slate-100">
-                  {filteredSubmissions.map(sub => (
+                  {orderedFilteredSubmissions.map(sub => (
                     <div key={sub.id} className="p-5 hover:bg-slate-50 transition-colors group">
                       <div className="flex items-center justify-between">
                         <div className="flex items-start gap-4">

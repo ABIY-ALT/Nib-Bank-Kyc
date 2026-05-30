@@ -168,7 +168,7 @@ export const ACCESS_CAPABILITY_CATALOG = [
   },
   {
     slug: "KYC_DIRECTOR_APPROVAL",
-    label: "KYC Director Approval",
+    label: "Branch Banking Director Approval",
     description: "Review case details, attachments, and prior governance decisions.",
     group: "WORKFLOWS",
   },
@@ -180,7 +180,7 @@ export const ACCESS_CAPABILITY_CATALOG = [
   },
   {
     slug: "DIVISION_MANAGER_REVIEW",
-    label: "Division Manager Review",
+    label: "CDD Division Manager Review",
     description: "Operational review and forwarding decision in governance.",
     group: "WORKFLOWS",
   },

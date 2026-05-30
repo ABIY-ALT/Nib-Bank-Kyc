@@ -26,7 +26,7 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
     actions: [
       {
         nextStatus: EXCEPTIONAL_STATUS.AWAITING_DIRECTOR,
-        label: 'Forward to KYC Director',
+        label: 'Forward to Branch Banking Director',
         actionType: 'FORWARD',
         requiresMemo: true,
         requiresRemarks: true,
@@ -41,13 +41,13 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
   },
   [EXCEPTIONAL_STATUS.AWAITING_DIRECTOR]: {
     status: EXCEPTIONAL_STATUS.AWAITING_DIRECTOR,
-    label: 'KYC Director Approval',
+    label: 'Branch Banking Director Approval',
     description: 'Review case details, attachments, and prior decisions.',
     permission: 'KYC_DIRECTOR_APPROVAL',
     actions: [
       {
         nextStatus: EXCEPTIONAL_STATUS.AWAITING_DIVISION,
-        label: 'Approve and Forward to Division Manager',
+        label: 'Approve and Forward to CDD Division Manager',
         actionType: 'APPROVE',
         requiresMemo: true, // Default, will be overridden if coming from Chief
         requiresRemarks: true,
@@ -75,14 +75,14 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
     actions: [
       {
         nextStatus: EXCEPTIONAL_STATUS.AWAITING_DIRECTOR,
-        label: 'Provide Decision to KYC Director',
+        label: 'Provide Decision to Branch Banking Director',
         actionType: 'FORWARD',
         allowOptionalMemo: true,
         requiresRemarks: true,
       },
       {
         nextStatus: EXCEPTIONAL_STATUS.AWAITING_DIRECTOR,
-        label: 'Return to KYC Director',
+        label: 'Return to Branch Banking Director',
         actionType: 'RETURN',
         allowOptionalMemo: true,
         requiresRemarks: true,
@@ -91,7 +91,7 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
   },
   [EXCEPTIONAL_STATUS.AWAITING_DIVISION]: {
     status: EXCEPTIONAL_STATUS.AWAITING_DIVISION,
-    label: 'Division Manager Review',
+    label: 'CDD Division Manager Review',
     description: 'Operational review and forwarding decision.',
     permission: 'DIVISION_MANAGER_REVIEW',
     actions: [
@@ -103,7 +103,7 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
       },
       {
         nextStatus: EXCEPTIONAL_STATUS.AWAITING_DIRECTOR,
-        label: 'Return to KYC Director',
+        label: 'Return to Branch Banking Director',
         actionType: 'RETURN',
         requiresRemarks: true,
       },
@@ -123,7 +123,7 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
       },
       {
         nextStatus: EXCEPTIONAL_STATUS.AWAITING_DIVISION,
-        label: 'Return to Division Manager',
+        label: 'Return to CDD Division Manager',
         actionType: 'RETURN',
         requiresRemarks: true,
       },

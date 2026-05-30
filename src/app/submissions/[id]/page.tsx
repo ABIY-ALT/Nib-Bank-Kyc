@@ -744,9 +744,9 @@ export default function SubmissionDetails() {
       return [
         { id: 'sub', label: 'Submission', desc: 'Case Dispatched', state: 'completed', icon: CheckCircle2 },
         { id: 'dist', label: 'District Director', desc: 'Regional Oversight', state: excStatus === EXCEPTIONAL_STATUS.AWAITING_DISTRICT ? 'active' : (excStatus === EXCEPTIONAL_STATUS.NONE ? 'pending' : 'completed'), icon: Landmark },
-        { id: 'kycdir', label: 'KYC Director', desc: 'Strategic Risk Review', state: excStatus === EXCEPTIONAL_STATUS.AWAITING_DIRECTOR ? 'active' : (['None', 'AWAITING_DISTRICT'].includes(excStatus) ? 'pending' : 'completed'), icon: Shield },
+        { id: 'kycdir', label: 'Branch Banking Director', desc: 'Strategic Risk Review', state: excStatus === EXCEPTIONAL_STATUS.AWAITING_DIRECTOR ? 'active' : (['None', 'AWAITING_DISTRICT'].includes(excStatus) ? 'pending' : 'completed'), icon: Shield },
         { id: 'chief', label: 'Chief Retail & SME', desc: 'Strategic Path', state: excStatus === EXCEPTIONAL_STATUS.AWAITING_CHIEF ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR'].includes(excStatus) ? 'pending' : 'completed'), icon: Zap },
-        { id: 'div', label: 'Division Manager', desc: 'Resource Allocation', state: excStatus === EXCEPTIONAL_STATUS.AWAITING_DIVISION ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: Scale },
+        { id: 'div', label: 'CDD Division Manager', desc: 'Resource Allocation', state: excStatus === EXCEPTIONAL_STATUS.AWAITING_DIVISION ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF'].includes(excStatus) ? 'pending' : 'completed'), icon: Scale },
         { id: 'super', label: 'Supervisor', desc: 'Operational Audit', state: excStatus === EXCEPTIONAL_STATUS.AWAITING_SUPERVISOR ? 'active' : (['None', 'AWAITING_DISTRICT', 'AWAITING_DIRECTOR', 'AWAITING_CHIEF', 'AWAITING_DIVISION'].includes(excStatus) ? 'pending' : 'completed'), icon: Gavel },
         { id: 'kyco', label: 'KYC Officer', desc: 'Lifecycle Conclusion', state: excStatus === EXCEPTIONAL_STATUS.COMPLETED ? 'completed' : 'pending', icon: UserCheck }
       ];

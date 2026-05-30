@@ -145,8 +145,8 @@ export default function Dashboard() {
     return [
       { label: `${scopeLabel} Active`, value: totalCount.toString(), icon: Inbox, color: 'text-blue-600' },
       { label: 'Authorized Recently', value: authorizedCount.toString(), icon: ShieldCheck, color: 'text-emerald-600' },
-      { label: 'Action Required', value: actionCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
-      { label: 'Methodology Index', value: `${methodologyScore}%`, icon: TrendingUp, color: 'text-primary' },
+      { label: 'Need Amendment', value: actionCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
+      { label: 'Workflow Performance', value: `${methodologyScore}%`, icon: TrendingUp, color: 'text-primary' },
     ];
   }, [recentSubmissions, dashboardContext]);
 
@@ -252,7 +252,7 @@ export default function Dashboard() {
                           (sub.status || '').toUpperCase() === (KYC_STATUS.ACTION_REQUIRED || 'ACTION_REQUIRED') ? 'bg-orange-50 text-orange-700 border-orange-100' :
                           'bg-blue-50 text-blue-700 border-blue-100'
                         )}>
-                          {(sub.status || 'PENDING').replace(/_/g, ' ')}
+                          {(sub.status || 'PENDING') === KYC_STATUS.ACTION_REQUIRED ? 'Need Amendment' : (sub.status || 'PENDING').replace(/_/g, ' ')}
                         </Badge>
                         <Button variant="ghost" size="icon" asChild className="rounded-full hover:bg-primary/10 text-primary">
                           <Link href={`/submissions/${sub.id}`}><ArrowUpRight className="w-5 h-5" /></Link>
@@ -273,7 +273,7 @@ export default function Dashboard() {
         <Card className="lg:col-span-3 shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
           <CardHeader className="bg-slate-50/50 border-b p-6">
             <CardTitle className="text-xl font-bold flex items-center gap-2">
-              <Info className="w-5 h-5 text-primary" /> Methodology Updates
+              <Info className="w-5 h-5 text-primary" /> Operational Updates
             </CardTitle>
             <CardDescription>Critical policy methodology for officers.</CardDescription>
           </CardHeader>

@@ -633,11 +633,11 @@ export default function NewSubmission() {
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Account Classification
+                Customer Classification
               </Label>
               <Select value={entityType} onValueChange={setEntityType}>
                 <SelectTrigger className="h-11 font-bold">
-                  <SelectValue placeholder="Select account category" />
+                  <SelectValue placeholder="Select customer classification" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl shadow-2xl">
                   {entityClassifications.length > 0 ? (
