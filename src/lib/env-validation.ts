@@ -76,6 +76,32 @@ const EnvSchema = z.object({
     .enum(['debug', 'info', 'warn', 'error'])
     .default('info'),
 
+  // SMTP EMAIL CONFIGURATION
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z
+    .string()
+    .optional()
+    .transform((val) => val ? Number(val) : 587)
+    .refine((val) => Number.isInteger(val) && val > 0 && val < 65536, 'SMTP_PORT must be a valid port number'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_SECURE: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((val) => val === 'true'),
+  SMTP_TLS_REJECT_UNAUTHORIZED: z
+    .string()
+    .optional()
+    .default('true')
+    .transform((val) => val !== 'false'),
+  EMAIL_FROM_ADDRESS: z.string().optional().default('noreply@nibbank.com.et'),
+  EMAIL_FROM_NAME: z.string().optional().default('NIB Bank KYC'),
+  APP_BASE_URL: z
+    .string()
+    .min(1, 'APP_BASE_URL is required')
+    .url('APP_BASE_URL must be a valid absolute URL'),
+
   // AWS CONFIGURATION (optional, for secret manager)
   AWS_REGION: z.string().optional(),
   AWS_ACCESS_KEY_ID: z.string().optional(),
@@ -102,6 +128,15 @@ export function validateEnv(): EnvConfig {
     CORS_MAX_AGE: process.env.CORS_MAX_AGE,
     CORS_EXPOSED_HEADERS: process.env.CORS_EXPOSED_HEADERS,
     LOG_LEVEL: process.env.LOG_LEVEL,
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_PORT: process.env.SMTP_PORT,
+    SMTP_USER: process.env.SMTP_USER,
+    SMTP_PASS: process.env.SMTP_PASS,
+    SMTP_SECURE: process.env.SMTP_SECURE,
+    SMTP_TLS_REJECT_UNAUTHORIZED: process.env.SMTP_TLS_REJECT_UNAUTHORIZED,
+    EMAIL_FROM_ADDRESS: process.env.EMAIL_FROM_ADDRESS,
+    EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME,
+    APP_BASE_URL: process.env.APP_BASE_URL,
     AWS_REGION: process.env.AWS_REGION,
     AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,

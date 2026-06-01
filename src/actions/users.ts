@@ -14,6 +14,7 @@ import { logInstitutionalError } from '@/lib/logger';
 import { normalizeInstitutionalLogin } from '@/lib/login-identifier';
 import { createPasswordResetToken } from '@/lib/password-reset-helper';
 import { validatePhoneNumber } from '@/lib/phone-validation';
+import { queueWelcomeEmail, queueAdminPasswordResetEmail } from '@/lib/email';
 
 const INSTITUTIONAL_EMAIL_DOMAIN = 'nibbank.com.et';
 
@@ -415,12 +416,29 @@ export async function provisionUser(data: {
       severity: 'MEDIUM'
     });
 
+    if (!isUpdate) {
+      void queueWelcomeEmail({
+        userId: result.id,
+        userName: `${result.firstName} ${result.lastName}`,
+        userEmail: result.email,
+        username: result.email,
+        temporaryPassword: tempPass as string,
+      });
+    } else if (tempPass) {
+      void queueAdminPasswordResetEmail({
+        userId: result.id,
+        userName: `${result.firstName} ${result.lastName}`,
+        userEmail: result.email,
+        username: result.email,
+        temporaryPassword: tempPass,
+      });
+    }
+
     revalidatePath('/admin/users');
-    
-    // Return user and the temporary password for the administrator's manual handover (UI display + copy)
-    return { 
-      success: true, 
-      tempPass: tempPass, // For admin to copy and share via preferred method
+
+    return {
+      success: true,
+      message: isUpdate ? 'Profile updated successfully.' : 'New user provisioned and welcome email queued.',
       user: {
         id: result.id,
         firstName: result.firstName,
@@ -503,7 +521,7 @@ export async function resetUserPassword(email: string) {
         userId: authorizerId,
         userEmail: session.email,
         action: 'PASSWORD_RESET_ADMIN_OVERRIDE',
-        details: `Administrator manually reset password for ${normalizedEmail}. New temporary password provided.`,
+        details: `Administrator manually reset password for ${normalizedEmail}. Notification queued.`,
         metadata: {
           email: normalizedEmail,
           resource: 'USER',
@@ -511,10 +529,17 @@ export async function resetUserPassword(email: string) {
         },
       }).catch(() => {});
 
-      return { 
-        success: true, 
-        message: 'A new temporary password has been generated. Please provide this to the user.',
-        tempPass: newTempPass 
+      void queueAdminPasswordResetEmail({
+        userId: user.id,
+        userName: `${user.firstName} ${user.lastName}`,
+        userEmail: user.email,
+        username: normalizedEmail,
+        temporaryPassword: newTempPass,
+      });
+
+      return {
+        success: true,
+        message: 'Password reset processed. User notification has been queued.'
       };
     } else {
       // Log attempted reset for non-existent user for security auditing

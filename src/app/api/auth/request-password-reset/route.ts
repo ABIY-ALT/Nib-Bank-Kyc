@@ -13,6 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/password-reset-helper';
 import { logInstitutionalError } from '@/lib/logger';
 import { createAuditLog } from '@/actions/audit';
+import { sendPasswordResetEmail } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,13 +37,15 @@ export async function POST(req: NextRequest) {
 
     if (user) {
       try {
-        // Generate and store hashed token (server-side only)
-        await createPasswordResetToken(user.id);
+        const token = await createPasswordResetToken(user.id);
+        const appBaseUrl = process.env.APP_BASE_URL?.trim();
+        if (!appBaseUrl) {
+          throw new Error('APP_BASE_URL is required in environment configuration.');
+        }
 
-        // Token is stored securely; external email service should retrieve and send link
-        // Never expose plaintext token in API response
+        const resetLink = `${appBaseUrl}/auth/complete-password-reset?token=${encodeURIComponent(token)}`;
+        void sendPasswordResetEmail(user.email, resetLink, `${user.firstName} ${user.lastName}`);
 
-        // Audit log
         await createAuditLog({
           userId: null,
           userEmail: normalizedEmail,

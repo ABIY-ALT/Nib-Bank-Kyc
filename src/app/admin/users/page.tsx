@@ -25,10 +25,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Phone,
-  Copy,
   KeyRound,
   X,
-  CheckCircle2,
   AlertCircle,
   MoreVertical,
   Edit3,
@@ -81,11 +79,11 @@ import { getBranches, getDistricts } from '@/actions/hierarchy';
 import { getRoleDefinitions } from '@/actions/roles';
 import { USER_STATUS } from '@/lib/kyc-data';
 import { usePermissions } from '@/hooks/use-permissions';
-import { useCopyPassword } from '@/hooks/use-copy-password';
 import { cn } from '@/lib/utils';
 import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
 
 const HQ_ONLY_ROLES = new Set([
+  'SUPER_ADMIN',
   'SUPERVISOR',
   'FOLLOW_UP',
   'FOLLOW_UP_OFFICER',
@@ -95,12 +93,13 @@ const HQ_ONLY_ROLES = new Set([
   'KYC_OFFICER'
 ]);
 
+const normalizeRoleName = (role?: string) => role?.toUpperCase().replace(/\s+/g, '_') || '';
+
 const isHqOnlyRole = (role?: string) => {
-  if (!role) return false;
-  return HQ_ONLY_ROLES.has(role.toUpperCase());
+  return HQ_ONLY_ROLES.has(normalizeRoleName(role));
 };
 
-const isDistrictDirectorRole = (role?: string) => role?.toUpperCase() === 'DISTRICT_DIRECTOR';
+const isDistrictDirectorRole = (role?: string) => normalizeRoleName(role) === 'DISTRICT_DIRECTOR';
 
 const buildEmailPreviewSegment = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -256,29 +255,6 @@ export default function UserManagementPage() {
   const [phoneNumberError, setPhoneNumberError] = useState('');
   
   // Credential Reveal State
-  const [isCredentialRevealOpen, setIsCredentialRevealOpen] = useState(false);
-  const [revealedCredential, setRevealedCredential] = useState<{
-    fullName: string;
-    email: string;
-    password: string;
-    type: 'PROVISION' | 'RESET';
-  } | null>(null);
-
-  // Use the reusable copy password hook
-  const { isCopying: isCopyingPassword, copySucceeded, copyPassword } = useCopyPassword();
-  
-  // Lifecycle safety: log when copy is active during dialog state changes
-  useEffect(() => {
-    if (isCopyingPassword && !isCredentialRevealOpen) {
-    }
-  }, [isCredentialRevealOpen, isCopyingPassword]);
-
-  const handleCopyRevealedPassword = useCallback(async () => {
-    if (!revealedCredential?.password) {
-      return;
-    }
-    await copyPassword(revealedCredential.password);
-  }, [revealedCredential?.password, copyPassword]);
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const canManageUsers = hasPermission('USER_CREATE');
@@ -296,17 +272,16 @@ export default function UserManagementPage() {
   const isHqOnly = useMemo(() => {
     const selectedRole = roleDefinitions.find(r => r.name === formData.role);
     const perms = selectedRole?.permissions?.map((p: any) => p.permission.slug) || [];
-    return perms.includes('KYC_DIRECTOR_APPROVAL') || 
-           perms.includes('KYC_VIEW_QUEUE') || 
-           formData.role === 'KYC_DIRECTOR' || 
-           formData.role === 'KYC_OFFICER' || 
-           formData.role === 'SUPERVISOR';
+    return isHqOnlyRole(formData.role) ||
+           perms.includes('KYC_DIRECTOR_APPROVAL') || 
+           perms.includes('KYC_VIEW_QUEUE');
   }, [formData.role, roleDefinitions]);
 
   const isDistrictDirector = useMemo(() => {
     const selectedRole = roleDefinitions.find(r => r.name === formData.role);
     const perms = selectedRole?.permissions?.map((p: any) => p.permission.slug) || [];
-    return perms.includes('DISTRICT_DIRECTOR_REVIEW') || formData.role === 'DISTRICT_DIRECTOR';
+    return isDistrictDirectorRole(formData.role) ||
+           perms.includes('DISTRICT_DIRECTOR_REVIEW');
   }, [formData.role, roleDefinitions]);
   const generatedEmailPreview = useMemo(() => {
     const firstNamePart = buildEmailPreviewSegment(formData.firstName || '');
@@ -502,18 +477,7 @@ export default function UserManagementPage() {
       if (res.success) {
         setIsDialogOpen(false);
         refreshUsers();
-        
-        if (res.tempPass) {
-          setRevealedCredential({
-            fullName: `${formData.firstName} ${formData.lastName}`,
-            email: (formData.email || generatedEmailPreview).toLowerCase().trim(),
-            password: res.tempPass,
-            type: 'PROVISION'
-          });
-          setTimeout(() => setIsCredentialRevealOpen(true), 250);
-        } else {
-          toast({ title: "Profile Updated" });
-        }
+        toast({ title: res.message || 'Profile saved successfully.' });
       } else {
         throw new Error(res.error);
       }
@@ -554,20 +518,10 @@ export default function UserManagementPage() {
       setIsResetConfirmOpen(false);
 
       if (res.success) {
-        if (res.tempPass) {
-          setRevealedCredential({
-            fullName: `${userToReset.firstName} ${userToReset.lastName}`,
-            email: userToReset.email,
-            password: res.tempPass,
-            type: 'RESET'
-          });
-          setTimeout(() => setIsCredentialRevealOpen(true), 250);
-        } else {
-          toast({
-            title: "Password Reset Processed",
-            description: res.message
-          });
-        }
+        toast({
+          title: "Password Reset Processed",
+          description: res.message
+        });
       } else {
         toast({ variant: "destructive", title: "Reset Failed", description: res.error });
       }
@@ -792,8 +746,8 @@ export default function UserManagementPage() {
                     
                     // Business Rules: Automatic HQ detection based on permissions
                     const isDirector = perms.includes('KYC_DIRECTOR_APPROVAL') || val === 'KYC_DIRECTOR';
-                    const isDistrict = perms.includes('DISTRICT_DIRECTOR_REVIEW') || val === 'DISTRICT_DIRECTOR';
-                    const isHqOnly = perms.includes('KYC_VIEW_QUEUE') || val === 'KYC_OFFICER' || val === 'SUPERVISOR';
+                    const isDistrict = perms.includes('DISTRICT_DIRECTOR_REVIEW') || isDistrictDirectorRole(val);
+                    const isHqOnly = isHqOnlyRole(val) || perms.includes('KYC_VIEW_QUEUE');
 
                     setFormData((prev: typeof formData) => ({
                       ...prev,
@@ -883,69 +837,6 @@ export default function UserManagementPage() {
       </AlertDialog>
     
 
-      <Dialog 
-        open={isCredentialRevealOpen} 
-        onOpenChange={(open) => {
-          setIsCredentialRevealOpen(open);
-          if (!open) {
-            setTimeout(() => {
-              setRevealedCredential(null);
-            }, 300);
-          }
-        }}
-      >
-        <DialogContent 
-          className="max-w-[400px] rounded-[24px] p-0 overflow-hidden border-none shadow-2xl bg-white"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-        >
-          <div className="absolute top-0 inset-x-0 h-1.5 bg-[#B89334]" />
-          
-          <div className="p-8 space-y-6">
-            <div className="space-y-1">
-              <DialogTitle className="text-xl font-black text-slate-900 tracking-tight">
-                Temporary Password
-              </DialogTitle>
-              <DialogDescription className="text-slate-500 font-bold text-xs uppercase tracking-widest">
-                Copy the one-time password below.
-              </DialogDescription>
-            </div>
-
-            <div className="relative group bg-slate-50 rounded-2xl p-5 border border-slate-100">
-              <div className="w-full bg-white px-5 py-4 rounded-xl border border-primary/20 flex items-center justify-between shadow-sm">
-                <span className="text-lg font-black text-primary font-mono tracking-widest">
-                  {revealedCredential?.password}
-                </span>
-                <Button 
-                  type="button"
-                  onClick={handleCopyRevealedPassword}
-                  disabled={isCopyingPassword}
-                  variant={copySucceeded ? 'default' : 'ghost'} 
-                  size="icon" 
-                  className="h-10 w-10 rounded-lg hover:bg-primary/10 text-primary"
-                  title={copySucceeded ? 'Copied' : 'Copy to clipboard'}
-                >
-                  {isCopyingPassword ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : copySucceeded ? (
-                    <CheckCircle2 className="w-4 h-4" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <Button 
-              type="button"
-              onClick={() => setIsCredentialRevealOpen(false)}
-              className="w-full bg-slate-900 hover:bg-black text-white font-black h-12 rounded-xl"
-            >
-              Done
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
