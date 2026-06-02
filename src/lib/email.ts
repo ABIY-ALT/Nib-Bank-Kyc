@@ -54,13 +54,72 @@ let emailQueue: Array<{ options: SendMailOptions; audit: EmailAuditContext; atte
 let queueScheduled = false;
 const rateLimitMap = new Map<string, { count: number; windowStart: number }>();
 
+export function validateEmailConfiguration(): { valid: boolean; message: string; config?: Partial<MailConfig> } {
+  try {
+    const config = getMailConfig();
+    
+    if (!config.enabled) {
+      return {
+        valid: false,
+        message: 'SMTP configuration is disabled. Please set SMTP_HOST (or EMAIL_HOST) in environment variables.'
+      };
+    }
+
+    if (!config.host) {
+      return {
+        valid: false,
+        message: 'SMTP_HOST (or EMAIL_HOST) environment variable is not set.'
+      };
+    }
+
+    if (!config.auth?.user) {
+      return {
+        valid: false,
+        message: 'SMTP_USER (or EMAIL_USER) environment variable is not set.'
+      };
+    }
+
+    return {
+      valid: true,
+      message: 'Email configuration is valid.',
+      config: {
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        fromAddress: config.fromAddress,
+        fromName: config.fromName
+      }
+    };
+  } catch (error: any) {
+    return {
+      valid: false,
+      message: `Email configuration error: ${error.message}`
+    };
+  }
+}
+
 function getMailConfig(): MailConfig {
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS?.trim() || 'noreply@nibbank.com.et';
-  const fromName = process.env.EMAIL_FROM_NAME?.trim() || 'NIB Bank KYC';
-  const host = process.env.SMTP_HOST?.trim() || '';
-  const port = Number(process.env.SMTP_PORT || '587');
-  const secure = process.env.SMTP_SECURE === 'true';
-  const rejectUnauthorized = process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false';
+  // Support both legacy EMAIL_* and new SMTP_* environment variables
+  const host = process.env.SMTP_HOST?.trim() || process.env.EMAIL_HOST?.trim() || '';
+  const port = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587');
+  const secure = process.env.SMTP_SECURE === 'true' || process.env.EMAIL_SECURE === 'true';
+  const rejectUnauthorized = process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false' && process.env.EMAIL_ALLOW_SELF_SIGNED !== 'true';
+  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+  
+  // Parse EMAIL_FROM format: "Name <email@example.com>" or just "email@example.com"
+  let fromAddress = process.env.EMAIL_FROM_ADDRESS?.trim() || process.env.EMAIL_FROM?.trim() || 'noreply@nibbank.com.et';
+  let fromName = process.env.EMAIL_FROM_NAME?.trim() || 'NIB Bank KYC';
+  
+  if (fromAddress.includes('<') && fromAddress.includes('>')) {
+    // Parse "Name <email@example.com>" format
+    const match = fromAddress.match(/^([^<]+?)\s*<([^>]+)>$/);
+    if (match) {
+      fromName = match[1].trim();
+      fromAddress = match[2].trim();
+    }
+  }
+  
   const loginUrl = process.env.APP_BASE_URL?.trim();
 
   if (!loginUrl) {
@@ -72,8 +131,8 @@ function getMailConfig(): MailConfig {
     host,
     port,
     secure,
-    auth: process.env.SMTP_USER
-      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || '' }
+    auth: smtpUser
+      ? { user: smtpUser, pass: smtpPass || '' }
       : undefined,
     tls: { rejectUnauthorized },
     fromAddress,
@@ -212,6 +271,11 @@ async function sendEmailJob(job: { options: SendMailOptions; audit: EmailAuditCo
 export function queueMail(options: SendMailOptions, audit: EmailAuditContext) {
   const config = getMailConfig();
   if (!config.enabled) {
+    const validation = validateEmailConfiguration();
+    logInstitutionalError(
+      new Error(`Email delivery disabled: ${validation.message}`),
+      'EMAIL_CONFIG_DISABLED'
+    );
     void auditEmailEvent('FAILED', audit, new Error('SMTP configuration missing'));
     return false;
   }

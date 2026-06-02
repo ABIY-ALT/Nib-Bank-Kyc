@@ -417,28 +417,54 @@ export async function provisionUser(data: {
     });
 
     if (!isUpdate) {
-      void queueWelcomeEmail({
+      const emailQueued = queueWelcomeEmail({
         userId: result.id,
         userName: `${result.firstName} ${result.lastName}`,
         userEmail: result.email,
         username: result.email,
         temporaryPassword: tempPass as string,
       });
+      
+      if (!emailQueued) {
+        await createAuditLog({
+          userId: session.id,
+          userEmail: session.email,
+          action: 'USER_PROVISION_EMAIL_FAILED',
+          details: `Welcome email failed to queue for new user: ${result.firstName} ${result.lastName}`,
+          severity: 'HIGH'
+        });
+      }
     } else if (tempPass) {
-      void queueAdminPasswordResetEmail({
+      const emailQueued = queueAdminPasswordResetEmail({
         userId: result.id,
         userName: `${result.firstName} ${result.lastName}`,
         userEmail: result.email,
         username: result.email,
         temporaryPassword: tempPass,
       });
+      
+      if (!emailQueued) {
+        await createAuditLog({
+          userId: session.id,
+          userEmail: session.email,
+          action: 'USER_PROFILE_UPDATE_EMAIL_FAILED',
+          details: `Password reset email failed to queue for user: ${result.firstName} ${result.lastName}`,
+          severity: 'HIGH'
+        });
+      }
     }
 
     revalidatePath('/admin/users');
 
+    let successMessage = isUpdate ? 'Profile updated successfully.' : 'New user provisioned successfully.';
+    
+    if (!isUpdate) {
+      successMessage += ' Welcome email has been queued for delivery.';
+    }
+
     return {
       success: true,
-      message: isUpdate ? 'Profile updated successfully.' : 'New user provisioned and welcome email queued.',
+      message: successMessage,
       user: {
         id: result.id,
         firstName: result.firstName,
@@ -529,13 +555,28 @@ export async function resetUserPassword(email: string) {
         },
       }).catch(() => {});
 
-      void queueAdminPasswordResetEmail({
+      const emailQueued = queueAdminPasswordResetEmail({
         userId: user.id,
         userName: `${user.firstName} ${user.lastName}`,
         userEmail: user.email,
         username: normalizedEmail,
         temporaryPassword: newTempPass,
       });
+
+      if (!emailQueued) {
+        await createAuditLog({
+          userId: authorizerId,
+          userEmail: session.email,
+          action: 'PASSWORD_RESET_EMAIL_FAILED',
+          details: `Password reset email failed to queue for ${normalizedEmail}. Temporary password: ${newTempPass}`,
+          severity: 'HIGH'
+        }).catch(() => {});
+        
+        return {
+          success: false,
+          error: 'Password reset completed, but notification email could not be delivered. Please check your email configuration (SMTP settings).'
+        };
+      }
 
       return {
         success: true,
