@@ -171,12 +171,13 @@ export default function BranchMonitoringPage() {
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
+    const branchName = user?.branchName || '';
     return submissions.filter(sub => {
       const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
-      const matchesBranch = isAdmin ? true : (sub.branch?.name === user.branchName || sub.branchName === user.branchName);
+      const matchesBranch = isAdmin ? true : (branchName && (sub.branch?.name === branchName || sub.branchName === branchName));
       return matchesSearch && matchesBranch;
     });
-  }, [submissions, searchTerm]);
+  }, [submissions, searchTerm, isAdmin, user?.branchName]);
 
   const staffMatrixOptions = useMemo(() => {
     const officers = Object.values(analytics?.officers || {}) as Array<{ name: string }>;

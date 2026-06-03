@@ -92,18 +92,20 @@ import {
 } from "@/lib/documents";
 
 const KYC_CHECKLIST_ITEMS = [
-  { id: 'id_verified', label: 'Identity Document Authenticity' },
-  { id: 'photo_match', label: 'Customer Photo Comparison' },
-  { id: 'sanction_check', label: 'Sanction & AML Screening' },
-  { id: 'pep_check', label: 'PEP (Politically Exposed Person) Check' },
-  { id: 'mother_name', label: "Mother's Name Verification" },
-  { id: 't24_sync', label: 'Core Banking (T24) Data Match' },
-  { id: 'address_verified', label: 'Residential Address Validation' },
-  { id: 'risk_profile', label: 'Risk Categorization Review' },
-  { id: 'funds_source', label: 'Source of Funds/Wealth Verification' },
-  { id: 'beneficial_owner', label: 'Beneficial Ownership Check' },
-  { id: 'blacklist_check', label: 'Blacklist & Caution List Screening' },
-  { id: 'signature_match', label: 'Specimen Signature Verification' }
+  { id: 'national_id_verified', label: 'National ID (Fayda API) Verified — Name, Photo, DOB, Address' },
+  { id: 'physical_id_authenticated', label: 'Physical ID Authenticated — Original Seen & Stamped "Original Seen"' },
+  { id: 'customer_photo_comparison', label: 'Customer Photo Comparison' },
+  { id: 'sanction_list_screening', label: 'Sanctions Screening – Clear / No Match' },
+  { id: 'delinquent_list_screening', label: 'Delinquent List Screening (NBE) – Clear / No Match' },
+  { id: 'pep_check', label: 'PEP Screening – Clear / No Match' },
+  { id: 'mother_name_verified', label: 'Mother’s Name Verified' },
+  { id: 'account_opening_form', label: 'Account Opening Form (Annex V) Fully Filled & Signed' },
+  { id: 'thumbprint_witnesses', label: 'Thumbprint & Witness IDs Attached for Illiterate / Blind Customers' },
+  { id: 'joint_account_verification', label: 'Joint Account Operation Type Marked & Undertaking Attached' },
+  { id: 'beneficial_owner', label: 'Beneficial Owner(s) Identified & Recorded' },
+  { id: 'signatory_authority_verified', label: 'Signatory Authority Verified Against MoA / Board Minutes' },
+  { id: 'special_product_proof', label: 'Special Product Proof Attached with Reference Number' },
+  { id: 'initial_deposit_ticket', label: 'Initial Deposit Posted & Ticket Number Attached' }
 ];
 
 
