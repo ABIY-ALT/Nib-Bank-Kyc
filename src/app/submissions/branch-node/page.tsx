@@ -171,9 +171,11 @@ export default function BranchMonitoringPage() {
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
-    return submissions.filter(sub => 
-      sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
-    );
+    return submissions.filter(sub => {
+      const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
+      const matchesBranch = isAdmin ? true : (sub.branch?.name === user.branchName || sub.branchName === user.branchName);
+      return matchesSearch && matchesBranch;
+    });
   }, [submissions, searchTerm]);
 
   const staffMatrixOptions = useMemo(() => {

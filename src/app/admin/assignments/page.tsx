@@ -51,7 +51,7 @@ export default function StaffAssignmentsPage() {
   const { toast } = useToast();
   const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
   
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -84,12 +84,15 @@ export default function StaffAssignmentsPage() {
     }
   };
 
-  const handleToggleBranchAssignment = async (user: any, branchName: string, isAdding: boolean) => {
+  const handleToggleBranchAssignment = async (user: any, branchNames: string[] | string, isAdding: boolean) => {
+    const branchesToToggle = Array.isArray(branchNames) ? branchNames : [branchNames];
     let updatedBranches = user.assignedBranches || [];
     if (isAdding) {
-      if (!updatedBranches.includes(branchName)) updatedBranches = [...updatedBranches, branchName];
+      branchesToToggle.forEach((bn) => {
+        if (!updatedBranches.includes(bn)) updatedBranches.push(bn);
+      });
     } else {
-      updatedBranches = updatedBranches.filter((b: string) => b !== branchName);
+      updatedBranches = updatedBranches.filter((b: string) => !branchesToToggle.includes(b));
     }
 
     try {
@@ -110,15 +113,15 @@ export default function StaffAssignmentsPage() {
 
   const assignedUsers = users.filter(u => {
     const hasSpecialistRole = isSpecialist(u);
-    const isAtBranch = u.assignedBranches?.includes(selectedBranch);
-    return hasSpecialistRole && isAtBranch && selectedBranch !== "";
+    const isAtSelected = selectedBranches.length > 0 && selectedBranches.some(sb => u.assignedBranches?.includes(sb));
+    return hasSpecialistRole && isAtSelected;
   });
 
   const unassignedUsers = users.filter(u => {
     const hasSpecialistRole = isSpecialist(u);
     const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
     const matchesSearch = fullName.includes(searchTerm.toLowerCase());
-    const isNotAtSelected = !u.assignedBranches?.includes(selectedBranch);
+    const isNotAtSelected = selectedBranches.length === 0 ? true : !selectedBranches.some(sb => u.assignedBranches?.includes(sb));
     const isActive = u.status === 'ACTIVE';
     return hasSpecialistRole && matchesSearch && isNotAtSelected && isActive;
   });
@@ -130,6 +133,12 @@ export default function StaffAssignmentsPage() {
   const filteredBranches = useMemo(() => {
     return branches.filter(b => b.name.toLowerCase().includes(branchSearchQuery.toLowerCase()));
   }, [branches, branchSearchQuery]);
+
+  const selectedBranchesSummary = (arr: string[]) => {
+    if (!arr || arr.length === 0) return "Select target branch...";
+    if (arr.length <= 3) return arr.join(', ');
+    return `${arr.slice(0,3).join(', ')} +${arr.length - 3} more`;
+  };
 
   const getPrimaryRoleLabel = (user: any) =>
     user.roles?.[0]?.role?.name?.replace(/_/g, ' ') || 'UNASSIGNED';
@@ -176,18 +185,17 @@ export default function StaffAssignmentsPage() {
                       aria-expanded={branchPopoverOpen}
                       className="w-full justify-between h-12 rounded-xl font-bold border-slate-200 bg-white"
                     >
-                      {selectedBranch ? selectedBranch : "Select target branch..."}
+                      {selectedBranchesSummary(selectedBranches)}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[300px] p-0" align="start">
                     <div className="flex items-center border-b px-3 py-2 bg-slate-50/50">
-                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                       <Input
                         placeholder="Search branch name..."
                         value={branchSearchQuery}
                         onChange={(e) => setBranchSearchQuery(e.target.value)}
-                        className="h-8 border-none focus-visible:ring-0 p-0 text-sm font-bold bg-transparent"
+                        className="h-8 border-none focus-visible:ring-0 p-0 text-sm font-bold bg-transparent pl-3"
                       />
                     </div>
                     <ScrollArea className="h-72">
@@ -197,17 +205,16 @@ export default function StaffAssignmentsPage() {
                             key={branch.id}
                             className={cn(
                               "relative flex cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm font-bold hover:bg-slate-100 transition-colors",
-                              selectedBranch === branch.name && "bg-primary/10 text-primary"
+                              selectedBranches.includes(branch.name) && "bg-primary/10 text-primary"
                             )}
                             onClick={() => {
-                              setSelectedBranch(branch.name);
-                              setBranchPopoverOpen(false);
+                              setSelectedBranches(prev => prev.includes(branch.name) ? prev.filter(x => x !== branch.name) : [...prev, branch.name]);
                               setBranchSearchQuery("");
                             }}
                           >
                             <Building2 className="mr-2 h-4 w-4 opacity-50" />
                             <span className="truncate">{branch.name}</span>
-                            {selectedBranch === branch.name && (
+                            {selectedBranches.includes(branch.name) && (
                               <Check className="ml-auto h-4 w-4" />
                             )}
                           </div>
@@ -221,6 +228,20 @@ export default function StaffAssignmentsPage() {
                     </ScrollArea>
                   </PopoverContent>
                 </Popover>
+                {selectedBranches.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedBranches.map((b) => (
+                      <div key={b} className="flex items-center gap-2">
+                        <Badge variant="secondary" className="bg-white border border-slate-200 text-slate-600 font-bold text-[9px] uppercase px-2">
+                          {b}
+                        </Badge>
+                        <button onClick={() => setSelectedBranches(prev => prev.filter(x => x !== b))} className="text-[10px] font-black text-slate-400 hover:text-destructive">
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 shadow-inner">
@@ -236,7 +257,7 @@ export default function StaffAssignmentsPage() {
         </Card>
 
         <div className="lg:col-span-8 space-y-6">
-          {!selectedBranch ? (
+          {selectedBranches.length === 0 ? (
             <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
               <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-3xl bg-white">
                 <CardHeader className="bg-primary text-white border-b flex flex-row items-center justify-between p-6">
@@ -327,16 +348,16 @@ export default function StaffAssignmentsPage() {
                       <div className="p-2 bg-primary/10 rounded-xl text-primary"><Users className="w-5 h-5" /></div>
                       Assigned Review Staff
                     </CardTitle>
-                    <Badge className="bg-primary text-white font-black">{selectedBranch}</Badge>
+                    <Badge className="bg-primary text-white font-black">{selectedBranches.length ? selectedBranchesSummary(selectedBranches) : 'No branch selected'}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[300px]">
                     <div className="divide-y divide-slate-100">
-                      {assignedUsers.length === 0 ? (
+                          {assignedUsers.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground italic text-sm gap-3">
                           <Users className="w-8 h-8 opacity-20" />
-                          <p className="font-bold uppercase tracking-widest text-[10px]">No officers mapped to this branch.</p>
+                          <p className="font-bold uppercase tracking-widest text-[10px]">No officers mapped to the selected branch(es).</p>
                         </div>
                       ) : assignedUsers.map(u => {
                         const fullName = `${u.firstName} ${u.lastName}`;
@@ -354,7 +375,7 @@ export default function StaffAssignmentsPage() {
                                 </Badge>
                               </div>
                             </div>
-                            <Button variant="ghost" size="sm" className="text-destructive font-black hover:bg-red-50 rounded-xl h-10 px-4" onClick={() => handleToggleBranchAssignment(u, selectedBranch, false)}>
+                            <Button variant="ghost" size="sm" className="text-destructive font-black hover:bg-red-50 rounded-xl h-10 px-4" onClick={() => handleToggleBranchAssignment(u, selectedBranches, false)}>
                               <X className="w-4 h-4 mr-2" /> Revoke Authority
                             </Button>
                           </div>
@@ -409,7 +430,7 @@ export default function StaffAssignmentsPage() {
                               variant="outline" 
                               size="sm" 
                               className="font-black border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl h-10 px-6 shadow-sm transition-all active:scale-[0.95]" 
-                              onClick={() => handleToggleBranchAssignment(u, selectedBranch, true)}
+                              onClick={() => handleToggleBranchAssignment(u, selectedBranches, true)}
                             >
                               <UserPlus className="w-4 h-4 mr-2" /> Add to Coverage
                             </Button>

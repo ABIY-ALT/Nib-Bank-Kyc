@@ -178,9 +178,12 @@ export default function DistrictMonitoringPage() {
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
-    return submissions.filter(sub => 
-      sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
-    );
+    return submissions.filter(sub => {
+      const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
+      const matchesBranch = matrixBranchFilter === 'all' || (sub.branch?.name === matrixBranchFilter || sub.branchName === matrixBranchFilter);
+      const matchesDistrict = isAdmin ? true : (sub.branch?.district?.name === districtName || sub.districtName === districtName);
+      return matchesSearch && matchesBranch && matchesDistrict;
+    });
   }, [submissions, searchTerm]);
 
   const branchMatrixOptions = useMemo(() => {

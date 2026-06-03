@@ -46,6 +46,7 @@ import {
   Download, 
   Filter, 
   Search, 
+  Building2,
   AlertTriangle, 
   Clock, 
   Loader2,
@@ -192,7 +193,14 @@ export default function ManagementReportingPage() {
     return submissions.filter(sub => {
       const matchesDistrict = selectedDistrict === 'all' || sub.branch?.district?.name === selectedDistrict;
       const branchName = sub.branch?.name || sub.branchName;
-      const matchesBranch = selectedBranch === 'all' || branchName === selectedBranch;
+      // When both district and branch are selected, require the submission to match both.
+      const matchesBranch = (() => {
+        if (selectedBranch === 'all') return true;
+        if (selectedDistrict === 'all') return branchName === selectedBranch;
+        // both selected -> ensure branch name matches and branch district matches
+        const branchDistrict = sub.branch?.district?.name || sub.branch?.districtName || sub.districtName;
+        return branchName === selectedBranch && branchDistrict === selectedDistrict;
+      })();
       const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
       const matchesType = selectedType === 'all' || sub.entityType === selectedType;
       const matchesSearch = sub.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || sub.id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -330,50 +338,49 @@ export default function ManagementReportingPage() {
                   <ChevronsUpDown className="h-4 w-4 text-slate-400" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-[320px] rounded-xl border border-slate-200 p-0 shadow-2xl">
-                <div className="relative border-b border-slate-100 p-3">
-                  <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <PopoverContent align="start" className="w-[300px] p-0 rounded-2xl shadow-2xl border-none">
+                <div className="p-3 border-b bg-slate-50/50">
                   <Input
                     placeholder="Search district..."
-                    className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                    className="pl-3 h-10 rounded-lg text-sm border-slate-200"
                     value={districtSearch}
                     onChange={(e) => setDistrictSearch(e.target.value)}
                   />
                 </div>
-                <ScrollArea className="max-h-64 p-2">
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
-                      selectedDistrict === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
-                    )}
-                    onClick={() => {
-                      setSelectedDistrict("all");
-                      setSelectedBranch("all");
-                      setDistrictFilterOpen(false);
-                    }}
-                  >
-                    <span>Overall Network</span>
-                    {selectedDistrict === "all" && <Check className="h-4 w-4" />}
-                  </button>
-                  {filteredDistrictOptions.map((name) => (
-                    <button
-                      key={name}
-                      type="button"
+                <ScrollArea className="h-64">
+                  <div className="p-1">
+                    <div
                       className={cn(
-                        "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
-                        selectedDistrict === name ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                        "flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold",
+                        selectedDistrict === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50"
                       )}
                       onClick={() => {
-                        setSelectedDistrict(name);
+                        setSelectedDistrict("all");
                         setSelectedBranch("all");
                         setDistrictFilterOpen(false);
                       }}
                     >
-                      <span className="truncate">{name}</span>
-                      {selectedDistrict === name && <Check className="h-4 w-4" />}
-                    </button>
-                  ))}
+                      <span>Overall Network</span>
+                      {selectedDistrict === "all" && <Check className="h-4 w-4" />}
+                    </div>
+                    {filteredDistrictOptions.map((name) => (
+                      <div
+                        key={name}
+                        className={cn(
+                          "mt-1 flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold",
+                          selectedDistrict === name ? "bg-primary/10 text-primary" : "hover:bg-slate-50"
+                        )}
+                        onClick={() => {
+                          setSelectedDistrict(name);
+                          setSelectedBranch("all");
+                          setDistrictFilterOpen(false);
+                        }}
+                      >
+                        <span className="truncate">{name}</span>
+                        {selectedDistrict === name && <Check className="h-4 w-4" />}
+                      </div>
+                    ))}
+                  </div>
                 </ScrollArea>
               </PopoverContent>
             </Popover>
@@ -387,48 +394,47 @@ export default function ManagementReportingPage() {
                   <ChevronsUpDown className="h-4 w-4 text-slate-400" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-[320px] rounded-xl border border-slate-200 p-0 shadow-2xl">
-                <div className="relative border-b border-slate-100 p-3">
-                  <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <PopoverContent align="start" className="w-[300px] p-0 rounded-2xl shadow-2xl border-none">
+                <div className="p-3 border-b bg-slate-50/50">
                   <Input
                     placeholder="Search branch..."
-                    className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                    className="pl-3 h-10 rounded-lg text-sm border-slate-200"
                     value={branchSearch}
                     onChange={(e) => setBranchSearch(e.target.value)}
                   />
                 </div>
-                <ScrollArea className="max-h-64 p-2">
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
-                      selectedBranch === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
-                    )}
-                    onClick={() => {
-                      setSelectedBranch("all");
-                      setBranchFilterOpen(false);
-                    }}
-                  >
-                    <span>All Branches</span>
-                    {selectedBranch === "all" && <Check className="h-4 w-4" />}
-                  </button>
-                  {filteredBranchOptions.map((name) => (
-                    <button
-                      key={name}
-                      type="button"
+                <ScrollArea className="h-64">
+                  <div className="p-1">
+                    <div
                       className={cn(
-                        "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
-                        selectedBranch === name ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                        "flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold",
+                        selectedBranch === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50"
                       )}
                       onClick={() => {
-                        setSelectedBranch(name);
+                        setSelectedBranch("all");
                         setBranchFilterOpen(false);
                       }}
                     >
-                      <span className="truncate">{name}</span>
-                      {selectedBranch === name && <Check className="h-4 w-4" />}
-                    </button>
-                  ))}
+                      <div className="flex items-center gap-2"><Building2 className="w-4 h-4" /> All Branches</div>
+                      {selectedBranch === "all" && <Check className="h-4 w-4" />}
+                    </div>
+                    {filteredBranchOptions.map((name) => (
+                      <div
+                        key={name}
+                        className={cn(
+                          "mt-1 flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold",
+                          selectedBranch === name ? "bg-primary/10 text-primary" : "hover:bg-slate-50"
+                        )}
+                        onClick={() => {
+                          setSelectedBranch(name);
+                          setBranchFilterOpen(false);
+                        }}
+                      >
+                        <span className="truncate">{name}</span>
+                        {selectedBranch === name && <Check className="h-4 w-4" />}
+                      </div>
+                    ))}
+                  </div>
                 </ScrollArea>
               </PopoverContent>
             </Popover>
@@ -444,48 +450,47 @@ export default function ManagementReportingPage() {
                   <ChevronsUpDown className="h-4 w-4 text-slate-400" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-[320px] rounded-xl border border-slate-200 p-0 shadow-2xl">
-                <div className="relative border-b border-slate-100 p-3">
-                  <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <PopoverContent align="start" className="w-[300px] p-0 rounded-2xl shadow-2xl border-none">
+                <div className="p-3 border-b bg-slate-50/50">
                   <Input
                     placeholder="Search risk level..."
-                    className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                    className="pl-3 h-10 rounded-lg text-sm border-slate-200"
                     value={riskSearch}
                     onChange={(e) => setRiskSearch(e.target.value)}
                   />
                 </div>
-                <ScrollArea className="max-h-64 p-2">
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
-                      selectedRisk === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
-                    )}
-                    onClick={() => {
-                      setSelectedRisk("all");
-                      setRiskFilterOpen(false);
-                    }}
-                  >
-                    <span>All Profiles</span>
-                    {selectedRisk === "all" && <Check className="h-4 w-4" />}
-                  </button>
-                  {filteredRiskOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
+                <ScrollArea className="h-64">
+                  <div className="p-1">
+                    <div
                       className={cn(
-                        "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
-                        selectedRisk === option.value ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                        "flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold",
+                        selectedRisk === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50"
                       )}
                       onClick={() => {
-                        setSelectedRisk(option.value);
+                        setSelectedRisk("all");
                         setRiskFilterOpen(false);
                       }}
                     >
-                      <span className="truncate">{option.label}</span>
-                      {selectedRisk === option.value && <Check className="h-4 w-4" />}
-                    </button>
-                  ))}
+                      <span>All Profiles</span>
+                      {selectedRisk === "all" && <Check className="h-4 w-4" />}
+                    </div>
+                    {filteredRiskOptions.map((option) => (
+                      <div
+                        key={option.value}
+                        className={cn(
+                          "mt-1 flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold",
+                          selectedRisk === option.value ? "bg-primary/10 text-primary" : "hover:bg-slate-50"
+                        )}
+                        onClick={() => {
+                          setSelectedRisk(option.value);
+                          setRiskFilterOpen(false);
+                        }}
+                      >
+                        <span className="truncate">{option.label}</span>
+                        {selectedRisk === option.value && <Check className="h-4 w-4" />}
+                      </div>
+                    ))}
+                  </div>
                 </ScrollArea>
               </PopoverContent>
             </Popover>
@@ -499,48 +504,47 @@ export default function ManagementReportingPage() {
                   <ChevronsUpDown className="h-4 w-4 text-slate-400" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-[320px] rounded-xl border border-slate-200 p-0 shadow-2xl">
-                <div className="relative border-b border-slate-100 p-3">
-                  <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <PopoverContent align="start" className="w-[300px] p-0 rounded-2xl shadow-2xl border-none">
+                <div className="p-3 border-b bg-slate-50/50">
                   <Input
                     placeholder="Search status..."
-                    className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                    className="pl-3 h-10 rounded-lg text-sm border-slate-200"
                     value={statusSearch}
                     onChange={(e) => setStatusSearch(e.target.value)}
                   />
                 </div>
-                <ScrollArea className="max-h-64 p-2">
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
-                      selectedStatus === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
-                    )}
-                    onClick={() => {
-                      setSelectedStatus("all");
-                      setStatusFilterOpen(false);
-                    }}
-                  >
-                    <span>All Stages</span>
-                    {selectedStatus === "all" && <Check className="h-4 w-4" />}
-                  </button>
-                  {filteredStatusOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
+                <ScrollArea className="h-64">
+                  <div className="p-1">
+                    <div
                       className={cn(
-                        "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
-                        selectedStatus === option.value ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                        "flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold",
+                        selectedStatus === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50"
                       )}
                       onClick={() => {
-                        setSelectedStatus(option.value);
+                        setSelectedStatus("all");
                         setStatusFilterOpen(false);
                       }}
                     >
-                      <span className="truncate">{option.label}</span>
-                      {selectedStatus === option.value && <Check className="h-4 w-4" />}
-                    </button>
-                  ))}
+                      <span>All Stages</span>
+                      {selectedStatus === "all" && <Check className="h-4 w-4" />}
+                    </div>
+                    {filteredStatusOptions.map((option) => (
+                      <div
+                        key={option.value}
+                        className={cn(
+                          "mt-1 flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold",
+                          selectedStatus === option.value ? "bg-primary/10 text-primary" : "hover:bg-slate-50"
+                        )}
+                        onClick={() => {
+                          setSelectedStatus(option.value);
+                          setStatusFilterOpen(false);
+                        }}
+                      >
+                        <span className="truncate">{option.label}</span>
+                        {selectedStatus === option.value && <Check className="h-4 w-4" />}
+                      </div>
+                    ))}
+                  </div>
                 </ScrollArea>
               </PopoverContent>
             </Popover>
