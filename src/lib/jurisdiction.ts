@@ -29,24 +29,29 @@ export const BRANCH_SCOPE_PERMISSIONS = new Set([
 
 export const DISTRICT_DIRECTOR_ROLE = 'DISTRICT_DIRECTOR';
 
+export function normalizeBranchName(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
 export function normalizeAssignedBranches(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.map((branch) => String(branch).trim()).filter(Boolean);
+    return value.map(normalizeBranchName).filter(Boolean);
   }
 
   if (typeof value === 'string') {
-    return value.split(',').map((branch) => branch.trim()).filter(Boolean);
+    return value.split(',').map(normalizeBranchName).filter(Boolean);
   }
 
   return [];
 }
 
 export function getResolvedUserBranchName(user: any) {
-  return user?.branchName || user?.branch?.name || null;
+  return normalizeBranchName(user?.branchName || user?.branch?.name || null) || null;
 }
 
 export function getResolvedUserDistrictName(user: any) {
-  return user?.districtName || user?.branch?.district?.name || null;
+  return normalizeBranchName(user?.districtName || user?.branch?.district?.name || null) || null;
 }
 
 export function getNormalizedRole(role?: string | null) {
@@ -81,18 +86,21 @@ export function hasJurisdictionalAccess(user: any, userPermissions: string[], se
 
   // 4. Portfolio / Specialist Logic
   if (userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p))) {
+    const normalizedKycBranchName = normalizeBranchName(kyc.branchName).toLowerCase();
     if (assignedBranches.length > 0) {
-      return assignedBranches.includes(kyc.branchName);
+      return assignedBranches
+        .map((branch) => normalizeBranchName(branch).toLowerCase())
+        .includes(normalizedKycBranchName);
     }
     // Fallback to primary branch if no portfolio mapped
-    if (branchName && kyc.branchName === branchName) {
+    if (branchName && normalizeBranchName(branchName).toLowerCase() === normalizedKycBranchName) {
       return true;
     }
   }
 
   // 5. Direct Branch Logic
   if (userPermissions.some(p => BRANCH_SCOPE_PERMISSIONS.has(p))) {
-    return branchName && kyc.branchName === branchName;
+    return branchName && normalizeBranchName(branchName).toLowerCase() === normalizeBranchName(kyc.branchName).toLowerCase();
   }
 
   return false;

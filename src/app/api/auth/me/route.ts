@@ -125,7 +125,7 @@ export async function GET(req: Request) {
         status: user.status,
         branchName: user.branch?.name || null,
         districtName: user.districtName || user.branch?.district?.name || null,
-        assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [],
+        assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').map((branch) => branch.trim()).filter(Boolean) : [],
         roles: serializableRoles,
         needsPasswordChange: user.needsPasswordChange
       }

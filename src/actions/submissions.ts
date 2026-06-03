@@ -21,6 +21,7 @@ import { getExceptionalWorkflowStage, getExceptionalWorkflowAction, getActionsFo
 
 import { 
   normalizeAssignedBranches, 
+  normalizeBranchName,
   getResolvedUserBranchName, 
   getResolvedUserDistrictName, 
   getNormalizedRole, 
@@ -91,9 +92,9 @@ export async function getSubmissions(filters?: any) {
     }
 
     const requestedBranches = Array.isArray(filters?.branches)
-      ? filters.branches.filter(Boolean)
-      : (filters?.branch ? [filters.branch] : []);
-    const requestedDistrict = filters?.district;
+      ? normalizeAssignedBranches(filters.branches)
+      : (filters?.branch ? normalizeAssignedBranches([filters.branch]) : []);
+    const requestedDistrict = normalizeBranchName(filters?.district);
     const normalizedRole = getNormalizedRole(session.role);
     const isOwnSubmissionRequest = filters?.submittedBy === session.id || filters?.createdById === session.id;
     let jurisdictionalFilter: any = {};
@@ -142,8 +143,10 @@ export async function getSubmissions(filters?: any) {
           }
         } else if (isPortfolioStaff) {
           if (assignedBranches.length > 0) {
+            const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch).toLowerCase());
+            const normalizedRequested = requestedBranches.map((branch) => normalizeBranchName(branch).toLowerCase());
             const visibleBranches = requestedBranches.length > 0
-              ? assignedBranches.filter(branch => requestedBranches.includes(branch))
+              ? assignedBranches.filter((branch) => normalizedRequested.includes(normalizeBranchName(branch).toLowerCase()))
               : assignedBranches;
             if (visibleBranches.length === 0) return [];
             jurisdictionalFilter.branchName = visibleBranches.length === 1 ? visibleBranches[0] : { in: visibleBranches };

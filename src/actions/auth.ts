@@ -43,7 +43,7 @@ export async function getUserProfile(userId: string) {
       branchId: user.branchId,
       branchName: user.branch?.name || null,
       districtName: user.districtName || user.branch?.district?.name || null,
-      assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').filter(Boolean) : [],
+      assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').map((branch) => branch.trim()).filter(Boolean) : [],
       roles: user.roles.map((ur: any) => ({
         role: {
           id: ur.role.id,
