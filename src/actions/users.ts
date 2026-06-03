@@ -153,7 +153,7 @@ export async function getAllUsers() {
       branchId: u.branchId,
       branchName: u.branchName,
       districtName: u.districtName,
-      assignedBranches: u.assignedBranches ? u.assignedBranches.split(',').map((branch) => normalizeBranchName(branch)).filter(Boolean) : [],
+      assignedBranches: u.assignedBranches ? u.assignedBranches.split(',').map((branch: string) => normalizeBranchName(branch)).filter(Boolean) : [],
       createdAt: u.createdAt,
       updatedAt: u.updatedAt,
       needsPasswordChange: u.needsPasswordChange,
