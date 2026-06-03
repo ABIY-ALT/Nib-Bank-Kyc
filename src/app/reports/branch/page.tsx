@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { getSubmissions } from "@/actions/submissions";
 import { getDistricts, getBranches } from "@/actions/hierarchy";
 import { format } from "date-fns";
@@ -49,6 +50,7 @@ import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picke
 
 export default function BranchReportsPage() {
   const { user } = useAuth();
+  const { isSuperAdmin } = usePermissions();
   const { toast } = useToast();
   
   const [districts, setDistricts] = useState<any[]>([]);
@@ -100,6 +102,17 @@ export default function BranchReportsPage() {
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+      }
+      // Non-superadmin users only see submissions from their assigned branches
+      if (!isSuperAdmin && user) {
+        if (user.assignedBranches && user.assignedBranches.length > 0) {
+          filters.branches = user.assignedBranches;
+          filters.district = undefined; // Ignore district selection for portfolio staff
+          filters.branch = undefined;
+        } else if (user.branchName) {
+          filters.branch = user.branchName;
+          filters.district = undefined;
+        }
       }
       const data = await getSubmissions(filters);
       setReportData(data || []);

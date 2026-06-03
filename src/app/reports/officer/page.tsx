@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { 
   Card, 
   CardContent, 
@@ -51,6 +52,7 @@ import { Progress } from "@/components/ui/progress";
 
 export default function OfficerReportsPage() {
   const { user } = useAuth();
+  const { isSuperAdmin } = usePermissions();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [reportDataActive, setReportDataActive] = useState(false);
@@ -63,10 +65,19 @@ export default function OfficerReportsPage() {
   const handleGenerateReport = async () => {
     setLoading(true);
     try {
-      const data = await getSubmissions({
+      let filters: any = {
         startDate: fromDate,
         endDate: toDate
-      });
+      };
+      // Non-superadmin users only see submissions from their assigned branches
+      if (!isSuperAdmin && user) {
+        if (user.assignedBranches && user.assignedBranches.length > 0) {
+          filters.branches = user.assignedBranches;
+        } else if (user.branchName) {
+          filters.branch = user.branchName;
+        }
+      }
+      const data = await getSubmissions(filters);
       setSubmissions(data);
       setReportDataActive(true);
       toast({

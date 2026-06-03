@@ -2,6 +2,8 @@
 "use client"
 
 import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '@/lib/auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { 
   Card, 
   CardContent, 
@@ -48,18 +50,31 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export default function ReportsPage() {
+  const { user } = useAuth();
+  const { isSuperAdmin } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const data = await getSubmissions({ limit: 1000 });
+      const filters: any = { limit: 1000 };
+      
+      // Non-superadmin users only see submissions from their assigned branches
+      if (!isSuperAdmin && user) {
+        if (user.assignedBranches && user.assignedBranches.length > 0) {
+          filters.branches = user.assignedBranches;
+        } else if (user.branchName) {
+          filters.branch = user.branchName;
+        }
+      }
+      
+      const data = await getSubmissions(filters);
       setSubmissions(data);
       setLoading(false);
     }
     loadData();
-  }, []);
+  }, [user, isSuperAdmin]);
 
   const analytics = useMemo(() => {
     const end = new Date();

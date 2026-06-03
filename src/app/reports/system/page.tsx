@@ -1,7 +1,9 @@
 
 'use client';
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useAuth } from "@/lib/auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { 
   Card, 
   CardContent, 
@@ -32,6 +34,8 @@ import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 export default function SystemWideReportsPage() {
+  const { user } = useAuth();
+  const { isSuperAdmin } = usePermissions();
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,6 +49,14 @@ export default function SystemWideReportsPage() {
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+      }
+      // Non-superadmin users only see submissions from their assigned branches
+      if (!isSuperAdmin && user) {
+        if (user.assignedBranches && user.assignedBranches.length > 0) {
+          filters.branches = user.assignedBranches;
+        } else if (user.branchName) {
+          filters.branch = user.branchName;
+        }
       }
       const data = await getSubmissions(filters);
       setSubmissions(data || []);
