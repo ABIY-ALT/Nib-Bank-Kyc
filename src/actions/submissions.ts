@@ -135,30 +135,34 @@ export async function getSubmissions(filters?: any) {
 
         const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
         const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
+        const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch)).filter(Boolean);
 
         if (isDistrictAdmin && districtName) {
           jurisdictionalFilter.districtName = districtName;
           if (requestedBranches.length > 0) {
-            jurisdictionalFilter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
+            jurisdictionalFilter.branchName = requestedBranches.length === 1
+              ? normalizeBranchName(requestedBranches[0])
+              : { in: requestedBranches.map((branch) => normalizeBranchName(branch)), mode: 'insensitive' };
           }
+        } else if (normalizedAssigned.length > 0) {
+          const normalizedRequested = requestedBranches.map((branch) => normalizeBranchName(branch).toLowerCase());
+          const visibleBranches = requestedBranches.length > 0
+            ? normalizedAssigned.filter((branch) => normalizedRequested.includes(branch.toLowerCase()))
+            : normalizedAssigned;
+          if (visibleBranches.length === 0) return [];
+          jurisdictionalFilter.branchName = visibleBranches.length === 1
+            ? visibleBranches[0]
+            : { in: visibleBranches, mode: 'insensitive' };
         } else if (isPortfolioStaff) {
-          if (assignedBranches.length > 0) {
-            const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch).toLowerCase());
-            const normalizedRequested = requestedBranches.map((branch) => normalizeBranchName(branch).toLowerCase());
-            const visibleBranches = requestedBranches.length > 0
-              ? assignedBranches.filter((branch) => normalizedRequested.includes(normalizeBranchName(branch).toLowerCase()))
-              : assignedBranches;
-            if (visibleBranches.length === 0) return [];
-            jurisdictionalFilter.branchName = visibleBranches.length === 1 ? visibleBranches[0] : { in: visibleBranches };
-          } else if (branchName) {
-            jurisdictionalFilter.branchName = branchName;
+          if (branchName) {
+            jurisdictionalFilter.branchName = { equals: normalizeBranchName(branchName), mode: 'insensitive' };
           } else {
             return [];
           }
         } else {
           // Direct Branch Staff
           if (!branchName) return [];
-          jurisdictionalFilter.branchName = branchName;
+          jurisdictionalFilter.branchName = { equals: normalizeBranchName(branchName), mode: 'insensitive' };
         }
       }
     } else {
@@ -167,7 +171,9 @@ export async function getSubmissions(filters?: any) {
         jurisdictionalFilter.districtName = requestedDistrict;
       }
       if (requestedBranches.length > 0) {
-        jurisdictionalFilter.branchName = requestedBranches.length === 1 ? requestedBranches[0] : { in: requestedBranches };
+        jurisdictionalFilter.branchName = requestedBranches.length === 1
+          ? normalizeBranchName(requestedBranches[0])
+          : { in: requestedBranches.map((branch) => normalizeBranchName(branch)), mode: 'insensitive' };
       }
     }
 

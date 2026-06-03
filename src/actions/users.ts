@@ -9,6 +9,7 @@ import { getServerSession, verifySensitiveSession, verifyPermission } from './au
 import { createAuditLog } from './audit';
 import { logPrivilegeChange } from './rbac';
 import { CreateUserSchema } from '@/lib/validation';
+import { normalizeAssignedBranches, normalizeBranchName } from '@/lib/jurisdiction';
 import { ZodError } from 'zod';
 import { logInstitutionalError } from '@/lib/logger';
 import { normalizeInstitutionalLogin } from '@/lib/login-identifier';
@@ -152,7 +153,7 @@ export async function getAllUsers() {
       branchId: u.branchId,
       branchName: u.branchName,
       districtName: u.districtName,
-      assignedBranches: u.assignedBranches ? u.assignedBranches.split(',').filter(Boolean) : [],
+      assignedBranches: u.assignedBranches ? u.assignedBranches.split(',').map((branch) => normalizeBranchName(branch)).filter(Boolean) : [],
       createdAt: u.createdAt,
       updatedAt: u.updatedAt,
       needsPasswordChange: u.needsPasswordChange,
@@ -676,7 +677,7 @@ export async function updateUserPortfolio(userId: string, branches: string[]) {
 
     const result = await prisma.user.update({
       where: { id: userId },
-      data: { assignedBranches: branches.join(','), updatedAt: new Date() },
+      data: { assignedBranches: branches.map(normalizeBranchName).filter(Boolean).join(','), updatedAt: new Date() },
       select: {
         id: true,
         firstName: true,

@@ -156,6 +156,15 @@ export default function KYCOperationsMonitoringPage() {
     setLoading(true);
     try {
       let filters: any = { limit: 5000 };
+      if (!isSuperAdmin && user) {
+        if (user.assignedBranches && user.assignedBranches.length > 0) {
+          filters.branches = user.assignedBranches;
+        } else if (user.branchName) {
+          filters.branch = user.branchName;
+        } else {
+          filters.assignedToId = user.id;
+        }
+      }
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
