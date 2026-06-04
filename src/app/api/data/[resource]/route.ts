@@ -16,6 +16,16 @@ import {
   internalErrorResponse,
   unauthorizedResponse
 } from '@/lib/api-security';
+import { normalizePermissionSlug } from '@/lib/access-control';
+import {
+  normalizeAssignedBranches,
+  getNormalizedRole,
+  getResolvedUserBranchName,
+  getResolvedUserDistrictName,
+  GLOBAL_SCOPE_PERMISSIONS,
+  PORTFOLIO_SCOPE_PERMISSIONS,
+  normalizeBranchName
+} from '@/lib/jurisdiction';
 
 // Map resource names to Prisma models
 const RESOURCE_MODELS: Record<string, string> = {
@@ -79,8 +89,67 @@ export async function GET(
       return badRequestResponse(`Forbidden: client-supplied field '${blockedKey}' is not permitted in filters.`);
     }
 
-    // For owned resources, non-admins can only see their own records
-    if (OWNED_RESOURCES[resource] && !isAdmin) {
+    // ===== SPECIAL CASE: SUBMISSIONS REQUIRE BRANCH-BASED ACCESS CONTROL =====
+    // SECURITY: Submissions are governed by branch/district jurisdiction, not just ownership
+    if (resource === 'submissions' && !isAdmin) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        include: {
+          roles: {
+            include: {
+              role: {
+                include: {
+                  permissions: {
+                    include: {
+                      permission: true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          branch: { include: { district: true } }
+        }
+      });
+
+      if (!dbUser) {
+        return unauthorizedResponse('User not found');
+      }
+
+      const userPermissions = dbUser.roles.flatMap((ur: any) =>
+        ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
+      );
+
+      let jurisdictionalFilter: any = {};
+
+      // Check for global oversight permissions
+      if (userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
+        jurisdictionalFilter = {}; // No additional restriction
+      } else {
+        // Apply branch/district filtering
+        const assignedBranches = normalizeAssignedBranches(dbUser.assignedBranches);
+        const branchName = getResolvedUserBranchName(dbUser);
+        const districtName = getResolvedUserDistrictName(dbUser);
+
+        const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
+        const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
+
+        if (isDistrictAdmin && districtName) {
+          jurisdictionalFilter.districtName = districtName;
+        } else if (isPortfolioStaff && assignedBranches.length > 0) {
+          jurisdictionalFilter.branchName = { in: assignedBranches };
+        } else if (branchName) {
+          jurisdictionalFilter.branchName = branchName;
+        } else {
+          // No jurisdiction - cannot access any submissions
+          return successResponse({ data: [] });
+        }
+      }
+
+      // Merge jurisdictional filter with client-supplied filter
+      filter = { ...jurisdictionalFilter, ...filter };
+    } else if (OWNED_RESOURCES[resource] && !isAdmin) {
+      // For other owned resources (not submissions), maintain ownership-based filtering
       filter[OWNED_RESOURCES[resource]] = user.id;
     }
 

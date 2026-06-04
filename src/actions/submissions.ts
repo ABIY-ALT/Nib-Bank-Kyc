@@ -99,7 +99,22 @@ export async function getSubmissions(filters?: any) {
     const isOwnSubmissionRequest = filters?.submittedBy === session.id || filters?.createdById === session.id;
     let jurisdictionalFilter: any = {};
     
-    if (session.role !== 'SUPER_ADMIN' && !isOwnSubmissionRequest) {
+    // ===== CRITICAL SECURITY FIX =====
+    // Branch filtering MUST be applied to ALL non-admin users, regardless of whether they're requesting their own submissions
+    // This prevents KYC Officers from bypassing branch restrictions by querying "their own" submissions
+    
+    if (session.role === 'SUPER_ADMIN') {
+      // Only SUPER_ADMIN gets unrestricted global view
+      if (requestedDistrict) {
+        jurisdictionalFilter.districtName = requestedDistrict;
+      }
+      if (requestedBranches.length > 0) {
+        jurisdictionalFilter.branchName = requestedBranches.length === 1
+          ? normalizeBranchName(requestedBranches[0])
+          : { in: requestedBranches.map((branch) => normalizeBranchName(branch)), mode: 'insensitive' };
+      }
+    } else {
+      // ALL non-admin users (KYC Officers, Branch Managers, etc.) MUST have branch filtering applied
       const user = await prisma.user.findUnique({
         where: { id: session.id },
         include: { 
@@ -125,26 +140,70 @@ export async function getSubmissions(filters?: any) {
         ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
       );
 
-      // Check for global oversight first
-      if (userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
-        jurisdictionalFilter = {}; // No restriction
+      // CRITICAL: Check for ROLE FIRST before permissions to ensure proper scope
+      // District Directors must be limited to their district REGARDLESS of other permissions
+      const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
+      
+      // Check for global oversight ONLY if NOT a district admin
+      // District admins should never get unrestricted global access
+      if (!isDistrictAdmin && userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
+        jurisdictionalFilter = {}; // No restriction - only for true global executives without district assignment
       } else {
+        // Standard branch-level access control
         const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
         const branchName = getResolvedUserBranchName(user);
         const districtName = getResolvedUserDistrictName(user);
 
-        const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
         const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
         const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch)).filter(Boolean);
 
+        // ===== DEBUG LOGGING =====
+        logInstitutionalError(
+          new Error(`[DEBUG] getSubmissions for user ${session.id}: isDistrictAdmin=${isDistrictAdmin}, districtName=${districtName}, branchName=${branchName}, normalizedAssigned=${JSON.stringify(normalizedAssigned)}`),
+          'DEBUG_JURISDICTIONAL_FILTER'
+        );
+
+        // ===== SECURITY: DISTRICT DIRECTORS MUST HAVE A DISTRICT ASSIGNED =====
+        if (isDistrictAdmin && !districtName) {
+          logInstitutionalError(
+            new Error(`SECURITY ALERT: District Director ${session.id} has no district assigned. Access denied.`),
+            'DISTRICT_ADMIN_NO_DISTRICT_ERROR'
+          );
+          return [];
+        }
+
         if (isDistrictAdmin && districtName) {
-          jurisdictionalFilter.districtName = districtName;
+          // District Directors see all cases in their district ONLY
+          // CRITICAL SECURITY: Validate requested district matches user's assigned district
+          if (requestedDistrict && requestedDistrict.toLowerCase() !== districtName.toLowerCase()) {
+            logInstitutionalError(
+              new Error(`SECURITY ALERT: District Director ${session.id} attempted to access district ${requestedDistrict} but is assigned to ${districtName}. BLOCKED.`),
+              'CROSS_DISTRICT_ACCESS_ATTEMPT'
+            );
+            return [];
+          }
+          
+          // Always apply district filter using user's assigned district, never client-requested value
+          jurisdictionalFilter.districtName = { equals: districtName, mode: 'insensitive' };
+          
+          // If specific branches were requested, validate they exist within this district
           if (requestedBranches.length > 0) {
-            jurisdictionalFilter.branchName = requestedBranches.length === 1
-              ? normalizeBranchName(requestedBranches[0])
-              : { in: requestedBranches.map((branch) => normalizeBranchName(branch)), mode: 'insensitive' };
+            // Requested branches must be within the user's district - apply both constraints
+            const normalizedRequested = requestedBranches.map((b) => normalizeBranchName(b));
+            jurisdictionalFilter.branchName = normalizedRequested.length === 1
+              ? { equals: normalizedRequested[0], mode: 'insensitive' }
+              : { in: normalizedRequested, mode: 'insensitive' };
+            
+            // Log warning if district director tries to filter branches (potential attack pattern)
+            if (requestedBranches.length > 0) {
+              logInstitutionalError(
+                new Error(`SECURITY NOTICE: District Director ${session.id} filtered by specific branches within their district`),
+                'DISTRICT_DIRECTOR_BRANCH_FILTER'
+              );
+            }
           }
         } else if (normalizedAssigned.length > 0) {
+          // Portfolio staff (KYC Officers with multiple assigned branches)
           const normalizedRequested = requestedBranches.map((branch) => normalizeBranchName(branch).toLowerCase());
           const visibleBranches = requestedBranches.length > 0
             ? normalizedAssigned.filter((branch) => normalizedRequested.includes(branch.toLowerCase()))
@@ -154,27 +213,36 @@ export async function getSubmissions(filters?: any) {
             ? visibleBranches[0]
             : { in: visibleBranches, mode: 'insensitive' };
         } else if (isPortfolioStaff) {
+          // Fallback: Portfolio staff without explicit assigned branches (should not happen, but handled for safety)
           if (branchName) {
             jurisdictionalFilter.branchName = { equals: normalizeBranchName(branchName), mode: 'insensitive' };
           } else {
-            return [];
+            return []; // No access if no branch is assigned
           }
         } else {
-          // Direct Branch Staff
+          // Direct Branch Staff (KYC Officers at single branch)
           if (!branchName) return [];
           jurisdictionalFilter.branchName = { equals: normalizeBranchName(branchName), mode: 'insensitive' };
         }
       }
-    } else {
-      // Admin/Global View: Apply requested filters directly if provided
-      if (requestedDistrict) {
-        jurisdictionalFilter.districtName = requestedDistrict;
-      }
-      if (requestedBranches.length > 0) {
-        jurisdictionalFilter.branchName = requestedBranches.length === 1
-          ? normalizeBranchName(requestedBranches[0])
-          : { in: requestedBranches.map((branch) => normalizeBranchName(branch)), mode: 'insensitive' };
-      }
+    }
+
+    // ===== SECURITY AUDIT: Log data access scope =====
+    // This helps detect if non-admin users are accessing data outside their jurisdiction
+    const accessScope = {
+      userId: session.id,
+      role: session.role,
+      filter: JSON.stringify(jurisdictionalFilter),
+      requestedStatus: filters?.status,
+      timestamp: new Date().toISOString()
+    };
+
+    // Log for suspicious patterns (non-admin accessing unfiltered submissions)
+    if (session.role !== 'SUPER_ADMIN' && Object.keys(jurisdictionalFilter).length === 0) {
+      logInstitutionalError(
+        new Error(`SECURITY ALERT: Non-admin user accessed submissions without jurisdiction filter`),
+        'UNFILTERED_DATA_ACCESS_ATTEMPT'
+      );
     }
 
     const data = await prisma.kYC.findMany({
@@ -200,6 +268,46 @@ export async function getSubmissions(filters?: any) {
       take: filters?.limit || 100,
       skip: filters?.offset || 0,
     });
+
+    // ===== DEFENSE-IN-DEPTH: Post-query validation for non-admin users =====
+    // Ensures no out-of-scope submissions slip through due to database inconsistencies
+    if (session.role !== 'SUPER_ADMIN' && Object.keys(jurisdictionalFilter).length > 0) {
+      const filtered = data.filter((item: any) => {
+        const itemDistrictName = item.districtName ? normalizeBranchName(item.districtName) : null;
+        const itemBranchName = item.branchName ? normalizeBranchName(item.branchName) : null;
+        
+        // Check district filter
+        if (jurisdictionalFilter.districtName) {
+          const filterDistrict = jurisdictionalFilter.districtName?.equals 
+            ? normalizeBranchName(jurisdictionalFilter.districtName.equals)
+            : null;
+          if (filterDistrict && (!itemDistrictName || itemDistrictName.toLowerCase() !== filterDistrict.toLowerCase())) {
+            logInstitutionalError(
+              new Error(`SECURITY: Non-admin submission ${item.id} has mismatched district ${item.districtName}, expected ${filterDistrict}`),
+              'SUBMISSION_DISTRICT_MISMATCH'
+            );
+            return false;
+          }
+        }
+        
+        // Check branch filter
+        if (jurisdictionalFilter.branchName) {
+          const allowedBranches = jurisdictionalFilter.branchName?.in ? jurisdictionalFilter.branchName.in : [jurisdictionalFilter.branchName?.equals];
+          const normAllowed = allowedBranches.map((b: any) => normalizeBranchName(b).toLowerCase());
+          if (!normAllowed.some((b: string) => b === itemBranchName?.toLowerCase())) {
+            logInstitutionalError(
+              new Error(`SECURITY: Non-admin submission ${item.id} has unauthorized branch ${item.branchName}`),
+              'SUBMISSION_BRANCH_MISMATCH'
+            );
+            return false;
+          }
+        }
+        
+        return true;
+      });
+      
+      return filtered.map((item: any) => formatKYC(item));
+    }
 
     return data.map((item: any) => formatKYC(item));
   } catch (error) {

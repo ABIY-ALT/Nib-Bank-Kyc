@@ -134,6 +134,24 @@ export default function DistrictMonitoringPage() {
     const dateMap: Record<string, number> = {};
 
     submissions.forEach(sub => {
+      // SECURITY: Log any district mismatches for audit (backend filtering should prevent these)
+      if (!isAdmin && districtName) {
+        const branchDistrict = sub.branch?.district?.name || '';
+        const submissionDistrict = sub.districtName || '';
+        const userDistrictLower = districtName.toLowerCase();
+        
+        const branchMatches = branchDistrict.toLowerCase() === userDistrictLower;
+        const submissionMatches = submissionDistrict.toLowerCase() === userDistrictLower;
+        
+        // Log warning if either field doesn't match, but still process the submission
+        // (Backend filtering should have prevented this - if it happens, it's a data consistency issue)
+        if (!branchMatches || !submissionMatches) {
+          console.warn(
+            `[AUDIT] Submission ${sub.id} has district inconsistency: branch=${branchDistrict}, submission=${submissionDistrict}, user=${districtName}`
+          );
+        }
+      }
+
       const bName = sub.branch?.name || sub.branchName || "Unknown Branch";
       if (!stats.branches[bName]) {
         stats.branches[bName] = { name: bName, total: 0, approved: 0, pending: 0, amended: 0 };
