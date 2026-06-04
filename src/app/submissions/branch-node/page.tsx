@@ -87,7 +87,8 @@ export default function BranchMonitoringPage() {
       setLoading(true);
       try {
         let filters: any = {
-          branch: isAdmin ? undefined : user.branchName || undefined,
+          branch: isAdmin ? undefined : (user.branchName || undefined),
+          branchId: isAdmin ? undefined : (user.branchId || undefined),
           limit: 1000
         };
 
@@ -99,6 +100,7 @@ export default function BranchMonitoringPage() {
         const data = await getSubmissions(filters);
         setSubmissions(data);
       } catch (error) {
+        console.error("Failed to load monitoring data:", error);
       } finally {
         setLoading(false);
       }
@@ -107,7 +109,7 @@ export default function BranchMonitoringPage() {
   }, [user, isAdmin, dateRange]);
 
   const cleanBranchTitle = useMemo(() => {
-    const raw = isAdmin ? 'Branch Monitoring' : user?.branchName || 'Branch Monitoring';
+    const raw = isAdmin ? 'Institutional Monitoring' : user?.branchName || 'Branch Monitoring';
     if (isAdmin) return raw;
     return raw.toLowerCase().includes('branch') ? raw : `${raw} Branch Monitoring`;
   }, [isAdmin, user]);
@@ -171,13 +173,21 @@ export default function BranchMonitoringPage() {
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
-    const branchName = user?.branchName || '';
+    const branchName = user?.branchName?.toLowerCase() || '';
+    const branchId = user?.branchId;
+
     return submissions.filter(sub => {
       const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
-      const matchesBranch = isAdmin ? true : (branchName && (sub.branch?.name === branchName || sub.branchName === branchName));
+      
+      if (isAdmin) return matchesSearch;
+      
+      const subBranchName = (sub.branch?.name || sub.branchName || '').toLowerCase();
+      const subBranchId = sub.branchId;
+      
+      const matchesBranch = (branchId && subBranchId === branchId) || (branchName && subBranchName === branchName);
       return matchesSearch && matchesBranch;
     });
-  }, [submissions, searchTerm, isAdmin, user?.branchName]);
+  }, [submissions, searchTerm, isAdmin, user?.branchName, user?.branchId]);
 
   const staffMatrixOptions = useMemo(() => {
     const officers = Object.values(analytics?.officers || {}) as Array<{ name: string }>;

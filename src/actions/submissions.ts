@@ -27,7 +27,8 @@ import {
   getNormalizedRole, 
   hasJurisdictionalAccess,
   GLOBAL_SCOPE_PERMISSIONS,
-  PORTFOLIO_SCOPE_PERMISSIONS
+  PORTFOLIO_SCOPE_PERMISSIONS,
+  BRANCH_SCOPE_PERMISSIONS
 } from '@/lib/jurisdiction';
 
 
@@ -144,22 +145,31 @@ export async function getSubmissions(filters?: any) {
       // District Directors must be limited to their district REGARDLESS of other permissions
       const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
       
-      // Check for global oversight ONLY if NOT a district admin
-      // District admins should never get unrestricted global access
-      if (!isDistrictAdmin && userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
-        jurisdictionalFilter = {}; // No restriction - only for true global executives without district assignment
+      const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
+      const branchName = getResolvedUserBranchName(user);
+      const districtName = getResolvedUserDistrictName(user);
+      const userBranchId = user.branchId;
+
+      const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
+      const isBranchScopeStaff = userPermissions.some(p => BRANCH_SCOPE_PERMISSIONS.has(p));
+      const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch)).filter(Boolean);
+
+      // ===== CRITICAL: Enforce strict branch filtering for branch-level staff =====
+      // Branch-level staff (Branch Officers, Branch Managers) MUST be strictly limited to their branch
+      const isBranchLevelStaff = branchName && 
+        isBranchScopeStaff && 
+        !isPortfolioStaff && 
+        (normalizedAssigned.length === 0 || normalizedAssigned.length === 1);
+
+      // Check for global oversight ONLY if NOT a district admin AND NOT a branch-level staff
+      if (!isDistrictAdmin && !isBranchLevelStaff && userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
+        jurisdictionalFilter = {}; // No restriction - only for true global executives
       } else {
         // Standard branch-level access control
-        const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
-        const branchName = getResolvedUserBranchName(user);
-        const districtName = getResolvedUserDistrictName(user);
-
-        const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
-        const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch)).filter(Boolean);
-
+        
         // ===== DEBUG LOGGING =====
         logInstitutionalError(
-          new Error(`[DEBUG] getSubmissions for user ${session.id}: isDistrictAdmin=${isDistrictAdmin}, districtName=${districtName}, branchName=${branchName}, normalizedAssigned=${JSON.stringify(normalizedAssigned)}`),
+          new Error(`[DEBUG] getSubmissions for user ${session.id}: isDistrictAdmin=${isDistrictAdmin}, isBranchLevelStaff=${isBranchLevelStaff}, districtName=${districtName}, branchName=${branchName}, userBranchId=${userBranchId}`),
           'DEBUG_JURISDICTIONAL_FILTER'
         );
 
@@ -174,33 +184,13 @@ export async function getSubmissions(filters?: any) {
 
         if (isDistrictAdmin && districtName) {
           // District Directors see all cases in their district ONLY
-          // CRITICAL SECURITY: Validate requested district matches user's assigned district
-          if (requestedDistrict && requestedDistrict.toLowerCase() !== districtName.toLowerCase()) {
-            logInstitutionalError(
-              new Error(`SECURITY ALERT: District Director ${session.id} attempted to access district ${requestedDistrict} but is assigned to ${districtName}. BLOCKED.`),
-              'CROSS_DISTRICT_ACCESS_ATTEMPT'
-            );
-            return [];
-          }
-          
-          // Always apply district filter using user's assigned district, never client-requested value
           jurisdictionalFilter.districtName = { equals: districtName, mode: 'insensitive' };
           
-          // If specific branches were requested, validate they exist within this district
           if (requestedBranches.length > 0) {
-            // Requested branches must be within the user's district - apply both constraints
             const normalizedRequested = requestedBranches.map((b) => normalizeBranchName(b));
             jurisdictionalFilter.branchName = normalizedRequested.length === 1
               ? { equals: normalizedRequested[0], mode: 'insensitive' }
               : { in: normalizedRequested, mode: 'insensitive' };
-            
-            // Log warning if district director tries to filter branches (potential attack pattern)
-            if (requestedBranches.length > 0) {
-              logInstitutionalError(
-                new Error(`SECURITY NOTICE: District Director ${session.id} filtered by specific branches within their district`),
-                'DISTRICT_DIRECTOR_BRANCH_FILTER'
-              );
-            }
           }
         } else if (normalizedAssigned.length > 0) {
           // Portfolio staff (KYC Officers with multiple assigned branches)
@@ -210,19 +200,17 @@ export async function getSubmissions(filters?: any) {
             : normalizedAssigned;
           if (visibleBranches.length === 0) return [];
           jurisdictionalFilter.branchName = visibleBranches.length === 1
-            ? visibleBranches[0]
-            : { in: visibleBranches, mode: 'insensitive' };
-        } else if (isPortfolioStaff) {
-          // Fallback: Portfolio staff without explicit assigned branches (should not happen, but handled for safety)
-          if (branchName) {
-            jurisdictionalFilter.branchName = { equals: normalizeBranchName(branchName), mode: 'insensitive' };
+            ? { equals: normalizeBranchName(visibleBranches[0]), mode: 'insensitive' }
+            : { in: visibleBranches.map(b => normalizeBranchName(b)), mode: 'insensitive' };
+        } else if (userBranchId || branchName) {
+          // Fallback: Branch level staff or single-branch KYC officers
+          if (userBranchId) {
+            jurisdictionalFilter.branchId = userBranchId;
           } else {
-            return []; // No access if no branch is assigned
+            jurisdictionalFilter.branchName = { equals: normalizeBranchName(branchName!), mode: 'insensitive' };
           }
         } else {
-          // Direct Branch Staff (KYC Officers at single branch)
-          if (!branchName) return [];
-          jurisdictionalFilter.branchName = { equals: normalizeBranchName(branchName), mode: 'insensitive' };
+          return []; // No access if no jurisdiction can be determined
         }
       }
     }
@@ -247,7 +235,6 @@ export async function getSubmissions(filters?: any) {
 
     const data = await prisma.kYC.findMany({
       where: {
-        ...jurisdictionalFilter,
         status: filters?.status ? { in: filters.status } : undefined,
         branchId: filters?.branchId,
         createdById: filters?.submittedBy || filters?.createdById,
@@ -257,6 +244,7 @@ export async function getSubmissions(filters?: any) {
         entityType: filters?.entityType,
         submittedAt: dateFilter,
         active: true,
+        ...jurisdictionalFilter, // CRITICAL: Spread LAST to ensure filters cannot override security constraints
       },
       include: {
         createdBy: true,
