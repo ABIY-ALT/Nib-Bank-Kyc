@@ -30,7 +30,9 @@ import {
   Monitor,
   Map,
   Check,
-  ChevronsUpDown
+  ChevronsUpDown,
+  Info,
+  EyeOff
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -44,6 +46,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getSubmissions, updateSubmissionStatus, logBundleDownload, getSubmissionById } from "@/actions/submissions";
 import { getAllUsers } from "@/actions/users";
@@ -239,8 +247,16 @@ export default function KYCOperationsMonitoringPage() {
 
   const processedOfficers = useMemo(() => {
     return officers.map(off => {
-      const offSubs = submissions.filter(s => s.assignedToId === off.id);
+      const offBranchNames = off.assignedBranches?.length > 0
+        ? off.assignedBranches
+        : (off.branchName ? [off.branchName] : []);
+      
+      const offSubs = submissions.filter(s => 
+        s.assignedToId === off.id || 
+        (s.assignedToId === null && offBranchNames.includes(s.branchName))
+      );
       const approved = offSubs.filter(s => s.status === KYC_STATUS.APPROVED);
+      const unseen = offSubs.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
       const escalated = offSubs.filter(s => s.status === KYC_STATUS.ESCALATED).length;
       const amended = offSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0);
       const branchesMapped = off.assignedBranches?.length || (off.branchName ? 1 : 0);
@@ -264,6 +280,7 @@ export default function KYCOperationsMonitoringPage() {
         stats: {
           total: offSubs.length,
           approved: approved.length,
+          unseen,
           escalated,
           amended,
           branchesMapped,
@@ -285,7 +302,10 @@ export default function KYCOperationsMonitoringPage() {
       : (selectedOfficer.branchName ? [selectedOfficer.branchName] : []);
 
     return bNames.map((name: string) => {
-      const branchSubs = submissions.filter(s => s.branchName === name && s.assignedToId === selectedOfficer.id);
+      const branchSubs = submissions.filter(s => 
+        s.branchName === name && 
+        (s.assignedToId === selectedOfficer.id || s.assignedToId === null)
+      );
       const approved = branchSubs.filter(s => s.status === KYC_STATUS.APPROVED);
       
       let avgResolutionMinutes = 0;
@@ -303,9 +323,10 @@ export default function KYCOperationsMonitoringPage() {
 
       return {
         name,
-        totalFiles: branchSubs.reduce((acc, s) => acc + (s.memos?.length || 0), 0),
+        totalFiles: branchSubs.reduce((acc, s) => acc + (s.documents?.length || 0), 0),
         total: branchSubs.length,
         approved: approved.length,
+        unseen: branchSubs.filter(s => s.status === KYC_STATUS.SUBMITTED).length,
         amended: branchSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0),
         pending: branchSubs.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
         avgResolutionMinutes
@@ -315,16 +336,20 @@ export default function KYCOperationsMonitoringPage() {
 
   const currentCases = useMemo(() => {
     if (!selectedBranch || !selectedOfficer) return [];
-    return submissions.filter(s => s.branchName === selectedBranch && s.assignedToId === selectedOfficer.id);
+    return submissions.filter(s => 
+      s.branchName === selectedBranch && 
+      (s.assignedToId === selectedOfficer.id || s.assignedToId === null)
+    );
   }, [selectedBranch, selectedOfficer, submissions]);
 
   const handleExportCSV = () => {
-    const headers = ['KYC Officer', 'Mapped Branches', 'Case Volume', 'Authorized', 'Amendment Cycles', 'Escalated'];
+    const headers = ['KYC Officer', 'Mapped Branches', 'Case Volume', 'Authorized', 'Unseen', 'Amendment Cycles', 'Escalated'];
     const rows = processedOfficers.map(o => [
       `${o.firstName} ${o.lastName}`,
       o.stats.branchesMapped,
       o.stats.total,
       o.stats.approved,
+      o.stats.unseen,
       o.stats.amended,
       o.stats.escalated
     ]);
@@ -553,7 +578,22 @@ export default function KYCOperationsMonitoringPage() {
                     <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">KYC Officer</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Branches Mapped</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Authorized</TableHead>
-                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Avg. Resolution</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Unseen</TableHead>
+                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">
+                      <TooltipProvider delayDuration={150}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1.5 cursor-help">
+                              Avg. Resolution
+                              <Info className="w-3.5 h-3.5 text-slate-400" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs text-xs font-medium normal-case tracking-normal leading-relaxed">
+                            Average Resolution Time is calculated from the case submission timestamp until the final authorization/completion timestamp.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amendment Cycles</TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Overview</TableHead>
                     <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
@@ -561,7 +601,7 @@ export default function KYCOperationsMonitoringPage() {
                 </TableHeader>
                 <TableBody>
                   {processedOfficers.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="py-32 text-center text-slate-400 italic">No personnel discovered in current selection context.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="py-32 text-center text-slate-400 italic">No personnel discovered in current selection context.</TableCell></TableRow>
                   ) : processedOfficers.map((off) => (
                     <TableRow key={off.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-100 group">
                       <TableCell className="py-8 pl-10">
@@ -577,6 +617,16 @@ export default function KYCOperationsMonitoringPage() {
                       </TableCell>
                       <TableCell className="text-center font-black text-slate-700 text-lg">{off.stats.branchesMapped}</TableCell>
                       <TableCell className="text-center font-black text-emerald-600 text-lg">{off.stats.approved}</TableCell>
+                      <TableCell className="text-center">
+                        {off.stats.unseen > 0 ? (
+                          <Badge className="bg-amber-50 text-amber-700 border-amber-200 font-black text-sm px-3 py-1 gap-1.5">
+                            <EyeOff className="w-3.5 h-3.5" />
+                            {off.stats.unseen}
+                          </Badge>
+                        ) : (
+                          <span className="text-slate-300 font-black text-lg">0</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className="font-black text-[10px] bg-slate-50">
                           {formatResolutionDuration(off.stats.avgResolutionMinutes)}
@@ -615,7 +665,22 @@ export default function KYCOperationsMonitoringPage() {
                       <TableRow>
                         <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead>
                         <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Uploaded Files</TableHead>
-                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Avg. Resolution</TableHead>
+                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Unseen Cases</TableHead>
+                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">
+                          <TooltipProvider delayDuration={150}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center gap-1.5 cursor-help">
+                                  Avg. Resolution
+                                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="max-w-xs text-xs font-medium normal-case tracking-normal leading-relaxed">
+                                Average Resolution Time is calculated from the case submission timestamp until the final authorization/completion timestamp.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableHead>
                         <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amend Cycles</TableHead>
                         <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch SLA Health</TableHead>
                       </TableRow>
@@ -630,6 +695,16 @@ export default function KYCOperationsMonitoringPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-center font-black text-slate-700">{b.totalFiles}</TableCell>
+                          <TableCell className="text-center">
+                            {b.unseen > 0 ? (
+                              <Badge className="bg-amber-50 text-amber-700 border-amber-200 font-black text-sm px-3 py-1 gap-1.5">
+                                <EyeOff className="w-3.5 h-3.5" />
+                                {b.unseen}
+                              </Badge>
+                            ) : (
+                              <span className="text-slate-300 font-black text-lg">0</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-center">
                             <Badge variant="outline" className="font-black text-[10px] bg-slate-50">
                             {formatResolutionDuration(b.avgResolutionMinutes)}
@@ -659,17 +734,30 @@ export default function KYCOperationsMonitoringPage() {
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Authorized Official</p>
                     </div>
                   </div>
-                  <div className="pt-6 border-t border-slate-200 grid grid-cols-2 gap-6">
+                  <div className="pt-6 border-t border-slate-200 grid grid-cols-3 gap-6">
                     <div className="space-y-1">
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Approved Cases</p>
                       <p className="text-3xl font-black text-emerald-600">{selectedOfficer.stats.approved}</p>
                     </div>
                     <div className="space-y-1">
+                      <p className="text-[9px] font-black text-amber-500 uppercase tracking-tighter flex items-center gap-1.5"><EyeOff className="w-3 h-3" /> Unseen</p>
+                      <p className="text-3xl font-black text-amber-600">{selectedOfficer.stats.unseen}</p>
+                    </div>
+                    <div className="space-y-1">
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Total Cycles</p>
                       <p className="text-3xl font-black text-orange-600">{selectedOfficer.stats.amended}</p>
                     </div>
-                    <div className="space-y-1 col-span-2 pt-2 border-t border-slate-100">
-                      <p className="text-[9px] font-black text-primary uppercase tracking-widest">Avg. Resolution Time</p>
+                    <div className="space-y-1 col-span-3 pt-2 border-t border-slate-100">
+                      <TooltipProvider delayDuration={150}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="text-[9px] font-black text-primary uppercase tracking-widest inline-flex items-center gap-1.5 cursor-help">Avg. Resolution Time <Info className="w-3 h-3 text-primary/50" /></p>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs font-medium normal-case tracking-normal leading-relaxed">
+                            Average Resolution Time is calculated from the case submission timestamp until the final authorization/completion timestamp.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <p className="text-2xl font-black text-primary">
                         {formatResolutionDuration(selectedOfficer.stats.avgResolutionMinutes)}
                       </p>
@@ -825,8 +913,21 @@ export default function KYCOperationsMonitoringPage() {
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Escalated Cases</p>
                 <p className="text-3xl font-black text-destructive">{showSummary?.stats.escalated}</p>
               </div>
-              <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 shadow-sm space-y-1 col-span-2">
-                <p className="text-[9px] font-black text-primary uppercase tracking-widest">Avg. Resolution Time</p>
+              <div className="p-5 rounded-2xl bg-amber-50 border border-amber-100 shadow-sm space-y-1">
+                <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5"><EyeOff className="w-3 h-3" /> Unseen Cases</p>
+                <p className="text-3xl font-black text-amber-600">{showSummary?.stats.unseen ?? 0}</p>
+              </div>
+              <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 shadow-sm space-y-1">
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className="text-[9px] font-black text-primary uppercase tracking-widest inline-flex items-center gap-1.5 cursor-help">Avg. Resolution Time <Info className="w-3 h-3 text-primary/50" /></p>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs text-xs font-medium normal-case tracking-normal leading-relaxed">
+                      Average Resolution Time is calculated from the case submission timestamp until the final authorization/completion timestamp.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <p className="text-3xl font-black text-primary">
                   {formatResolutionDuration(showSummary?.stats.avgResolutionMinutes)} Resolution
                 </p>

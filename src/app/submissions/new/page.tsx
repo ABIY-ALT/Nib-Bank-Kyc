@@ -628,7 +628,7 @@ export default function NewSubmission() {
                 required
                 className="h-11 w-full rounded-md border px-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={customerName}
-                onChange={(event) => setCustomerName(event.target.value)}
+                onChange={(event) => setCustomerName(event.target.value.toUpperCase())}
               />
             </div>
             <div className="space-y-2">

@@ -72,7 +72,12 @@ export const SubmissionSchema = z.object({
     .string()
     .min(2, 'Customer name required')
     .max(200, 'Customer name exceeds max length')
-    .regex(/^[a-zA-Z\s'-]*$/, 'Customer name contains invalid characters'),
+    .regex(/^[a-zA-Z\s'-]*$/, 'Customer name contains invalid characters')
+    .toUpperCase()
+    .refine((val) => {
+      const words = val.trim().split(/\s+/);
+      return words.length >= 2;
+    }, 'First name and second name are mandatory'),
   entityType: z
     .string()
     .max(100, 'Entity type exceeds max length')

@@ -483,6 +483,10 @@ export async function createSubmission(formData: FormData) {
     revalidatePath('/submissions/my');
     return { success: true, kyc };
   } catch (error: any) {
+    if (error?.name === 'ZodError') {
+      const msg = error.issues.map((i: any) => i.message).join(', ');
+      return { success: false, error: msg };
+    }
     const { message } = logInstitutionalError(error, 'DB_CREATE_SUBMISSION');
     return { success: false, error: message };
   }
@@ -620,6 +624,10 @@ export async function resubmitSubmission(formData: FormData) {
     revalidatePath(`/submissions/${id}`);
     return { success: true };
   } catch (error: any) {
+    if (error?.name === 'ZodError') {
+      const msg = error.issues.map((i: any) => i.message).join(', ');
+      return { success: false, error: msg };
+    }
     const { message } = logInstitutionalError(error, 'DB_RESUBMIT_SUBMISSION');
     return { success: false, error: message };
   }
