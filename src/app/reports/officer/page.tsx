@@ -50,6 +50,7 @@ import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
 import { Progress } from "@/components/ui/progress";
 import { KYC_STATUS } from "@/lib/kyc-data";
+import { cn } from "@/lib/utils";
 import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
 import { differenceInMinutes } from "date-fns";
 
