@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import Link from "next/link";
+import { KYC_STATUS } from "@/lib/kyc-data";
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
@@ -51,7 +52,7 @@ export default function ExceptionalCasesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = isSuperAdmin;
-  const canTrigger = hasPermission('BRANCH_CASE_CREATE');
+  const canTrigger = hasPermission('TRIGGER_GOVERNANCE_FLOW');
 
   const loadData = async () => {
     if (!user) return;
@@ -79,7 +80,9 @@ export default function ExceptionalCasesPage() {
 
       const [exceptional, all] = await Promise.all([exceptionalPromise, availablePromise]);
       const activeExceptional = exceptional || [];
+      // SECURITY: Exclude cases that are already authorized or already in the exceptional workflow
       const available = (all || []).filter((candidate: any) =>
+        candidate.status !== KYC_STATUS.APPROVED &&
         !activeExceptional.some((existing: any) => existing.id === candidate.id)
       );
       setSubmissions(activeExceptional);

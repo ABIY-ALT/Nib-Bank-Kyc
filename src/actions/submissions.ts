@@ -33,10 +33,13 @@ import {
 
 
 function hasPermission(user: any, slug: string) {
+  const normalized = normalizePermissionSlug(slug);
   return Boolean(
     user?.roles?.some((userRole: any) =>
       userRole?.role?.active !== false &&
-      userRole?.role?.permissions?.some((rolePermission: any) => rolePermission?.permission?.slug === slug)
+      userRole?.role?.permissions?.some((rolePermission: any) => 
+        normalizePermissionSlug(rolePermission?.permission?.slug) === normalized
+      )
     )
   );
 }
@@ -77,153 +80,130 @@ function formatKYC(kyc: any) {
 }
 
 /**
- * Retrieves submissions with PostgreSQL native JSON support and strict jurisdictional filtering.
+ * Reusable helper to build jurisdictional filters for submissions and counts.
+ * Centralizes security logic to prevent data leaks between branches/districts.
  */
-export async function getSubmissions(filters?: any) {
+async function buildJurisdictionalFilter(session: any, requestedDistrict?: string, requestedBranches: string[] = []) {
+  if (session.role === 'SUPER_ADMIN') {
+    let filter: any = {};
+    if (requestedDistrict) filter.districtName = requestedDistrict;
+    if (requestedBranches.length > 0) {
+      filter.branchName = requestedBranches.length === 1
+        ? normalizeBranchName(requestedBranches[0])
+        : { in: requestedBranches.map((branch) => normalizeBranchName(branch)), mode: 'insensitive' };
+    }
+    return filter;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.id },
+    include: { 
+      roles: {
+        include: {
+          role: {
+            include: {
+              permissions: {
+                include: {
+                  permission: true
+                }
+              }
+            }
+          }
+        }
+      },
+      branch: { include: { district: true } } 
+    }
+  });
+  
+  if (!user) return null;
+
+  const userPermissions = user.roles.flatMap((ur: any) => 
+    ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
+  );
+
+  const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
+  const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
+  const branchName = getResolvedUserBranchName(user);
+  const districtName = getResolvedUserDistrictName(user);
+  const userBranchId = user.branchId;
+
+  const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
+  const isBranchScopeStaff = userPermissions.some(p => BRANCH_SCOPE_PERMISSIONS.has(p));
+  const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch)).filter(Boolean);
+
+  const isBranchLevelStaff = branchName && 
+    isBranchScopeStaff && 
+    !isPortfolioStaff && 
+    (normalizedAssigned.length === 0 || normalizedAssigned.length === 1);
+
+  if (!isDistrictAdmin && !isBranchLevelStaff && userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
+    return {}; // No restriction for global executives
+  }
+
+  let filter: any = {};
+
+  if (isDistrictAdmin && districtName) {
+    filter.districtName = { equals: districtName, mode: 'insensitive' };
+    if (requestedBranches.length > 0) {
+      const normalizedRequested = requestedBranches.map((b) => normalizeBranchName(b));
+      filter.branchName = normalizedRequested.length === 1
+        ? { equals: normalizedRequested[0], mode: 'insensitive' }
+        : { in: normalizedRequested, mode: 'insensitive' };
+    }
+  } else if (normalizedAssigned.length > 0) {
+    const normalizedRequested = requestedBranches.map((branch) => normalizeBranchName(branch).toLowerCase());
+    const visibleBranches = requestedBranches.length > 0
+      ? normalizedAssigned.filter((branch) => normalizedRequested.includes(branch.toLowerCase()))
+      : normalizedAssigned;
+    
+    if (visibleBranches.length === 0) return null;
+    
+    filter.branchName = visibleBranches.length === 1
+      ? { equals: normalizeBranchName(visibleBranches[0]), mode: 'insensitive' }
+      : { in: visibleBranches.map(b => normalizeBranchName(b)), mode: 'insensitive' };
+  } else if (userBranchId || branchName) {
+    if (userBranchId) {
+      filter.branchId = userBranchId;
+    } else {
+      filter.branchName = { equals: normalizeBranchName(branchName!), mode: 'insensitive' };
+    }
+  } else {
+    return null;
+  }
+
+  return filter;
+}
+
+export async function getSubmissions(filters?: {
+  status?: string[],
+  district?: string,
+  branches?: string[],
+  branchId?: string,
+  submittedBy?: string,
+  createdById?: string,
+  assignedToId?: string,
+  isResubmitted?: boolean,
+  isExceptional?: boolean,
+  entityType?: string,
+  startDate?: string,
+  endDate?: string,
+  limit?: number,
+  offset?: number
+}) {
   const session = await getServerSession();
   if (!session) return [];
 
   try {
-    let dateFilter = undefined;
-    if (filters?.startDate || filters?.endDate) {
-      const start = filters.startDate ? new Date(filters.startDate) : undefined;
-      const end = filters.endDate ? new Date(filters.endDate) : undefined;
-      if (end) end.setHours(23, 59, 59, 999);
-      dateFilter = { gte: start, lte: end };
-    }
-
-    const requestedBranches = Array.isArray(filters?.branches)
-      ? normalizeAssignedBranches(filters.branches)
-      : (filters?.branch ? normalizeAssignedBranches([filters.branch]) : []);
-    const requestedDistrict = normalizeBranchName(filters?.district);
-    const normalizedRole = getNormalizedRole(session.role);
-    const isOwnSubmissionRequest = filters?.submittedBy === session.id || filters?.createdById === session.id;
-    let jurisdictionalFilter: any = {};
+    const requestedDistrict = filters?.district;
+    const requestedBranches = filters?.branches || [];
     
-    // ===== CRITICAL SECURITY FIX =====
-    // Branch filtering MUST be applied to ALL non-admin users, regardless of whether they're requesting their own submissions
-    // This prevents KYC Officers from bypassing branch restrictions by querying "their own" submissions
-    
-    if (session.role === 'SUPER_ADMIN') {
-      // Only SUPER_ADMIN gets unrestricted global view
-      if (requestedDistrict) {
-        jurisdictionalFilter.districtName = requestedDistrict;
-      }
-      if (requestedBranches.length > 0) {
-        jurisdictionalFilter.branchName = requestedBranches.length === 1
-          ? normalizeBranchName(requestedBranches[0])
-          : { in: requestedBranches.map((branch) => normalizeBranchName(branch)), mode: 'insensitive' };
-      }
-    } else {
-      // ALL non-admin users (KYC Officers, Branch Managers, etc.) MUST have branch filtering applied
-      const user = await prisma.user.findUnique({
-        where: { id: session.id },
-        include: { 
-          roles: {
-            include: {
-              role: {
-                include: {
-                  permissions: {
-                    include: {
-                      permission: true
-                    }
-                  }
-                }
-              }
-            }
-          },
-          branch: { include: { district: true } } 
-        }
-      });
-      if (!user) return [];
+    const dateFilter = filters?.startDate ? {
+      gte: new Date(filters.startDate),
+      lte: filters.endDate ? new Date(filters.endDate) : undefined
+    } : undefined;
 
-      const userPermissions = user.roles.flatMap((ur: any) => 
-        ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
-      );
-
-      // CRITICAL: Check for ROLE FIRST before permissions to ensure proper scope
-      // District Directors must be limited to their district REGARDLESS of other permissions
-      const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
-      
-      const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
-      const branchName = getResolvedUserBranchName(user);
-      const districtName = getResolvedUserDistrictName(user);
-      const userBranchId = user.branchId;
-
-      const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
-      const isBranchScopeStaff = userPermissions.some(p => BRANCH_SCOPE_PERMISSIONS.has(p));
-      const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch)).filter(Boolean);
-
-      // ===== CRITICAL: Enforce strict branch filtering for branch-level staff =====
-      // Branch-level staff (Branch Officers, Branch Managers) MUST be strictly limited to their branch
-      const isBranchLevelStaff = branchName && 
-        isBranchScopeStaff && 
-        !isPortfolioStaff && 
-        (normalizedAssigned.length === 0 || normalizedAssigned.length === 1);
-
-      // Check for global oversight ONLY if NOT a district admin AND NOT a branch-level staff
-      if (!isDistrictAdmin && !isBranchLevelStaff && userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
-        jurisdictionalFilter = {}; // No restriction - only for true global executives
-      } else {
-        // Standard branch-level access control
-        
-        // ===== DEBUG LOGGING =====
-        logInstitutionalError(
-          new Error(`[DEBUG] getSubmissions for user ${session.id}: isDistrictAdmin=${isDistrictAdmin}, isBranchLevelStaff=${isBranchLevelStaff}, districtName=${districtName}, branchName=${branchName}, userBranchId=${userBranchId}`),
-          'DEBUG_JURISDICTIONAL_FILTER'
-        );
-
-        // ===== SECURITY: DISTRICT DIRECTORS MUST HAVE A DISTRICT ASSIGNED =====
-        if (isDistrictAdmin && !districtName) {
-          logInstitutionalError(
-            new Error(`SECURITY ALERT: District Director ${session.id} has no district assigned. Access denied.`),
-            'DISTRICT_ADMIN_NO_DISTRICT_ERROR'
-          );
-          return [];
-        }
-
-        if (isDistrictAdmin && districtName) {
-          // District Directors see all cases in their district ONLY
-          jurisdictionalFilter.districtName = { equals: districtName, mode: 'insensitive' };
-          
-          if (requestedBranches.length > 0) {
-            const normalizedRequested = requestedBranches.map((b) => normalizeBranchName(b));
-            jurisdictionalFilter.branchName = normalizedRequested.length === 1
-              ? { equals: normalizedRequested[0], mode: 'insensitive' }
-              : { in: normalizedRequested, mode: 'insensitive' };
-          }
-        } else if (normalizedAssigned.length > 0) {
-          // Portfolio staff (KYC Officers with multiple assigned branches)
-          const normalizedRequested = requestedBranches.map((branch) => normalizeBranchName(branch).toLowerCase());
-          const visibleBranches = requestedBranches.length > 0
-            ? normalizedAssigned.filter((branch) => normalizedRequested.includes(branch.toLowerCase()))
-            : normalizedAssigned;
-          if (visibleBranches.length === 0) return [];
-          jurisdictionalFilter.branchName = visibleBranches.length === 1
-            ? { equals: normalizeBranchName(visibleBranches[0]), mode: 'insensitive' }
-            : { in: visibleBranches.map(b => normalizeBranchName(b)), mode: 'insensitive' };
-        } else if (userBranchId || branchName) {
-          // Fallback: Branch level staff or single-branch KYC officers
-          if (userBranchId) {
-            jurisdictionalFilter.branchId = userBranchId;
-          } else {
-            jurisdictionalFilter.branchName = { equals: normalizeBranchName(branchName!), mode: 'insensitive' };
-          }
-        } else {
-          return []; // No access if no jurisdiction can be determined
-        }
-      }
-    }
-
-    // ===== SECURITY AUDIT: Log data access scope =====
-    // This helps detect if non-admin users are accessing data outside their jurisdiction
-    const accessScope = {
-      userId: session.id,
-      role: session.role,
-      filter: JSON.stringify(jurisdictionalFilter),
-      requestedStatus: filters?.status,
-      timestamp: new Date().toISOString()
-    };
+    const jurisdictionalFilter = await buildJurisdictionalFilter(session, requestedDistrict, requestedBranches);
+    if (jurisdictionalFilter === null) return [];
 
     // Log for suspicious patterns (non-admin accessing unfiltered submissions)
     if (session.role !== 'SUPER_ADMIN' && Object.keys(jurisdictionalFilter).length === 0) {
@@ -244,7 +224,7 @@ export async function getSubmissions(filters?: any) {
         entityType: filters?.entityType,
         submittedAt: dateFilter,
         active: true,
-        ...jurisdictionalFilter, // CRITICAL: Spread LAST to ensure filters cannot override security constraints
+        ...jurisdictionalFilter,
       },
       include: {
         createdBy: true,
@@ -257,38 +237,23 @@ export async function getSubmissions(filters?: any) {
       skip: filters?.offset || 0,
     });
 
-    // ===== DEFENSE-IN-DEPTH: Post-query validation for non-admin users =====
-    // Ensures no out-of-scope submissions slip through due to database inconsistencies
+    // Defense-in-depth validation
     if (session.role !== 'SUPER_ADMIN' && Object.keys(jurisdictionalFilter).length > 0) {
       const filtered = data.filter((item: any) => {
         const itemDistrictName = item.districtName ? normalizeBranchName(item.districtName) : null;
         const itemBranchName = item.branchName ? normalizeBranchName(item.branchName) : null;
         
-        // Check district filter
         if (jurisdictionalFilter.districtName) {
           const filterDistrict = jurisdictionalFilter.districtName?.equals 
             ? normalizeBranchName(jurisdictionalFilter.districtName.equals)
             : null;
-          if (filterDistrict && (!itemDistrictName || itemDistrictName.toLowerCase() !== filterDistrict.toLowerCase())) {
-            logInstitutionalError(
-              new Error(`SECURITY: Non-admin submission ${item.id} has mismatched district ${item.districtName}, expected ${filterDistrict}`),
-              'SUBMISSION_DISTRICT_MISMATCH'
-            );
-            return false;
-          }
+          if (filterDistrict && (!itemDistrictName || itemDistrictName.toLowerCase() !== filterDistrict.toLowerCase())) return false;
         }
         
-        // Check branch filter
         if (jurisdictionalFilter.branchName) {
           const allowedBranches = jurisdictionalFilter.branchName?.in ? jurisdictionalFilter.branchName.in : [jurisdictionalFilter.branchName?.equals];
           const normAllowed = allowedBranches.map((b: any) => normalizeBranchName(b).toLowerCase());
-          if (!normAllowed.some((b: string) => b === itemBranchName?.toLowerCase())) {
-            logInstitutionalError(
-              new Error(`SECURITY: Non-admin submission ${item.id} has unauthorized branch ${item.branchName}`),
-              'SUBMISSION_BRANCH_MISMATCH'
-            );
-            return false;
-          }
+          if (!normAllowed.some((b: string) => b === itemBranchName?.toLowerCase())) return false;
         }
         
         return true;
@@ -302,6 +267,106 @@ export async function getSubmissions(filters?: any) {
     logInstitutionalError(error, 'DB_QUERY_SUBMISSIONS');
     return [];
   }
+}
+
+/**
+ * Calculates accurate summary statistics for the dashboard using SQL counts.
+ * Ensures counts are consistent across all dashboards and respect jurisdiction.
+ */
+export interface CaseMetricsFilter {
+  district?: string;
+  branches?: string[];
+  branch?: string;
+  branchId?: string;
+  submittedBy?: string;
+  createdById?: string;
+  assignedToId?: string;
+  status?: string[] | string;
+  isResubmitted?: boolean;
+  isExceptional?: boolean;
+  entityType?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface CaseMetrics {
+  total: number;
+  authorized: number;
+  needAmendment: number;
+  unseen: number;
+  running: number;
+  viewed: number;
+  resubmitted: number;
+  escalated: number;
+  exceptional: number;
+  pending: number;
+}
+
+export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseMetrics> {
+  const session = await getServerSession();
+  if (!session) throw new Error("Please log in to continue.");
+
+  const requestedDistrict = filters?.district;
+  const requestedBranches = filters?.branches || (filters?.branch ? [filters.branch] : []);
+  const jurisdictionalFilter = await buildJurisdictionalFilter(session, requestedDistrict, requestedBranches);
+  if (jurisdictionalFilter === null) {
+    return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0 };
+  }
+
+  const dateFilter = filters?.startDate ? {
+    gte: new Date(filters.startDate),
+    lte: filters?.endDate ? new Date(filters.endDate) : undefined
+  } : undefined;
+
+  const statusFilter = filters?.status
+    ? Array.isArray(filters.status)
+      ? { in: filters.status }
+      : { equals: filters.status }
+    : undefined;
+
+  const where: any = {
+    ...jurisdictionalFilter,
+    branchId: filters?.branchId,
+    createdById: filters?.submittedBy || filters?.createdById,
+    assignedToId: filters?.assignedToId,
+    isResubmitted: filters?.isResubmitted,
+    isExceptional: filters?.isExceptional,
+    entityType: filters?.entityType,
+    submittedAt: dateFilter,
+    status: statusFilter,
+    active: true,
+  };
+
+  try {
+    const auditLogs = await prisma.auditLog.findMany({
+      where: { userId: session.id, action: 'VIEW' },
+      select: { kycId: true }
+    });
+    const viewedIds = Array.from(new Set(auditLogs.map(log => log.kycId).filter(Boolean))) as string[];
+
+    const [total, authorized, needAmendment, running, viewed, resubmitted, escalated, exceptional, pending, unseen] = await Promise.all([
+      prisma.kYC.count({ where }),
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.APPROVED } }),
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ACTION_REQUIRED } }),
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.IN_REVIEW } }),
+      prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED] } } }),
+      prisma.kYC.count({ where: { ...where, isResubmitted: true } }),
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ESCALATED, isExceptional: false } }),
+      prisma.kYC.count({ where: { ...where, isExceptional: true } }),
+      prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] } } }),
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.SUBMITTED, id: { notIn: viewedIds } } })
+    ]);
+
+    return { total, authorized, needAmendment, unseen, running, viewed, resubmitted, escalated, exceptional, pending };
+  } catch (error) {
+    logInstitutionalError(error, 'DB_CASE_METRICS');
+    return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0 };
+  }
+}
+
+export async function getDashboardSummaryStats() {
+  const { total, authorized, needAmendment, unseen, running } = await getCaseMetrics();
+  return { total, authorized, needAmendment, unseen, running };
 }
 
 /**
@@ -688,13 +753,32 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     throw new Error("You do not have permission to access this case.");
   }
 
-  const newEntry = {
-    role: session.role || 'OFFICER',
-    performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
-    timestamp: new Date().toISOString(),
-    comment: remarks || `Status updated to ${status}`,
-    action: status
-  };
+  // REDUCE DUPLICATE ENTRIES: Prevent rapid-fire or redundant status updates
+  const lastEntry = history.length > 0 ? history[history.length - 1] : null;
+  const isStatusChanging = current.status !== status;
+  
+  // Rule 1: Same status and same person without a unique comment is a duplicate
+  const isSameStatusAndPerson = lastEntry?.action === status && lastEntry?.performedBy === `${reviewer?.firstName} ${reviewer?.lastName}`;
+  const hasNewRemarks = !!remarks && remarks !== lastEntry?.comment;
+  
+  // Rule 2: Specifically prevent multiple "Open" entries (automatic background transitions)
+  const isAutoOpen = remarks === "Case opened for analysis.";
+  const wasAlreadyOpened = history.some(h => h.comment === "Case opened for analysis." && h.performedBy === `${reviewer?.firstName} ${reviewer?.lastName}`);
+  const isDuplicateOpen = isAutoOpen && wasAlreadyOpened;
+
+  const isDuplicateAction = (isSameStatusAndPerson && !hasNewRemarks) || isDuplicateOpen;
+
+  let updatedHistory = history;
+  if ((isStatusChanging || hasNewRemarks) && !isDuplicateAction && !isAutoOpen) {
+    const newEntry = {
+      role: session.role || 'OFFICER',
+      performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
+      timestamp: new Date().toISOString(),
+      comment: remarks || `Status updated to ${status}`,
+      action: status
+    };
+    updatedHistory = [...history, newEntry];
+  }
 
   const kyc = await prisma.kYC.update({
     where: { id },
@@ -702,7 +786,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
       status,
       assignedToId: session.id,
       updatedAt: new Date(),
-      commentHistory: [...history, newEntry],
+      commentHistory: updatedHistory,
       isResubmitted: status === KYC_STATUS.SUBMITTED && current.status === KYC_STATUS.ACTION_REQUIRED,
       amendCycles: status === KYC_STATUS.ACTION_REQUIRED ? { increment: 1 } : undefined
     }
@@ -814,8 +898,8 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     }
 
     // Dynamic Permission Check
-    if (session.role !== 'SUPER_ADMIN' && !hasPermission(actor, 'BRANCH_CASE_CREATE')) {
-      throw new Error("You do not have permission to create cases.");
+    if (session.role !== 'SUPER_ADMIN' && !hasPermission(actor, 'TRIGGER_GOVERNANCE_FLOW')) {
+      throw new Error("You do not have permission to trigger governance cases.");
     }
 
     const buffer = Buffer.from(await memo.arrayBuffer());
@@ -893,112 +977,84 @@ export async function getWorkflowCounts() {
     throw new Error("Please log in to continue.");
   }
 
-  const isSuperAdmin = session.role === 'SUPER_ADMIN';
-  
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: session.id },
-      include: { 
-        roles: {
-          include: {
-            role: {
-              include: {
-                permissions: {
-                  include: {
-                    permission: true
-                  }
-                }
-              }
-            }
-          }
-        },
-        branch: { include: { district: true } } 
-      }
-    });
-    if (!user) {
+    const jurisdictionalFilter = await buildJurisdictionalFilter(session);
+    if (jurisdictionalFilter === null) {
       return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, unseenCases: 0, branchNode: 0 };
     }
 
-    const userPermissions = user.roles.flatMap((ur: any) => 
-      ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
-    );
-
-    let scopeFilter: any = {};
-    let scopeUnavailable = false;
-
-    if (!isSuperAdmin) {
-      // Check for global oversight first
-      if (userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
-        scopeFilter = {}; // No restriction
-      } else {
-        const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
-        const branchName = getResolvedUserBranchName(user);
-        const districtName = getResolvedUserDistrictName(user);
-
-        const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
-        const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
-
-        if (isDistrictAdmin && districtName) {
-          scopeFilter = { districtName };
-        } else if (isPortfolioStaff) {
-          if (assignedBranches.length > 0) {
-            scopeFilter = { branchName: { in: assignedBranches } };
-          } else if (branchName) {
-            scopeFilter = { branchName };
-          } else {
-            scopeUnavailable = true;
-          }
-        } else {
-          // Direct Branch Staff
-          if (!branchName) {
-            scopeUnavailable = true;
-          } else {
-            scopeFilter = { branchName };
-          }
-        }
-      }
-    }
-
-    // Optimization: Fetch IDs of cases that have been viewed to calculate "Unseen" count
-    const viewedLogs = await prisma.auditLog.findMany({
-      where: { action: 'VIEW' },
-      select: { kycId: true },
-      distinct: ['kycId']
+    const auditLogs = await prisma.auditLog.findMany({
+      where: { userId: session.id, action: 'VIEW' },
+      select: { kycId: true }
     });
-    const viewedIds = viewedLogs.map(log => log.kycId).filter(Boolean) as string[];
+    const viewedIds = Array.from(new Set(auditLogs.map(log => log.kycId).filter(Boolean))) as string[];
 
-    const [myCount, actionRequired, queueCounts, unseenCases] = await Promise.all([
+    const [myCount, actionRequired, queueCounts, unseenCases, exceptionalCount, escalatedCount, resubmittedCount] = await Promise.all([
       prisma.kYC.count({ where: { createdById: session.id, active: true } }),
       prisma.kYC.count({
         where: {
-          ...(isSuperAdmin ? {} : { createdById: session.id }),
+          ...jurisdictionalFilter,
           status: KYC_STATUS.ACTION_REQUIRED,
           active: true
         }
       }),
-      scopeUnavailable
-        ? Promise.resolve([0, 0, 0, 0] as const)
-        : Promise.all([
-            prisma.kYC.count({ where: { ...scopeFilter, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isExceptional: false, isResubmitted: false, active: true } }),
-            prisma.kYC.count({ where: { ...scopeFilter, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isResubmitted: true, active: true } }),
-            prisma.kYC.count({ where: { ...scopeFilter, status: KYC_STATUS.ESCALATED, active: true } }),
-            prisma.kYC.count({ where: { ...scopeFilter, isExceptional: true, status: { not: KYC_STATUS.APPROVED }, active: true } })
-          ]),
-      scopeUnavailable
-        ? Promise.resolve(0)
-        : prisma.kYC.count({
-            where: {
-              ...scopeFilter,
-              status: KYC_STATUS.SUBMITTED,
-              active: true,
-              id: { notIn: viewedIds }
-            }
-          })
+      prisma.kYC.groupBy({
+        by: ['status'],
+        where: { ...jurisdictionalFilter, active: true },
+        _count: true
+      }),
+      prisma.kYC.count({
+        where: {
+          ...jurisdictionalFilter,
+          status: KYC_STATUS.SUBMITTED,
+          active: true,
+          id: { notIn: viewedIds }
+        }
+      }),
+      prisma.kYC.count({
+        where: {
+          ...jurisdictionalFilter,
+          isExceptional: true,
+          active: true,
+          NOT: {
+            status: { in: [KYC_STATUS.APPROVED, KYC_STATUS.REJECTED] }
+          }
+        }
+      }),
+      prisma.kYC.count({
+        where: {
+          ...jurisdictionalFilter,
+          status: KYC_STATUS.ESCALATED,
+          isExceptional: false,
+          active: true
+        }
+      }),
+      prisma.kYC.count({
+        where: {
+          ...jurisdictionalFilter,
+          isResubmitted: true,
+          active: true
+        }
+      })
     ]);
-    const [reviewQueue, resubmitted, escalated, exceptional] = queueCounts;
 
-    return { mySubmissions: myCount, actionRequired: actionRequired, reviewQueue, resubmitted, escalated, exceptional, unseenCases, branchNode: 0 };
+    const statsMap: Record<string, number> = {};
+    queueCounts.forEach(item => {
+      statsMap[item.status] = item._count;
+    });
+
+    return {
+      mySubmissions: myCount,
+      actionRequired: actionRequired,
+      reviewQueue: statsMap[KYC_STATUS.SUBMITTED] || 0,
+      resubmitted: resubmittedCount,
+      escalated: escalatedCount,
+      exceptional: exceptionalCount,
+      unseenCases: unseenCases,
+      branchNode: statsMap[KYC_STATUS.IN_REVIEW] || 0
+    };
   } catch (error) {
+    logInstitutionalError(error, 'DB_WORKFLOW_COUNTS');
     return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, unseenCases: 0, branchNode: 0 };
   }
 }

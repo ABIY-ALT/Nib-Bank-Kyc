@@ -62,6 +62,7 @@ import { getGlobalSettings } from "@/actions/settings";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { KYC_STATUS } from "@/lib/kyc-data";
+import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
 import Link from "next/link";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import JSZip from 'jszip';
@@ -71,6 +72,7 @@ import {
   getSubmissionDistrictName,
   sanitizeBundleSegment,
 } from "@/lib/bundle-path";
+import { normalizeBranchName } from "@/lib/jurisdiction";
 import {
   Dialog,
   DialogContent,
@@ -98,8 +100,10 @@ const formatResolutionDuration = (totalMinutes?: number) => {
 
 export default function KYCOperationsMonitoringPage() {
   const { user } = useAuth();
-  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
+  const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
+  
+  const hasGlobalOversight = hasPermission('VIEW_SPECIALIST_PRODUCTIVITY');
   
   const [loading, setLoading] = useState(false);
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -178,11 +182,29 @@ export default function KYCOperationsMonitoringPage() {
         getBranches(),
         getGlobalSettings()
       ]);
-      const kycPersonnel = u.filter((usr: any) => 
+      
+      // Filter personnel based on roles
+      let kycPersonnel = u.filter((usr: any) => 
         usr.roles?.some((r: any) => 
           ['KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER', 'CHECKER', 'MAKER', 'GOVERNANCE'].includes(r.role.name)
         )
       );
+
+      // JURISDICTIONAL FILTER: Supervisors only see personnel in their assigned branches
+      // POLICY: If user has global monitoring permission (VIEW_SPECIALIST_PRODUCTIVITY), bypass branch filter
+      if (!isSuperAdmin && user && !hasGlobalOversight) {
+        const myBranches = (user.assignedBranches?.length > 0 
+          ? user.assignedBranches 
+          : (user.branchName ? [user.branchName] : [])).map((b: string) => b.toLowerCase());
+        
+        if (myBranches.length > 0) {
+          kycPersonnel = kycPersonnel.filter((p: any) => {
+            const pBranches = (p.assignedBranches?.length > 0 ? p.assignedBranches : (p.branchName ? [p.branchName] : [])).map((b: string) => b.toLowerCase());
+            return pBranches.some((pb: string) => myBranches.includes(pb));
+          });
+        }
+      }
+
       setOfficers(kycPersonnel);
       setDistricts(d);
       setBranches(b);
@@ -195,16 +217,9 @@ export default function KYCOperationsMonitoringPage() {
   const loadSubmissions = async () => {
     setLoading(true);
     try {
+      // SECURITY: Server-side getSubmissions now handles jurisdictional filtering automatically
       let filters: any = { limit: 5000 };
-      if (!isSuperAdmin && user) {
-        if (user.assignedBranches && user.assignedBranches.length > 0) {
-          filters.branches = user.assignedBranches;
-        } else if (user.branchName) {
-          filters.branch = user.branchName;
-        } else {
-          filters.assignedToId = user.id;
-        }
-      }
+      
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
@@ -279,44 +294,59 @@ export default function KYCOperationsMonitoringPage() {
 
   const processedOfficers = useMemo(() => {
     const data = officers.map(off => {
-      const offBranchNames = off.assignedBranches?.length > 0
+      const offBranchNames = (off.assignedBranches?.length > 0
         ? off.assignedBranches
-        : (off.branchName ? [off.branchName] : []);
+        : (off.branchName ? [off.branchName] : [])).map((b: string) => normalizeBranchName(b).toLowerCase());
       
-      const offSubs = submissions.filter(s => 
-        s.assignedToId === off.id || 
-        (s.assignedToId === null && offBranchNames.includes(s.branchName))
-      );
-      const approved = offSubs.filter(s => s.status === KYC_STATUS.APPROVED);
-      const unseen = offSubs.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
+      const offSubs = submissions.filter(s => {
+        const isAssigned = s.assignedToId === off.id;
+        const sBranchNorm = normalizeBranchName(s.branchName || "").toLowerCase();
+        // Attribute if explicitly assigned OR if unassigned but in officer's mapped branch
+        return isAssigned || (s.assignedToId === null && offBranchNames.includes(sBranchNorm));
+      });
+
+      const authorized = offSubs.filter(s => s.status === KYC_STATUS.APPROVED).length;
+      const viewed = offSubs.filter(s => [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(s.status as any)).length;
+      const amended = offSubs.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length;
       const escalated = offSubs.filter(s => s.status === KYC_STATUS.ESCALATED).length;
-      const amended = offSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0);
+      const unseen = offSubs.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
+      const running = offSubs.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;
       const branchesMapped = off.assignedBranches?.length || (off.branchName ? 1 : 0);
 
       // Calculate Average Resolution Time for Approved Cases
       let avgResolutionMinutes = 0;
-      if (approved.length > 0) {
-        const totalMinutes = approved.reduce((acc, sub) => {
+      const approvedCases = offSubs.filter(s => s.status === KYC_STATUS.APPROVED);
+      if (approvedCases.length > 0) {
+        const totalMinutes = approvedCases.reduce((acc, sub) => {
           const approvalEntry = sub.commentHistory?.find((h: any) => h.action === KYC_STATUS.APPROVED);
           const submissionTime = new Date(sub.submittedAt);
-          if (approvalEntry) {
-            return acc + differenceInMinutes(new Date(approvalEntry.timestamp), submissionTime);
-          }
-          return acc + differenceInMinutes(new Date(sub.updatedAt), submissionTime);
+          const resolutionEnd = approvalEntry ? new Date(approvalEntry.timestamp) : new Date(sub.updatedAt);
+          const diff = differenceInMinutes(resolutionEnd, submissionTime);
+          return acc + (isNaN(diff) ? 0 : Math.max(0, diff));
         }, 0);
-        avgResolutionMinutes = Math.round(totalMinutes / approved.length);
+        avgResolutionMinutes = Math.round(totalMinutes / approvedCases.length);
       }
+
+      const performanceIndex = calculatePerformanceIndex({
+        total: offSubs.length,
+        viewed,
+        amended,
+        authorized
+      });
 
       return {
         ...off,
         stats: {
           total: offSubs.length,
-          approved: approved.length,
-          unseen,
-          escalated,
+          authorized,
+          viewed,
           amended,
+          escalated,
+          unseen,
+          running,
+          avgResolutionMinutes,
           branchesMapped,
-          avgResolutionMinutes
+          performanceIndex
         }
       };
     }).filter(off => {
@@ -338,8 +368,11 @@ export default function KYCOperationsMonitoringPage() {
         case 'branchesMapped':
           comparison = a.stats.branchesMapped - b.stats.branchesMapped;
           break;
-        case 'approved':
-          comparison = a.stats.approved - b.stats.approved;
+        case 'total':
+          comparison = a.stats.total - b.stats.total;
+          break;
+        case 'authorized':
+          comparison = a.stats.authorized - b.stats.authorized;
           break;
         case 'unseen':
           comparison = a.stats.unseen - b.stats.unseen;
@@ -349,6 +382,9 @@ export default function KYCOperationsMonitoringPage() {
           break;
         case 'amended':
           comparison = a.stats.amended - b.stats.amended;
+          break;
+        case 'performanceIndex':
+          comparison = a.stats.performanceIndex - b.stats.performanceIndex;
           break;
         default:
           comparison = 0;
@@ -383,15 +419,17 @@ export default function KYCOperationsMonitoringPage() {
         avgResolutionMinutes = Math.round(totalMinutes / approved.length);
       }
 
+      const pending = branchSubs.filter(s => ![KYC_STATUS.APPROVED, KYC_STATUS.REJECTED, KYC_STATUS.ESCALATED].includes(s.status as any)).length;
       return {
         name,
         totalFiles: branchSubs.reduce((acc, s) => acc + (s.documents?.length || 0), 0),
         total: branchSubs.length,
         approved: approved.length,
         unseen: branchSubs.filter(s => s.status === KYC_STATUS.SUBMITTED).length,
+        running: branchSubs.filter(s => s.status === KYC_STATUS.IN_REVIEW).length,
         amended: branchSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0),
-        pending: branchSubs.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
-        avgResolutionMinutes
+        avgResolutionMinutes,
+        pending
       };
     });
   }, [selectedOfficer, submissions]);
@@ -405,15 +443,16 @@ export default function KYCOperationsMonitoringPage() {
   }, [selectedBranch, selectedOfficer, submissions]);
 
   const handleExportCSV = () => {
-    const headers = ['KYC Officer', 'Mapped Branches', 'Case Volume', 'Authorized', 'Unseen', 'Amendment Cycles', 'Escalated'];
+    const headers = ['KYC Officer', 'Mapped Branches', 'Case Volume', 'Authorized', 'Unseen', 'Avg. Resolution', 'Amendment Cycles', 'Performance Index'];
     const rows = processedOfficers.map(o => [
       `${o.firstName} ${o.lastName}`,
       o.stats.branchesMapped,
       o.stats.total,
-      o.stats.approved,
+      o.stats.authorized,
       o.stats.unseen,
+      formatResolutionDuration(o.stats.avgResolutionMinutes),
       o.stats.amended,
-      o.stats.escalated
+      `${o.stats.performanceIndex}%`
     ]);
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -432,6 +471,16 @@ export default function KYCOperationsMonitoringPage() {
   });
 
   if (loading || permissionsLoading) return <div className="py-48 text-center flex items-center justify-center"><Loader2 className="w-12 h-12 animate-spin text-primary" /></div>;
+
+  if (!hasGlobalOversight) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center px-6 text-center">
+        <ShieldAlert className="w-16 h-16 text-destructive" />
+        <p className="mt-6 text-3xl font-black text-slate-900">Unauthorized</p>
+        <p className="mt-3 max-w-2xl text-slate-500">You do not have permission to access the Ops Monitoring page. If you believe this is incorrect, contact your administrator.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
@@ -664,13 +713,25 @@ export default function KYCOperationsMonitoringPage() {
                     <TableHead 
                       className={cn(
                         "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
-                        sortField === 'approved' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                        sortField === 'total' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
                       )}
-                      onClick={() => toggleSort('approved')}
+                      onClick={() => toggleSort('total')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Total Volume
+                        <SortIndicator field="total" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        sortField === 'authorized' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleSort('authorized')}
                     >
                       <div className="flex items-center justify-center">
                         Authorized
-                        <SortIndicator field="approved" />
+                        <SortIndicator field="authorized" />
                       </div>
                     </TableHead>
                     <TableHead 
@@ -721,13 +782,25 @@ export default function KYCOperationsMonitoringPage() {
                         <SortIndicator field="amended" />
                       </div>
                     </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        sortField === 'performanceIndex' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleSort('performanceIndex')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Performance Index
+                        <SortIndicator field="performanceIndex" />
+                      </div>
+                    </TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Overview</TableHead>
                     <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {processedOfficers.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="py-32 text-center text-slate-400 italic">No personnel discovered in current selection context.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={10} className="py-32 text-center text-slate-400 italic">No personnel discovered in current selection context.</TableCell></TableRow>
                   ) : processedOfficers.map((off) => (
                     <TableRow key={off.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-100 group">
                       <TableCell className="py-8 pl-10">
@@ -742,7 +815,8 @@ export default function KYCOperationsMonitoringPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center font-black text-slate-700 text-lg">{off.stats.branchesMapped}</TableCell>
-                      <TableCell className="text-center font-black text-emerald-600 text-lg">{off.stats.approved}</TableCell>
+                      <TableCell className="text-center font-black text-primary text-lg">{off.stats.total}</TableCell>
+                      <TableCell className="text-center font-black text-emerald-600 text-lg">{off.stats.authorized}</TableCell>
                       <TableCell className="text-center">
                         {off.stats.unseen > 0 ? (
                           <Badge className="bg-amber-50 text-amber-700 border-amber-200 font-black text-sm px-3 py-1 gap-1.5">
@@ -759,6 +833,17 @@ export default function KYCOperationsMonitoringPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center font-black text-orange-600 text-lg">{off.stats.amended}</TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex flex-col items-center gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className={cn("text-[10px] font-black uppercase tracking-widest", getPerformanceLabel(off.stats.performanceIndex).color)}>
+                              {getPerformanceLabel(off.stats.performanceIndex).label}
+                            </span>
+                            <span className="font-black text-primary text-sm">{off.stats.performanceIndex}%</span>
+                          </div>
+                          <Progress value={off.stats.performanceIndex} className="w-24 h-1.5 bg-slate-100" />
+                        </div>
+                      </TableCell>
                       <TableCell className="text-center">
                         <Button variant="ghost" size="icon" onClick={() => setShowSummary(off)} className="h-11 w-11 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 transition-all">
                           <Eye className="w-5 h-5" />
@@ -862,8 +947,8 @@ export default function KYCOperationsMonitoringPage() {
                   </div>
                   <div className="pt-6 border-t border-slate-200 grid grid-cols-3 gap-6">
                     <div className="space-y-1">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Approved Cases</p>
-                      <p className="text-3xl font-black text-emerald-600">{selectedOfficer.stats.approved}</p>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Authorized Cases</p>
+                      <p className="text-3xl font-black text-emerald-600">{selectedOfficer.stats.authorized}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[9px] font-black text-amber-500 uppercase tracking-tighter flex items-center gap-1.5"><EyeOff className="w-3 h-3" /> Unseen</p>

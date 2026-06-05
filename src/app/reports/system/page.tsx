@@ -29,7 +29,7 @@ import {
   RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissions } from "@/actions/submissions";
+import { getSubmissions, getCaseMetrics } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
@@ -38,6 +38,7 @@ export default function SystemWideReportsPage() {
   const { isSuperAdmin } = usePermissions();
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [stats, setStats] = useState<{ total: number; approved: number; pending: number; unseen: number; accuracy: string; branches: { name: string; count: number }[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [reportDataActive, setReportDataActive] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -50,9 +51,25 @@ export default function SystemWideReportsPage() {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
-      const data = await getSubmissions(filters);
+      const [data, metrics] = await Promise.all([
+        getSubmissions(filters),
+        getCaseMetrics(filters)
+      ]);
       setSubmissions(data || []);
       setReportDataActive(true);
+      const branches = (data || []).reduce((acc: Record<string, number>, sub: any) => {
+        const name = sub.branchName || 'Unknown Branch';
+        acc[name] = (acc[name] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      setStats({
+        total: metrics.total,
+        approved: metrics.authorized,
+        pending: metrics.pending,
+        unseen: metrics.unseen,
+        accuracy: metrics.total > 0 ? ((metrics.authorized / (metrics.total - metrics.pending || 1)) * 100).toFixed(1) : '0.0',
+        branches: Object.entries(branches).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+      });
       toast({
         title: "Compliance Report Ready",
         description: `Analyzed ${data.length} system-wide records.`,
@@ -64,25 +81,15 @@ export default function SystemWideReportsPage() {
     }
   };
 
-  const stats = useMemo(() => {
-    if (!submissions.length) return null;
-    const total = submissions.length;
-    const approved = submissions.filter(s => s.status === KYC_STATUS.APPROVED).length;
-    const pending = submissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length;
-    const accuracy = total > 0 ? ((approved / (total - pending || 1)) * 100).toFixed(1) : "0.0";
-    const branchMap: Record<string, number> = {};
-    submissions.forEach(sub => {
-      const bName = sub.branchName || "Unknown Branch";
-      branchMap[bName] = (branchMap[bName] || 0) + 1;
-    });
-    const branches = Object.entries(branchMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-    return { total, approved, pending, accuracy, branches };
-  }, [submissions]);
+  const computedStats = useMemo(() => {
+    if (!stats) return null;
+    return stats;
+  }, [stats]);
 
   const handleExportCSV = () => {
     if (!stats) return;
     const headers = ['Category', 'Value'];
-    const dataRows = [['Total Volume', stats.total], ['Approvals', stats.approved], ['Unseen', stats.pending], ['Accuracy (%)', stats.accuracy]];
+    const dataRows = [['Total Volume', stats.total], ['Approvals', stats.approved], ['Unseen', stats.unseen], ['Accuracy (%)', stats.accuracy]];
     stats.branches.forEach(b => dataRows.push([`Branch: ${b.name}`, b.count]));
     const csvContent = [headers.join(','), ...dataRows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -144,9 +151,9 @@ export default function SystemWideReportsPage() {
         <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
              <Card className="bg-primary text-white shadow-2xl rounded-2xl overflow-hidden border-none"><CardHeader className="pb-2 bg-white/10"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-white/80">Total Volume</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-white tracking-tighter">{stats.total}</span></CardContent></Card>
-             <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Total Approvals</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-emerald-600 tracking-tighter">{stats.approved}</span></CardContent></Card>
-             <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Unseen Review</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-orange-600 tracking-tighter">{stats.pending}</span></CardContent></Card>
-             <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Accuracy Index</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-primary tracking-tighter">{stats.accuracy}%</span></CardContent></Card>
+             <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Total Approvals</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-emerald-600 tracking-tighter">{computedStats?.approved ?? 0}</span></CardContent></Card>
+             <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Unseen Review</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-orange-600 tracking-tighter">{computedStats?.unseen ?? 0}</span></CardContent></Card>
+             <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Accuracy Index</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-primary tracking-tighter">{computedStats?.accuracy ?? '0.0'}%</span></CardContent></Card>
           </div>
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="bg-primary text-white border-b p-6 flex flex-row items-center justify-between">

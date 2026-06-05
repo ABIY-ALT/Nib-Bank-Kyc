@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { Button } from "@/components/ui/button";
 import { PdfPreview } from "@/components/submissions/pdf-preview";
+import { ImageViewerModal } from "@/components/submissions/image-viewer-modal";
 import { cn } from "@/lib/utils";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
@@ -218,6 +219,9 @@ interface DocumentPreviewViewerProps {
   emptyStateTitle?: string;
   emptyStateDescription?: string;
   onFileSelect?: (file: PreviewableDocument) => void;
+  onNext?: () => void;
+  onPrevious?: () => void;
+  currentIndex?: number;
 }
 
 export interface DocumentPreviewNavigationProps {
@@ -463,6 +467,9 @@ export function DocumentPreviewViewer({
   emptyStateTitle = "Select a document",
   emptyStateDescription = "Choose a file from the list to inspect it here.",
   onFileSelect,
+  onNext,
+  onPrevious,
+  currentIndex,
 }: DocumentPreviewViewerProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -475,6 +482,7 @@ export function DocumentPreviewViewer({
   }, [resetZoom]);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isFullViewerOpen, setIsFullViewerOpen] = useState(false);
   const { zoomLevel: multiZoomLevel, handleWheelZoom: handleMultiWheelZoom, resetZoom: resetMultiZoom } = useZoomController();
   const [multiZoomResetSignal, setMultiZoomResetSignal] = useState(0);
   const resetMultiZoomWithSignal = useCallback(() => {
@@ -634,12 +642,24 @@ export function DocumentPreviewViewer({
                         className="min-h-0"
                       />
                     ) : isImageDocument(selectedFile) ? (
-                      <img
-                        src={selectedFile.previewUrl}
-                        alt={selectedFile.name}
-                        draggable={false}
-                        className="h-full w-full select-none object-contain"
-                      />
+                      <div className="relative h-full w-full group/preview">
+                        <img
+                          src={selectedFile.previewUrl}
+                          alt={selectedFile.name}
+                          draggable={false}
+                          className="h-full w-full select-none object-contain"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity bg-black/5">
+                          <Button
+                            variant="secondary"
+                            onClick={(e) => { e.stopPropagation(); setIsFullViewerOpen(true); }}
+                            className="rounded-full shadow-lg font-bold"
+                          >
+                            <Search className="w-4 h-4 mr-2" />
+                            View Fullscreen
+                          </Button>
+                        </div>
+                      </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center gap-3">
                         <FileText className="h-12 w-12 text-slate-300" />
@@ -815,29 +835,42 @@ export function DocumentPreviewViewer({
           ) : null}
         </div>
       ) : isImage ? (
-        <ZoomSurface
-          className="h-full min-h-[420px] w-full p-6 sm:p-8"
-          zoomLevel={zoomLevel}
-          onWheel={(event) => handleWheelZoom(event, false)}
-          onDoubleClick={resetZoomWithSignal}
-          resetSignal={zoomResetSignal}
-          showZoomBadge
-        >
-          <img
-            key={file.id}
-            src={blobUrl || undefined}
-            alt={file.name}
-            loading="lazy"
-            decoding="async"
-            draggable={false}
-            onLoad={() => setIsLoaded(true)}
-            onError={() => setError("Failed to load image.")}
-            className={cn(
-              "max-h-full max-w-full select-none rounded-2xl object-contain shadow-[0_18px_60px_rgba(15,23,42,0.18)] transition-all duration-300 will-change-transform",
-              isLoaded ? "scale-100 opacity-100" : "scale-[0.985] opacity-0"
-            )}
-          />
-        </ZoomSurface>
+        <div className="relative h-full min-h-[420px] w-full group/preview">
+          <ZoomSurface
+            className="h-full min-h-[420px] w-full p-6 sm:p-8"
+            zoomLevel={zoomLevel}
+            onWheel={(event) => handleWheelZoom(event, false)}
+            onDoubleClick={resetZoomWithSignal}
+            resetSignal={zoomResetSignal}
+            showZoomBadge
+          >
+            <img
+              key={file.id}
+              src={blobUrl || undefined}
+              alt={file.name}
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              onLoad={() => setIsLoaded(true)}
+              onError={() => setError("Failed to load image.")}
+              className={cn(
+                "max-h-full max-w-full select-none rounded-2xl object-contain shadow-[0_18px_60px_rgba(15,23,42,0.18)] transition-all duration-300 will-change-transform",
+                isLoaded ? "scale-100 opacity-100" : "scale-[0.985] opacity-0"
+              )}
+            />
+          </ZoomSurface>
+          {isLoaded && !error && (
+            <div className="absolute bottom-6 right-6 opacity-0 group-hover/preview:opacity-100 transition-opacity">
+               <Button
+                 onClick={() => setIsFullViewerOpen(true)}
+                 className="rounded-full shadow-lg font-bold bg-slate-900 text-white hover:bg-slate-800"
+               >
+                 <Search className="w-4 h-4 mr-2" />
+                 High Quality Viewer
+               </Button>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-6 p-10 text-center">
           <div className="rounded-full bg-slate-100 p-6">
@@ -858,6 +891,21 @@ export function DocumentPreviewViewer({
             Download Original
           </Button>
         </div>
+      )}
+
+      {/* Fullscreen High-Quality Image Viewer Modal */}
+      {(isImage || (isMultiMode && selectedFile && isImageDocument(selectedFile))) && (
+        <ImageViewerModal
+          isOpen={isFullViewerOpen}
+          onClose={() => setIsFullViewerOpen(false)}
+          src={isMultiMode ? (selectedFile?.previewUrl || "") : (file.previewUrl || "")}
+          title={isMultiMode ? (selectedFile?.name || "") : file.name}
+          description={isMultiMode ? selectedFile?.documentType : file.documentType}
+          onNext={isMultiMode ? goToNext : onNext}
+          onPrevious={isMultiMode ? goToPrevious : onPrevious}
+          currentIndex={isMultiMode ? selectedIndex : currentIndex}
+          total={isMultiMode ? filesLength : (files?.length || 0)}
+        />
       )}
     </div>
   );

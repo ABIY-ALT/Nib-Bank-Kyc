@@ -49,7 +49,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { getSubmissions } from "@/actions/submissions"
+import { getSubmissions, getCaseMetrics } from "@/actions/submissions"
 import { getDistricts } from "@/actions/hierarchy"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
@@ -57,6 +57,8 @@ import { usePermissions } from "@/hooks/use-permissions"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
+import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
+import { differenceInMinutes } from "date-fns";
 
 export default function DistrictPerformancePage() {
   const { user } = useAuth();
@@ -65,6 +67,7 @@ export default function DistrictPerformancePage() {
   
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
+  const [summaryStats, setSummaryStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("all");
@@ -98,12 +101,14 @@ export default function DistrictPerformancePage() {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
-      const [subs, dists] = await Promise.all([
+      const [subs, dists, metrics] = await Promise.all([
         getSubmissions(filters),
-        isAdmin ? getDistricts() : Promise.resolve([])
+        isAdmin ? getDistricts() : Promise.resolve([]),
+        getCaseMetrics(filters)
       ]);
       setSubmissions(subs || []);
       setDistricts(dists || []);
+      setSummaryStats(metrics);
     } catch (e) {
       toast({ variant: "destructive", title: "Sync Failed" });
     } finally {
@@ -114,19 +119,36 @@ export default function DistrictPerformancePage() {
   const analytics = useMemo(() => {
     const stats = {
       total: submissions.length,
-      approved: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
-      pending: submissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
+      viewed: submissions.filter(s => [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(s.status as any)).length,
+      authorized: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
       amended: submissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
-      byBranch: {} as Record<string, { total: number, approved: number, pending: number, amended: number }>
+      unseen: submissions.filter(s => s.status === KYC_STATUS.SUBMITTED).length,
+      byBranch: {} as Record<string, any>
     };
 
     submissions.forEach(sub => {
       const bName = sub.branchName || 'Unmapped Branch';
-      if (!stats.byBranch[bName]) stats.byBranch[bName] = { total: 0, approved: 0, pending: 0, amended: 0 };
+      if (!stats.byBranch[bName]) {
+        stats.byBranch[bName] = { 
+          total: 0, 
+          viewed: 0,
+          authorized: 0, 
+          amended: 0
+        };
+      }
       stats.byBranch[bName].total++;
-      if (sub.status === KYC_STATUS.APPROVED) stats.byBranch[bName].approved++;
-      if (sub.status === KYC_STATUS.ACTION_REQUIRED) stats.byBranch[bName].amended++;
-      if ([KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status)) stats.byBranch[bName].pending++;
+      
+      if ([KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(sub.status as any)) {
+        stats.byBranch[bName].viewed++;
+      }
+
+      if (sub.status === KYC_STATUS.APPROVED) {
+        stats.byBranch[bName].authorized++;
+      }
+      
+      if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
+        stats.byBranch[bName].amended++;
+      }
     });
 
     return stats;
@@ -232,15 +254,68 @@ export default function DistrictPerformancePage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="shadow-lg border-slate-200 bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-slate-400 bg-slate-50/50">Volume</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-slate-900 tracking-tighter">{analytics.total}</span><div className="p-2 bg-slate-50 rounded-lg"><TrendingUp className="w-4 h-4 text-slate-400" /></div></CardContent></Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-emerald-600 bg-slate-50/50">Authorized</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-emerald-600 tracking-tighter">{analytics.approved}</span><div className="p-2 bg-emerald-50 rounded-lg"><ShieldCheck className="w-4 h-4 text-emerald-600" /></div></CardContent></Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500 bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-orange-600 bg-slate-50/50">Amended</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-orange-600 tracking-tighter">{analytics.amended}</span><div className="p-2 bg-orange-50 rounded-lg"><ShieldAlert className="w-4 h-4 text-orange-600" /></div></CardContent></Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-primary bg-slate-50/50">Unseen</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-primary tracking-tighter">{analytics.pending}</span><div className="p-2 bg-primary/5 rounded-lg"><Zap className="w-4 h-4 text-primary" /></div></CardContent></Card>
+        <Card className="shadow-lg border-slate-200 bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-slate-400 bg-slate-50/50">Volume</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-slate-900 tracking-tighter">{summaryStats?.total ?? analytics.total}</span><div className="p-2 bg-slate-50 rounded-lg"><TrendingUp className="w-4 h-4 text-slate-400" /></div></CardContent></Card>
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-emerald-600 bg-slate-50/50">Authorized</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-emerald-600 tracking-tighter">{summaryStats?.authorized ?? analytics.approved}</span><div className="p-2 bg-emerald-50 rounded-lg"><ShieldCheck className="w-4 h-4 text-emerald-600" /></div></CardContent></Card>
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500 bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-orange-600 bg-slate-50/50">Amended</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-orange-600 tracking-tighter">{summaryStats?.needAmendment ?? analytics.amended}</span><div className="p-2 bg-orange-50 rounded-lg"><ShieldAlert className="w-4 h-4 text-orange-600" /></div></CardContent></Card>
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-primary bg-slate-50/50">Unseen</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-primary tracking-tighter">{summaryStats?.unseen ?? analytics.unseen}</span><div className="p-2 bg-primary/5 rounded-lg"><Zap className="w-4 h-4 text-primary" /></div></CardContent></Card>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        <Card className="lg:col-span-2 shadow-2xl border-slate-200 overflow-hidden bg-white rounded-3xl"><CardHeader className="bg-slate-50/50 border-b p-6"><div><CardTitle className="text-xl flex items-center gap-3 font-headline text-slate-900"><LayoutGrid className="w-5 h-5 text-primary" /> Branch Matrix</CardTitle></div></CardHeader><CardContent className="p-0"><Table><TableHeader className="bg-slate-50/80"><TableRow><TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead><TableHead className="font-black text-center text-[11px] uppercase text-slate-500">Volume</TableHead><TableHead className="font-black text-center text-emerald-600 text-[11px] uppercase">Authorized</TableHead><TableHead className="font-black text-right pr-8 text-[11px] uppercase w-[180px] text-slate-500">Efficiency</TableHead></TableRow></TableHeader><TableBody>{branchRows.map(([name, data]) => { const efficiency = Math.round((data.approved / (data.total - data.pending || 1)) * 100); return (<TableRow key={name} className="hover:bg-slate-50 transition-colors group"><TableCell className="font-bold py-6 pl-8 text-slate-900 flex items-center gap-3"><div className="p-2.5 bg-slate-100 rounded-xl group-hover:bg-primary/10 group-hover:text-primary transition-all"><Building2 className="w-5 h-5" /></div>{name}</TableCell><TableCell className="text-center font-black text-lg text-slate-700">{data.total}</TableCell><TableCell className="text-center"><Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-black px-4 py-1">{data.approved}</Badge></TableCell><TableCell className="text-right pr-8"><div className="flex flex-col items-end gap-2"><div className="flex items-center gap-2"><span className={cn("font-black text-base", efficiency >= 90 ? "text-emerald-600" : efficiency >= 70 ? "text-primary" : "text-orange-600")}>{efficiency}%</span><ArrowUpRight className="w-3 h-3 text-slate-300" /></div><Progress value={efficiency} className={cn("w-full h-1.5 bg-slate-100", efficiency >= 90 ? "[&>div]:bg-emerald-500" : efficiency >= 70 ? "[&>div]:bg-primary" : "[&>div]:bg-orange-500")} /></div></TableCell></TableRow>); })}</TableBody></Table></CardContent></Card>
-        <div className="space-y-8"><Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white"><CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-white text-lg font-black uppercase tracking-widest flex items-center gap-2"><Target className="w-5 h-5 text-white" /> Regional Pulse</CardTitle></CardHeader><CardContent className="p-6 space-y-6"><div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-4"><div className="space-y-2"><div className="flex justify-between text-xs font-bold text-slate-700"><span>Accuracy Index</span><span>{analytics.total > 0 ? Math.round((analytics.approved / analytics.total) * 100) : 0}%</span></div><Progress value={analytics.total > 0 ? (analytics.approved / analytics.total) * 100 : 0} className="h-2 bg-white" /></div></div></CardContent></Card></div>
+        <Card className="lg:col-span-2 shadow-2xl border-slate-200 overflow-hidden bg-white rounded-3xl"><CardHeader className="bg-slate-50/50 border-b p-6"><div><CardTitle className="text-xl flex items-center gap-3 font-headline text-slate-900"><LayoutGrid className="w-5 h-5 text-primary" /> Branch Matrix</CardTitle></div></CardHeader><CardContent className="p-0"><Table><TableHeader className="bg-slate-50/80"><TableRow><TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead><TableHead className="font-black text-center text-[11px] uppercase text-slate-500">Volume</TableHead><TableHead className="font-black text-center text-emerald-600 text-[11px] uppercase">Authorized</TableHead><TableHead className="font-black text-right pr-8 text-[11px] uppercase w-[180px] text-slate-500">Performance Index</TableHead></TableRow></TableHeader><TableBody>{branchRows.map(([name, data]) => { 
+          const efficiency = calculatePerformanceIndex({
+            total: data.total,
+            viewed: data.viewed || 0,
+            amended: data.amended || 0,
+            authorized: data.authorized || 0
+          }); 
+          return (
+            <TableRow key={name} className="hover:bg-slate-50 transition-colors group">
+              <TableCell className="font-bold py-6 pl-8 text-slate-900 flex items-center gap-3">
+                <div className="p-2.5 bg-slate-100 rounded-xl group-hover:bg-primary/10 group-hover:text-primary transition-all"><Building2 className="w-5 h-5" /></div>
+                {name}
+              </TableCell>
+              <TableCell className="text-center font-black text-lg text-slate-700">{data.total}</TableCell>
+              <TableCell className="text-center"><Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-black px-4 py-1">{data.authorized}</Badge></TableCell>
+              <TableCell className="text-right pr-8">
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("text-[10px] font-black uppercase tracking-widest", getPerformanceLabel(efficiency).color)}>
+                      {getPerformanceLabel(efficiency).label}
+                    </span>
+                    <span className={cn("font-black text-base", getPerformanceLabel(efficiency).color)}>{efficiency}%</span>
+                    <ArrowUpRight className="w-3 h-3 text-slate-300" />
+                  </div>
+                  <Progress 
+                    value={efficiency} 
+                    className={cn(
+                      "h-1.5 w-24 bg-slate-100", 
+                      efficiency >= 90 ? "[&>div]:bg-emerald-500" : 
+                      efficiency >= 75 ? "[&>div]:bg-blue-600" : 
+                      efficiency >= 50 ? "[&>div]:bg-slate-600" : 
+                      efficiency >= 25 ? "[&>div]:bg-orange-500" : 
+                      "[&>div]:bg-red-500"
+                    )} 
+                  />
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        })}</TableBody></Table></CardContent></Card>
+        <div className="space-y-8"><Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white"><CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-white text-lg font-black uppercase tracking-widest flex items-center gap-2"><Target className="w-5 h-5 text-white" /> Regional Pulse</CardTitle></CardHeader><CardContent className="p-6 space-y-6"><div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-4"><div className="space-y-2"><div className="flex justify-between text-xs font-bold text-slate-700"><span>Performance Index</span><span>{(() => {
+          return calculatePerformanceIndex({
+            total: analytics.total,
+            viewed: analytics.viewed || 0,
+            amended: analytics.amended || 0,
+            authorized: analytics.authorized || 0
+          });
+        })()}%</span></div><Progress value={(() => {
+          return calculatePerformanceIndex({
+            total: analytics.total,
+            viewed: analytics.viewed || 0,
+            amended: analytics.amended || 0,
+            authorized: analytics.authorized || 0
+          });
+        })()} className="h-2 bg-white" /></div></div></CardContent></Card></div>
       </div>
     </div>
   )

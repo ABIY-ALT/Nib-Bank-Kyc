@@ -34,7 +34,6 @@ export default async function RootLayout({
                 defaultTheme="light"
                 enableSystem
                 disableTransitionOnChange
-                nonce={nonce}
               >
                 <TooltipProvider delayDuration={200}>
                   <AuthGuard>

@@ -55,7 +55,8 @@ import {
   Inbox,
   CheckCircle2,
   RotateCcw,
-  ShieldAlert
+  ShieldAlert,
+  Activity
 } from "lucide-react";
 import {
   Popover,
@@ -64,7 +65,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format, startOfMonth, eachMonthOfInterval, isSameMonth, subDays } from "date-fns";
-import { getSubmissions } from "@/actions/submissions";
+import { getSubmissions, getCaseMetrics } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,7 @@ export default function ManagementReportingPage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
+  const [summaryStats, setSummaryStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
@@ -101,6 +103,39 @@ export default function ManagementReportingPage() {
   useEffect(() => {
     loadInstitutionalData();
   }, [user, dateRange]);
+
+  const metricFilters = useMemo(() => {
+    const branch = selectedBranch === 'all' ? undefined : selectedBranch;
+    const status = selectedStatus === 'all' ? undefined : selectedStatus;
+    const entityType = selectedType === 'all' ? undefined : selectedType;
+    const isExceptional = selectedRisk === 'all' ? undefined : selectedRisk === 'HIGH';
+
+    return {
+      district: selectedDistrict === 'all' ? undefined : selectedDistrict,
+      branch,
+      status,
+      entityType,
+      isExceptional,
+      startDate: dateRange?.from ? dateRange.from.toISOString() : undefined,
+      endDate: dateRange?.to ? dateRange.to.toISOString() : undefined,
+    };
+  }, [selectedDistrict, selectedBranch, selectedStatus, selectedType, selectedRisk, dateRange]);
+
+  useEffect(() => {
+    let active = true;
+    const loadMetrics = async () => {
+      try {
+        const metrics = await getCaseMetrics(metricFilters);
+        if (active) {
+          setSummaryStats(metrics);
+        }
+      } catch (e) {
+      }
+    };
+
+    loadMetrics();
+    return () => { active = false; };
+  }, [metricFilters]);
 
   const loadInstitutionalData = async () => {
     if (!user) return;
@@ -215,7 +250,9 @@ export default function ManagementReportingPage() {
   const stats = useMemo(() => {
     const total = filteredData.length;
     const approved = filteredData.filter(s => s.status === KYC_STATUS.APPROVED).length;
-    const pending = filteredData.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length;
+    // Precise separation of Analysis (Unseen) and Running (In Review)
+    const unseen = filteredData.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
+    const running = filteredData.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;
     const rejected = filteredData.filter(s => s.status === KYC_STATUS.REJECTED).length;
     const returned = filteredData.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length;
     
@@ -224,15 +261,15 @@ export default function ManagementReportingPage() {
       branchBreakdown[s.branchName] = (branchBreakdown[s.branchName] || 0) + 1;
     });
 
-    return { total, approved, pending, rejected, returned, branchBreakdown };
+    return { total, approved, unseen, running, rejected, returned, branchBreakdown };
   }, [filteredData]);
 
   const chartsData = useMemo(() => {
     const statusPie = [
       { name: 'Authorized', value: stats.approved },
-      { name: 'Analysis', value: stats.pending },
-      { name: 'Gaps', value: stats.returned },
-      { name: 'Rejected', value: stats.rejected }
+      { name: 'Analysis', value: stats.unseen },
+      { name: 'Running', value: stats.running },
+      { name: 'Gaps', value: stats.returned }
     ].filter(d => d.value > 0);
 
     const riskBar = [
@@ -575,12 +612,13 @@ export default function ManagementReportingPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {[
-          { label: 'Total Cases', value: stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white' },
-          { label: 'Unseen Analysis', value: stats.pending, icon: Clock, color: 'text-primary', bg: 'bg-white' },
-          { label: 'Authorized', value: stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white' },
-          { label: 'Amendments', value: stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white' },
+          { label: 'Total Cases', value: summaryStats?.total ?? stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white' },
+          { label: 'Unseen Analysis', value: summaryStats?.unseen ?? stats.unseen, icon: Clock, color: 'text-primary', bg: 'bg-white' },
+          { label: 'Running (In Review)', value: summaryStats?.running ?? stats.running, icon: Activity, color: 'text-blue-500', bg: 'bg-white' },
+          { label: 'Authorized Recently', value: summaryStats?.authorized ?? stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white' },
+          { label: 'Need Amendment', value: summaryStats?.needAmendment ?? stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white' },
         ].map((item, i) => (
           <Card key={i} className={cn("shadow-lg border-slate-200 overflow-hidden group hover:scale-[1.02] transition-all rounded-2xl", item.bg)}>
             <CardHeader className="p-4 pb-2 border-b bg-slate-50/50">

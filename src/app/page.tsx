@@ -35,7 +35,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { getSubmissions } from "@/actions/submissions";
+import { getSubmissions, getDashboardSummaryStats } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -53,6 +53,7 @@ export default function Dashboard() {
   const { hasPermission, loading: permissionsLoading, isSuperAdmin } = usePermissions();
   const counts = useSidebarCounts(user);
   const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
+  const [summaryStats, setSummaryStats] = useState({ total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0 });
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -62,14 +63,15 @@ export default function Dashboard() {
       setLoading(true);
       try {
         // SECURITY: Let the server-side getSubmissions handle jurisdictional filtering
-        // only pass sub-filters if specifically selected by user
-        const [subs, globalSettings] = await Promise.all([
-          getSubmissions(), 
-          getGlobalSettings()
+        const [subs, globalSettings, stats] = await Promise.all([
+          getSubmissions({ limit: 10 }), // Only need recent 10 for the list
+          getGlobalSettings(),
+          getDashboardSummaryStats()
         ]);
         
         setRecentSubmissions(subs);
         setSettings(globalSettings);
+        setSummaryStats(stats);
       } catch (error) {
       } finally {
         setLoading(false);
@@ -113,11 +115,12 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const scopeLabel = dashboardContext.scope;
-    if (!recentSubmissions) return [];
 
-    const authorizedCount = recentSubmissions.filter(s => s.status === KYC_STATUS.APPROVED).length;
-    const actionCount = recentSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length;
-    const totalCount = recentSubmissions.length;
+    const totalCount = summaryStats.total;
+    const authorizedCount = summaryStats.authorized;
+    const actionCount = summaryStats.needAmendment;
+    const unseenCount = summaryStats.unseen;
+    const runningCount = summaryStats.running;
 
     const methodologyScore = totalCount > 0 
       ? Math.round(((totalCount - actionCount) / totalCount) * 100) 
@@ -125,12 +128,13 @@ export default function Dashboard() {
 
     return [
       { label: `${scopeLabel} Active`, value: totalCount.toString(), icon: Inbox, color: 'text-blue-600' },
-      { label: 'Unseen Cases', value: counts.unseenCases.toString(), icon: Eye, color: 'text-indigo-600' },
+      { label: 'Unseen Analysis', value: unseenCount.toString(), icon: Eye, color: 'text-indigo-600' },
+      { label: 'Running (In Review)', value: runningCount.toString(), icon: Activity, color: 'text-blue-500' },
       { label: 'Authorized Recently', value: authorizedCount.toString(), icon: ShieldCheck, color: 'text-emerald-600' },
       { label: 'Need Amendment', value: actionCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
       { label: 'Workflow Performance', value: `${methodologyScore}%`, icon: TrendingUp, color: 'text-primary' },
     ];
-  }, [recentSubmissions, dashboardContext, counts.unseenCases]);
+  }, [summaryStats, dashboardContext]);
 
   const isBranchOfficer = useMemo(() => {
     return getActiveRoleNames(user).includes('BRANCH_OFFICER');
@@ -176,7 +180,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {stats.map((stat) => (
           <Card key={stat.label} className="shadow-lg border overflow-hidden group hover:border-primary/40 transition-all rounded-2xl bg-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50 border-b">

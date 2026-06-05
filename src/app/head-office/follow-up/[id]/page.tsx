@@ -470,6 +470,10 @@ export default function FollowUpVerificationDetail() {
             <div className="flex-1 min-h-0 bg-slate-950 p-6">
               <DocumentPreviewViewer 
                 file={activeDocPreview} 
+                files={previewableDocuments}
+                onNext={goToNextDoc}
+                onPrevious={goToPreviousDoc}
+                currentIndex={activeDocIndex}
                 className="h-full w-full rounded-2xl border border-white/5"
               />
             </div>

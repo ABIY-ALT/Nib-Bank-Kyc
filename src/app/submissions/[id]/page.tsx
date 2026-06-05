@@ -297,6 +297,7 @@ export default function SubmissionDetails() {
   const [isUrgentDialogOpen, setIsUrgentDialogOpen] = useState(false);
   const [urgentRemark, setUrgentRemark] = useState("");
   const [isActioning, setIsActioning] = useState<string | null>(null);
+  const autoTransitionRef = useRef(false);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const checklistSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checklistLatestRef = useRef<Record<string, boolean>>({});
@@ -499,9 +500,11 @@ export default function SubmissionDetails() {
       isReviewer && 
       !isTerminal && 
       submission.status !== KYC_STATUS.IN_REVIEW &&
-      !submission.isExceptional
+      !submission.isExceptional &&
+      !autoTransitionRef.current
     ) {
       const autoTransition = async () => {
+        autoTransitionRef.current = true;
         try {
           // We don't want to show a toast for an automatic background action
           await updateSubmissionStatus(submission.id, KYC_STATUS.IN_REVIEW, user.id, "Case opened for analysis.");
@@ -509,6 +512,7 @@ export default function SubmissionDetails() {
         } catch (e) {
           // Silent fail for auto-transition
           console.error("Auto-transition to IN_REVIEW failed:", e);
+          autoTransitionRef.current = false;
         }
       };
       autoTransition();
@@ -518,23 +522,46 @@ export default function SubmissionDetails() {
   const handleAction = useCallback(async (action: string) => {
     if (!submission || !user || isTerminal || isActioning) return;
 
-    if ((action === KYC_STATUS.ACTION_REQUIRED || action === KYC_STATUS.ESCALATED) && !remarks.trim()) {
+    // AMENDMENT REASON LOGIC: Combine selected reasons + manual input
+    let finalRemarks = remarks.trim();
+    
+    // If we have selected predefined scenarios, ensure they are included
+    if (selectedScenario.length > 0) {
+      const predefined = selectedScenario.filter(s => !/\bother\b/i.test(s)).join('; ');
+      const hasOther = selectedScenario.some(s => /\bother\b/i.test(s));
+      
+      if (predefined && hasOther && remarks.trim()) {
+        finalRemarks = `${predefined}; Other: ${remarks.trim()}`;
+      } else if (predefined && !hasOther) {
+        finalRemarks = predefined;
+      } else if (hasOther && remarks.trim()) {
+        finalRemarks = `Other: ${remarks.trim()}`;
+      } else if (predefined) {
+        finalRemarks = predefined;
+      }
+    }
+
+    if ((action === KYC_STATUS.ACTION_REQUIRED || action === KYC_STATUS.ESCALATED) && !finalRemarks) {
       toast({ variant: "destructive", title: "Remarks Required", description: "Please provide a reason for this action." });
       return;
     }
 
     setIsActioning(action);
     try {
-      await updateSubmissionStatus(submission.id, action, user.id, remarks);
+      await updateSubmissionStatus(submission.id, action, user.id, finalRemarks);
       toast({ title: "Successful", description: `Case moved to ${action.replace(/_/g, ' ')}.` });
       await refreshSubmission(submission.id);
+      
+      // Reset states
       setRemarks("");
+      setSelectedScenario([]);
+      setIsCustomRemark(false);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Action Failed", description: error.message });
     } finally {
       setIsActioning(null);
     }
-  }, [isActioning, isTerminal, refreshSubmission, remarks, submission, toast, user]);
+  }, [isActioning, isTerminal, refreshSubmission, remarks, submission, toast, user, selectedScenario]);
 
   const handleResubmit = useCallback(async () => {
     if (!submission || !user || isActioning) return;
@@ -714,9 +741,21 @@ export default function SubmissionDetails() {
     setSelectedScenario((prev) => {
       const exists = prev.includes(scenario);
       const next = exists ? prev.filter((s) => s !== scenario) : [...prev, scenario];
-      const requiresCustomRemark = next.some((v) => /\bother\b/i.test(v));
-      setIsCustomRemark(requiresCustomRemark);
-      setRemarks(requiresCustomRemark ? "" : next.join('; '));
+      
+      const hasOther = next.some((v) => /\bother\b/i.test(v));
+      const wasOtherSelected = prev.some((v) => /\bother\b/i.test(v));
+      
+      setIsCustomRemark(hasOther);
+      
+      // If we just toggled "Other" on, clear remarks for manual input
+      if (hasOther && !wasOtherSelected) {
+        setRemarks("");
+      } 
+      // If "Other" is NOT selected, keep remarks in sync with checkboxes
+      else if (!hasOther) {
+        setRemarks(next.join('; '));
+      }
+      
       return next;
     });
   }, []);
@@ -823,9 +862,29 @@ export default function SubmissionDetails() {
 
   const sortedHistory = useMemo(() => {
     if (!submission?.commentHistory || !Array.isArray(submission.commentHistory)) return [];
-    return [...submission.commentHistory]
+    
+    // REDUCE DUPLICATE ENTRIES: Filter out consecutive identical status updates from the same person
+    const history = [...submission.commentHistory]
       .filter((entry: any) => !String(entry?.action || '').startsWith('URGENT_FLAG_'))
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    const deduplicated: any[] = [];
+    history.forEach((entry, i) => {
+      const prev = deduplicated[deduplicated.length - 1];
+      
+      // If it's a status update without unique comments, check for duplication
+      const isAutoComment = entry.comment === `Status updated to ${entry.action}`;
+      const isDuplicate = prev && 
+        prev.action === entry.action && 
+        prev.performedBy === entry.performedBy &&
+        isAutoComment;
+
+      if (!isDuplicate) {
+        deduplicated.push(entry);
+      }
+    });
+
+    return deduplicated.reverse(); // Return newest first for display
   }, [submission?.commentHistory]);
 
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Loading case details...</div>;
@@ -1136,6 +1195,10 @@ export default function SubmissionDetails() {
               <div className="min-h-0 overflow-hidden bg-[#050d18] p-4 sm:p-6">
                 <DocumentPreviewViewer
                   file={activeDocPreview}
+                  files={previewableDocuments}
+                  onNext={goToNextDoc}
+                  onPrevious={goToPreviousDoc}
+                  currentIndex={activeDocIndex}
                   className="h-full border-white/10 bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.18),_rgba(3,7,18,0.98)_58%)]"
                   emptyStateTitle="No file selected"
                   emptyStateDescription="Choose a document from the list to open it in preview."

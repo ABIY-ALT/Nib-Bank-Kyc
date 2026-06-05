@@ -41,10 +41,12 @@ import { useToast } from "@/hooks/use-toast"
 import { getSubmissions } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
+import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
+import { differenceInMinutes } from "date-fns";
 
 export default function BranchPerformancePage() {
   const { user } = useAuth();
@@ -143,15 +145,40 @@ export default function BranchPerformancePage() {
     scopedSubmissions.forEach(sub => {
       const bName = sub.branchName || 'Unknown';
       if (!stats[bName]) {
-        stats[bName] = { name: bName, district: sub.districtName, volume: 0, approved: 0, amended: 0, pending: 0 };
+        stats[bName] = { 
+          name: bName, 
+          district: sub.districtName, 
+          volume: 0, 
+          viewed: 0,
+          authorized: 0, 
+          amended: 0
+        };
       }
       stats[bName].volume++;
-      if (sub.status === KYC_STATUS.APPROVED) stats[bName].approved++;
-      if (sub.status === KYC_STATUS.ACTION_REQUIRED) stats[bName].amended++;
-      if ([KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status)) stats[bName].pending++;
+      
+      if ([KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(sub.status as any)) {
+        stats[bName].viewed++;
+      }
+
+      if (sub.status === KYC_STATUS.APPROVED) {
+        stats[bName].authorized++;
+      }
+      
+      if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
+        stats[bName].amended++;
+      }
     });
 
     return Object.values(stats)
+      .map(b => {
+        const accuracy = calculatePerformanceIndex({
+          total: b.volume,
+          viewed: b.viewed || 0,
+          amended: b.amended || 0,
+          authorized: b.authorized || 0
+        });
+        return { ...b, accuracy };
+      })
       .filter(b => selectedBranches.length === 0 || selectedBranches.includes(b.name))
       .sort((a, b) => b.volume - a.volume);
   }, [scopedSubmissions, selectedBranches]);
@@ -169,10 +196,18 @@ export default function BranchPerformancePage() {
 
   const aggregateStats = useMemo(() => {
     const total = branchMetrics.reduce((acc, b) => acc + b.volume, 0);
-    const approved = branchMetrics.reduce((acc, b) => acc + b.approved, 0);
-    const amended = branchMetrics.reduce((acc, b) => acc + b.amended, 0);
-    const accuracy = total > 0 ? Math.round((approved / total) * 100) : 0;
-    return { total, approved, amended, accuracy };
+    const viewed = branchMetrics.reduce((acc, b) => acc + (b.viewed || 0), 0);
+    const authorized = branchMetrics.reduce((acc, b) => acc + (b.authorized || 0), 0);
+    const amended = branchMetrics.reduce((acc, b) => acc + (b.amended || 0), 0);
+    
+    const accuracy = calculatePerformanceIndex({
+      total,
+      viewed,
+      amended,
+      authorized
+    });
+
+    return { total, authorized, amended, accuracy };
   }, [branchMetrics]);
 
   if (loading || permissionsLoading) return <div className="py-40 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" /></div>;
@@ -268,16 +303,40 @@ export default function BranchPerformancePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-slate-400 bg-slate-50/50">Volume</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-slate-900 tracking-tighter">{aggregateStats.total}</span><div className="p-2 bg-slate-100 rounded-lg"><Inbox className="w-4 h-4 text-slate-400" /></div></CardContent></Card>
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-emerald-600 bg-slate-50/50">Successfully Authorized</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-emerald-600 tracking-tighter">{aggregateStats.approved}</span><div className="p-2 bg-emerald-50 rounded-lg"><ShieldCheck className="w-4 h-4 text-emerald-600" /></div></CardContent></Card>
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-emerald-600 bg-slate-50/50">Successfully Authorized</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-emerald-600 tracking-tighter">{aggregateStats.authorized}</span><div className="p-2 bg-emerald-50 rounded-lg"><ShieldCheck className="w-4 h-4 text-emerald-600" /></div></CardContent></Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500 bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-orange-600 bg-slate-50/50">Amendments</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-orange-600 tracking-tighter">{aggregateStats.amended}</span><div className="p-2 bg-orange-50 rounded-lg"><ShieldAlert className="w-4 h-4 text-orange-600" /></div></CardContent></Card>
         <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary bg-white overflow-hidden rounded-2xl"><CardHeader className="pb-2 text-[10px] font-black uppercase text-primary bg-slate-50/50">Efficiency Index</CardHeader><CardContent className="pt-4 flex items-end justify-between"><span className="text-5xl font-black text-primary tracking-tighter">{aggregateStats.accuracy}%</span><div className="p-2 bg-primary/5 rounded-lg"><Activity className="w-4 h-4 text-primary" /></div></CardContent></Card>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredBranchMetrics.map((branch) => {
-          const efficiency = Math.round((branch.approved / (branch.volume - branch.pending || 1)) * 100);
+          const efficiency = Math.round((branch.authorized / (branch.volume || 1)) * 100);
           return (
-            <Card key={branch.name} className="shadow-xl border-slate-200 overflow-hidden group hover:border-primary/40 transition-all rounded-3xl bg-white"><CardHeader className="bg-slate-50/80 border-b p-6 flex flex-row items-start justify-between"><div><CardTitle className="text-xl font-black text-slate-900">{branch.name}</CardTitle><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-1.5"><Building2 className="w-3 h-3" /> {branch.district} District</p></div><Badge variant="outline" className="bg-white text-primary border-primary/20 font-black h-7">{branch.volume} Cases</Badge></CardHeader><CardContent className="pt-8 px-6 space-y-8"><div className="grid grid-cols-2 gap-6"><div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Successfully Authorized</p><div className="flex items-center gap-2"><span className="text-3xl font-black text-emerald-600">{branch.approved}</span><ShieldCheck className="w-4 h-4 text-emerald-600/30" /></div></div><div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Amendments</p><div className="flex items-center gap-2"><span className="text-3xl font-black text-orange-600">{branch.amended}</span><ShieldAlert className="w-4 h-4 text-orange-600/30" /></div></div></div><div className="space-y-3"><div className="flex justify-between items-end"><div className="space-y-0.5"><p className="text-[10px] font-black text-slate-400 uppercase">Accuracy Index</p><p className={cn("text-lg font-black leading-none", efficiency >= 90 ? "text-emerald-600" : efficiency >= 70 ? "text-primary" : "text-orange-600")}>{efficiency}%</p></div><ArrowUpRight className="w-4 h-4 text-slate-200" /></div><Progress value={efficiency} className={cn("h-2 bg-slate-100", efficiency >= 90 ? "[&>div]:bg-emerald-500" : efficiency >= 70 ? "[&>div]:bg-primary" : "[&>div]:bg-orange-500")} /></div></CardContent></Card>
+            <Card key={branch.name} className="shadow-xl border-slate-200 overflow-hidden group hover:border-primary/40 transition-all rounded-3xl bg-white"><CardHeader className="bg-slate-50/80 border-b p-6 flex flex-row items-start justify-between"><div><CardTitle className="text-xl font-black text-slate-900">{branch.name}</CardTitle><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-1.5"><Building2 className="w-3 h-3" /> {branch.district} District</p></div><Badge variant="outline" className="bg-white text-primary border-primary/20 font-black h-7">{branch.volume} Cases</Badge></CardHeader><CardContent className="pt-8 px-6 space-y-8"><div className="grid grid-cols-2 gap-6"><div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Successfully Authorized</p><div className="flex items-center gap-2"><span className="text-3xl font-black text-emerald-600">{branch.authorized}</span><ShieldCheck className="w-4 h-4 text-emerald-600/30" /></div></div><div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Amendments</p><div className="flex items-center gap-2"><span className="text-3xl font-black text-orange-600">{branch.amended}</span><ShieldAlert className="w-4 h-4 text-orange-600/30" /></div></div></div>                <div className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Performance Index</p>
+                      <div className="flex items-center gap-2">
+                        <p className={cn("text-lg font-black leading-none", getPerformanceLabel(branch.accuracy).color)}>
+                          {getPerformanceLabel(branch.accuracy).label}
+                        </p>
+                        <p className="text-sm font-black text-slate-500">{branch.accuracy}%</p>
+                      </div>
+                    </div>
+                    <ArrowUpRight className="w-4 h-4 text-slate-200" />
+                  </div>
+                  <Progress 
+                    value={branch.accuracy} 
+                    className={cn(
+                      "h-2 bg-slate-100", 
+                      branch.accuracy >= 90 ? "[&>div]:bg-emerald-500" : 
+                      branch.accuracy >= 75 ? "[&>div]:bg-blue-600" : 
+                      branch.accuracy >= 50 ? "[&>div]:bg-slate-600" : 
+                      branch.accuracy >= 25 ? "[&>div]:bg-orange-500" : 
+                      "[&>div]:bg-red-500"
+                    )} 
+                  />
+                </div></CardContent></Card>
           );
         })}
       </div>

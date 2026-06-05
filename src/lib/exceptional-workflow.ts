@@ -167,7 +167,7 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
     status: EXCEPTIONAL_STATUS.CLARIFICATION_REQUIRED,
     label: 'Clarification Required',
     description: 'Returned to the branch for corrections and supporting documents.',
-    permission: 'BRANCH_CASE_CREATE',
+    permission: 'TRIGGER_GOVERNANCE_FLOW',
     actions: [
       {
         nextStatus: EXCEPTIONAL_STATUS.AWAITING_DISTRICT,

@@ -49,6 +49,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
 import { Progress } from "@/components/ui/progress";
+import { KYC_STATUS } from "@/lib/kyc-data";
+import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
+import { differenceInMinutes } from "date-fns";
 
 export default function OfficerReportsPage() {
   const { user } = useAuth();
@@ -107,23 +110,47 @@ export default function OfficerReportsPage() {
           total: 0, 
           approved: 0, 
           amended: 0, 
-          rejected: 0 
+          unseen: 0,
+          running: 0,
+          escalated: 0,
+          totalCycles: 0,
+          totalResolutionMins: 0,
+          approvedCount: 0
         };
       }
       
       matrix[officerId].total++;
-      if (['ACTIVE', 'GOVERNANCE_APPROVED'].includes(sub.status)) matrix[officerId].approved++;
-      if (sub.status === 'ACTION_REQUIRED') matrix[officerId].amended++;
-      if (sub.status === 'REJECTED') matrix[officerId].rejected++;
+      
+      // A case is "Viewed" if it has been opened (moved to IN_REVIEW) or finalized
+      if ([KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(sub.status as any)) {
+        matrix[officerId].viewed++;
+      }
+
+      if (sub.status === KYC_STATUS.APPROVED) {
+        matrix[officerId].authorized++;
+      }
+      
+      if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
+        matrix[officerId].amended++;
+      }
     });
 
     return Object.values(matrix)
-      .map(o => ({
-        ...o,
-        accuracy: o.total > 0 ? Math.round((o.approved / o.total) * 100) : 0
-      }))
+      .map(o => {
+        const accuracy = calculatePerformanceIndex({
+          total: o.total,
+          viewed: o.viewed || 0,
+          amended: o.amended || 0,
+          authorized: o.authorized || 0
+        });
+
+        return {
+          ...o,
+          accuracy
+        };
+      })
       .filter(o => selectedOfficers.length === 0 || selectedOfficers.includes(o.id))
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => b.accuracy - a.accuracy);
   }, [submissions, selectedOfficers]);
 
   const OFFICER_LIST = useMemo(() => {
@@ -280,7 +307,7 @@ export default function OfficerReportsPage() {
                   <TableRow>
                     <TableHead className="font-black py-5 pl-8 text-slate-500 text-[11px] uppercase">Officer Name</TableHead>
                     <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase text-center">Total Reviews</TableHead>
-                    <TableHead className="font-black py-5 text-emerald-600 text-[11px] uppercase text-center">Approved</TableHead>
+                    <TableHead className="font-black py-5 text-emerald-600 text-[11px] uppercase text-center">Authorized</TableHead>
                     <TableHead className="font-black py-5 text-orange-600 text-[11px] uppercase text-center">Amended</TableHead>
                     <TableHead className="text-right font-black py-5 pr-8 text-slate-500 text-[11px] uppercase">Accuracy Index</TableHead>
                   </TableRow>
@@ -294,7 +321,12 @@ export default function OfficerReportsPage() {
                       <TableCell className="text-center text-orange-600 font-bold">{officer.amended}</TableCell>
                       <TableCell className="text-right pr-8">
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className="font-black text-primary text-sm">{officer.accuracy}%</span>
+                          <div className="flex items-center gap-2">
+                            <span className={cn("text-[10px] font-black uppercase tracking-widest", getPerformanceLabel(officer.accuracy).color)}>
+                              {getPerformanceLabel(officer.accuracy).label}
+                            </span>
+                            <span className="font-black text-primary text-sm">{officer.accuracy}%</span>
+                          </div>
                           <Progress value={officer.accuracy} className="w-24 h-1.5 bg-slate-100" />
                         </div>
                       </TableCell>

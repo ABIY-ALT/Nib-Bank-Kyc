@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { signDownloadToken, verifyDownloadToken } from '@/lib/security';
 import { createAuditLog } from './audit';
 import { getServerSession } from './auth-server';
+import { normalizePermissionSlug } from '@/lib/access-control';
 
 const DIRECT_BRANCH_ROLES = new Set(['BRANCH_MANAGER', 'BRANCH_OFFICER']);
 const PORTFOLIO_BRANCH_ROLES = new Set(['KYC_OFFICER', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER', 'SUPERVISOR']);
@@ -22,10 +23,13 @@ function normalizeAssignedBranches(value: unknown): string[] {
 }
 
 function hasPermission(user: any, slug: string) {
+  const normalized = normalizePermissionSlug(slug);
   return Boolean(
     user?.roles?.some((userRole: any) =>
       userRole?.role?.active !== false &&
-      userRole?.role?.permissions?.some((rolePermission: any) => rolePermission?.permission?.slug === slug)
+      userRole?.role?.permissions?.some((rolePermission: any) => 
+        normalizePermissionSlug(rolePermission?.permission?.slug) === normalized
+      )
     )
   );
 }
@@ -64,12 +68,7 @@ async function getMemoAccessContext(userId: string, memoId: string) {
 
   const memo = await prisma.memo.findUnique({
     where: { id: memoId },
-    select: {
-      id: true,
-      name: true,
-      originalName: true,
-      storageKey: true,
-      mimeType: true,
+    include: {
       kyc: true
     }
   });
@@ -79,7 +78,7 @@ async function getMemoAccessContext(userId: string, memoId: string) {
   }
 
   const kyc = memo.kyc;
-  const userRole = user?.roles?.[0]?.role?.name?.toUpperCase();
+  const userRoles = user?.roles?.map(ur => ur.role.name.toUpperCase()) || [];
   const userBranchId = user?.branchId;
   const userBranchName = user?.branchName;
   const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
@@ -87,21 +86,21 @@ async function getMemoAccessContext(userId: string, memoId: string) {
 
   let authorized = false;
 
-  if (userRole === 'SUPER_ADMIN') {
+  if (userRoles.includes('SUPER_ADMIN')) {
     authorized = true;
-  } else if (DIRECT_BRANCH_ROLES.has(userRole || '')) {
+  } else if (userRoles.some(role => DIRECT_BRANCH_ROLES.has(role))) {
     authorized = Boolean(
       (userBranchId && kyc.branchId === userBranchId) ||
       (userBranchName && kyc.branchName === userBranchName)
     );
-  } else if (PORTFOLIO_BRANCH_ROLES.has(userRole || '')) {
+  } else if (userRoles.some(role => PORTFOLIO_BRANCH_ROLES.has(role))) {
     authorized = assignedBranches.length > 0
       ? assignedBranches.includes(kyc.branchName)
       : Boolean(
           (userBranchId && kyc.branchId === userBranchId) ||
           (userBranchName && kyc.branchName === userBranchName)
         );
-  } else if (userRole === DISTRICT_DIRECTOR_ROLE) {
+  } else if (userRoles.includes(DISTRICT_DIRECTOR_ROLE)) {
     authorized = Boolean(
       userDistrictName &&
       kyc.districtName === userDistrictName
@@ -112,8 +111,11 @@ async function getMemoAccessContext(userId: string, memoId: string) {
     assignedBranches.includes(kyc.branchName)
   ) {
     authorized = true;
-  } else if (await hasFollowUpCaseAccess(user, kyc.id)) {
-    authorized = true;
+  }
+
+  // Fallback check for follow-up verification access
+  if (!authorized) {
+    authorized = await hasFollowUpCaseAccess(user, kyc.id);
   }
 
   return { user, memo, authorized };
