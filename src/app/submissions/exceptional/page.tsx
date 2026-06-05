@@ -111,11 +111,11 @@ export default function ExceptionalCasesPage() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > MAX_FILE_SIZE) {
-        toast({ variant: "destructive", title: "File Too Large", description: "Memo exceeds the 30MB institutional limit." });
+        toast({ variant: "destructive", title: "File is too big", description: "The file exceeds the 30MB limit." });
         return;
       }
       if (!ALLOWED_TYPES.includes(file.type)) {
-        toast({ variant: "destructive", title: "Invalid Type", description: "Only PDF or image files are allowed." });
+        toast({ variant: "destructive", title: "Unsupported file type", description: "Only PDF or image files are allowed." });
         return;
       }
       setMemoFile(file);
@@ -124,7 +124,7 @@ export default function ExceptionalCasesPage() {
 
   const handleInitiateException = async () => {
     if (!user || !selectedCaseId || !exceptionReason || !riskJustification || !memoFile) {
-      toast({ variant: "destructive", title: "Validation Error", description: "All fields (including PDF/Image memo) are required." });
+      toast({ variant: "destructive", title: "Information missing", description: "Please fill in all fields and attach a document." });
       return;
     }
 
@@ -141,7 +141,7 @@ export default function ExceptionalCasesPage() {
       const res = await initiateExceptionalWorkflow(formData);
       
       if (res.success) {
-        toast({ title: "Successful", description: "Case dispatched to Governance branches." });
+        toast({ title: "Successful", description: "Case sent for review." });
         setIsAddDialogOpen(false);
         resetForm();
         await loadData();
@@ -149,7 +149,7 @@ export default function ExceptionalCasesPage() {
         throw new Error(res.error);
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Action Failed", description: error.message });
+      toast({ variant: "destructive", title: "Action failed", description: error.message || "We couldn't process this request. Please try again." });
     }
   };
 
@@ -168,9 +168,9 @@ export default function ExceptionalCasesPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Exceptional Approvals</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Special Approvals</h1>
           </div>
-          <p className="text-muted-foreground text-lg font-medium">Hierarchy oversight for high-risk and non-standard verification requests.</p>
+          <p className="text-muted-foreground text-lg font-medium">Review process for high-risk or non-standard verification requests.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
           {canTrigger && (
@@ -179,7 +179,7 @@ export default function ExceptionalCasesPage() {
               className="bg-[#B89334] hover:bg-[#A6822D] text-white font-bold h-12 px-8 shadow-xl gap-2 rounded-lg transition-all active:scale-95"
             >
               <Zap className="w-5 h-5 fill-white" />
-              Trigger Exception
+              Request Exception
             </Button>
           )}
           <div className="relative w-full md:w-80">

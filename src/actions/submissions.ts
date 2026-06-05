@@ -253,7 +253,7 @@ export async function getSubmissions(filters?: any) {
         memos: true
       },
       orderBy: { submittedAt: 'desc' },
-      take: filters?.limit || 100,
+      take: filters?.limit || 5000,
       skip: filters?.offset || 0,
     });
 
@@ -353,6 +353,22 @@ export async function getSubmissionById(id: string) {
       hasJurisdictionalAccess(user, userPermissions, session.id, kyc) ||
       await hasFollowUpCaseAccess(user, kyc.id)
     ) {
+      // SECURITY: Log VIEW action for audit and tracking "Unseen" cases
+      // Only log for non-creators to track when reviewers actually look at the case
+      if (kyc.createdById !== session.id) {
+        await createAuditLog({
+          userId: session.id,
+          userEmail: session.email,
+          userName: (session.email || 'unknown').split('@')[0],
+          action: 'VIEW',
+          details: `Viewed submission details for case ${kyc.id} (${kyc.customerName})`,
+          kycId: kyc.id,
+          severity: 'LOW'
+        }).catch(err => {
+          logInstitutionalError(err, 'AUDIT_LOG_VIEW_FAILED');
+        });
+      }
+
       return formatKYC(kyc);
     }
 
@@ -635,13 +651,13 @@ export async function resubmitSubmission(formData: FormData) {
 
 export async function updateSubmissionStatus(id: string, status: string, reviewerId: string, remarks?: string) {
   const session = await getServerSession();
-  if (!session) throw new Error("Unauthorized");
+  if (!session) throw new Error("Please log in to continue.");
 
   const current = await prisma.kYC.findUnique({ where: { id } });
-  if (!current) throw new Error("KYC record not found");
+  if (!current) throw new Error("The case could not be found.");
 
   if (reviewerId !== session.id && session.role !== 'SUPER_ADMIN') {
-    throw new Error("Privilege escalation detected.");
+    throw new Error("Access denied.");
   }
 
   const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
@@ -669,7 +685,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   ) || [];
 
   if (!reviewer || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(reviewer, userPermissions, session.id, current))) {
-    throw new Error("Unauthorized case access.");
+    throw new Error("You do not have permission to access this case.");
   }
 
   const newEntry = {
@@ -706,7 +722,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
 
 export async function updateSubmissionChecklist(id: string, state: any) {
   const session = await getServerSession();
-  if (!session) throw new Error("Unauthorized");
+  if (!session) throw new Error("Please log in to continue.");
 
   try {
     const [currentKyc, actor] = await Promise.all([
@@ -732,7 +748,7 @@ export async function updateSubmissionChecklist(id: string, state: any) {
     ]);
 
     if (!currentKyc) {
-      throw new Error("KYC record not found");
+      throw new Error("The case could not be found.");
     }
 
     const userPermissions = actor?.roles.flatMap((ur: any) => 
@@ -740,7 +756,7 @@ export async function updateSubmissionChecklist(id: string, state: any) {
     ) || [];
 
     if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, currentKyc))) {
-      throw new Error("Unauthorized case access.");
+      throw new Error("You do not have permission to access this case.");
     }
 
     const updatedKyc = await prisma.kYC.update({
@@ -752,7 +768,7 @@ export async function updateSubmissionChecklist(id: string, state: any) {
     return updatedKyc;
   } catch (error) {
     logInstitutionalError(error, 'DB_UPDATE_CHECKLIST');
-    throw new Error("Institutional database fault.");
+    throw new Error("A system error occurred. Please try again later.");
   }
 }
 
@@ -794,12 +810,12 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     ) || [];
 
     if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
-      throw new Error("Unauthorized case access.");
+      throw new Error("You do not have permission to access this case.");
     }
 
     // Dynamic Permission Check
     if (session.role !== 'SUPER_ADMIN' && !hasPermission(actor, 'BRANCH_CASE_CREATE')) {
-      throw new Error("Insufficient permissions. Required: BRANCH_CASE_CREATE");
+      throw new Error("You do not have permission to create cases.");
     }
 
     const buffer = Buffer.from(await memo.arrayBuffer());
@@ -813,7 +829,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
         details: `Exceptional memo rejected: ${memo.name} - ${validation.error}`, 
         kycId: id 
       }).catch(() => {});
-      throw new Error(`Security check failed: ${validation.error}`);
+      throw new Error(`The file failed security checks: ${validation.error}`);
     }
 
     const storedKey = validation.storageKey!;
@@ -874,7 +890,7 @@ export async function getWorkflowCounts() {
   // SECURITY: No parameters accepted — all identity/jurisdiction derived from server session.
   const session = await getServerSession();
   if (!session) {
-    throw new Error("Authentication required");
+    throw new Error("Please log in to continue.");
   }
 
   const isSuperAdmin = session.role === 'SUPER_ADMIN';
@@ -900,7 +916,7 @@ export async function getWorkflowCounts() {
       }
     });
     if (!user) {
-      return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
+      return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, unseenCases: 0, branchNode: 0 };
     }
 
     const userPermissions = user.roles.flatMap((ur: any) => 
@@ -943,7 +959,15 @@ export async function getWorkflowCounts() {
       }
     }
 
-    const [myCount, actionRequired, queueCounts] = await Promise.all([
+    // Optimization: Fetch IDs of cases that have been viewed to calculate "Unseen" count
+    const viewedLogs = await prisma.auditLog.findMany({
+      where: { action: 'VIEW' },
+      select: { kycId: true },
+      distinct: ['kycId']
+    });
+    const viewedIds = viewedLogs.map(log => log.kycId).filter(Boolean) as string[];
+
+    const [myCount, actionRequired, queueCounts, unseenCases] = await Promise.all([
       prisma.kYC.count({ where: { createdById: session.id, active: true } }),
       prisma.kYC.count({
         where: {
@@ -959,13 +983,23 @@ export async function getWorkflowCounts() {
             prisma.kYC.count({ where: { ...scopeFilter, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isResubmitted: true, active: true } }),
             prisma.kYC.count({ where: { ...scopeFilter, status: KYC_STATUS.ESCALATED, active: true } }),
             prisma.kYC.count({ where: { ...scopeFilter, isExceptional: true, status: { not: KYC_STATUS.APPROVED }, active: true } })
-          ])
+          ]),
+      scopeUnavailable
+        ? Promise.resolve(0)
+        : prisma.kYC.count({
+            where: {
+              ...scopeFilter,
+              status: KYC_STATUS.SUBMITTED,
+              active: true,
+              id: { notIn: viewedIds }
+            }
+          })
     ]);
     const [reviewQueue, resubmitted, escalated, exceptional] = queueCounts;
 
-    return { mySubmissions: myCount, actionRequired: actionRequired, reviewQueue, resubmitted, escalated, exceptional, branchNode: 0 };
+    return { mySubmissions: myCount, actionRequired: actionRequired, reviewQueue, resubmitted, escalated, exceptional, unseenCases, branchNode: 0 };
   } catch (error) {
-    return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, branchNode: 0 };
+    return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, unseenCases: 0, branchNode: 0 };
   }
 }
 

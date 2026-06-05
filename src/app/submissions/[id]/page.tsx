@@ -491,11 +491,35 @@ export default function SubmissionDetails() {
     return updatedSubmission;
   }, []);
 
+  // Automatically move to IN_REVIEW when opened by a reviewer
+  useEffect(() => {
+    if (
+      submission && 
+      user && 
+      isReviewer && 
+      !isTerminal && 
+      submission.status !== KYC_STATUS.IN_REVIEW &&
+      !submission.isExceptional
+    ) {
+      const autoTransition = async () => {
+        try {
+          // We don't want to show a toast for an automatic background action
+          await updateSubmissionStatus(submission.id, KYC_STATUS.IN_REVIEW, user.id, "Case opened for analysis.");
+          await refreshSubmission(submission.id);
+        } catch (e) {
+          // Silent fail for auto-transition
+          console.error("Auto-transition to IN_REVIEW failed:", e);
+        }
+      };
+      autoTransition();
+    }
+  }, [submission?.id, submission?.status, submission?.isExceptional, user?.id, isReviewer, isTerminal, refreshSubmission]);
+
   const handleAction = useCallback(async (action: string) => {
     if (!submission || !user || isTerminal || isActioning) return;
 
     if ((action === KYC_STATUS.ACTION_REQUIRED || action === KYC_STATUS.ESCALATED) && !remarks.trim()) {
-      toast({ variant: "destructive", title: "Information Required", description: "This action requires detailed remarks." });
+      toast({ variant: "destructive", title: "Remarks Required", description: "Please provide a reason for this action." });
       return;
     }
 
@@ -804,8 +828,8 @@ export default function SubmissionDetails() {
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [submission?.commentHistory]);
 
-  if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Retrieving case file...</div>;
-  if (!submission) return <div className="p-12 text-center">Case file not found.</div>;
+  if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse"><Loader2 className="w-10 h-10 animate-spin mx-auto mb-4" /> Loading case details...</div>;
+  if (!submission) return <div className="p-12 text-center">Case not found.</div>;
 
   const canRespondToAmendment =
     isCreator &&

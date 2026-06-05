@@ -27,7 +27,8 @@ import {
   Landmark,
   ShieldAlert,
   Inbox,
-  Activity
+  Activity,
+  Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -39,6 +40,7 @@ import { getGlobalSettings } from "@/actions/settings";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getActiveRoleNames, getPrimaryRoleName } from "@/lib/access-control";
+import { useSidebarCounts } from "@/hooks/use-sidebar-counts";
 
 function formatBranchName(name?: string | null) {
   const raw = (name || "").trim();
@@ -49,6 +51,7 @@ function formatBranchName(name?: string | null) {
 export default function Dashboard() {
   const { user } = useAuth();
   const { hasPermission, loading: permissionsLoading, isSuperAdmin } = usePermissions();
+  const counts = useSidebarCounts(user);
   const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -58,32 +61,10 @@ export default function Dashboard() {
       if (!user) return;
       setLoading(true);
       try {
-        const activeRoleNames = getActiveRoleNames(user);
-        const isDirector = activeRoleNames.includes('DISTRICT_DIRECTOR');
-        const isSpecialist = activeRoleNames.some((roleName) => ['KYC_SPECIALIST', 'KYC_OFFICER', 'SUPERVISOR', 'KYC_SPECIALIST_OFFICER'].includes(roleName));
-        
-        let filters: any = { limit: 100 };
-
-        if (!isSuperAdmin) {
-          if (isDirector && user.districtName) {
-            filters.district = user.districtName;
-          } else if (isSpecialist) {
-            if (user.assignedBranches && user.assignedBranches.length > 0) {
-              filters.branches = user.assignedBranches;
-            } else if (user.branchName) {
-              filters.branch = user.branchName;
-            } else {
-              filters.branch = "RESTRICTED_ACCESS_PENDING_ASSIGNMENT";
-            }
-          } else if (user.branchName) {
-            filters.branch = user.branchName;
-          } else {
-            filters.branch = "RESTRICTED_ACCESS";
-          }
-        }
-
+        // SECURITY: Let the server-side getSubmissions handle jurisdictional filtering
+        // only pass sub-filters if specifically selected by user
         const [subs, globalSettings] = await Promise.all([
-          getSubmissions(filters),
+          getSubmissions(), 
           getGlobalSettings()
         ]);
         
@@ -144,11 +125,12 @@ export default function Dashboard() {
 
     return [
       { label: `${scopeLabel} Active`, value: totalCount.toString(), icon: Inbox, color: 'text-blue-600' },
+      { label: 'Unseen Cases', value: counts.unseenCases.toString(), icon: Eye, color: 'text-indigo-600' },
       { label: 'Authorized Recently', value: authorizedCount.toString(), icon: ShieldCheck, color: 'text-emerald-600' },
       { label: 'Need Amendment', value: actionCount.toString(), icon: AlertCircle, color: 'text-orange-600' },
       { label: 'Workflow Performance', value: `${methodologyScore}%`, icon: TrendingUp, color: 'text-primary' },
     ];
-  }, [recentSubmissions, dashboardContext]);
+  }, [recentSubmissions, dashboardContext, counts.unseenCases]);
 
   const isBranchOfficer = useMemo(() => {
     return getActiveRoleNames(user).includes('BRANCH_OFFICER');
@@ -194,7 +176,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => (
           <Card key={stat.label} className="shadow-lg border overflow-hidden group hover:border-primary/40 transition-all rounded-2xl bg-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-slate-50/50 border-b">
@@ -213,13 +195,13 @@ export default function Dashboard() {
           <CardHeader className="bg-slate-50/50 border-b flex flex-row items-center justify-between p-6">
             <div>
               <CardTitle className="text-xl font-bold flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary" /> Operational Stream
+                <Activity className="w-5 h-5 text-primary" /> Live Case Tracking
               </CardTitle>
               <CardDescription>Live tracking for authorized institutional cases.</CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/5">
               <Link href="/submissions" className="flex items-center gap-1">
-                Institutional Archive <ChevronRight className="w-4 h-4" />
+                Case Archive <ChevronRight className="w-4 h-4" />
               </Link>
             </Button>
           </CardHeader>
@@ -263,7 +245,7 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-20 bg-slate-50/30 rounded-2xl">
                   <History className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground font-black uppercase tracking-widest">No Operational Data Found</p>
+                  <p className="text-sm text-muted-foreground font-black uppercase tracking-widest">No cases found</p>
                 </div>
               )}
             </div>

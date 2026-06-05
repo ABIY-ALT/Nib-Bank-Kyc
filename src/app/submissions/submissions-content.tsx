@@ -129,7 +129,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
         description: `Case assets extracted into folder-style bundle.` 
       });
     } catch (error) {
-      toast({ variant: "destructive", title: "Archiving Error", description: "Could not compile institutional bundle." });
+      toast({ variant: "destructive", title: "Download failed", description: "We couldn't create the download file. Please try again." });
     } finally {
       setDownloadingId(null);
     }
@@ -193,7 +193,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
         </TableHeader>
         <TableBody>
           {sortedSubmissions.length === 0 ? (
-            <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No institutional records discovered.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No cases found.</TableCell></TableRow>
           ) : sortedSubmissions.map((sub) => (
             <TableRow
               key={sub.id}

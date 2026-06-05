@@ -32,7 +32,9 @@ import {
   Check,
   ChevronsUpDown,
   Info,
-  EyeOff
+  EyeOff,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -119,6 +121,9 @@ export default function KYCOperationsMonitoringPage() {
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("all");
   const [selectedOfficerFilter, setSelectedOfficerFilter] = useState<string>("all");
   
+  const [sortField, setSortField] = useState<string>("name");
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>("asc");
+
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   
   const [isEscalating, setIsEscalating] = useState<string | null>(null);
@@ -129,6 +134,33 @@ export default function KYCOperationsMonitoringPage() {
   const [distOpen, setDistOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [officerOpen, setOfficerOpen] = useState(false);
+
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const SortIndicator = ({ field }: { field: string }) => {
+    if (sortField !== field) return (
+      <div className="ml-2 p-1 rounded-md bg-slate-100 group-hover:bg-slate-200 transition-colors">
+        <ChevronsUpDown className="w-3 h-3 text-slate-400 opacity-50" />
+      </div>
+    );
+    
+    return (
+      <div className="ml-2 p-1 rounded-md bg-primary/10 text-primary shadow-sm animate-in zoom-in-75 duration-300">
+        {sortOrder === 'asc' ? (
+          <ArrowUp className="w-3.5 h-3.5" />
+        ) : (
+          <ArrowDown className="w-3.5 h-3.5" />
+        )}
+      </div>
+    );
+  };
 
   useEffect(() => {
     loadBaseData();
@@ -246,7 +278,7 @@ export default function KYCOperationsMonitoringPage() {
   };
 
   const processedOfficers = useMemo(() => {
-    return officers.map(off => {
+    const data = officers.map(off => {
       const offBranchNames = off.assignedBranches?.length > 0
         ? off.assignedBranches
         : (off.branchName ? [off.branchName] : []);
@@ -293,7 +325,37 @@ export default function KYCOperationsMonitoringPage() {
       const matchesBranch = selectedBranchFilter === 'all' || off.branchName === selectedBranchFilter;
       return matchesSelection && matchesDistrict && matchesBranch;
     });
-  }, [officers, submissions, selectedOfficerFilter, selectedDistrict, selectedBranchFilter]);
+
+    // Apply Sorting
+    return [...data].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'name':
+          const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+          const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+          comparison = nameA.localeCompare(nameB);
+          break;
+        case 'branchesMapped':
+          comparison = a.stats.branchesMapped - b.stats.branchesMapped;
+          break;
+        case 'approved':
+          comparison = a.stats.approved - b.stats.approved;
+          break;
+        case 'unseen':
+          comparison = a.stats.unseen - b.stats.unseen;
+          break;
+        case 'avgResolutionMinutes':
+          comparison = a.stats.avgResolutionMinutes - b.stats.avgResolutionMinutes;
+          break;
+        case 'amended':
+          comparison = a.stats.amended - b.stats.amended;
+          break;
+        default:
+          comparison = 0;
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [officers, submissions, selectedOfficerFilter, selectedDistrict, selectedBranchFilter, sortField, sortOrder]);
 
   const currentBranches = useMemo(() => {
     if (!selectedOfficer) return [];
@@ -575,26 +637,90 @@ export default function KYCOperationsMonitoringPage() {
               <Table>
                 <TableHeader className="bg-slate-50 border-b">
                   <TableRow>
-                    <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">KYC Officer</TableHead>
-                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Branches Mapped</TableHead>
-                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Authorized</TableHead>
-                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Unseen</TableHead>
-                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">
-                      <TooltipProvider delayDuration={150}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1.5 cursor-help">
-                              Avg. Resolution
-                              <Info className="w-3.5 h-3.5 text-slate-400" />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-xs text-xs font-medium normal-case tracking-normal leading-relaxed">
-                            Average Resolution Time is calculated from the case submission timestamp until the final authorization/completion timestamp.
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                    <TableHead 
+                      className={cn(
+                        "py-6 pl-10 font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        sortField === 'name' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleSort('name')}
+                    >
+                      <div className="flex items-center">
+                        KYC Officer
+                        <SortIndicator field="name" />
+                      </div>
                     </TableHead>
-                    <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amendment Cycles</TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        sortField === 'branchesMapped' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleSort('branchesMapped')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Branches Mapped
+                        <SortIndicator field="branchesMapped" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        sortField === 'approved' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleSort('approved')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Authorized
+                        <SortIndicator field="approved" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        sortField === 'unseen' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleSort('unseen')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Unseen
+                        <SortIndicator field="unseen" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        sortField === 'avgResolutionMinutes' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleSort('avgResolutionMinutes')}
+                    >
+                      <div className="flex items-center justify-center">
+                        <TooltipProvider delayDuration={150}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-1.5 cursor-help">
+                                Avg. Resolution
+                                <Info className="w-3.5 h-3.5 text-slate-400" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-xs text-xs font-medium normal-case tracking-normal leading-relaxed">
+                              Average Resolution Time is calculated from the case submission timestamp until the final authorization/completion timestamp.
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <SortIndicator field="avgResolutionMinutes" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        sortField === 'amended' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleSort('amended')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Amendment Cycles
+                        <SortIndicator field="amended" />
+                      </div>
+                    </TableHead>
                     <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Overview</TableHead>
                     <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
                   </TableRow>

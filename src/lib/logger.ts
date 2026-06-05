@@ -19,18 +19,18 @@ export function logInstitutionalError(error: any, context: string): LogResult {
     // SECURITY FIX: Never return raw error.message — callers serialize this to client responses.
     // Full error details are available in server-side logs only.
     return {
-      message: "An internal service exception occurred.",
+      message: "Something went wrong. Please try again.",
       traceId
     };
   }
 
   // PRODUCTION RESPONSE (User-Safe)
-  let userMessage = "An internal service exception occurred.";
+  let userMessage = "Something went wrong. Please try again.";
 
   if (context.includes('AUTH')) userMessage = "Invalid username or password.";
-  if (context.includes('DB')) userMessage = "Institutional database fault.";
-  if (context.includes('PERMISSION')) userMessage = "Access restricted: Insufficient clearance.";
-  if (context.includes('FILE')) userMessage = "Institutional vault access fault.";
+  if (context.includes('DB')) userMessage = "A system error occurred. Please try again later.";
+  if (context.includes('PERMISSION')) userMessage = "You do not have permission to perform this action.";
+  if (context.includes('FILE')) userMessage = "There was a problem accessing the files. Please try again.";
 
   return {
     message: userMessage,

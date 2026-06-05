@@ -111,8 +111,8 @@ export const SubmissionSchema = z.object({
     .toUpperCase()
     .refine((val) => {
       const words = val.trim().split(/\s+/);
-      return words.length >= 2;
-    }, 'First name and second name are mandatory'),
+      return words.length >= 3;
+    }, 'First name, father name, and grandfather name are mandatory'),
   entityType: z
     .string()
     .min(1, 'Entity type required')

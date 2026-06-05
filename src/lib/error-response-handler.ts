@@ -27,40 +27,40 @@ export interface StandardErrorResponse {
  */
 const ERROR_MESSAGES: Record<string, string> = {
   // Authentication
-  UNAUTHORIZED: 'Authentication required',
-  INVALID_TOKEN: 'Authentication failed',
-  EXPIRED_TOKEN: 'Session expired. Please log in again.',
-  INSUFFICIENT_PERMISSIONS: 'You do not have permission to perform this action',
+  UNAUTHORIZED: 'Please log in to continue.',
+  INVALID_TOKEN: 'We couldn\'t verify your account. Please try again.',
+  EXPIRED_TOKEN: 'Your session has expired. Please log in again.',
+  INSUFFICIENT_PERMISSIONS: 'You do not have permission to do this.',
   
   // Database
-  DUPLICATE_EMAIL: 'This email is already registered',
-  DUPLICATE_PHONE: 'This phone number is already registered',
-  DUPLICATE_KEY: 'This record already exists',
-  NOT_FOUND: 'The requested resource was not found',
-  FOREIGN_KEY_VIOLATION: 'Cannot delete this record due to related data',
-  CONSTRAINT_VIOLATION: 'This action violates system constraints',
+  DUPLICATE_EMAIL: 'This email is already in use.',
+  DUPLICATE_PHONE: 'This phone number is already in use.',
+  DUPLICATE_KEY: 'This record already exists.',
+  NOT_FOUND: 'The requested item was not found.',
+  FOREIGN_KEY_VIOLATION: 'This item can\'t be deleted because it\'s being used elsewhere.',
+  CONSTRAINT_VIOLATION: 'This action isn\'t allowed right now.',
   
   // Validation
-  INVALID_EMAIL: 'Invalid email format',
-  INVALID_PHONE: 'Invalid phone number format',
-  INVALID_PASSWORD: 'Password does not meet requirements',
-  INVALID_INPUT: 'Invalid data provided',
-  MISSING_REQUIRED: 'Required information is missing',
+  INVALID_EMAIL: 'Please enter a valid email address.',
+  INVALID_PHONE: 'Please enter a valid phone number.',
+  INVALID_PASSWORD: 'Your password doesn\'t meet the requirements.',
+  INVALID_INPUT: 'Please check the information you entered.',
+  MISSING_REQUIRED: 'Please fill in all required fields.',
   
   // File operations
-  FILE_TOO_LARGE: 'File size exceeds the maximum allowed limit',
-  UNSUPPORTED_FILE_TYPE: 'File type is not supported',
-  FILE_NOT_FOUND: 'File not found',
-  INVALID_FILE: 'The uploaded file is invalid',
+  FILE_TOO_LARGE: 'This file is too big.',
+  UNSUPPORTED_FILE_TYPE: 'This file type isn\'t supported.',
+  FILE_NOT_FOUND: 'The file could not be found.',
+  INVALID_FILE: 'There is a problem with this file.',
   
   // Business logic
-  ACCOUNT_INACTIVE: 'This account is not active',
-  ACCOUNT_LOCKED: 'Account is temporarily locked. Please try again later.',
-  SESSION_EXPIRED: 'Your session has expired',
-  OPERATION_NOT_ALLOWED: 'This operation is not allowed',
+  ACCOUNT_INACTIVE: 'This account is not active.',
+  ACCOUNT_LOCKED: 'Your account is temporarily locked. Please try again later.',
+  SESSION_EXPIRED: 'Your session has expired.',
+  OPERATION_NOT_ALLOWED: 'You can\'t do this right now.',
   
   // Generic fallback
-  SERVER_ERROR: 'An error occurred. Please try again later.',
+  SERVER_ERROR: 'Something went wrong. Please try again later.',
 };
 
 /**

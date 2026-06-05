@@ -45,6 +45,7 @@ import {
   CheckCircle2, 
   Inbox, 
   Activity,
+  AlertCircle,
   ArrowUpRight,
   RotateCcw,
   ChevronRight,
@@ -115,7 +116,7 @@ export default function MyCasesPerformancePage() {
       const data = await getSubmissions(filters);
       setSubmissions(data || []);
     } catch (error) {
-      toast({ variant: "destructive", title: "Sync Failed", description: "Could not retrieve your cases from the Vault." });
+      toast({ variant: "destructive", title: "Unable to load data", description: "We couldn't load your cases right now. Please try again." });
     } finally {
       setLoading(false);
     }
@@ -147,14 +148,21 @@ export default function MyCasesPerformancePage() {
       const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
       const matchesType = selectedType === 'all' || sub.entityType === selectedType;
 
-      return matchesSearch && matchesBranch && matchesStatus && matchesType;
+      // SECURITY: Ensure officers only see their own active work and history
+      // SUBMITTED cases are unassigned and should be visible to all officers in the branch
+      const isMyCase = !sub.assignedToId || sub.assignedToId === user?.id;
+      const isPending = sub.status === KYC_STATUS.SUBMITTED;
+      const matchesAssignment = isPending || isMyCase;
+
+      return matchesSearch && matchesBranch && matchesStatus && matchesType && matchesAssignment;
     });
-  }, [submissions, searchTerm, selectedBranch, selectedStatus, selectedType]);
+  }, [submissions, searchTerm, selectedBranch, selectedStatus, selectedType, user?.id]);
 
   const stats = useMemo(() => {
     const total = filteredSubmissions.length;
-    const running = filteredSubmissions.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;
-    const completed = filteredSubmissions.filter(s => s.status === KYC_STATUS.APPROVED || s.status === KYC_STATUS.REJECTED).length;
+    // CRITICAL FIX: Running count must only reflect cases assigned to the logged-in officer
+    const running = filteredSubmissions.filter(s => s.status === KYC_STATUS.IN_REVIEW && s.assignedToId === user?.id).length;
+    const completed = filteredSubmissions.filter(s => (s.status === KYC_STATUS.APPROVED || s.status === KYC_STATUS.REJECTED) && s.assignedToId === user?.id).length;
     const pending = filteredSubmissions.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
 
     const branchBreakdown: Record<string, number> = {};
@@ -163,7 +171,7 @@ export default function MyCasesPerformancePage() {
     });
 
     return { total, running, completed, pending, branchBreakdown };
-  }, [filteredSubmissions]);
+  }, [filteredSubmissions, user?.id]);
 
   const resetFilters = () => {
     setSearchTerm("");
@@ -177,7 +185,7 @@ export default function MyCasesPerformancePage() {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Querying Officer Branch...</p>
+        <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Loading your cases...</p>
       </div>
     );
   }
@@ -365,9 +373,14 @@ export default function MyCasesPerformancePage() {
                           </TableCell>
                           <TableCell>
                             <Badge className={cn(
-                              "font-black text-[9px] uppercase px-3",
-                              sub.status === KYC_STATUS.SUBMITTED ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                              "font-black text-[9px] uppercase px-3 py-1 flex items-center gap-1.5 w-fit",
+                              sub.status === KYC_STATUS.SUBMITTED 
+                                ? 'bg-orange-50 text-orange-700 border-orange-200' 
+                                : 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse'
                             )}>
+                              {sub.status === KYC_STATUS.IN_REVIEW && <Activity className="w-3 h-3" />}
+                              {sub.status === KYC_STATUS.SUBMITTED && <Clock className="w-3 h-3" />}
+                              {sub.status === KYC_STATUS.ACTION_REQUIRED && <AlertCircle className="w-3 h-3" />}
                               {sub.status.replace(/_/g, ' ')}
                             </Badge>
                           </TableCell>

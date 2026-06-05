@@ -106,18 +106,10 @@ export default function ManagementReportingPage() {
     if (!user) return;
     setLoading(true);
     try {
-      let filters: any = { limit: 5000 };
+      let filters: any = {};
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
-      }
-      // Non-superadmin users only see submissions from their assigned branches
-      if (!isSuperAdmin && user) {
-        if (user.assignedBranches && user.assignedBranches.length > 0) {
-          filters.branches = user.assignedBranches;
-        } else if (user.branchName) {
-          filters.branch = user.branchName;
-        }
       }
 
       const [subs, b, d] = await Promise.all([

@@ -23,6 +23,7 @@ export function useSidebarCounts(user: UserProfile | null) {
     resubmitted: 0,
     escalated: 0,
     exceptional: 0,
+    unseenCases: 0,
     branchNode: 0
   });
 

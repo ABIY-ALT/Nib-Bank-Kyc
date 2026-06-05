@@ -280,7 +280,9 @@ export default function NewSubmission() {
   const { user } = useAuth();
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [customerName, setCustomerName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [fatherName, setFatherName] = useState("");
+  const [grandfatherName, setGrandfatherName] = useState("");
   const [entityType, setEntityType] = useState("");
   const [remarks, setRemarks] = useState("");
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
@@ -360,8 +362,8 @@ export default function NewSubmission() {
       if (file.size > MAX_FILE_SIZE) {
         toast({
           variant: "destructive",
-          title: "File Too Large",
-          description: `"${file.name}" exceeds the 30MB limit.`,
+          title: "File is too big",
+          description: `"${file.name}" is over the 30MB limit.`,
         });
         continue;
       }
@@ -369,7 +371,7 @@ export default function NewSubmission() {
       if (!ALLOWED_TYPES.includes(file.type)) {
         toast({
           variant: "destructive",
-          title: "Invalid Type",
+          title: "Unsupported file type",
           description: "Only PDF or image files are allowed.",
         });
         continue;
@@ -485,11 +487,29 @@ export default function NewSubmission() {
     event.preventDefault();
     if (!user || isSubmitting) return;
 
-    if (!customerName.trim()) {
+    if (!firstName.trim()) {
       toast({
         variant: "destructive",
-        title: "Validation Error",
-        description: "Customer Full Name is required.",
+        title: "Information missing",
+        description: "Please enter the First Name.",
+      });
+      return;
+    }
+
+    if (!fatherName.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Information missing",
+        description: "Please enter the Father's Name.",
+      });
+      return;
+    }
+
+    if (!grandfatherName.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Information missing",
+        description: "Please enter the Grandfather's Name.",
       });
       return;
     }
@@ -497,8 +517,8 @@ export default function NewSubmission() {
     if (!entityType) {
       toast({
         variant: "destructive",
-        title: "Classification Required",
-        description: "Please select an account category.",
+        title: "Information missing",
+        description: "Please select an Account Type.",
       });
       return;
     }
@@ -506,8 +526,8 @@ export default function NewSubmission() {
     if (uploadedFiles.length === 0) {
       toast({
         variant: "destructive",
-        title: "Missing Documents",
-        description: "Upload at least one document.",
+        title: "Files missing",
+        description: "Please attach at least one document.",
       });
       return;
     }
@@ -515,8 +535,8 @@ export default function NewSubmission() {
     if (uploadedFiles.some((file) => !file.type)) {
       toast({
         variant: "destructive",
-        title: "Classification Required",
-        description: "Please select a file type for all uploaded documents.",
+        title: "Type missing",
+        description: "Please select a document type for all files.",
       });
       return;
     }
@@ -532,6 +552,9 @@ export default function NewSubmission() {
       const randomSuffix = 1000 + (randomArray[0] % 9000);
 
       const submissionId = `${branchSlug}-KYC-${randomSuffix}`;
+
+      // Combine three name fields into customerName
+      const customerName = `${firstName.toUpperCase()} ${fatherName.toUpperCase()} ${grandfatherName.toUpperCase()}`.trim();
 
       const formData = new FormData();
       formData.append("id", submissionId);
@@ -557,8 +580,8 @@ export default function NewSubmission() {
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Submission Failed",
-        description: error.message,
+        title: "Submission failed",
+        description: error.message || "We couldn't submit your case. Please try again.",
       });
     } finally {
       setIsSubmitting(false);
@@ -595,7 +618,7 @@ export default function NewSubmission() {
       <div className="flex flex-col items-center justify-center gap-4 py-32">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-          Synchronizing Config...
+          Loading...
         </p>
       </div>
     );
@@ -618,17 +641,41 @@ export default function NewSubmission() {
               Entity Profile
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-6 pt-6 md:grid-cols-2">
+          <CardContent className="grid gap-6 pt-6 md:grid-cols-4">
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Customer Full Name
+                First Name
               </Label>
               <input
-                placeholder="Full legal name"
+                placeholder="First name"
                 required
                 className="h-11 w-full rounded-md border px-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
-                value={customerName}
-                onChange={(event) => setCustomerName(event.target.value.toUpperCase())}
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Father's Name
+              </Label>
+              <input
+                placeholder="Father's name"
+                required
+                className="h-11 w-full rounded-md border px-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={fatherName}
+                onChange={(event) => setFatherName(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Grandfather's Name
+              </Label>
+              <input
+                placeholder="Grandfather's name"
+                required
+                className="h-11 w-full rounded-md border px-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={grandfatherName}
+                onChange={(event) => setGrandfatherName(event.target.value)}
               />
             </div>
             <div className="space-y-2">
