@@ -25,8 +25,8 @@ export default function AmendmentReviewPage() {
       const assignedBranches = user.assignedBranches || [];
       const data = await getSubmissions({
         isResubmitted: true,
-        branches: !isAdmin && assignedBranches.length > 0 ? assignedBranches : undefined,
-        branch: !isAdmin && assignedBranches.length === 0 && user.branchName ? user.branchName : undefined
+        branches: !isAdmin && assignedBranches.length > 0 ? assignedBranches :
+          (!isAdmin && assignedBranches.length === 0 && user.branchName ? [user.branchName] : undefined)
       });
       setSubmissions(data);
       setLoading(false);

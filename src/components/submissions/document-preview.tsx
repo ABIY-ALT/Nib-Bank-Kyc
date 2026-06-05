@@ -581,16 +581,17 @@ export function DocumentPreviewViewer({
 
   const selectedFile = isMultiMode ? fileList[selectedIndex] : null;
 
+  // Navigation functions for multi-mode
+  const goToPrevious = () => {
+    setSelectedIndex((prev) => (prev > 0 ? prev - 1 : filesLength - 1));
+  };
+
+  const goToNext = () => {
+    setSelectedIndex((prev) => (prev < filesLength - 1 ? prev + 1 : 0));
+  };
+
   // --- Multiple View Mode ---
   if (isMultiMode) {
-    const goToPrevious = () => {
-      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : filesLength - 1));
-    };
-
-    const goToNext = () => {
-      setSelectedIndex((prev) => (prev < filesLength - 1 ? prev + 1 : 0));
-    };
-
     return (
       <div
         className={cn(

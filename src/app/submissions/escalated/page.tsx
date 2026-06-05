@@ -28,8 +28,8 @@ export default function EscalatedCasesPage() {
       const data = await getSubmissions({
         status: [KYC_STATUS.ESCALATED],
         isExceptional: false, // Strictly filter out exceptional cases
-        branches: !isAdmin && assignedBranches.length > 0 ? assignedBranches : undefined,
-        branch: !isAdmin && assignedBranches.length === 0 && user.branchName ? user.branchName : undefined
+        branches: !isAdmin && assignedBranches.length > 0 ? assignedBranches :
+          (!isAdmin && assignedBranches.length === 0 && user.branchName ? [user.branchName] : undefined)
       });
       setSubmissions(data);
       setLoading(false);
