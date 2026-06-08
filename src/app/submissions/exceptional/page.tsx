@@ -53,13 +53,13 @@ export default function ExceptionalCasesPage() {
 
   const isAdmin = isSuperAdmin;
   const canTrigger = hasPermission('TRIGGER_GOVERNANCE_FLOW');
+  const isDistrictDirector = hasPermission('DISTRICT_DIRECTOR_REVIEW');
 
   const loadData = async () => {
     if (!user) return;
     setLoading(true);
     try {
       const assignedBranches = user.assignedBranches || [];
-      const isDistrictDirector = user.roles?.some((ur: any) => ur.role?.name === 'DISTRICT_DIRECTOR');
       const branchContext = isAdmin ? undefined : (user.branchName || "RESTRICTED_BRANCH");
       const branchesContext = isAdmin ? undefined : (assignedBranches.length > 0 ? assignedBranches : branchContext ? [branchContext] : undefined);
       const districtContext = isDistrictDirector ? (user.districtName ?? undefined) : undefined;

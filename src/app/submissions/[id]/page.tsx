@@ -495,11 +495,12 @@ export default function SubmissionDetails() {
   // Automatically move to IN_REVIEW when opened by a reviewer
   useEffect(() => {
     if (
-      submission && 
-      user && 
-      isReviewer && 
-      !isTerminal && 
+      submission &&
+      user &&
+      isReviewer &&
+      !isTerminal &&
       submission.status !== KYC_STATUS.IN_REVIEW &&
+      submission.status !== KYC_STATUS.ACTION_REQUIRED &&
       !submission.isExceptional &&
       !autoTransitionRef.current
     ) {
@@ -672,12 +673,26 @@ export default function SubmissionDetails() {
       formData.append('actionLabel', actionLabel);
       if (govMemo) formData.append('memo', govMemo);
 
+      // Attach corrected documents when resubmitting an exceptional case
+      if (actionDetails?.actionType === 'RESUBMIT') {
+        resubmitFiles.forEach(f => {
+          formData.append('files', f.file);
+          formData.append('types', f.type);
+        });
+      }
+
       const res = await processExceptionalStep(formData);
       if (res.success) {
         toast({ title: "Successful" });
         await refreshSubmission(submission.id);
         setRemarks("");
         setGovMemo(null);
+        if (actionDetails?.actionType === 'RESUBMIT') {
+          setResubmitFiles(prev => {
+            prev.forEach(p => URL.revokeObjectURL(p.previewUrl));
+            return [];
+          });
+        }
       } else {
         throw new Error("Transition failed");
       }
@@ -686,7 +701,7 @@ export default function SubmissionDetails() {
     } finally {
       setIsActioning(null);
     }
-  }, [govMemo, isActioning, refreshSubmission, remarks, submission, toast, user]);
+  }, [govMemo, isActioning, refreshSubmission, remarks, resubmitFiles, submission, toast, user]);
 
   const handleConfirmPurge = useCallback(async () => {
     if (!fileToPurge) return;
@@ -1414,13 +1429,52 @@ export default function SubmissionDetails() {
                     <>
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Reviewer Comments</Label>
-                        <Textarea 
-                          placeholder="Provide your decision rationale..." 
-                          value={remarks} 
-                          onChange={(e) => setRemarks(e.target.value)} 
-                          className="min-h-[140px] rounded-2xl bg-slate-50/50 font-medium" 
+                        <Textarea
+                          placeholder="Provide your decision rationale..."
+                          value={remarks}
+                          onChange={(e) => setRemarks(e.target.value)}
+                          className="min-h-[140px] rounded-2xl bg-slate-50/50 font-medium"
                         />
                       </div>
+
+                      {actions.some(a => a.actionType === 'RESUBMIT') && (
+                        <div className="space-y-3">
+                          <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            Attach Corrected Documents (Optional)
+                          </Label>
+                          <input
+                            ref={resubmitInputRef}
+                            type="file"
+                            multiple
+                            accept=".pdf,image/*"
+                            className="hidden"
+                            onChange={handleFileSelection}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => resubmitInputRef.current?.click()}
+                            className="w-full h-12 font-black rounded-xl border-blue-300 text-blue-700 hover:bg-blue-50"
+                            disabled={!!isActioning}
+                          >
+                            <Upload className="w-5 h-5 mr-2" />
+                            Attach Supporting Documents
+                          </Button>
+                          {resubmitFiles.length > 0 && (
+                            <div className="space-y-2">
+                              {resubmitFiles.map((item) => (
+                                <ResubmitFileRow
+                                  key={item.id}
+                                  item={item}
+                                  documentTypes={documentTypes}
+                                  onTypeChange={handleResubmitTypeChange}
+                                  onRemove={removeResubmitFile}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {actions.some(a => a.requiresMemo || a.allowOptionalMemo) && (
                         <div className="space-y-2">

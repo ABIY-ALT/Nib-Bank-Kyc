@@ -8,10 +8,10 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
-import { 
-  FileCheck, 
-  Clock, 
-  AlertCircle, 
+import {
+  FileCheck,
+  Clock,
+  AlertCircle,
   ArrowUpRight,
   TrendingUp,
   History,
@@ -28,7 +28,8 @@ import {
   ShieldAlert,
   Inbox,
   Activity,
-  Eye
+  Eye,
+  UserCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -37,6 +38,7 @@ import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { getSubmissions, getDashboardSummaryStats } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
+import { getBranchOfficers } from "@/actions/branch-mappings";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getActiveRoleNames, getPrimaryRoleName } from "@/lib/access-control";
@@ -55,6 +57,7 @@ export default function Dashboard() {
   const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
   const [summaryStats, setSummaryStats] = useState({ total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0 });
   const [settings, setSettings] = useState<any>(null);
+  const [assignedOfficer, setAssignedOfficer] = useState<{ name: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -63,15 +66,19 @@ export default function Dashboard() {
       setLoading(true);
       try {
         // SECURITY: Let the server-side getSubmissions handle jurisdictional filtering
-        const [subs, globalSettings, stats] = await Promise.all([
-          getSubmissions({ limit: 10 }), // Only need recent 10 for the list
+        const isBranchUser = !isSuperAdmin && !!user.branchId;
+        const [subs, globalSettings, stats, officers] = await Promise.all([
+          getSubmissions({ limit: 10 }),
           getGlobalSettings(),
-          getDashboardSummaryStats()
+          getDashboardSummaryStats(),
+          isBranchUser ? getBranchOfficers(user.branchId!) : Promise.resolve([]),
         ]);
-        
+
         setRecentSubmissions(subs);
         setSettings(globalSettings);
         setSummaryStats(stats);
+        const primary = officers.find((o: any) => o.isPrimary) || officers[0] || null;
+        setAssignedOfficer(primary ? { name: primary.name } : null);
       } catch (error) {
       } finally {
         setLoading(false);
@@ -170,6 +177,11 @@ export default function Dashboard() {
           {!isSuperAdmin && user?.districtName && (
             <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-4 py-2 font-black h-12 flex items-center gap-2 text-xs rounded-xl shadow-sm">
               <MapPin className="w-4 h-4" /> {user.districtName} District
+            </Badge>
+          )}
+          {!isSuperAdmin && assignedOfficer && (
+            <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 px-4 py-2 font-black h-12 flex items-center gap-2 text-xs rounded-xl shadow-sm">
+              <UserCheck className="w-4 h-4 text-primary" /> {assignedOfficer.name}
             </Badge>
           )}
           {isBranchOfficer && (

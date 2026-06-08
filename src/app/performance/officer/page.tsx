@@ -298,16 +298,27 @@ export default function KYCOperationsMonitoringPage() {
         ? off.assignedBranches
         : (off.branchName ? [off.branchName] : [])).map((b: string) => normalizeBranchName(b).toLowerCase());
       
+      // Helper: did this officer perform a specific action on this case?
+      // Prefers userId in commentHistory (new records); falls back to assignedToId+status for old records.
+      const officerActed = (s: any, action: string) =>
+        s.commentHistory?.some((h: any) => h.userId === off.id && h.action === action) ||
+        (s.assignedToId === off.id && s.status === action &&
+          !s.commentHistory?.some((h: any) => h.userId && h.action === action));
+
       const offSubs = submissions.filter(s => {
-        const isAssigned = s.assignedToId === off.id;
+        if (s.assignedToId === off.id) return true;
         const sBranchNorm = normalizeBranchName(s.branchName || "").toLowerCase();
-        // Attribute if explicitly assigned OR if unassigned but in officer's mapped branch
-        return isAssigned || (s.assignedToId === null && offBranchNames.includes(sBranchNorm));
+        if (s.assignedToId === null && offBranchNames.includes(sBranchNorm)) return true;
+        // Historical: officer performed a review action on a case that may now be reassigned
+        return s.commentHistory?.some((h: any) =>
+          h.userId === off.id &&
+          [KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED, KYC_STATUS.IN_REVIEW].includes(h.action)
+        );
       });
 
-      const authorized = offSubs.filter(s => s.status === KYC_STATUS.APPROVED).length;
+      const authorized = offSubs.filter(s => officerActed(s, KYC_STATUS.APPROVED)).length;
       const viewed = offSubs.filter(s => [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(s.status as any)).length;
-      const amended = offSubs.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length;
+      const amended = offSubs.filter(s => officerActed(s, KYC_STATUS.ACTION_REQUIRED)).length;
       const escalated = offSubs.filter(s => s.status === KYC_STATUS.ESCALATED).length;
       const unseen = offSubs.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
       const running = offSubs.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;

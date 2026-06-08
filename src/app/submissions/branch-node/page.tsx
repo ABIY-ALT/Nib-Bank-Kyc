@@ -2,23 +2,24 @@
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
-import { 
+import {
   Check,
   ChevronsUpDown,
-  Loader2, 
-  Search, 
-  ShieldCheck, 
-  Users, 
-  TrendingUp, 
+  Loader2,
+  Search,
+  ShieldCheck,
+  Users,
+  TrendingUp,
   AlertCircle,
   CheckCircle2,
   Inbox,
   Activity,
   Building2,
-  ShieldAlert,
-  RefreshCw
+  RefreshCw,
+  UserCheck
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ import {
 import { type ChartConfig, ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { SubmissionsPageContent } from "../submissions-content";
 import { getSubmissions } from "@/actions/submissions";
+import { getBranchOfficers } from "@/actions/branch-mappings";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -71,7 +73,9 @@ const volumeConfig = {
 
 export default function BranchMonitoringPage() {
   const { user } = useAuth();
+  const { isSuperAdmin } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [branchOfficers, setBranchOfficers] = useState<{ id: string; name: string; isPrimary: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [staffMatrixFilter, setStaffMatrixFilter] = useState<string>("all");
@@ -79,7 +83,7 @@ export default function BranchMonitoringPage() {
   const [staffMatrixOpen, setStaffMatrixOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
+  const isAdmin = isSuperAdmin;
 
   useEffect(() => {
     async function loadData() {
@@ -97,8 +101,12 @@ export default function BranchMonitoringPage() {
           if (dateRange.to) filters.endDate = dateRange.to.toISOString();
         }
 
-        const data = await getSubmissions(filters);
+        const [data, officers] = await Promise.all([
+          getSubmissions(filters),
+          !isAdmin && user.branchId ? getBranchOfficers(user.branchId) : Promise.resolve([]),
+        ]);
         setSubmissions(data);
+        setBranchOfficers(officers);
       } catch (error) {
         console.error("Failed to load monitoring data:", error);
       } finally {
@@ -221,8 +229,8 @@ export default function BranchMonitoringPage() {
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground text-lg">
-              {isAdmin 
-                ? 'Master institutional monitoring of all branches.' 
+              {isAdmin
+                ? 'Master institutional monitoring of all branches.'
                 : `Managing operational compliance at the authorized local branch.`}
             </p>
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 flex items-center gap-1 px-3 font-bold">
@@ -230,6 +238,27 @@ export default function BranchMonitoringPage() {
               {user?.roles?.[0]?.role.name.replace(/_/g, ' ') || 'OFFICER'} Authorization
             </Badge>
           </div>
+          {!isAdmin && branchOfficers.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">KYC Officer</span>
+              {branchOfficers.map((o) => (
+                <Badge
+                  key={o.id}
+                  variant="secondary"
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1 font-bold text-[11px]",
+                    o.isPrimary
+                      ? "bg-primary/5 text-primary border-primary/20"
+                      : "bg-slate-100 text-slate-600 border-slate-200"
+                  )}
+                >
+                  <UserCheck className="w-3 h-3" />
+                  {o.name}
+                  {o.isPrimary && <span className="text-[9px] font-black opacity-50 ml-0.5">Assigned</span>}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex gap-3">
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />

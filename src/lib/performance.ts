@@ -1,52 +1,21 @@
 /**
  * @fileOverview Institutional Performance Metrics Library.
- * Provides a balanced, multi-dimensional scoring algorithm for KYC Officers
- * instead of relying on raw counts alone.
  */
 
-import { KYC_STATUS } from "./kyc-data";
-
 export interface OfficerPerformanceStats {
-  total: number;      // Submitted Cases (Total assigned/received)
-  viewed: number;     // Viewed Cases (Opened and reviewed)
-  amended: number;    // Amendment Cases (Sent back for correction)
-  authorized: number; // Authorized Cases (Successfully approved)
+  total: number;      // Total Cases assigned/received
+  viewed: number;     // Viewed Cases (opened and reviewed)
+  amended: number;    // Amendment Cases (sent back for correction)
+  authorized: number; // Authorized Cases (successfully approved)
 }
 
 /**
- * Calculates a refined Performance Index (0-100) based on specific workflow rates.
- * 
- * Formula:
- * Performance Index = (Approval Rate × 50) + (Review Rate × 30) − (Amendment Rate × 20)
- * 
- * Where:
- * - Review Rate = Viewed / Submitted
- * - Approval Rate = Authorized / Viewed
- * - Amendment Rate = Amendment / Viewed
+ * Performance Score (%) = ((Authorized Cases + Amendment Cases) / Total Cases) × 100
  */
 export function calculatePerformanceIndex(stats: OfficerPerformanceStats): number {
-  const { 
-    total,    // Submitted
-    viewed,   // Viewed
-    amended,  // Amendment
-    authorized // Authorized
-  } = stats;
-  
+  const { total, amended, authorized } = stats;
   if (total === 0) return 0;
-
-  // Step 1: Core Rates
-  const reviewRate = viewed / total;
-  
-  // Prevent division by zero if no cases have been viewed yet
-  const approvalRate = viewed > 0 ? authorized / viewed : 0;
-  const amendmentRate = viewed > 0 ? amended / viewed : 0;
-
-  // Step 2: Performance Index (0–100%)
-  // Calculation is done in decimal (0-1) then multiplied by 100
-  const index = (approvalRate * 0.50) + (reviewRate * 0.30) - (amendmentRate * 0.20);
-
-  // Clamp result between 0 and 100
-  return Math.round(Math.max(0, Math.min(index * 100, 100)));
+  return Math.round(Math.min(((authorized + amended) / total) * 100, 100));
 }
 
 /**

@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  UserPlus, 
-  Mail, 
+import {
+  UserPlus,
+  Mail,
   Loader2,
   Building2,
   Settings2,
@@ -30,8 +30,15 @@ import {
   AlertCircle,
   MoreVertical,
   Edit3,
-  RefreshCw
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  Users,
+  Network,
+  MapPin,
 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Dialog, 
   DialogContent, 
@@ -104,6 +111,9 @@ const isDistrictDirectorRole = (role?: string) => normalizeRoleName(role) === 'D
 const buildEmailPreviewSegment = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const ALL_ROLES_FILTER = 'ALL_ROLES';
+const ALL_DISTRICTS_FILTER = 'ALL_DISTRICTS';
+const ALL_BRANCHES_FILTER = 'ALL_BRANCHES';
+const ALL_STATUSES_FILTER = 'ALL_STATUSES';
 
 const getPrimaryRoleName = (user: any) => user.roles?.[0]?.role?.name || 'UNASSIGNED';
 const formatRoleLabel = (role?: string) => role?.replace(/_/g, ' ') || 'Unassigned';
@@ -249,6 +259,10 @@ export default function UserManagementPage() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRoleFilter, setSelectedRoleFilter] = useState(ALL_ROLES_FILTER);
+  const [selectedDistrictFilter, setSelectedDistrictFilter] = useState(ALL_DISTRICTS_FILTER);
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState(ALL_BRANCHES_FILTER);
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState(ALL_STATUSES_FILTER);
+  const [explorerOpen, setExplorerOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
@@ -366,22 +380,33 @@ export default function UserManagementPage() {
   const filteredUsers = useMemo(() => {
     const term = deferredSearchTerm.trim().toLowerCase();
     const roleFilter = selectedRoleFilter === ALL_ROLES_FILTER ? null : selectedRoleFilter;
+    const districtFilter = selectedDistrictFilter === ALL_DISTRICTS_FILTER ? null : selectedDistrictFilter;
+    const branchFilter = selectedBranchFilter === ALL_BRANCHES_FILTER ? null : selectedBranchFilter;
+    const statusFilter = selectedStatusFilter === ALL_STATUSES_FILTER ? null : selectedStatusFilter;
 
     return users
       .filter(user => {
         const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
         const primaryRole = getPrimaryRoleName(user);
+        const branchName = (user.branch?.name || '').toLowerCase();
+        const districtName = (user.districtName || user.branch?.district?.name || '').toLowerCase();
         const assignmentLabel = (user.branch?.name || user.districtName || 'HQ / Central').toLowerCase();
+
         const matchesRole = !roleFilter || primaryRole === roleFilter;
+        const matchesStatus = !statusFilter || user.status === statusFilter;
+        const matchesDistrict = !districtFilter || districtName === districtFilter.toLowerCase();
+        const matchesBranch = !branchFilter || branchName === branchFilter.toLowerCase();
         const matchesSearch =
           !term ||
           fullName.includes(term) ||
           user.email.toLowerCase().includes(term) ||
           (user.phoneNumber || '').toLowerCase().includes(term) ||
           formatRoleLabel(primaryRole).toLowerCase().includes(term) ||
+          branchName.includes(term) ||
+          districtName.includes(term) ||
           assignmentLabel.includes(term);
 
-        return matchesRole && matchesSearch;
+        return matchesRole && matchesSearch && matchesStatus && matchesDistrict && matchesBranch;
       })
       .map((user) => ({
         user,
@@ -392,7 +417,7 @@ export default function UserManagementPage() {
         if (firstNameComparison !== 0) return firstNameComparison;
         return left.user.lastName.localeCompare(right.user.lastName);
       });
-  }, [deferredSearchTerm, selectedRoleFilter, users]);
+  }, [deferredSearchTerm, selectedRoleFilter, selectedDistrictFilter, selectedBranchFilter, selectedStatusFilter, users]);
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
   const paginatedUsers = useMemo(() => {
@@ -402,7 +427,31 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedRoleFilter]);
+  }, [searchTerm, selectedRoleFilter, selectedDistrictFilter, selectedBranchFilter, selectedStatusFilter]);
+
+  // ── Summary stats ────────────────────────────────────────────────────────
+  const summaryStats = useMemo(() => ({
+    total: users.length,
+    active: users.filter(u => u.status === USER_STATUS.ACTIVE).length,
+    inactive: users.filter(u => u.status !== USER_STATUS.ACTIVE).length,
+    branches: new Set(users.map(u => u.branch?.id).filter(Boolean)).size,
+  }), [users]);
+
+  // ── Branch explorer data ─────────────────────────────────────────────────
+  const branchExplorerData = useMemo(() => {
+    return districts.map(d => {
+      const distBranches = branches.filter((b: any) => b.districtId === d.id);
+      const districtUserCount = users.filter((u: any) => distBranches.some((b: any) => b.id === u.branchId)).length;
+      return {
+        ...d,
+        userCount: districtUserCount,
+        branches: distBranches.map((b: any) => ({
+          ...b,
+          userCount: users.filter((u: any) => u.branchId === b.id).length,
+        })),
+      };
+    }).filter(d => d.branches.length > 0);
+  }, [districts, branches, users]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.max(1, Math.min(page, totalPages)));
@@ -536,38 +585,47 @@ export default function UserManagementPage() {
   if (initialLoading || permissionsLoading) return <div className="py-48 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">{SYSTEM_SECTION_COPY.USER_CREATE.label}</h1>
-          <p className="text-muted-foreground text-lg font-medium">{SYSTEM_SECTION_COPY.USER_CREATE.description}</p>
-        </div>
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-72">
+    <div className="space-y-6 animate-in fade-in duration-300 pb-20">
+      {/* ── Page title ── */}
+      <div>
+        <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">{SYSTEM_SECTION_COPY.USER_CREATE.label}</h1>
+        <p className="text-muted-foreground text-lg font-medium">{SYSTEM_SECTION_COPY.USER_CREATE.description}</p>
+      </div>
+
+      {/* ── Summary Cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Users', value: summaryStats.total, icon: Users, color: 'text-slate-700', bg: 'bg-slate-50' },
+          { label: 'Active Users', value: summaryStats.active, icon: UserCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Inactive Users', value: summaryStats.inactive, icon: UserX, color: 'text-slate-400', bg: 'bg-slate-100' },
+          { label: 'Branches', value: summaryStats.branches, icon: Building2, color: 'text-primary', bg: 'bg-primary/5' },
+        ].map(({ label, value, icon: Icon, color, bg }) => (
+          <Card key={label} className="border-slate-200 shadow-sm">
+            <CardContent className="py-4 px-5 flex items-center gap-4">
+              <div className={`p-2.5 rounded-xl ${bg}`}>
+                <Icon className={`w-5 h-5 ${color}`} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+                <p className={`text-2xl font-extrabold mt-0.5 ${color}`}>{value}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* ── Advanced Search + Filters ── */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col md:flex-row gap-3">
+          {/* Search */}
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <Input 
-              placeholder="Search staff..." 
+            <Input
+              placeholder="Search by name, email, phone, branch or district…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 h-11 bg-white border rounded-xl font-medium"
             />
-          </div>
-          <div className="w-full md:w-64">
-            <Select value={selectedRoleFilter} onValueChange={setSelectedRoleFilter}>
-              <SelectTrigger className="h-11 rounded-xl bg-white font-medium">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl shadow-2xl">
-                <SelectItem value={ALL_ROLES_FILTER} className="font-bold">
-                  All Roles
-                </SelectItem>
-                {roleFilterOptions.map((roleOption) => (
-                  <SelectItem key={roleOption.value} value={roleOption.value}>
-                    {roleOption.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
           {isRefreshing && (
             <div className="hidden md:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -579,7 +637,134 @@ export default function UserManagementPage() {
             <UserPlus className="w-4 h-4" /> Add User
           </Button>
         </div>
+        {/* Quick filter dropdowns */}
+        <div className="flex flex-wrap gap-3">
+          <Select value={selectedDistrictFilter} onValueChange={setSelectedDistrictFilter}>
+            <SelectTrigger className="h-10 w-52 rounded-xl bg-white font-medium text-sm">
+              <SelectValue placeholder="All Districts" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl shadow-2xl">
+              <SelectItem value={ALL_DISTRICTS_FILTER} className="font-bold">All Districts</SelectItem>
+              {districts.map((d: any) => (
+                <SelectItem key={d.id} value={d.name.toLowerCase()}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+            <SelectTrigger className="h-10 w-52 rounded-xl bg-white font-medium text-sm">
+              <SelectValue placeholder="All Branches" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl shadow-2xl">
+              <SelectItem value={ALL_BRANCHES_FILTER} className="font-bold">All Branches</SelectItem>
+              {branches
+                .filter((b: any) => selectedDistrictFilter === ALL_DISTRICTS_FILTER || (b.district?.name || '').toLowerCase() === selectedDistrictFilter)
+                .map((b: any) => (
+                  <SelectItem key={b.id} value={b.name.toLowerCase()}>{b.name}</SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedRoleFilter} onValueChange={setSelectedRoleFilter}>
+            <SelectTrigger className="h-10 w-52 rounded-xl bg-white font-medium text-sm">
+              <SelectValue placeholder="All Roles" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl shadow-2xl">
+              <SelectItem value={ALL_ROLES_FILTER} className="font-bold">All Roles</SelectItem>
+              {roleFilterOptions.map((roleOption) => (
+                <SelectItem key={roleOption.value} value={roleOption.value}>{roleOption.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedStatusFilter} onValueChange={setSelectedStatusFilter}>
+            <SelectTrigger className="h-10 w-40 rounded-xl bg-white font-medium text-sm">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl shadow-2xl">
+              <SelectItem value={ALL_STATUSES_FILTER} className="font-bold">All Statuses</SelectItem>
+              <SelectItem value={USER_STATUS.ACTIVE}>Active</SelectItem>
+              <SelectItem value={USER_STATUS.INACTIVE}>Inactive</SelectItem>
+              <SelectItem value={USER_STATUS.SUSPENDED}>Suspended</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      {/* ── Main content: Branch Explorer + User List ── */}
+      <div className="flex gap-6 items-start">
+
+        {/* Branch Explorer Panel */}
+        <div className={cn(
+          "shrink-0 transition-all duration-300 overflow-hidden",
+          explorerOpen ? "w-64" : "w-10"
+        )}>
+          {explorerOpen ? (
+            <div className="border rounded-2xl bg-white shadow-sm border-slate-200 overflow-hidden">
+              <div
+                className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b cursor-pointer hover:bg-slate-100 transition-colors"
+                onClick={() => setExplorerOpen(false)}
+              >
+                <div className="flex items-center gap-2">
+                  <Network className="w-4 h-4 text-primary" />
+                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-600">Branch Explorer</span>
+                </div>
+                <ChevronLeft className="w-4 h-4 text-slate-400" />
+              </div>
+              <ScrollArea className="h-[480px]">
+                <div className="p-2">
+                  {branchExplorerData.length === 0 ? (
+                    <p className="py-8 text-center text-xs font-bold text-muted-foreground">No districts found</p>
+                  ) : branchExplorerData.map((district: any) => (
+                    <div key={district.id} className="mb-1">
+                      <div
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-primary/5 transition-colors text-xs font-black uppercase tracking-tight",
+                          selectedDistrictFilter === district.name.toLowerCase() ? "bg-primary/10 text-primary" : "text-slate-700"
+                        )}
+                        onClick={() => {
+                          const val = district.name.toLowerCase();
+                          setSelectedDistrictFilter(prev => prev === val ? ALL_DISTRICTS_FILTER : val);
+                          setSelectedBranchFilter(ALL_BRANCHES_FILTER);
+                        }}
+                      >
+                        <MapPin className="w-3 h-3 shrink-0" />
+                        <span className="flex-1 truncate">{district.name}</span>
+                        <span className="text-[9px] bg-slate-200 text-slate-600 rounded px-1.5 py-0.5 font-black">{district.userCount}</span>
+                      </div>
+                      {district.branches.map((branch: any) => (
+                        <div
+                          key={branch.id}
+                          className={cn(
+                            "flex items-center gap-2 pl-6 pr-3 py-1.5 rounded-lg cursor-pointer hover:bg-primary/5 transition-colors text-[11px] font-bold",
+                            selectedBranchFilter === branch.name.toLowerCase() ? "bg-primary/10 text-primary" : "text-slate-600"
+                          )}
+                          onClick={() => {
+                            const bVal = branch.name.toLowerCase();
+                            setSelectedBranchFilter(prev => prev === bVal ? ALL_BRANCHES_FILTER : bVal);
+                            setSelectedDistrictFilter(district.name.toLowerCase());
+                          }}
+                        >
+                          <Building2 className="w-3 h-3 shrink-0 opacity-60" />
+                          <span className="flex-1 truncate">{branch.name}</span>
+                          <span className="text-[9px] bg-slate-100 text-slate-500 rounded px-1.5 py-0.5 font-black">{branch.userCount}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          ) : (
+            <button
+              onClick={() => setExplorerOpen(true)}
+              className="w-10 h-10 rounded-xl border border-slate-200 bg-white shadow-sm flex items-center justify-center text-slate-400 hover:text-primary hover:border-primary/30 transition-all"
+              title="Open Branch Explorer"
+            >
+              <Network className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* User list (unchanged design) */}
+        <div className="flex-1 min-w-0">
 
       <div className="border rounded-2xl bg-white shadow-xl overflow-hidden border-slate-200">
         <Table>
@@ -645,7 +830,10 @@ export default function UserManagementPage() {
             </Button>
           </div>
         </div>
-      </div>
+      </div>{/* end table container */}
+
+        </div>{/* end flex-1 user list */}
+      </div>{/* end flex explorer+list */}
 
       {/* PROVISIONING DIALOG */}
     

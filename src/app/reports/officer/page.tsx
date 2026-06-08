@@ -97,58 +97,76 @@ export default function OfficerReportsPage() {
 
   const performanceMatrix = useMemo(() => {
     const matrix: Record<string, any> = {};
-    
-    submissions.forEach(sub => {
-      if (!sub.assignedToId) return; 
 
-      const officerName = `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}`;
-      const officerId = sub.assignedToId;
-      
+    const ensureEntry = (officerId: string, officerName: string) => {
       if (!matrix[officerId]) {
-        matrix[officerId] = { 
-          id: officerId, 
-          name: officerName, 
-          total: 0, 
-          approved: 0, 
-          amended: 0, 
+        matrix[officerId] = {
+          id: officerId,
+          name: officerName,
+          total: 0,
+          approved: 0,
+          amended: 0,
           unseen: 0,
           running: 0,
           escalated: 0,
           totalCycles: 0,
           totalResolutionMins: 0,
-          approvedCount: 0
+          approvedCount: 0,
+          // track case IDs to avoid double-counting per officer
+          _caseIds: new Set<string>(),
         };
       }
-      
-      matrix[officerId].total++;
-      
-      // A case is "Viewed" if it has been opened (moved to IN_REVIEW) or finalized
-      if ([KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(sub.status as any)) {
-        matrix[officerId].viewed++;
+    };
+
+    submissions.forEach(sub => {
+      // Collect officers who acted on this case (new records have userId in history)
+      const actorMap = new Map<string, string>(); // id → name
+      sub.commentHistory?.forEach((h: any) => {
+        if (h.userId && [KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED, KYC_STATUS.IN_REVIEW].includes(h.action)) {
+          actorMap.set(h.userId, h.performedBy || h.userId);
+        }
+      });
+
+      // Backward compat: for old records with no userId in history, fall back to assignedToId
+      const hasUserIdHistory = sub.commentHistory?.some((h: any) => h.userId);
+      if (!hasUserIdHistory && sub.assignedToId) {
+        const name = sub.assignedTo ? `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}` : sub.assignedToId;
+        actorMap.set(sub.assignedToId, name);
       }
 
-      if (sub.status === KYC_STATUS.APPROVED) {
-        matrix[officerId].authorized++;
-      }
-      
-      if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
-        matrix[officerId].amended++;
-      }
+      actorMap.forEach((officerName, officerId) => {
+        ensureEntry(officerId, officerName);
+        const entry = matrix[officerId];
+
+        // Count each case once per officer
+        if (!entry._caseIds.has(sub.id)) {
+          entry._caseIds.add(sub.id);
+          entry.total++;
+        }
+
+        // Authorized: officer performed APPROVED action on this case
+        const officerApproved =
+          sub.commentHistory?.some((h: any) => h.userId === officerId && h.action === KYC_STATUS.APPROVED) ||
+          (!hasUserIdHistory && sub.assignedToId === officerId && sub.status === KYC_STATUS.APPROVED);
+        if (officerApproved) entry.approved++;
+
+        // Amendment: officer performed ACTION_REQUIRED on this case
+        const officerAmended =
+          sub.commentHistory?.some((h: any) => h.userId === officerId && h.action === KYC_STATUS.ACTION_REQUIRED) ||
+          (!hasUserIdHistory && sub.assignedToId === officerId && sub.status === KYC_STATUS.ACTION_REQUIRED);
+        if (officerAmended) entry.amended++;
+      });
     });
 
     return Object.values(matrix)
-      .map(o => {
+      .map(({ _caseIds: _omit, ...o }) => {
         const accuracy = calculatePerformanceIndex({
           total: o.total,
           viewed: o.viewed || 0,
           amended: o.amended || 0,
-          authorized: o.authorized || 0
+          authorized: o.approved || 0
         });
-
-        return {
-          ...o,
-          accuracy
-        };
+        return { ...o, accuracy };
       })
       .filter(o => selectedOfficers.length === 0 || selectedOfficers.includes(o.id))
       .sort((a, b) => b.accuracy - a.accuracy);
@@ -157,7 +175,12 @@ export default function OfficerReportsPage() {
   const OFFICER_LIST = useMemo(() => {
     const list: Record<string, string> = {};
     submissions.forEach(sub => {
-      if (sub.assignedToId) {
+      // Include historically-attributed officers from commentHistory
+      sub.commentHistory?.forEach((h: any) => {
+        if (h.userId && h.performedBy) list[h.userId] = h.performedBy;
+      });
+      // Also include current assignedToId for backward compat
+      if (sub.assignedToId && sub.assignedTo) {
         list[sub.assignedToId] = `${sub.assignedTo.firstName} ${sub.assignedTo.lastName}`;
       }
     });

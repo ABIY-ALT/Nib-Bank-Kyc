@@ -18,6 +18,7 @@ import { resolvePreviewMimeType } from '@/lib/documents';
 import { performCompleteFileValidation } from '@/lib/file-upload-security-integration';
 import { writeSecureUploadedFile } from '@/lib/secure-file-storage';
 import { getExceptionalWorkflowStage, getExceptionalWorkflowAction, getActionsForCase } from '@/lib/exceptional-workflow';
+import { EXCEPTIONAL_RESTORE_SENTINEL } from '@/lib/kyc-data';
 
 import { 
   normalizeAssignedBranches, 
@@ -675,6 +676,7 @@ export async function resubmitSubmission(formData: FormData) {
     const newHistory = [...history, {
       role: session.role || 'BRANCH_OFFICER',
       performedBy: session.email.split('@')[0],
+      userId: session.id,
       timestamp: new Date().toISOString(),
       comment: remarks || "Documents resubmitted for review.",
       action: "RESUBMIT"
@@ -687,15 +689,24 @@ export async function resubmitSubmission(formData: FormData) {
       operations.push(prisma.memo.createMany({ data: memoData }));
     }
 
+    // Route resubmission to the currently assigned primary officer for the branch.
+    const primaryOfficerRecord = current.branchId
+      ? await prisma.branchMappingOfficer.findFirst({
+          where: { mapping: { branchId: current.branchId, type: 'PERMANENT', active: true }, isPrimary: true },
+          select: { userId: true },
+        })
+      : null;
+
     operations.push(
       prisma.kYC.update({
         where: { id },
         data: {
           status: KYC_STATUS.SUBMITTED,
           isResubmitted: true,
+          assignedToId: primaryOfficerRecord?.userId ?? current.assignedToId,
           commentHistory: newHistory,
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       })
     );
 
@@ -780,6 +791,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     const newEntry = {
       role: session.role || 'OFFICER',
       performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
+      userId: session.id,
       timestamp: new Date().toISOString(),
       comment: remarks || `Status updated to ${status}`,
       action: status
@@ -1076,6 +1088,8 @@ export async function processExceptionalStep(formData: FormData) {
     const remarks = formData.get('remarks') as string;
     const actionLabel = formData.get('actionLabel') as string;
     const memo = formData.get('memo') as File | null;
+    const resubmitFiles = formData.getAll('files') as File[];
+    const resubmitTypes = formData.getAll('types') as string[];
 
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
@@ -1126,6 +1140,13 @@ export async function processExceptionalStep(formData: FormData) {
       throw new Error("Remarks are mandatory for this action.");
     }
 
+    // Resolve AMENDMENT_REQUESTED resubmit sentinel → the stage that requested the amendment.
+    let resolvedNextStatus = nextStatus;
+    if (nextStatus === EXCEPTIONAL_RESTORE_SENTINEL) {
+      const lastAmendmentEntry = [...history].reverse().find((h: any) => h.actionType === 'AMENDMENT_REQUEST');
+      resolvedNextStatus = lastAmendmentEntry?.returnToStatus || EXCEPTIONAL_STATUS.AWAITING_KYC_OFFICER;
+    }
+
     let storedMemoKey: string | null = null;
     let memoValidation: any = null;
 
@@ -1136,7 +1157,7 @@ export async function processExceptionalStep(formData: FormData) {
 
       const buffer = Buffer.from(await memo!.arrayBuffer());
       memoValidation = await performCompleteFileValidation(memo!.name, memo!.type, buffer, session.id);
-      
+
       if (!memoValidation.valid || !memoValidation.storageKey) {
         throw new Error(`Memo validation failed: ${memoValidation.error}`);
       }
@@ -1146,41 +1167,85 @@ export async function processExceptionalStep(formData: FormData) {
       await writeSecureUploadedFile(storedMemoKey, persistableBuffer);
     }
 
-    const data: any = { 
-      exceptionalStatus: nextStatus, 
-      updatedAt: new Date(), 
-      commentHistory: [...history, { 
-        role: session.role || 'GOVERNANCE', 
-        performedBy: `${actor?.firstName} ${actor?.lastName}`, 
-        timestamp: new Date().toISOString(), 
-        comment: remarks || actionLabel, 
-        action: actionLabel,
-        actionType: action.actionType
-      }]
+    const historyEntry: any = {
+      role: session.role || 'GOVERNANCE',
+      performedBy: `${actor?.firstName} ${actor?.lastName}`,
+      userId: session.id,
+      timestamp: new Date().toISOString(),
+      comment: remarks || actionLabel,
+      action: actionLabel,
+      actionType: action.actionType,
     };
-    
-    if (nextStatus === EXCEPTIONAL_STATUS.COMPLETED) {
+
+    // Record current stage so the sentinel can resolve on resubmission.
+    if (action.actionType === 'AMENDMENT_REQUEST') {
+      historyEntry.returnToStatus = current.exceptionalStatus;
+    }
+
+    const data: any = {
+      exceptionalStatus: resolvedNextStatus,
+      updatedAt: new Date(),
+      commentHistory: [...history, historyEntry],
+    };
+
+    if (resolvedNextStatus === EXCEPTIONAL_STATUS.COMPLETED) {
       data.status = KYC_STATUS.APPROVED;
     }
 
-    // Use transaction if memo is uploaded
+    // Validate and store resubmit attachments (RESUBMIT action type only)
+    const resubmitMemoData: any[] = [];
+    if (action.actionType === 'RESUBMIT' && resubmitFiles.length > 0) {
+      const countValidation = validateFileCount(resubmitFiles.length);
+      if (!countValidation.valid) throw new Error(countValidation.error);
+      const sizeValidation = validateTotalUploadSize(resubmitFiles);
+      if (!sizeValidation.valid) throw new Error(sizeValidation.error);
+
+      for (let i = 0; i < resubmitFiles.length; i++) {
+        const file = resubmitFiles[i];
+        const type = resubmitTypes[i] || 'OTHER';
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const validation = await performCompleteFileValidation(file.name, file.type, buffer, session.id);
+        if (!validation.valid || !validation.storageKey) {
+          throw new Error(`File validation failed: ${validation.error}`);
+        }
+        const persistableBuffer = validation.sanitisedBuffer || buffer;
+        await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
+        resubmitMemoData.push({
+          name: file.name.split('.').slice(0, -1).join('.'),
+          originalName: file.name,
+          type,
+          storageKey: validation.storageKey!,
+          fileHash: validation.fileHash,
+          uploadedById: session.id,
+          kycId: id,
+          mimeType: validation.fileType || file.type,
+          size: persistableBuffer.length,
+        });
+      }
+    }
+
+    // Use transaction if memo or resubmit files are uploaded
+    const txOps: any[] = [prisma.kYC.update({ where: { id }, data })];
     if (storedMemoKey && memo) {
-      await prisma.$transaction([
-        prisma.memo.create({
-          data: {
-            name: memo.name.split('.').slice(0, -1).join('.'),
-            originalName: memo.name,
-            type: 'GOVERNANCE_MEMO',
-            storageKey: storedMemoKey,
-            fileHash: memoValidation.fileHash,
-            uploadedById: session.id,
-            kycId: id,
-            mimeType: memoValidation.fileType || memo.type,
-            size: memo.size
-          }
-        }),
-        prisma.kYC.update({ where: { id }, data })
-      ]);
+      txOps.push(prisma.memo.create({
+        data: {
+          name: memo.name.split('.').slice(0, -1).join('.'),
+          originalName: memo.name,
+          type: 'GOVERNANCE_MEMO',
+          storageKey: storedMemoKey,
+          fileHash: memoValidation.fileHash,
+          uploadedById: session.id,
+          kycId: id,
+          mimeType: memoValidation.fileType || memo.type,
+          size: memo.size
+        }
+      }));
+    }
+    if (resubmitMemoData.length > 0) {
+      txOps.push(prisma.memo.createMany({ data: resubmitMemoData }));
+    }
+    if (txOps.length > 1) {
+      await prisma.$transaction(txOps);
     } else {
       await prisma.kYC.update({ where: { id }, data });
     }
@@ -1188,8 +1253,8 @@ export async function processExceptionalStep(formData: FormData) {
     await createAuditLog({
       userId: session.id,
       userEmail: session.email,
-      action: `GOVERNANCE_STEP_${nextStatus}`,
-      details: `Governance step advanced from ${current.exceptionalStatus} to ${nextStatus}. Action: ${actionLabel}. Permission used: ${stage.permission}`,
+      action: `GOVERNANCE_STEP_${resolvedNextStatus}`,
+      details: `Governance step advanced from ${current.exceptionalStatus} to ${resolvedNextStatus}. Action: ${actionLabel}. Permission used: ${stage.permission}`,
       kycId: id
     });
 

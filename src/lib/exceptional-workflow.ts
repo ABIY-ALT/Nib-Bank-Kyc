@@ -1,9 +1,9 @@
-import { EXCEPTIONAL_STATUS, ExceptionalStatus } from './kyc-data';
+import { EXCEPTIONAL_STATUS, EXCEPTIONAL_RESTORE_SENTINEL, ExceptionalStatus } from './kyc-data';
 
 export type ExceptionalWorkflowAction = {
-  nextStatus: ExceptionalStatus;
+  nextStatus: ExceptionalStatus | typeof EXCEPTIONAL_RESTORE_SENTINEL;
   label: string;
-  actionType: 'APPROVE' | 'RETURN' | 'FORWARD' | 'COMPLETE' | 'RESUBMIT';
+  actionType: 'APPROVE' | 'RETURN' | 'FORWARD' | 'COMPLETE' | 'RESUBMIT' | 'AMENDMENT_REQUEST';
   requiresMemo?: boolean;
   allowOptionalMemo?: boolean;
   requiresRemarks?: boolean;
@@ -127,6 +127,12 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
         actionType: 'RETURN',
         requiresRemarks: true,
       },
+      {
+        nextStatus: EXCEPTIONAL_STATUS.AMENDMENT_REQUESTED,
+        label: 'Request Amendment from Branch',
+        actionType: 'AMENDMENT_REQUEST',
+        requiresRemarks: true,
+      },
     ],
   },
   [EXCEPTIONAL_STATUS.AWAITING_KYC_OFFICER]: {
@@ -145,6 +151,12 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
         nextStatus: EXCEPTIONAL_STATUS.AWAITING_SUPERVISOR,
         label: 'Return to Supervisor',
         actionType: 'RETURN',
+        requiresRemarks: true,
+      },
+      {
+        nextStatus: EXCEPTIONAL_STATUS.AMENDMENT_REQUESTED,
+        label: 'Request Amendment from Branch',
+        actionType: 'AMENDMENT_REQUEST',
         requiresRemarks: true,
       },
     ],
@@ -183,6 +195,21 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
     description: 'Workflow rejected and case closed.',
     permission: 'VIEW_ONLY_ACCESS',
     actions: [],
+  },
+  [EXCEPTIONAL_STATUS.AMENDMENT_REQUESTED]: {
+    status: EXCEPTIONAL_STATUS.AMENDMENT_REQUESTED,
+    label: 'Amendment Requested',
+    description: 'Case returned to branch for correction by CDD Division.',
+    permission: 'TRIGGER_GOVERNANCE_FLOW',
+    actions: [
+      {
+        // Resolved at runtime to the stage that requested the amendment (from commentHistory).
+        nextStatus: EXCEPTIONAL_RESTORE_SENTINEL as ExceptionalStatus,
+        label: 'Resubmit for Review',
+        actionType: 'RESUBMIT',
+        requiresRemarks: true,
+      },
+    ],
   },
 };
 

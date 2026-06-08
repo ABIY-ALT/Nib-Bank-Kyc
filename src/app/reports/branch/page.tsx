@@ -50,7 +50,7 @@ import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picke
 
 export default function BranchReportsPage() {
   const { user } = useAuth();
-  const { isSuperAdmin } = usePermissions();
+  const { isSuperAdmin, hasPermission } = usePermissions();
   const { toast } = useToast();
   
   const [districts, setDistricts] = useState<any[]>([]);
@@ -63,7 +63,7 @@ export default function BranchReportsPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  const isDistDir = user?.roles?.some(ur => ur.role.name === 'DISTRICT_DIRECTOR');
+  const isDistDir = hasPermission('DISTRICT_DIRECTOR_REVIEW');
   const activeDistrict = isDistDir ? user?.districtName : (selectedDistrict === 'all' ? undefined : selectedDistrict);
 
   useEffect(() => {

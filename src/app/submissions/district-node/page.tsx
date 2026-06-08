@@ -20,6 +20,7 @@ import {
   Map
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +73,7 @@ const volumeConfig = {
 
 export default function DistrictMonitoringPage() {
   const { user } = useAuth();
+  const { isSuperAdmin } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -83,7 +85,7 @@ export default function DistrictMonitoringPage() {
   const [staffMatrixOpen, setStaffMatrixOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  const isAdmin = user?.roles?.some(ur => ur.role.name === 'SUPER_ADMIN');
+  const isAdmin = isSuperAdmin;
   const districtName = user?.districtName || "";
 
   useEffect(() => {

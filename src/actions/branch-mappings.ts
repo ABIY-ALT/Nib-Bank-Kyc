@@ -116,6 +116,47 @@ export async function getBranchMappings() {
   }
 }
 
+/** Returns the active KYC officers mapped to a given branch, primary officer first. */
+export async function getBranchOfficers(branchId: string) {
+  const session = await getServerSession();
+  if (!session || !branchId) return [];
+
+  try {
+    const mappings = await prisma.branchMapping.findMany({
+      where: { branchId, active: true },
+      include: {
+        officers: {
+          include: {
+            user: { select: { id: true, firstName: true, lastName: true, email: true } },
+          },
+        },
+      },
+    });
+
+    const seen = new Set<string>();
+    const officers: { id: string; name: string; email: string; isPrimary: boolean }[] = [];
+
+    for (const mapping of mappings) {
+      for (const o of mapping.officers) {
+        if (!seen.has(o.user.id)) {
+          seen.add(o.user.id);
+          officers.push({
+            id: o.user.id,
+            name: `${o.user.firstName} ${o.user.lastName}`.trim(),
+            email: o.user.email,
+            isPrimary: o.isPrimary,
+          });
+        }
+      }
+    }
+
+    return officers.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
+  } catch (error) {
+    logInstitutionalError(error, 'DB_GET_BRANCH_OFFICERS');
+    return [];
+  }
+}
+
 export async function createMapping(input: {
   branchIds: string[];
   type?: MappingType;
