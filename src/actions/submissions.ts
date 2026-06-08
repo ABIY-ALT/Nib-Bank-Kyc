@@ -24,8 +24,9 @@ import {
   normalizeBranchName,
   getResolvedUserBranchName, 
   getResolvedUserDistrictName, 
-  getNormalizedRole, 
+  getNormalizedRole,
   hasJurisdictionalAccess,
+  isSaturdayNow,
   GLOBAL_SCOPE_PERMISSIONS,
   PORTFOLIO_SCOPE_PERMISSIONS,
   BRANCH_SCOPE_PERMISSIONS
@@ -130,6 +131,12 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
   const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
   const isBranchScopeStaff = userPermissions.some(p => BRANCH_SCOPE_PERMISSIONS.has(p));
   const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch)).filter(Boolean);
+
+  // Saturday Configuration: this officer sees cases from all branches on Saturdays,
+  // independent of their normal branch mappings.
+  if ((user as any).saturdayAllBranches && isSaturdayNow()) {
+    return {};
+  }
 
   const isBranchLevelStaff = branchName && 
     isBranchScopeStaff && 

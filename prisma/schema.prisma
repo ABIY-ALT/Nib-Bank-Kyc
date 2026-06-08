@@ -14,6 +14,11 @@ enum UserStatus {
   SUSPENDED
 }
 
+enum MappingType {
+  PERMANENT
+  TEMPORARY
+}
+
 model User {
   id                  String     @id @default(cuid())
   email               String     @unique
@@ -26,6 +31,7 @@ model User {
   branchName          String?
   districtName        String?
   assignedBranches    String?    // CSV of branch names
+  saturdayAllBranches Boolean    @default(false) // Saturday config: see all branches on Saturdays
   needsPasswordChange Boolean    @default(true)
   sessionId           String?
   
@@ -46,6 +52,7 @@ model User {
   branch              Branch?    @relation(fields: [branchId], references: [id])
   passwordResetTokens PasswordResetToken[]
   sessions            Session[]
+  branchMappings      BranchMappingOfficer[]
 }
 
 model Role {
@@ -100,7 +107,36 @@ model Branch {
   district    District @relation(fields: [districtId], references: [id])
   submissions KYC[]
   users       User[]
+  mappings    BranchMapping[]
   createdAt   DateTime @default(now())
+}
+
+model BranchMapping {
+  id          String      @id @default(cuid())
+  branchId    String
+  branch      Branch      @relation(fields: [branchId], references: [id])
+  type        MappingType @default(PERMANENT)
+  active      Boolean     @default(true)
+  note        String?     // reason / coverage note (e.g. leave coverage, workload balancing)
+  startDate   DateTime?   // informational (temporary mappings)
+  endDate     DateTime?   // informational (temporary mappings)
+  officers    BranchMappingOfficer[]
+  createdById String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([branchId])
+}
+
+model BranchMappingOfficer {
+  mappingId String
+  userId    String
+  isPrimary Boolean       @default(false) // Assigned KYC Officer vs Additional KYC Officer
+  mapping   BranchMapping @relation(fields: [mappingId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id])
+
+  @@id([mappingId, userId])
+  @@index([userId])
 }
 
 model KYC {

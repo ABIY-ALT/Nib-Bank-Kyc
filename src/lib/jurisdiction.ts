@@ -61,6 +61,22 @@ export function getNormalizedRole(role?: string | null) {
 }
 
 /**
+ * Whether "now" is Saturday in the bank's local timezone (Africa/Addis_Ababa).
+ * Used by the per-officer Saturday all-branch visibility configuration.
+ */
+export function isSaturdayNow(date: Date = new Date()): boolean {
+  try {
+    const weekday = new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      timeZone: 'Africa/Addis_Ababa',
+    }).format(date);
+    return weekday === 'Sat';
+  } catch {
+    return date.getDay() === 6;
+  }
+}
+
+/**
  * Checks if a user has jurisdictional access to a specific KYC case based on their permissions.
  */
 export function hasJurisdictionalAccess(user: any, userPermissions: string[], sessionId: string, kyc: any) {
@@ -71,6 +87,11 @@ export function hasJurisdictionalAccess(user: any, userPermissions: string[], se
 
   // 1. Ownership Check (Always allowed)
   if (kyc.createdById === sessionId || kyc.assignedToId === sessionId) {
+    return true;
+  }
+
+  // 1b. Saturday Configuration: officer can see every branch on Saturdays.
+  if (user?.saturdayAllBranches && isSaturdayNow()) {
     return true;
   }
 
