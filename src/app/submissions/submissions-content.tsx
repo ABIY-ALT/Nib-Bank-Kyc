@@ -44,6 +44,7 @@ import { useState, useMemo } from "react";
 import { logBundleDownload, getSubmissionById } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { sortSubmissionsOldestFirst } from "@/lib/submission-sort";
+import { resolveDownloadFileName } from "@/lib/documents";
 import {
   buildBundleRootName,
   getSubmissionBranchName,
@@ -93,16 +94,47 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
         const docFolder = rootFolder?.folder(`${caseFolderName}/Documents`);
         for (const doc of fullSub.documents) {
           try {
+            // FIX: Ensure we use the proper download URL with credentials
             const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : doc.url);
-            const response = await fetch(downloadUrl, { credentials: 'include' });
+            
+            // SECURITY: Using 'include' credentials to ensure authorized session cookies are passed
+            const response = await fetch(downloadUrl, { 
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                'Accept': '*/*'
+              }
+            });
+
             if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-            const blob = await response.blob();
-            docFolder?.file(doc.name, blob);
-            manifestBody += `- [FILE] ${doc.name} (${doc.type || 'Unclassified'})\n`;
+            
+            const arrayBuffer = await response.arrayBuffer();
+            if (arrayBuffer.byteLength === 0) throw new Error("Received empty file buffer");
+            
+            const safeFileName = resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType);
+            docFolder?.file(safeFileName, arrayBuffer, { binary: true });
+            manifestBody += `- [FILE] ${safeFileName} (${doc.type || 'Unclassified'})\n`;
           } catch (err) {
-            manifestBody += `- [ERROR] Failed to extract asset: ${doc.name}\n`;
+            console.error(`Bundle extraction error for ${doc.name}:`, err);
+            manifestBody += `- [ERROR] Failed to extract asset: ${doc.name} (${err instanceof Error ? err.message : 'Unknown error'})\n`;
           }
         }
+
+        // Add CASE_METADATA.txt for individual case bundle
+        const caseMetadata = `CASE METADATA
+==================================================
+Case ID:           ${sub.id}
+Customer Name:     ${sub.customerName}
+Entity Type:       ${sub.entityType || 'Individual'}
+Branch:            ${branchName}
+District:          ${districtName}
+Status:            ${sub.status}
+Submitted Date:    ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : 'N/A'}
+Last Updated:      ${sub.updatedAt ? new Date(sub.updatedAt).toLocaleString() : 'N/A'}
+Document Count:    ${fullSub?.documents?.length || 0}
+==================================================`;
+        rootFolder?.folder(caseFolderName)?.file('CASE_METADATA.txt', caseMetadata);
+
       } else {
         manifestBody += "No digital assets discovered for this case.\n";
       }

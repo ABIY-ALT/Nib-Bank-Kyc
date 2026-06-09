@@ -72,6 +72,7 @@ import {
   getSubmissionDistrictName,
   sanitizeBundleSegment,
 } from "@/lib/bundle-path";
+import { resolveDownloadFileName } from "@/lib/documents";
 import { normalizeBranchName } from "@/lib/jurisdiction";
 import {
   Dialog,
@@ -277,13 +278,55 @@ export default function KYCOperationsMonitoringPage() {
       if (fullSub && fullSub.documents?.length > 0) {
         const folder = rootFolder?.folder(`${caseFolderName}/Documents`);
         for (const doc of fullSub.documents) {
-          const res = await fetch(doc.url);
-          const blob = await res.blob();
-          folder?.file(doc.name, blob);
+          try {
+            // FIX: Use downloadUrl or formatted previewUrl for secure extraction
+            const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : doc.url);
+            
+            const res = await fetch(downloadUrl, { 
+              method: 'GET',
+              credentials: 'include',
+              headers: { 'Accept': '*/*' }
+            });
+
+            if (!res.ok) throw new Error(`Fetch status: ${res.status}`);
+            
+            const buffer = await res.arrayBuffer();
+            if (buffer.byteLength === 0) throw new Error("Empty buffer received");
+            
+            const safeFileName = resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType);
+            folder?.file(safeFileName, buffer, { binary: true });
+          } catch (err) {
+            console.error(`Performance ZIP extraction failed for ${doc.name}:`, err);
+          }
         }
+
+        // Add CASE_METADATA.txt for performance export
+        const caseMetadata = `CASE METADATA
+==================================================
+Case ID:           ${sub.id}
+Customer Name:     ${sub.customerName}
+Entity Type:       ${sub.entityType || 'Individual'}
+Branch:            ${branchName}
+District:          ${districtName}
+Status:            ${sub.status}
+Submitted Date:    ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : 'N/A'}
+Last Updated:      ${sub.updatedAt ? new Date(sub.updatedAt).toLocaleString() : 'N/A'}
+Document Count:    ${fullSub?.documents?.length || 0}
+==================================================`;
+        rootFolder?.folder(caseFolderName)?.file('CASE_METADATA.txt', caseMetadata);
+
         rootFolder?.file(
           "nib_institutional_manifest.txt",
-          `CASE IDENTIFIER: ${sub.id}\nCUSTOMER ENTITY: ${sub.customerName}\nREGIONAL DIST: ${districtName}\nDISPATCH BRANCH: ${branchName}\nARCHIVE ROOT: ${bundleName}\n`
+          `NIB BANK INSTITUTIONAL ARCHIVE\n` +
+          `==================================================\n` +
+          `CASE IDENTIFIER: ${sub.id}\n` +
+          `CUSTOMER ENTITY: ${sub.customerName}\n` +
+          `REGIONAL DIST:   ${districtName}\n` +
+          `DISPATCH BRANCH: ${branchName}\n` +
+          `EXPORTED BY:     ${user.name}\n` +
+          `TIMESTAMP:       ${new Date().toLocaleString()}\n` +
+          `ARCHIVE ROOT:    ${bundleName}\n` +
+          `==================================================\n`
         );
         const content = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(content);

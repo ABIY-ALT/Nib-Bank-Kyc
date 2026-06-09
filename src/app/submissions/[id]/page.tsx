@@ -100,6 +100,13 @@ import {
   getPreviewFormatLabel,
   resolveDownloadFileName,
 } from "@/lib/documents";
+import {
+  buildBundleRootName,
+  getSubmissionBranchName,
+  getSubmissionDistrictName,
+  sanitizeBundleSegment,
+} from "@/lib/bundle-path";
+import { format } from "date-fns";
 
 const KYC_CHECKLIST_ITEMS = [
   { id: 'national_id_verified', label: 'National ID (Fayda API) Verified — Name, Photo, DOB, Address' },
@@ -412,34 +419,86 @@ export default function SubmissionDetails() {
   );
 
   const handleBulkDownload = async () => {
-    if (previewableDocuments.length === 0) return;
+    if (!submission || !user || isBulkDownloading || previewableDocuments.length === 0) return;
     setIsBulkDownloading(true);
+
     try {
       const zip = new JSZip();
-      const folderName = `Case_${routeSubmissionId}_Documents`;
-      const folder = zip.folder(folderName);
+      const now = new Date();
+      
+      const timestamp = format(now, 'yyyyMMdd_HHmmss');
+      const districtName = getSubmissionDistrictName(submission);
+      const branchName = getSubmissionBranchName(submission);
+      const bundleName = buildBundleRootName(districtName, branchName, timestamp);
+      const rootFolder = zip.folder(bundleName);
+      const caseFolderName = `${sanitizeBundleSegment(submission.id, 'CASE')}_${sanitizeBundleSegment(submission.customerName, 'CUSTOMER')}`;
 
+      const manifest = `NIB BANK INSTITUTIONAL ARCHIVE\n` +
+                       `--------------------------------------------------\n` +
+                       `CASE IDENTIFIER: ${submission.id}\n` +
+                       `CUSTOMER ENTITY: ${submission.customerName}\n` +
+                       `DISPATCH BRANCH: ${branchName}\n` +
+                       `REGIONAL DIST:   ${districtName}\n` +
+                       `EXPORTED BY:     ${user.name}\n` +
+                       `TIMESTAMP:       ${now.toLocaleString()}\n` +
+                       `ARCHIVE ROOT:    ${bundleName}\n` +
+                       `--------------------------------------------------\n\n` +
+                       `INVENTORY:\n`;
+      
+      let manifestBody = "";
+
+      const docFolder = rootFolder?.folder(`${caseFolderName}/Documents`);
+      
       for (const doc of previewableDocuments) {
         try {
           const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : "");
-          const response = await fetch(downloadUrl, { credentials: 'include' });
+          const response = await fetch(downloadUrl, { 
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Accept': '*/*' }
+          });
+
           if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-          const blob = await response.blob();
-          const filename = resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType);
-          folder?.file(filename, blob);
+          
+          const arrayBuffer = await response.arrayBuffer();
+          if (arrayBuffer.byteLength === 0) throw new Error("Received empty file buffer");
+          
+          const safeFileName = resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType);
+          docFolder?.file(safeFileName, arrayBuffer, { binary: true });
+          manifestBody += `- [FILE] ${safeFileName} (${doc.documentType || 'Unclassified'})\n`;
         } catch (err) {
-          console.error(`Failed to download ${doc.name}:`, err);
+          console.error(`Bulk download extraction error for ${doc.name}:`, err);
+          manifestBody += `- [ERROR] Failed to extract asset: ${doc.name} (${err instanceof Error ? err.message : 'Unknown error'})\n`;
         }
       }
 
+      // Add CASE_METADATA.txt for individual bulk download
+      const caseMetadata = `CASE METADATA
+==================================================
+Case ID:           ${submission.id}
+Customer Name:     ${submission.customerName}
+Entity Type:       ${submission.entityType || 'Individual'}
+Branch:            ${branchName}
+District:          ${districtName}
+Status:            ${submission.status}
+Submitted Date:    ${submission.submittedAt ? new Date(submission.submittedAt).toLocaleString() : 'N/A'}
+Last Updated:      ${submission.updatedAt ? new Date(submission.updatedAt).toLocaleString() : 'N/A'}
+Document Count:    ${previewableDocuments.length}
+==================================================`;
+      rootFolder?.folder(caseFolderName)?.file('CASE_METADATA.txt', caseMetadata);
+
+      rootFolder?.file("nib_institutional_manifest.txt", manifest + manifestBody);
+
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
-      const link = document.createElement('a');
+      const link = document.body.appendChild(document.createElement('a'));
       link.href = url;
-      link.download = `${folderName}.zip`;
+      link.download = `${bundleName}.zip`;
       link.click();
+      document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 100);
-      toast({ title: "Bulk Download Successful", description: `Downloaded ${previewableDocuments.length} files.` });
+
+      toast({ title: "Bulk Download Successful", description: `Case assets extracted into folder-style bundle.` });
     } catch (error) {
       toast({ variant: "destructive", title: "Bulk Download Failed", description: "Could not create ZIP archive." });
     } finally {

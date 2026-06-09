@@ -49,6 +49,7 @@ import {
   getSubmissionDistrictName,
   sanitizeBundleSegment,
 } from "@/lib/bundle-path";
+import { resolveDownloadFileName } from "@/lib/documents";
 
 const STATUS_OPTIONS = [
   { id: KYC_STATUS.APPROVED, label: 'Approved' },
@@ -192,10 +193,24 @@ export default function MasterBundleDownloadPage() {
             if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
               for (const doc of fullSub.documents) {
                 try {
-                  const fileRes = await fetch(doc.previewUrl || doc.url);
-                  const blob = await fileRes.blob();
-                  customerFolder?.file(doc.name, blob);
+                  // FIX: Use downloadUrl or formatted previewUrl for secure extraction
+                  const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : doc.url);
+                  
+                  const fileRes = await fetch(downloadUrl, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'Accept': '*/*' }
+                  });
+
+                  if (!fileRes.ok) throw new Error(`Fetch failed: ${fileRes.status}`);
+                  
+                  const buffer = await fileRes.arrayBuffer();
+                  if (buffer.byteLength === 0) throw new Error("Empty buffer received");
+                  
+                  const safeFileName = resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType);
+                  customerFolder?.file(safeFileName, buffer, { binary: true });
                 } catch (err) {
+                  console.error(`Master bundle extraction failed for ${doc.name}:`, err);
                 }
               }
             }

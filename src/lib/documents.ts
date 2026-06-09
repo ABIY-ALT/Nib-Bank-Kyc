@@ -18,6 +18,11 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   'image/webp': '.webp',
   'image/bmp': '.bmp',
   'image/tiff': '.tiff',
+  'pdf': '.pdf',
+  'jpg': '.jpg',
+  'jpeg': '.jpg',
+  'png': '.png',
+  'webp': '.webp',
 };
 
 /** Filename for saving to disk (prefers original upload name with extension). */
@@ -26,16 +31,32 @@ export function resolveDownloadFileName(
   originalName?: string | null,
   mimeType?: string | null
 ): string {
-  if (originalName?.trim()) return originalName.trim();
+  const cleanOriginal = originalName?.trim();
+  const cleanDisplay = displayName?.trim();
+  
+  // 1. If originalName already has a valid extension, use it immediately
+  if (cleanOriginal && /\.[a-z0-9]+$/i.test(cleanOriginal)) {
+    return cleanOriginal;
+  }
 
-  const base = (displayName?.trim() || 'document').replace(/[/\\]/g, '_');
+  // 2. Prepare the base name
+  let base = (cleanOriginal || cleanDisplay || 'document').replace(/[/\\]/g, '_');
+  
+  // 3. Resolve MIME and extension
   const mime = resolvePreviewMimeType(mimeType, base);
-  const ext = mime ? MIME_TO_EXTENSION[mime] : undefined;
+  const ext = mime ? (MIME_TO_EXTENSION[mime.toLowerCase()] || MIME_TO_EXTENSION[mime.toLowerCase().split('/')[1]]) : undefined;
 
   if (!ext) return base;
-  const lower = base.toLowerCase();
-  if (lower.endsWith(ext)) return base;
-  return `${base}${ext}`;
+
+  // 4. Ensure the extension is appended if missing
+  if (!base.toLowerCase().endsWith(ext.toLowerCase())) {
+    // If it has a different extension, don't double up, but if it has NONE, add it
+    if (!/\.[a-z0-9]+$/i.test(base)) {
+      return `${base}${ext}`;
+    }
+  }
+  
+  return base;
 }
 
 export function getDocumentDownloadUrl(file: Pick<PreviewableDocument, 'downloadUrl' | 'previewUrl'>): string {

@@ -67,6 +67,7 @@ import { format } from "date-fns";
 import JSZip from 'jszip';
 import { getStorageInventory, deleteInstitutionalFile } from '@/actions/storage';
 import { getDistricts, getBranches } from '@/actions/hierarchy';
+import { resolveDownloadFileName } from '@/lib/documents';
 import { cn } from '@/lib/utils';
 
 type AssetCategory = 'ALL' | 'INITIAL' | 'AMENDMENT' | 'MEMO' | 'OTHER';
@@ -330,40 +331,81 @@ export default function StorageVaultPage() {
       const zip = new JSZip();
       const now = new Date();
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      
-      const uniqueBranches = Array.from(new Set(filesToDownload.map(f => f.kyc?.branchName).filter(Boolean)));
-      const branchLabel = uniqueBranches.length === 1 ? uniqueBranches[0]?.replace(/[^a-zA-Z0-9]/g, '_') : 'Bulk_Extraction';
-      const bundleName = `${branchLabel}_${timestamp}`;
-      
+      const bundleName = `NIB_STORAGE_BUNDLE_${timestamp}`;
       const rootFolder = zip.folder(bundleName);
       
-      let manifestBody = "BULK INSTITUTIONAL EXTRACTION\n";
-      manifestBody += `TIMESTAMP: ${now.toLocaleString()}\n`;
-      manifestBody += `TOTAL ASSETS: ${filesToDownload.length}\n`;
-      manifestBody += `--------------------------------------------------\n\n`;
+      const manifestHeader = `NIB BANK INSTITUTIONAL STORAGE ARCHIVE\n` +
+                             `==================================================\n` +
+                             `EXPORT METADATA\n` +
+                             `==================================================\n` +
+                             `Authorizing Official:  ${user?.firstName || ''} ${user?.lastName || 'Unknown'}\n` +
+                             `Export Timestamp:      ${now.toLocaleString()}\n` +
+                             `Total Assets Extracted: ${filesToDownload.length}\n` +
+                             `Archive Root:          ${bundleName}\n` +
+                             `==================================================\n\n` +
+                             `EXTRACTION LOG:\n`;
+      
+      let manifestBody = "";
 
       toast({
         title: "Starting Bundle Extraction",
         description: `Zipping ${filesToDownload.length} files...`,
       });
 
-      for (const file of filesToDownload) {
-        try {
-          const kycId = file.kyc?.id || 'UNKNOWN_CASE';
-          const customerName = file.kyc?.customerName ? file.kyc.customerName.replace(/[^a-zA-Z0-9]/g, '_') : 'Unknown_Customer';
-          const caseFolder = rootFolder?.folder(kycId);
-          const response = await fetch(file.fileUrl);
-          const blob = await response.blob();
-          
-          const formattedDocName = `${customerName}_${file.name}`;
-          caseFolder?.file(formattedDocName, blob);
-          manifestBody += `- [SUCCESS] ${kycId}/${formattedDocName}\n`;
-        } catch (e) {
-          manifestBody += `- [ERROR] Failed to fetch: ${file.name}\n`;
+      // Group files by case for metadata generation
+      const filesByCase: Record<string, any[]> = {};
+      filesToDownload.forEach(f => {
+        const kycId = f.kyc?.id || 'UNASSIGNED';
+        if (!filesByCase[kycId]) filesByCase[kycId] = [];
+        filesByCase[kycId].push(f);
+      });
+
+      for (const [kycId, caseFiles] of Object.entries(filesByCase)) {
+        const firstFile = caseFiles[0];
+        const customerName = firstFile.kyc?.customerName || 'Unknown_Customer';
+        const safeCustomerName = customerName.replace(/[^a-zA-Z0-9]/g, '_');
+        const caseFolderName = `${kycId}_${safeCustomerName}`;
+        const caseFolder = rootFolder?.folder(caseFolderName);
+        const docFolder = caseFolder?.folder("Documents");
+
+        for (const file of caseFiles) {
+          try {
+            // FIX: Use credentials and handle binary buffer for storage extraction
+            const response = await fetch(file.fileUrl, {
+              method: 'GET',
+              credentials: 'include',
+              headers: { 'Accept': '*/*' }
+            });
+
+            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+            
+            const arrayBuffer = await response.arrayBuffer();
+            if (arrayBuffer.byteLength === 0) throw new Error("Empty buffer received");
+            
+            const safeFileName = resolveDownloadFileName(file.name, file.originalName, file.mimeType);
+            docFolder?.file(safeFileName, arrayBuffer, { binary: true });
+            manifestBody += `- [SUCCESS] ${kycId}/${safeFileName}\n`;
+          } catch (e) {
+            console.error(`Storage bundle extraction error for ${file.name}:`, e);
+            manifestBody += `- [ERROR] Failed to fetch: ${file.name} (${e instanceof Error ? e.message : 'Unknown error'})\n`;
+          }
+        }
+
+        // Add CASE_METADATA.txt for each case folder in the storage bundle
+        if (kycId !== 'UNASSIGNED') {
+          const caseMetadata = `CASE METADATA
+==================================================
+Case ID:           ${kycId}
+Customer Name:     ${customerName}
+Entity Type:       ${firstFile.kyc?.entityType || 'Individual'}
+Status:            ${firstFile.kyc?.status || 'Unknown'}
+Asset Count:       ${caseFiles.length}
+==================================================`;
+          caseFolder?.file('CASE_METADATA.txt', caseMetadata);
         }
       }
 
-      rootFolder?.file("bulk_manifest.txt", manifestBody);
+      rootFolder?.file("nib_institutional_manifest.txt", manifestHeader + manifestBody);
       
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
