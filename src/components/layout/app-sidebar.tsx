@@ -222,7 +222,7 @@ export function AppSidebar() {
                         </SidebarMenuSubItem>
                       )}
 
-                      {hasPermission('VIEW_GOVERNANCE_QUEUE') && (
+                      {(hasPermission('VIEW_GOVERNANCE_QUEUE') || (hasPermission('CASE_VIEW_OWN') && counts.exceptional > 0)) && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/exceptional'}>
                             <Link href="/submissions/exceptional">

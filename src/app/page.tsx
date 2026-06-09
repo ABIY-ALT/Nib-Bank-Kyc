@@ -39,10 +39,12 @@ import { cn } from "@/lib/utils";
 import { getSubmissions, getDashboardSummaryStats } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { getBranchOfficers } from "@/actions/branch-mappings";
+import { getBranches } from "@/actions/hierarchy";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getActiveRoleNames, getPrimaryRoleName } from "@/lib/access-control";
 import { useSidebarCounts } from "@/hooks/use-sidebar-counts";
+import { normalizeBranchName } from "@/lib/jurisdiction";
 
 function formatBranchName(name?: string | null) {
   const raw = (name || "").trim();
@@ -55,7 +57,7 @@ export default function Dashboard() {
   const { hasPermission, loading: permissionsLoading, isSuperAdmin } = usePermissions();
   const counts = useSidebarCounts(user);
   const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
-  const [summaryStats, setSummaryStats] = useState({ total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0 });
+  const [summaryStats, setSummaryStats] = useState({ total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, performanceIndex: 100 });
   const [settings, setSettings] = useState<any>(null);
   const [assignedOfficer, setAssignedOfficer] = useState<{ name: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,12 +68,24 @@ export default function Dashboard() {
       setLoading(true);
       try {
         // SECURITY: Let the server-side getSubmissions handle jurisdictional filtering
-        const isBranchUser = !isSuperAdmin && !!user.branchId;
+        const isBranchUser = !isSuperAdmin && (!!user.branchId || !!user.branchName);
+        let targetBranchId = user.branchId;
+
+        // JURISDICTIONAL RESOLUTION: If branchId is missing (common for mapped officers), 
+        // resolve it via branchName to ensure personnel visibility.
+        if (!targetBranchId && user.branchName) {
+          const allBranches = await getBranches();
+          const branch = allBranches.find(b => 
+            normalizeBranchName(b.name).toLowerCase() === normalizeBranchName(user.branchName).toLowerCase()
+          );
+          targetBranchId = branch?.id;
+        }
+
         const [subs, globalSettings, stats, officers] = await Promise.all([
           getSubmissions({ limit: 10 }),
           getGlobalSettings(),
           getDashboardSummaryStats(),
-          isBranchUser ? getBranchOfficers(user.branchId!) : Promise.resolve([]),
+          targetBranchId ? getBranchOfficers(targetBranchId) : Promise.resolve([]),
         ]);
 
         setRecentSubmissions(subs);
@@ -129,9 +143,7 @@ export default function Dashboard() {
     const unseenCount = summaryStats.unseen;
     const runningCount = summaryStats.running;
 
-    const methodologyScore = totalCount > 0 
-      ? Math.round(((totalCount - actionCount) / totalCount) * 100) 
-      : 100;
+    const methodologyScore = summaryStats.performanceIndex;
 
     return [
       { label: `${scopeLabel} Active`, value: totalCount.toString(), icon: Inbox, color: 'text-blue-600' },
@@ -181,7 +193,7 @@ export default function Dashboard() {
           )}
           {!isSuperAdmin && assignedOfficer && (
             <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 px-4 py-2 font-black h-12 flex items-center gap-2 text-xs rounded-xl shadow-sm">
-              <UserCheck className="w-4 h-4 text-primary" /> {assignedOfficer.name}
+              <UserCheck className="w-4 h-4 text-primary" /> Current KYC Officer: {assignedOfficer.name}
             </Badge>
           )}
           {isBranchOfficer && (

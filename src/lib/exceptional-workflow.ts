@@ -107,6 +107,12 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
         actionType: 'RETURN',
         requiresRemarks: true,
       },
+      {
+        nextStatus: EXCEPTIONAL_STATUS.AMENDMENT_REQUESTED,
+        label: 'Request Amendment from Branch',
+        actionType: 'AMENDMENT_REQUEST',
+        requiresRemarks: true,
+      },
     ],
   },
   [EXCEPTIONAL_STATUS.AWAITING_SUPERVISOR]: {

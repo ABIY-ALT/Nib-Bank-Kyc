@@ -3,19 +3,20 @@
  */
 
 export interface OfficerPerformanceStats {
-  total: number;      // Total Cases assigned/received
-  viewed: number;     // Viewed Cases (opened and reviewed)
-  amended: number;    // Amendment Cases (sent back for correction)
-  authorized: number; // Authorized Cases (successfully approved)
+  total: number;      // Historical total (all cases)
+  unseen: number;     // Unseen/Pending Cases
+  amended: number;    // Amendment Cases
+  authorized: number; // Authorized Cases
 }
 
 /**
- * Performance Score (%) = ((Authorized Cases + Amendment Cases) / Total Cases) × 100
+ * Performance Score (%) = ((Authorized + Amendment) / (Authorized + Amendment + Unseen)) × 100
  */
 export function calculatePerformanceIndex(stats: OfficerPerformanceStats): number {
-  const { total, amended, authorized } = stats;
-  if (total === 0) return 0;
-  return Math.round(Math.min(((authorized + amended) / total) * 100, 100));
+  const { unseen, amended, authorized } = stats;
+  const denominator = authorized + amended + unseen;
+  if (denominator === 0) return 100; // Return 100% if no work is pending or finished
+  return Math.round(Math.min(((authorized + amended) / denominator) * 100, 100));
 }
 
 /**

@@ -162,7 +162,7 @@ export default function OfficerReportsPage() {
       .map(({ _caseIds: _omit, ...o }) => {
         const accuracy = calculatePerformanceIndex({
           total: o.total,
-          viewed: o.viewed || 0,
+          unseen: o.unseen || 0,
           amended: o.amended || 0,
           authorized: o.approved || 0
         });

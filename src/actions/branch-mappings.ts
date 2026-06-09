@@ -391,6 +391,33 @@ export async function setSaturdayVisibility(userId: string, enabled: boolean) {
   }
 }
 
+export async function setAllSaturdayVisibility(userIds: string[], enabled: boolean) {
+  const actor = await requireMappingActor(true);
+  if (!userIds || userIds.length === 0) throw new Error('At least one officer is required.');
+
+  try {
+    await prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { saturdayAllBranches: enabled },
+    });
+
+    await createAuditLog({
+      userId: actor.id,
+      userEmail: actor.email,
+      userName: actor.name,
+      action: enabled ? 'SATURDAY_VISIBILITY_ENABLE_ALL' : 'SATURDAY_VISIBILITY_DISABLE_ALL',
+      details: `${enabled ? 'Enabled' : 'Disabled'} Saturday all-branch visibility for ${userIds.length} officer(s).`,
+      severity: 'HIGH',
+    });
+
+    revalidatePath('/admin/assignments');
+  } catch (error: any) {
+    if (error?.message && !error.message.startsWith('Institutional')) throw error;
+    logInstitutionalError(error, 'DB_SET_ALL_SATURDAY_VISIBILITY');
+    throw new Error('Institutional database fault during bulk Saturday configuration.');
+  }
+}
+
 export async function deleteMapping(id: string) {
   const actor = await requireMappingActor(true);
 

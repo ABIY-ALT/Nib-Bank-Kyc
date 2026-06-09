@@ -49,7 +49,8 @@ import {
   ArrowUpRight,
   RotateCcw,
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  Eye
 } from "lucide-react";
 import { getSubmissions } from '@/actions/submissions';
 import { getGlobalSettings } from '@/actions/settings';
@@ -98,12 +99,16 @@ export default function MyCasesPerformancePage() {
 
       // Jurisdiction: KYC Officers and Specialists see their mapped branches
       if (!isSuperAdmin) {
+        // PRIORITY: If user has assigned branches, use them.
         if (user.assignedBranches && user.assignedBranches.length > 0) {
           filters.branches = user.assignedBranches;
-        } else if (user.branchName) {
-          filters.branch = user.branchName;
-        } else {
-          // If no assignment, fallback to assignedToId to at least show their own cases if any
+        } 
+        // FALLBACK: Use branchName if it exists.
+        else if (user.branchName) {
+          filters.branches = [user.branchName];
+        } 
+        // SECURITY: If no branch assignment, default to their own cases to prevent data exposure.
+        else {
           filters.assignedToId = user.id;
         }
       }
@@ -143,35 +148,46 @@ export default function MyCasesPerformancePage() {
 
   const filteredSubmissions = useMemo(() => {
     return (submissions || []).filter(sub => {
-      const matchesSearch = sub.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || sub.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (sub.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (sub.id || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesBranch = selectedBranch === 'all' || sub.branchName === selectedBranch;
       const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
       const matchesType = selectedType === 'all' || sub.entityType === selectedType;
 
       // SECURITY: Ensure officers only see their own active work and history
-      // SUBMITTED cases are unassigned and should be visible to all officers in the branch
-      const isMyCase = !sub.assignedToId || sub.assignedToId === user?.id;
-      const isPending = sub.status === KYC_STATUS.SUBMITTED;
-      const matchesAssignment = isPending || isMyCase;
+      // 1. Cases assigned directly to the user
+      // 2. Unassigned cases (SUBMITTED) in their jurisdiction
+      // 3. Cases they have previously acted on (history)
+      const isMyCase = sub.assignedToId === user?.id;
+      const isUnassigned = !sub.assignedToId || sub.status === KYC_STATUS.SUBMITTED;
+      const hasHistory = sub.commentHistory?.some((h: any) => h.userId === user?.id);
+      
+      const matchesAssignment = isMyCase || isUnassigned || hasHistory;
 
       return matchesSearch && matchesBranch && matchesStatus && matchesType && matchesAssignment;
     });
   }, [submissions, searchTerm, selectedBranch, selectedStatus, selectedType, user?.id]);
 
   const stats = useMemo(() => {
-    const total = filteredSubmissions.length;
-    // CRITICAL FIX: Running count must only reflect cases assigned to the logged-in officer
-    const running = filteredSubmissions.filter(s => s.status === KYC_STATUS.IN_REVIEW && s.assignedToId === user?.id).length;
-    const completed = filteredSubmissions.filter(s => (s.status === KYC_STATUS.APPROVED || s.status === KYC_STATUS.REJECTED) && s.assignedToId === user?.id).length;
+    const running = filteredSubmissions.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;
+    const completed = filteredSubmissions.filter(s => s.status === KYC_STATUS.APPROVED).length;
+    const amendment = filteredSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length;
     const pending = filteredSubmissions.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
+
+    // REFINED: Only consider Authorize, Amendment, and Unseen (Pending) in total and performance
+    const total = completed + amendment + pending;
+    const denominator = total;
+    const numerator = completed + amendment;
+    const performanceIndex = denominator > 0 ? Math.round((numerator / denominator) * 100) : 100;
 
     const branchBreakdown: Record<string, number> = {};
     filteredSubmissions.forEach(s => {
+      // Branch breakdown still reflects all active work for context
       branchBreakdown[s.branchName] = (branchBreakdown[s.branchName] || 0) + 1;
     });
 
-    return { total, running, completed, pending, branchBreakdown };
-  }, [filteredSubmissions, user?.id]);
+    return { total, running, completed, pending, amendment, performanceIndex, branchBreakdown };
+  }, [filteredSubmissions]);
 
   const resetFilters = () => {
     setSearchTerm("");
@@ -224,44 +240,64 @@ export default function MyCasesPerformancePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all rounded-3xl bg-white overflow-hidden">
-          <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Assigned</span>
-            <Inbox className="w-3.5 h-3.5 text-primary" />
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all rounded-2xl bg-white overflow-hidden">
+          <CardHeader className="p-3 bg-slate-50/50 border-b flex flex-row items-center justify-between">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Portfolio Active</span>
+            <Inbox className="w-3 h-3 text-primary" />
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="text-5xl font-black text-slate-900 tracking-tighter">{stats.total}</div>
+          <CardContent className="pt-4 pb-6">
+            <div className="text-4xl font-black text-slate-900 tracking-tighter">{stats.total}</div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-blue-500 rounded-3xl bg-white overflow-hidden">
-          <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Running (In Review)</span>
-            <Activity className="w-3.5 h-3.5 text-blue-600" />
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-indigo-500 rounded-2xl bg-white overflow-hidden">
+          <CardHeader className="p-3 bg-slate-50/50 border-b flex flex-row items-center justify-between">
+            <span className="text-[9px] font-black uppercase text-indigo-600 tracking-widest">Unseen Analysis</span>
+            <Eye className="w-3 h-3 text-indigo-600" />
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="text-5xl font-black text-blue-600 tracking-tighter">{stats.running}</div>
+          <CardContent className="pt-4 pb-6">
+            <div className="text-4xl font-black text-indigo-600 tracking-tighter">{stats.pending}</div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 rounded-3xl bg-white overflow-hidden">
-          <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Completed Verdicts</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-blue-500 rounded-2xl bg-white overflow-hidden">
+          <CardHeader className="p-3 bg-slate-50/50 border-b flex flex-row items-center justify-between">
+            <span className="text-[9px] font-black uppercase text-blue-600 tracking-widest">Running (In Review)</span>
+            <Activity className="w-3 h-3 text-blue-600" />
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="text-5xl font-black text-emerald-600 tracking-tighter">{stats.completed}</div>
+          <CardContent className="pt-4 pb-6">
+            <div className="text-4xl font-black text-blue-600 tracking-tighter">{stats.running}</div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500 rounded-3xl bg-white overflow-hidden">
-          <CardHeader className="p-4 bg-slate-50/50 border-b flex flex-row items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-orange-600 tracking-widest">Awaiting Analysis</span>
-            <Clock className="w-3.5 h-3.5 text-orange-600" />
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500 rounded-2xl bg-white overflow-hidden">
+          <CardHeader className="p-3 bg-slate-50/50 border-b flex flex-row items-center justify-between">
+            <span className="text-[9px] font-black uppercase text-emerald-600 tracking-widest">Authorized</span>
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="text-5xl font-black text-orange-600 tracking-tighter">{stats.pending}</div>
+          <CardContent className="pt-4 pb-6">
+            <div className="text-4xl font-black text-emerald-600 tracking-tighter">{stats.completed}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500 rounded-2xl bg-white overflow-hidden">
+          <CardHeader className="p-3 bg-slate-50/50 border-b flex flex-row items-center justify-between">
+            <span className="text-[9px] font-black uppercase text-orange-600 tracking-widest">Need Amendment</span>
+            <AlertCircle className="w-3 h-3 text-orange-600" />
+          </CardHeader>
+          <CardContent className="pt-4 pb-6">
+            <div className="text-4xl font-black text-orange-600 tracking-tighter">{stats.amendment}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary rounded-2xl bg-white overflow-hidden">
+          <CardHeader className="p-3 bg-slate-50/50 border-b flex flex-row items-center justify-between">
+            <span className="text-[9px] font-black uppercase text-primary tracking-widest">Workflow Performance</span>
+            <TrendingUp className="w-3 h-3 text-primary" />
+          </CardHeader>
+          <CardContent className="pt-4 pb-6">
+            <div className="text-4xl font-black text-primary tracking-tighter">{stats.performanceIndex}%</div>
           </CardContent>
         </Card>
       </div>

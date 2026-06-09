@@ -118,36 +118,40 @@ export default function DistrictPerformancePage() {
 
   const analytics = useMemo(() => {
     const stats = {
-      total: submissions.length,
-      viewed: submissions.filter(s => [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(s.status as any)).length,
+      total: 0,
       authorized: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
       amended: submissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
       unseen: submissions.filter(s => s.status === KYC_STATUS.SUBMITTED).length,
       byBranch: {} as Record<string, any>
     };
 
+    // REFINED: Total only considers Authorized, Amended, and Unseen
+    stats.total = stats.authorized + stats.amended + stats.unseen;
+
     submissions.forEach(sub => {
       const bName = sub.branchName || 'Unmapped Branch';
       if (!stats.byBranch[bName]) {
         stats.byBranch[bName] = { 
           total: 0, 
-          viewed: 0,
+          unseen: 0,
           authorized: 0, 
           amended: 0
         };
       }
-      stats.byBranch[bName].total++;
       
-      if ([KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(sub.status as any)) {
-        stats.byBranch[bName].viewed++;
-      }
-
       if (sub.status === KYC_STATUS.APPROVED) {
         stats.byBranch[bName].authorized++;
+        stats.byBranch[bName].total++;
       }
       
       if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
         stats.byBranch[bName].amended++;
+        stats.byBranch[bName].total++;
+      }
+
+      if (sub.status === KYC_STATUS.SUBMITTED) {
+        stats.byBranch[bName].unseen++;
+        stats.byBranch[bName].total++;
       }
     });
 
@@ -264,7 +268,7 @@ export default function DistrictPerformancePage() {
         <Card className="lg:col-span-2 shadow-2xl border-slate-200 overflow-hidden bg-white rounded-3xl"><CardHeader className="bg-slate-50/50 border-b p-6"><div><CardTitle className="text-xl flex items-center gap-3 font-headline text-slate-900"><LayoutGrid className="w-5 h-5 text-primary" /> Branch Matrix</CardTitle></div></CardHeader><CardContent className="p-0"><Table><TableHeader className="bg-slate-50/80"><TableRow><TableHead className="font-black py-5 pl-8 text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead><TableHead className="font-black text-center text-[11px] uppercase text-slate-500">Volume</TableHead><TableHead className="font-black text-center text-emerald-600 text-[11px] uppercase">Authorized</TableHead><TableHead className="font-black text-right pr-8 text-[11px] uppercase w-[180px] text-slate-500">Performance Index</TableHead></TableRow></TableHeader><TableBody>{branchRows.map(([name, data]) => { 
           const efficiency = calculatePerformanceIndex({
             total: data.total,
-            viewed: data.viewed || 0,
+            unseen: data.unseen || 0,
             amended: data.amended || 0,
             authorized: data.authorized || 0
           }); 
@@ -304,14 +308,14 @@ export default function DistrictPerformancePage() {
         <div className="space-y-8"><Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white"><CardHeader className="bg-primary p-6 border-b text-white"><CardTitle className="text-white text-lg font-black uppercase tracking-widest flex items-center gap-2"><Target className="w-5 h-5 text-white" /> Regional Pulse</CardTitle></CardHeader><CardContent className="p-6 space-y-6"><div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-4"><div className="space-y-2"><div className="flex justify-between text-xs font-bold text-slate-700"><span>Performance Index</span><span>{(() => {
           return calculatePerformanceIndex({
             total: analytics.total,
-            viewed: analytics.viewed || 0,
+            unseen: analytics.unseen || 0,
             amended: analytics.amended || 0,
             authorized: analytics.authorized || 0
           });
         })()}%</span></div><Progress value={(() => {
           return calculatePerformanceIndex({
             total: analytics.total,
-            viewed: analytics.viewed || 0,
+            unseen: analytics.unseen || 0,
             amended: analytics.amended || 0,
             authorized: analytics.authorized || 0
           });

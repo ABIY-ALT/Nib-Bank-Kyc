@@ -93,10 +93,12 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
         const docFolder = rootFolder?.folder(`${caseFolderName}/Documents`);
         for (const doc of fullSub.documents) {
           try {
-            const response = await fetch(doc.url);
+            const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : doc.url);
+            const response = await fetch(downloadUrl, { credentials: 'include' });
+            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
             const blob = await response.blob();
             docFolder?.file(doc.name, blob);
-            manifestBody += `- [FILE] ${doc.name} (${doc.type})\n`;
+            manifestBody += `- [FILE] ${doc.name} (${doc.type || 'Unclassified'})\n`;
           } catch (err) {
             manifestBody += `- [ERROR] Failed to extract asset: ${doc.name}\n`;
           }
@@ -137,9 +139,14 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
 
   const getStatusBadge = (sub: any) => {
     if (sub.isExceptional && sub.exceptionalStatus && sub.exceptionalStatus !== 'NONE' && sub.exceptionalStatus !== 'COMPLETED') {
+      const isAmendment = sub.exceptionalStatus === 'AMENDMENT_REQUESTED';
       return (
-        <Badge className="bg-yellow-50 text-yellow-800 border-yellow-200 flex items-center gap-1.5 font-black text-[9px] px-3 py-1 uppercase tracking-tighter">
-          <Zap className="w-3 h-3 text-yellow-600" /> Hierarchy: {sub.exceptionalStatus.replace(/_/g, ' ')}
+        <Badge className={cn(
+          "flex items-center gap-1.5 font-black text-[9px] px-3 py-1 uppercase tracking-tighter",
+          isAmendment ? "bg-orange-50 text-orange-700 border-orange-200" : "bg-yellow-50 text-yellow-800 border-yellow-200"
+        )}>
+          <Zap className={cn("w-3 h-3", isAmendment ? "text-orange-600" : "text-yellow-600")} /> 
+          {isAmendment ? 'Additional Info Needed' : `Hierarchy: ${sub.exceptionalStatus.replace(/_/g, ' ')}`}
         </Badge>
       );
     }
@@ -201,6 +208,8 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
                 "transition-colors group",
                 sub.isUrgent
                   ? "bg-red-50/45 hover:bg-red-50 border-l-4 border-l-red-500"
+                  : sub.status === KYC_STATUS.ESCALATED
+                  ? "bg-purple-50/45 hover:bg-purple-50 border-l-4 border-l-purple-500"
                   : "hover:bg-slate-50"
               )}
             >
@@ -212,6 +221,12 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
                       <Badge className="border-red-200 bg-red-100 text-red-700 shadow-none font-black text-[8px] uppercase tracking-widest px-2 py-0.5 flex items-center gap-1">
                         <Flame className="w-2.5 h-2.5" />
                         Urgent
+                      </Badge>
+                    )}
+                    {sub.status === KYC_STATUS.ESCALATED && (
+                      <Badge className="border-purple-200 bg-purple-100 text-purple-700 shadow-none font-black text-[8px] uppercase tracking-widest px-2 py-0.5 flex items-center gap-1">
+                        <ShieldAlert className="w-2.5 h-2.5" />
+                        Escalated
                       </Badge>
                     )}
                   </div>

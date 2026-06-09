@@ -128,6 +128,9 @@ export default function KYCOperationsMonitoringPage() {
   const [sortField, setSortField] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>("asc");
 
+  const [branchSortField, setBranchSortField] = useState<string>("branch");
+  const [branchSortOrder, setBranchSortOrder] = useState<'asc' | 'desc'>("asc");
+
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   
   const [isEscalating, setIsEscalating] = useState<string | null>(null);
@@ -148,8 +151,20 @@ export default function KYCOperationsMonitoringPage() {
     }
   };
 
-  const SortIndicator = ({ field }: { field: string }) => {
-    if (sortField !== field) return (
+  const toggleBranchSort = (field: string) => {
+    if (branchSortField === field) {
+      setBranchSortOrder(branchSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setBranchSortField(field);
+      setBranchSortOrder('asc');
+    }
+  };
+
+  const SortIndicator = ({ field, currentField, currentOrder }: { field: string, currentField?: string, currentOrder?: 'asc' | 'desc' }) => {
+    const activeField = currentField || sortField;
+    const activeOrder = currentOrder || sortOrder;
+    
+    if (activeField !== field) return (
       <div className="ml-2 p-1 rounded-md bg-slate-100 group-hover:bg-slate-200 transition-colors">
         <ChevronsUpDown className="w-3 h-3 text-slate-400 opacity-50" />
       </div>
@@ -157,7 +172,7 @@ export default function KYCOperationsMonitoringPage() {
     
     return (
       <div className="ml-2 p-1 rounded-md bg-primary/10 text-primary shadow-sm animate-in zoom-in-75 duration-300">
-        {sortOrder === 'asc' ? (
+        {activeOrder === 'asc' ? (
           <ArrowUp className="w-3.5 h-3.5" />
         ) : (
           <ArrowDown className="w-3.5 h-3.5" />
@@ -340,7 +355,7 @@ export default function KYCOperationsMonitoringPage() {
 
       const performanceIndex = calculatePerformanceIndex({
         total: offSubs.length,
-        viewed,
+        unseen,
         amended,
         authorized
       });
@@ -410,7 +425,7 @@ export default function KYCOperationsMonitoringPage() {
       ? selectedOfficer.assignedBranches
       : (selectedOfficer.branchName ? [selectedOfficer.branchName] : []);
 
-    return bNames.map((name: string) => {
+    const data = bNames.map((name: string) => {
       const branchSubs = submissions.filter(s => 
         s.branchName === name && 
         (s.assignedToId === selectedOfficer.id || s.assignedToId === null)
@@ -443,7 +458,35 @@ export default function KYCOperationsMonitoringPage() {
         pending
       };
     });
-  }, [selectedOfficer, submissions]);
+
+    // Apply Sorting
+    return [...data].sort((a, b) => {
+      let comparison = 0;
+      switch (branchSortField) {
+        case 'branch':
+          comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+          break;
+        case 'totalFiles':
+          comparison = a.totalFiles - b.totalFiles;
+          break;
+        case 'unseen':
+          comparison = a.unseen - b.unseen;
+          break;
+        case 'avgResolutionMinutes':
+          comparison = a.avgResolutionMinutes - b.avgResolutionMinutes;
+          break;
+        case 'amended':
+          comparison = a.amended - b.amended;
+          break;
+        case 'pending':
+          comparison = a.pending - b.pending;
+          break;
+        default:
+          comparison = 0;
+      }
+      return branchSortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [selectedOfficer, submissions, branchSortField, branchSortOrder]);
 
   const currentCases = useMemo(() => {
     if (!selectedBranch || !selectedOfficer) return [];
@@ -885,26 +928,90 @@ export default function KYCOperationsMonitoringPage() {
                   <Table>
                     <TableHeader className="bg-slate-50 border-b">
                       <TableRow>
-                        <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch</TableHead>
-                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Uploaded Files</TableHead>
-                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Unseen Cases</TableHead>
-                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">
-                          <TooltipProvider delayDuration={150}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex items-center gap-1.5 cursor-help">
-                                  Avg. Resolution
-                                  <Info className="w-3.5 h-3.5 text-slate-400" />
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" className="max-w-xs text-xs font-medium normal-case tracking-normal leading-relaxed">
-                                Average Resolution Time is calculated from the case submission timestamp until the final authorization/completion timestamp.
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                        <TableHead 
+                          className={cn(
+                            "py-6 pl-10 font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                            branchSortField === 'branch' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                          )}
+                          onClick={() => toggleBranchSort('branch')}
+                        >
+                          <div className="flex items-center">
+                            Branch
+                            <SortIndicator field="branch" currentField={branchSortField} currentOrder={branchSortOrder} />
+                          </div>
                         </TableHead>
-                        <TableHead className="text-center font-black text-[11px] uppercase tracking-widest text-slate-500">Amend Cycles</TableHead>
-                        <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Branch SLA Health</TableHead>
+                        <TableHead 
+                          className={cn(
+                            "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                            branchSortField === 'totalFiles' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                          )}
+                          onClick={() => toggleBranchSort('totalFiles')}
+                        >
+                          <div className="flex items-center justify-center">
+                            Uploaded Files
+                            <SortIndicator field="totalFiles" currentField={branchSortField} currentOrder={branchSortOrder} />
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className={cn(
+                            "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                            branchSortField === 'unseen' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                          )}
+                          onClick={() => toggleBranchSort('unseen')}
+                        >
+                          <div className="flex items-center justify-center">
+                            Unseen Cases
+                            <SortIndicator field="unseen" currentField={branchSortField} currentOrder={branchSortOrder} />
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className={cn(
+                            "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                            branchSortField === 'avgResolutionMinutes' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                          )}
+                          onClick={() => toggleBranchSort('avgResolutionMinutes')}
+                        >
+                          <div className="flex items-center justify-center">
+                            <TooltipProvider delayDuration={150}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center gap-1.5 cursor-help">
+                                    Avg. Resolution
+                                    <Info className="w-3.5 h-3.5 text-slate-400" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="max-w-xs text-xs font-medium normal-case tracking-normal leading-relaxed">
+                                  Average Resolution Time is calculated from the case submission timestamp until the final authorization/completion timestamp.
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <SortIndicator field="avgResolutionMinutes" currentField={branchSortField} currentOrder={branchSortOrder} />
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className={cn(
+                            "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                            branchSortField === 'amended' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                          )}
+                          onClick={() => toggleBranchSort('amended')}
+                        >
+                          <div className="flex items-center justify-center">
+                            Amend Cycles
+                            <SortIndicator field="amended" currentField={branchSortField} currentOrder={branchSortOrder} />
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className={cn(
+                            "text-right pr-10 font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                            branchSortField === 'pending' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                          )}
+                          onClick={() => toggleBranchSort('pending')}
+                        >
+                          <div className="flex items-center justify-end">
+                            Branch SLA Health
+                            <SortIndicator field="pending" currentField={branchSortField} currentOrder={branchSortOrder} />
+                          </div>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

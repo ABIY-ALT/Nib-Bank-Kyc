@@ -39,17 +39,27 @@ import {
   ShieldAlert,
   X,
   History,
-  Flame
+  Flame,
+  Undo2
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissionById, updateSubmissionStatus, updateSubmissionChecklist, processExceptionalStep, resubmitSubmission, toggleSubmissionUrgentFlag } from "@/actions/submissions";
+import { 
+  getSubmissionById, 
+  updateSubmissionStatus, 
+  updateSubmissionChecklist, 
+  processExceptionalStep, 
+  resubmitSubmission, 
+  toggleSubmissionUrgentFlag,
+   returnEscalatedCaseToOfficer
+ } from "@/actions/submissions";
 import { deleteInstitutionalFile } from "@/actions/storage";
 import { getGlobalSettings } from "@/actions/settings";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import JSZip from 'jszip';
 import {
   Select,
   SelectContent,
@@ -315,6 +325,7 @@ export default function SubmissionDetails() {
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [isDocPreviewModalOpen, setIsDocPreviewModalOpen] = useState(false);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -399,6 +410,42 @@ export default function SubmissionDetails() {
     },
     [toast]
   );
+
+  const handleBulkDownload = async () => {
+    if (previewableDocuments.length === 0) return;
+    setIsBulkDownloading(true);
+    try {
+      const zip = new JSZip();
+      const folderName = `Case_${routeSubmissionId}_Documents`;
+      const folder = zip.folder(folderName);
+
+      for (const doc of previewableDocuments) {
+        try {
+          const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : "");
+          const response = await fetch(downloadUrl, { credentials: 'include' });
+          if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+          const blob = await response.blob();
+          const filename = resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType);
+          folder?.file(filename, blob);
+        } catch (err) {
+          console.error(`Failed to download ${doc.name}:`, err);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${folderName}.zip`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+      toast({ title: "Bulk Download Successful", description: `Downloaded ${previewableDocuments.length} files.` });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Bulk Download Failed", description: "Could not create ZIP archive." });
+    } finally {
+      setIsBulkDownloading(false);
+    }
+  };
 
   const handleDocumentSelect = useCallback((doc: PreviewableDocument) => {
     setActiveDocId(doc.id);
@@ -703,6 +750,23 @@ export default function SubmissionDetails() {
     }
   }, [govMemo, isActioning, refreshSubmission, remarks, resubmitFiles, submission, toast, user]);
 
+  const handleReturnFromEscalation = async () => {
+    if (!remarks.trim()) {
+      toast({ variant: "destructive", title: "Remarks Required", description: "Please provide escalation remarks." });
+      return;
+    }
+    setIsActioning("RETURN_ESCALATION");
+    try {
+      await returnEscalatedCaseToOfficer(submission.id, remarks);
+      toast({ title: "Case Returned", description: "Case has been returned to the mapped officer." });
+      router.push('/submissions');
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Return Failed", description: error.message });
+    } finally {
+      setIsActioning(null);
+    }
+  };
+
   const handleConfirmPurge = useCallback(async () => {
     if (!fileToPurge) return;
     setIsPurging(fileToPurge.id);
@@ -907,7 +971,6 @@ export default function SubmissionDetails() {
 
   const canRespondToAmendment =
     isCreator &&
-    !submission.isExceptional &&
     !isTerminal &&
     submission.status === KYC_STATUS.ACTION_REQUIRED;
 
@@ -955,6 +1018,12 @@ export default function SubmissionDetails() {
                   )}
                   {submission.isUrgent ? "Remove Urgent" : "Flag Urgent"}
                 </Button>
+              )}
+              {submission.status === KYC_STATUS.ESCALATED && (
+                <Badge variant="outline" className="font-black px-3 py-1 uppercase text-[10px] tracking-widest border-purple-200 bg-purple-50 text-purple-700">
+                  <ShieldAlert className="w-3 h-3 mr-1" />
+                  Escalated
+                </Badge>
               )}
             </div>
             {submission.isUrgent && latestUrgentRemark && (
@@ -1068,6 +1137,16 @@ export default function SubmissionDetails() {
                       <Badge variant="outline" className="border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                         {previewableDocuments.length} file{previewableDocuments.length === 1 ? "" : "s"}
                       </Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleBulkDownload}
+                        disabled={isBulkDownloading || previewableDocuments.length === 0}
+                        className="h-8 rounded-xl font-black text-[10px] uppercase tracking-widest border-primary/30 text-primary hover:bg-primary/5 gap-2"
+                      >
+                        {isBulkDownloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                        Bulk Download
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -1395,6 +1474,16 @@ export default function SubmissionDetails() {
                   {!isEscalated && (
                     <Button onClick={() => handleAction(KYC_STATUS.ESCALATED)} className="bg-slate-900 hover:bg-black text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Escalate</Button>
                   )}
+                  {isEscalated && hasPermission('MANAGE_ESCALATIONS') && (
+                    <Button 
+                      onClick={handleReturnFromEscalation} 
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-black h-12 rounded-xl shadow-lg col-span-full" 
+                      disabled={!!isActioning}
+                    >
+                      {isActioning === "RETURN_ESCALATION" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Undo2 className="w-4 h-4 mr-2" />}
+                      Return to Mapped Officer
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1532,7 +1621,8 @@ export default function SubmissionDetails() {
                               action.actionType === 'FORWARD' && "bg-primary hover:bg-primary/90 text-white",
                               action.actionType === 'RETURN' && "bg-orange-600 hover:bg-orange-700 text-white",
                               action.actionType === 'COMPLETE' && "bg-slate-900 hover:bg-black text-white",
-                              action.actionType === 'RESUBMIT' && "bg-blue-600 hover:bg-blue-700 text-white"
+                              action.actionType === 'RESUBMIT' && "bg-blue-600 hover:bg-blue-700 text-white",
+                              action.actionType === 'AMENDMENT_REQUEST' && "bg-amber-600 hover:bg-amber-700 text-white"
                             )}
                             disabled={!!isActioning}
                           >

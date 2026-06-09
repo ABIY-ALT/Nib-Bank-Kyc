@@ -149,23 +149,25 @@ export default function BranchPerformancePage() {
           name: bName, 
           district: sub.districtName, 
           volume: 0, 
-          viewed: 0,
+          unseen: 0,
           authorized: 0, 
           amended: 0
         };
       }
-      stats[bName].volume++;
       
-      if ([KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(sub.status as any)) {
-        stats[bName].viewed++;
-      }
-
       if (sub.status === KYC_STATUS.APPROVED) {
         stats[bName].authorized++;
+        stats[bName].volume++;
       }
       
       if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
         stats[bName].amended++;
+        stats[bName].volume++;
+      }
+
+      if (sub.status === KYC_STATUS.SUBMITTED) {
+        stats[bName].unseen++;
+        stats[bName].volume++;
       }
     });
 
@@ -173,7 +175,7 @@ export default function BranchPerformancePage() {
       .map(b => {
         const accuracy = calculatePerformanceIndex({
           total: b.volume,
-          viewed: b.viewed || 0,
+          unseen: b.unseen || 0,
           amended: b.amended || 0,
           authorized: b.authorized || 0
         });
@@ -196,13 +198,13 @@ export default function BranchPerformancePage() {
 
   const aggregateStats = useMemo(() => {
     const total = branchMetrics.reduce((acc, b) => acc + b.volume, 0);
-    const viewed = branchMetrics.reduce((acc, b) => acc + (b.viewed || 0), 0);
+    const unseen = branchMetrics.reduce((acc, b) => acc + (b.unseen || 0), 0);
     const authorized = branchMetrics.reduce((acc, b) => acc + (b.authorized || 0), 0);
     const amended = branchMetrics.reduce((acc, b) => acc + (b.amended || 0), 0);
     
     const accuracy = calculatePerformanceIndex({
       total,
-      viewed,
+      unseen,
       amended,
       authorized
     });

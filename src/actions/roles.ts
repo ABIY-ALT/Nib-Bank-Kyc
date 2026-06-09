@@ -21,6 +21,7 @@ const SYSTEM_CAPABILITIES = [
   { slug: 'VIEW_AMENDMENT_QUEUE', name: 'Access Amendment Review', group: 'WORKFLOWS' },
   { slug: 'CASE_VIEW_ACTION_REQUIRED', name: 'View Returned Cases', group: 'WORKFLOWS' },
   { slug: 'VIEW_ESCALATED_CASES', name: 'View Escalated Cases', group: 'WORKFLOWS' },
+  { slug: 'MANAGE_ESCALATIONS', name: 'Manage Escalated Cases', group: 'WORKFLOWS' },
   { slug: 'VIEW_GOVERNANCE_QUEUE', name: 'Access Exceptional Cases', group: 'WORKFLOWS' },
   { slug: 'TRIGGER_GOVERNANCE_FLOW', name: 'Trigger Exceptional Flow', group: 'WORKFLOWS' },
   { slug: 'CASE_FLAG_URGENT', name: 'Flag Case as Urgent', group: 'WORKFLOWS' },

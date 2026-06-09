@@ -23,7 +23,9 @@ import {
   Archive,
   Clock,
   Loader2,
-  RotateCcw
+  RotateCcw,
+  ShieldAlert,
+  Flame
 } from "lucide-react";
 import { 
   DropdownMenu,
@@ -171,15 +173,31 @@ export default function CaseArchivePage() {
 
   const getStatusBadge = (sub: any) => {
     const status = sub.status;
-    switch (status) {
-      case KYC_STATUS.APPROVED: return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 font-bold px-3 py-1">Authorized</Badge>;
-      case KYC_STATUS.SUBMITTED: 
-      case KYC_STATUS.IN_REVIEW: return <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Analysis</Badge>;
-      case KYC_STATUS.ACTION_REQUIRED: return <Badge className="bg-orange-100 text-orange-800 border-orange-200 font-bold px-3 py-1">Returned</Badge>;
-      case KYC_STATUS.REJECTED: return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 font-bold px-3 py-1">Risk Rejected</Badge>;
-      case KYC_STATUS.ESCALATED: return <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-bold px-3 py-1">Escalated</Badge>;
-      default: return <Badge variant="secondary" className="font-bold px-3 py-1">{status}</Badge>;
-    }
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          {status === KYC_STATUS.APPROVED && <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 font-bold px-3 py-1">Authorized</Badge>}
+          {(status === KYC_STATUS.SUBMITTED || status === KYC_STATUS.IN_REVIEW) && <Badge variant="outline" className="text-slate-500 font-bold px-3 py-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Analysis</Badge>}
+          {status === KYC_STATUS.ACTION_REQUIRED && <Badge className="bg-orange-100 text-orange-800 border-orange-200 font-bold px-3 py-1">Returned</Badge>}
+          {status === KYC_STATUS.REJECTED && <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200 font-bold px-3 py-1">Risk Rejected</Badge>}
+          {status === KYC_STATUS.ESCALATED && <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-bold px-3 py-1">Escalated</Badge>}
+          {![KYC_STATUS.APPROVED, KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ACTION_REQUIRED, KYC_STATUS.REJECTED, KYC_STATUS.ESCALATED].includes(status) && <Badge variant="secondary" className="font-bold px-3 py-1">{status}</Badge>}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {sub.isUrgent && (
+            <Badge variant="outline" className="font-black px-2 py-0.5 uppercase text-[8px] tracking-widest border-red-200 bg-red-50 text-red-700">
+              <Flame className="w-2.5 h-2.5 mr-1" /> Urgent
+            </Badge>
+          )}
+          {sub.status === KYC_STATUS.ESCALATED && (
+            <Badge className="border-purple-200 bg-purple-100 text-purple-700 shadow-none font-black text-[8px] uppercase tracking-widest px-2 py-0.5 flex items-center gap-1">
+              <ShieldAlert className="w-2.5 h-2.5" />
+              Escalated
+            </Badge>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (

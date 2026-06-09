@@ -213,6 +213,36 @@ export async function getSubmissions(filters?: {
     const jurisdictionalFilter = await buildJurisdictionalFilter(session, requestedDistrict, requestedBranches);
     if (jurisdictionalFilter === null) return [];
 
+    const user = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { roles: { include: { role: true } } }
+    });
+    
+    const roleNames = user?.roles.map(r => r.role.name) || [];
+    const isOfficer = roleNames.some(r => ['KYC_OFFICER', 'KYC_SPECIALIST', 'SUPERVISOR'].includes(r));
+    const isManagement = session.role === 'SUPER_ADMIN' || roleNames.includes('DISTRICT_DIRECTOR');
+
+    const where: any = {
+      status: filters?.status ? { in: filters.status } : undefined,
+      branchId: filters?.branchId,
+      createdById: filters?.submittedBy || filters?.createdById,
+      assignedToId: filters?.assignedToId,
+      isResubmitted: filters?.isResubmitted,
+      isExceptional: filters?.isExceptional ?? false,
+      entityType: filters?.entityType,
+      submittedAt: dateFilter,
+      active: true,
+      ...jurisdictionalFilter,
+    };
+
+    if (isOfficer && !isManagement && !filters?.assignedToId) {
+      where.OR = [
+        { assignedToId: session.id },
+        { assignedToId: null },
+        { status: KYC_STATUS.SUBMITTED }
+      ];
+    }
+
     // Log for suspicious patterns (non-admin accessing unfiltered submissions)
     if (session.role !== 'SUPER_ADMIN' && Object.keys(jurisdictionalFilter).length === 0) {
       logInstitutionalError(
@@ -222,18 +252,7 @@ export async function getSubmissions(filters?: {
     }
 
     const data = await prisma.kYC.findMany({
-      where: {
-        status: filters?.status ? { in: filters.status } : undefined,
-        branchId: filters?.branchId,
-        createdById: filters?.submittedBy || filters?.createdById,
-        assignedToId: filters?.assignedToId,
-        isResubmitted: filters?.isResubmitted,
-        isExceptional: filters?.isExceptional,
-        entityType: filters?.entityType,
-        submittedAt: dateFilter,
-        active: true,
-        ...jurisdictionalFilter,
-      },
+      where,
       include: {
         createdBy: true,
         assignedTo: true,
@@ -308,6 +327,7 @@ export interface CaseMetrics {
   escalated: number;
   exceptional: number;
   pending: number;
+  performanceIndex: number;
 }
 
 export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseMetrics> {
@@ -318,7 +338,7 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
   const requestedBranches = filters?.branches || (filters?.branch ? [filters.branch] : []);
   const jurisdictionalFilter = await buildJurisdictionalFilter(session, requestedDistrict, requestedBranches);
   if (jurisdictionalFilter === null) {
-    return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0 };
+    return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0, performanceIndex: 100 };
   }
 
   const dateFilter = filters?.startDate ? {
@@ -345,6 +365,26 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
     active: true,
   };
 
+  // NEW: Assignment filter for KYC Officers / Specialists to ensure Dashboard matches My Cases
+  // Only apply if filters.assignedToId is NOT explicitly provided (to avoid double filtering)
+  // and if the user is not a Super Admin or District Admin who should see everything.
+  const user = await prisma.user.findUnique({
+    where: { id: session.id },
+    select: { roles: { include: { role: true } } }
+  });
+  
+  const roleNames = user?.roles.map(r => r.role.name) || [];
+  const isOfficer = roleNames.some(r => ['KYC_OFFICER', 'KYC_SPECIALIST', 'SUPERVISOR'].includes(r));
+  const isManagement = session.role === 'SUPER_ADMIN' || roleNames.includes('DISTRICT_DIRECTOR');
+
+  if (isOfficer && !isManagement && !filters?.assignedToId) {
+    where.OR = [
+      { assignedToId: session.id },
+      { assignedToId: null },
+      { status: KYC_STATUS.SUBMITTED }
+    ];
+  }
+
   try {
     const auditLogs = await prisma.auditLog.findMany({
       where: { userId: session.id, action: 'VIEW' },
@@ -352,29 +392,39 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
     });
     const viewedIds = Array.from(new Set(auditLogs.map(log => log.kycId).filter(Boolean))) as string[];
 
-    const [total, authorized, needAmendment, running, viewed, resubmitted, escalated, exceptional, pending, unseen] = await Promise.all([
+    const [rawTotal, authorized, needAmendment, running, viewed, resubmitted, escalated, exceptional, pending, unseen] = await Promise.all([
       prisma.kYC.count({ where }),
-      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.APPROVED } }),
-      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ACTION_REQUIRED } }),
-      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.IN_REVIEW } }),
-      prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED] } } }),
-      prisma.kYC.count({ where: { ...where, isResubmitted: true } }),
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.APPROVED, isExceptional: false } }),
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ACTION_REQUIRED, isExceptional: false } }),
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.IN_REVIEW, isExceptional: false } }),
+      prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED] }, isExceptional: false } }),
+      prisma.kYC.count({ where: { ...where, isResubmitted: true, isExceptional: false } }),
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ESCALATED, isExceptional: false } }),
       prisma.kYC.count({ where: { ...where, isExceptional: true } }),
-      prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] } } }),
-      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.SUBMITTED, id: { notIn: viewedIds } } })
+      prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isExceptional: false } }),
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.SUBMITTED, id: { notIn: viewedIds }, isExceptional: false } })
     ]);
 
-    return { total, authorized, needAmendment, unseen, running, viewed, resubmitted, escalated, exceptional, pending };
+    // NEW: Refined Performance Calculation Rule
+    // Formula: (Authorized + Amendment) / (Authorized + Amendment + Unseen) * 100
+    // Total shown also only considers these three.
+    
+    const unseenTotal = pending - running; // pending includes SUBMITTED and IN_REVIEW
+    const denominator = authorized + needAmendment + unseenTotal;
+    const numerator = authorized + needAmendment;
+    const performanceIndex = denominator > 0 ? Math.round((numerator / denominator) * 100) : 100;
+    const total = denominator;
+
+    return { total, authorized, needAmendment, unseen, running, viewed, resubmitted, escalated, exceptional, pending, performanceIndex };
   } catch (error) {
     logInstitutionalError(error, 'DB_CASE_METRICS');
-    return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0 };
+    return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0, performanceIndex: 100 };
   }
 }
 
 export async function getDashboardSummaryStats() {
-  const { total, authorized, needAmendment, unseen, running } = await getCaseMetrics();
-  return { total, authorized, needAmendment, unseen, running };
+  const { total, authorized, needAmendment, unseen, running, performanceIndex } = await getCaseMetrics();
+  return { total, authorized, needAmendment, unseen, running, performanceIndex };
 }
 
 /**
@@ -697,13 +747,16 @@ export async function resubmitSubmission(formData: FormData) {
         })
       : null;
 
+    const isExceptionalAmendment = current.isExceptional && current.exceptionalStatus === EXCEPTIONAL_STATUS.AMENDMENT_REQUESTED;
+
     operations.push(
       prisma.kYC.update({
         where: { id },
         data: {
-          status: KYC_STATUS.SUBMITTED,
+          status: isExceptionalAmendment ? KYC_STATUS.ESCALATED : KYC_STATUS.SUBMITTED,
           isResubmitted: true,
-          assignedToId: primaryOfficerRecord?.userId ?? current.assignedToId,
+          exceptionalStatus: isExceptionalAmendment ? EXCEPTIONAL_STATUS.AWAITING_DIVISION : current.exceptionalStatus,
+          assignedToId: isExceptionalAmendment ? null : (primaryOfficerRecord?.userId ?? current.assignedToId),
           commentHistory: newHistory,
           updatedAt: new Date(),
         },
@@ -820,6 +873,69 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   });
 
   revalidatePath(`/submissions/${id}`);
+  return kyc;
+}
+
+export async function returnEscalatedCaseToOfficer(id: string, remarks: string) {
+  const session = await getServerSession();
+  if (!session) throw new Error("Please log in to continue.");
+
+  const current = await prisma.kYC.findUnique({ 
+    where: { id },
+    include: {
+      branch: {
+        include: {
+          mappings: {
+            where: { active: true },
+            include: { officers: { where: { isPrimary: true }, include: { user: true } } },
+          },
+        },
+      },
+    },
+  });
+
+  if (!current) throw new Error("The case could not be found.");
+
+  // Find mapped primary officer
+  const mapping = current.branch.mappings[0];
+  const mappedOfficerId = mapping?.officers[0]?.userId;
+
+  if (!mappedOfficerId) {
+    throw new Error("No primary officer is currently mapped to this branch.");
+  }
+
+  const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
+  const reviewer = await prisma.user.findUnique({ where: { id: session.id } });
+
+  const newEntry = {
+    role: session.role || 'SUPERVISOR',
+    performedBy: reviewer ? `${reviewer.firstName} ${reviewer.lastName}` : session.email,
+    userId: session.id,
+    timestamp: new Date().toISOString(),
+    comment: remarks,
+    action: 'RETURNED_FROM_ESCALATION'
+  };
+
+  const kyc = await prisma.kYC.update({
+    where: { id },
+    data: {
+      status: KYC_STATUS.IN_REVIEW, // Normal workflow continues
+      assignedToId: mappedOfficerId,
+      updatedAt: new Date(),
+      commentHistory: [...history, newEntry],
+    }
+  });
+
+  await createAuditLog({
+    userId: session.id,
+    userEmail: session.email,
+    action: 'ESCALATION_RETURN',
+    details: `Case ${current.id} returned to mapped officer with remarks.`,
+    kycId: id
+  });
+
+  revalidatePath(`/submissions/${id}`);
+  revalidatePath('/submissions');
   return kyc;
 }
 
@@ -1009,17 +1125,18 @@ export async function getWorkflowCounts() {
     const viewedIds = Array.from(new Set(auditLogs.map(log => log.kycId).filter(Boolean))) as string[];
 
     const [myCount, actionRequired, queueCounts, unseenCases, exceptionalCount, escalatedCount, resubmittedCount] = await Promise.all([
-      prisma.kYC.count({ where: { createdById: session.id, active: true } }),
+      prisma.kYC.count({ where: { createdById: session.id, active: true, isExceptional: false } }),
       prisma.kYC.count({
         where: {
           ...jurisdictionalFilter,
           status: KYC_STATUS.ACTION_REQUIRED,
+          isExceptional: false,
           active: true
         }
       }),
       prisma.kYC.groupBy({
         by: ['status'],
-        where: { ...jurisdictionalFilter, active: true },
+        where: { ...jurisdictionalFilter, active: true, isExceptional: false },
         _count: true
       }),
       prisma.kYC.count({
@@ -1027,6 +1144,7 @@ export async function getWorkflowCounts() {
           ...jurisdictionalFilter,
           status: KYC_STATUS.SUBMITTED,
           active: true,
+          isExceptional: false,
           id: { notIn: viewedIds }
         }
       }),
@@ -1052,6 +1170,7 @@ export async function getWorkflowCounts() {
         where: {
           ...jurisdictionalFilter,
           isResubmitted: true,
+          isExceptional: false,
           active: true
         }
       })
@@ -1190,6 +1309,16 @@ export async function processExceptionalStep(formData: FormData) {
 
     if (resolvedNextStatus === EXCEPTIONAL_STATUS.COMPLETED) {
       data.status = KYC_STATUS.APPROVED;
+    }
+
+    if (action.actionType === 'AMENDMENT_REQUEST') {
+      data.status = KYC_STATUS.ACTION_REQUIRED;
+      data.amendCycles = { increment: 1 };
+    }
+
+    if (action.actionType === 'RESUBMIT') {
+      data.status = KYC_STATUS.ESCALATED;
+      data.isResubmitted = true;
     }
 
     // Validate and store resubmit attachments (RESUBMIT action type only)

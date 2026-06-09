@@ -25,17 +25,17 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/use-permissions';
 import {
-  Loader2, ArrowRightLeft, Plus, Search, Building2, Users, Check,
+  Loader2, ArrowRightLeft, Plus, Search, Building2, Users, Check, CheckCircle2,
   ChevronsUpDown, Edit3, Trash2, UserPlus, UserMinus,
   Star, StarOff, Power, PowerOff, Eye, ChevronDown, ChevronRight,
-  CalendarDays, Sun, X,
+  CalendarDays, Sun, X, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
 import {
   getBranchMappings, createMapping, updateMapping, setMappingActive, setMappingsActive,
   deleteMapping, setPrimaryOfficer, addOfficers, removeOfficer, setSaturdayVisibility,
-  reassignAllOfficerBranches,
+  reassignAllOfficerBranches, setAllSaturdayVisibility,
 } from '@/actions/branch-mappings';
 import { getAllUsers } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
@@ -399,11 +399,59 @@ function OfficerAccordionRow({
   onMassReassign: (officer: any) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [sortField, setSortField] = useState<'branch' | 'district' | 'type' | 'role' | 'status'>('branch');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
   const { officer, mappings } = officerEntry;
   const activeMappings = mappings.filter((m) => m.active);
   const allActive = activeMappings.length === mappings.length;
   const noneActive = activeMappings.length === 0;
   const satOn = officer.saturdayAllBranches;
+
+  const sortedMappings = useMemo(() => {
+    return [...mappings].sort((a, b) => {
+      let valA: any, valB: any;
+      switch (sortField) {
+        case 'branch':
+          valA = a.branchName;
+          valB = b.branchName;
+          break;
+        case 'district':
+          valA = a.districtName || '';
+          valB = b.districtName || '';
+          break;
+        case 'type':
+          valA = a.type;
+          valB = b.type;
+          break;
+        case 'role':
+          valA = a.officers.find((o: any) => o.id === officer.id)?.isPrimary ? 0 : 1;
+          valB = b.officers.find((o: any) => o.id === officer.id)?.isPrimary ? 0 : 1;
+          break;
+        case 'status':
+          valA = a.active ? 0 : 1;
+          valB = b.active ? 0 : 1;
+          break;
+      }
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [mappings, sortField, sortOrder, officer.id]);
+
+  const toggleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: typeof sortField }) => {
+    if (sortField !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 opacity-20 group-hover:opacity-50 transition-opacity" />;
+    return sortOrder === 'asc' ? <ArrowDown className="w-3 h-3 ml-1 text-primary" /> : <ArrowUp className="w-3 h-3 ml-1 text-primary" />;
+  };
 
   return (
     <div className="border-b border-slate-100 last:border-0">
@@ -489,16 +537,56 @@ function OfficerAccordionRow({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Branch</th>
-                    <th className="text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400">District</th>
-                    <th className="text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Type</th>
-                    <th className="text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Role</th>
-                    <th className="text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                    <th
+                      className={cn(
+                        "text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors group",
+                        sortField === 'branch' ? "text-primary" : "text-slate-400"
+                      )}
+                      onClick={() => toggleSort('branch')}
+                    >
+                      <div className="flex items-center">Branch <SortIcon field="branch" /></div>
+                    </th>
+                    <th
+                      className={cn(
+                        "text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors group",
+                        sortField === 'district' ? "text-primary" : "text-slate-400"
+                      )}
+                      onClick={() => toggleSort('district')}
+                    >
+                      <div className="flex items-center">District <SortIcon field="district" /></div>
+                    </th>
+                    <th
+                      className={cn(
+                        "text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors group",
+                        sortField === 'type' ? "text-primary" : "text-slate-400"
+                      )}
+                      onClick={() => toggleSort('type')}
+                    >
+                      <div className="flex items-center">Type <SortIcon field="type" /></div>
+                    </th>
+                    <th
+                      className={cn(
+                        "text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors group",
+                        sortField === 'role' ? "text-primary" : "text-slate-400"
+                      )}
+                      onClick={() => toggleSort('role')}
+                    >
+                      <div className="flex items-center">Role <SortIcon field="role" /></div>
+                    </th>
+                    <th
+                      className={cn(
+                        "text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors group",
+                        sortField === 'status' ? "text-primary" : "text-slate-400"
+                      )}
+                      onClick={() => toggleSort('status')}
+                    >
+                      <div className="flex items-center">Status <SortIcon field="status" /></div>
+                    </th>
                     {canManage && <th className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {mappings.map((m) => {
+                  {sortedMappings.map((m) => {
                     const role = m.officers.find((o: any) => o.id === officer.id);
                     return (
                       <tr key={m.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
@@ -582,6 +670,7 @@ export default function BranchMappingPage() {
   const [loading, setLoading] = useState(true);
 
   const [officerSearchQ, setOfficerSearchQ] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'PERMANENT' | 'TEMPORARY'>('ALL');
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<any | null>(null);
@@ -655,9 +744,13 @@ export default function BranchMappingPage() {
     }
     const q = officerSearchQ.toLowerCase();
     return Array.from(map.values())
-      .filter((e) => !q || formatName(e.officer).toLowerCase().includes(q) || e.officer.email?.toLowerCase().includes(q))
+      .filter((e) => {
+        const matchesSearch = !q || formatName(e.officer).toLowerCase().includes(q) || e.officer.email?.toLowerCase().includes(q);
+        const matchesType = typeFilter === 'ALL' || e.mappings.some(m => m.type === typeFilter);
+        return matchesSearch && matchesType;
+      })
       .sort((a, b) => formatName(a.officer).localeCompare(formatName(b.officer)));
-  }, [mappings, allUsers, officerSearchQ]);
+  }, [mappings, allUsers, officerSearchQ, typeFilter]);
 
   const saturdayEnabledOfficers = useMemo(() =>
     officers.filter((o: any) => (allUsers.find((u: any) => u.id === o.id) as any)?.saturdayAllBranches),
@@ -825,6 +918,20 @@ export default function BranchMappingPage() {
     setCreateOpen(true);
   };
 
+  const handleBulkSaturday = async (enabled: boolean) => {
+    setSaturdayBusy('ALL');
+    try {
+      const ids = officers.map((o) => o.id);
+      await setAllSaturdayVisibility(ids, enabled);
+      toast({ title: `All officers Saturday visibility ${enabled ? 'enabled' : 'disabled'}.` });
+      await load();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Action failed', description: e.message });
+    } finally {
+      setSaturdayBusy(null);
+    }
+  };
+
   const handleMassReassign = async () => {
     if (!massReassignTarget || !massReassignNewId) return;
     setMassReassigning(true);
@@ -910,13 +1017,44 @@ export default function BranchMappingPage() {
       ══════════════════════════════════════════════════════════════════ */}
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary" /> Officer Overview
-            </h2>
-            <p className="text-sm text-muted-foreground font-medium mt-0.5">
-              All mapped KYC officers with their branch assignments
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <Users className="w-5 h-5 text-primary" /> Officer Overview
+              </h2>
+              <p className="text-sm text-muted-foreground font-medium mt-0.5">
+                All mapped KYC officers with their branch assignments
+              </p>
+            </div>
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner">
+              <button
+                onClick={() => setTypeFilter('ALL')}
+                className={cn(
+                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  typeFilter === 'ALL' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setTypeFilter('PERMANENT')}
+                className={cn(
+                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  typeFilter === 'PERMANENT' ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Permanent
+              </button>
+              <button
+                onClick={() => setTypeFilter('TEMPORARY')}
+                className={cn(
+                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  typeFilter === 'TEMPORARY' ? "bg-white text-amber-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Temporary
+              </button>
+            </div>
           </div>
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -975,14 +1113,38 @@ export default function BranchMappingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {canManage && (
             <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-black text-slate-700 flex items-center gap-2">
-                  <Sun className="w-4 h-4 text-amber-500" />
-                  Grant All-Branch Access on Saturdays
-                </CardTitle>
-                <p className="text-xs text-muted-foreground font-medium">
-                  Selected officer will see cases from all branches every Saturday, independent of their normal mappings.
-                </p>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <div className="space-y-1">
+                  <CardTitle className="text-sm font-black text-slate-700 flex items-center gap-2">
+                    <Sun className="w-4 h-4 text-amber-500" />
+                    Grant All-Branch Access on Saturdays
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Selected officer will see cases from all branches every Saturday, independent of their normal mappings.
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={saturdayBusy === 'ALL'}
+                    onClick={() => handleBulkSaturday(true)}
+                    className="h-8 px-3 rounded-lg font-black text-[10px] uppercase tracking-wider border-amber-200 text-amber-600 hover:bg-amber-50"
+                  >
+                    {saturdayBusy === 'ALL' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                    Enable All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={saturdayBusy === 'ALL'}
+                    onClick={() => handleBulkSaturday(false)}
+                    className="h-8 px-3 rounded-lg font-black text-[10px] uppercase tracking-wider border-slate-200 text-slate-500 hover:bg-slate-50"
+                  >
+                    {saturdayBusy === 'ALL' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <PowerOff className="w-3 h-3 mr-1" />}
+                    Disable All
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <SingleOfficerPicker
