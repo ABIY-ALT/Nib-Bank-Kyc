@@ -547,3 +547,74 @@ export async function removeOfficer(mappingId: string, userId: string) {
     throw new Error('Institutional database fault while removing officer.');
   }
 }
+
+export async function reassignAllOfficerBranches(oldOfficerId: string, newOfficerId: string) {
+  const actor = await requireMappingActor(true);
+  if (oldOfficerId === newOfficerId) throw new Error('Source and target officers must be different.');
+
+  try {
+    const oldUser = await prisma.user.findUnique({ where: { id: oldOfficerId } });
+    const newUser = await prisma.user.findUnique({ where: { id: newOfficerId } });
+    if (!oldUser || !newUser) throw new Error('Officer not found.');
+
+    // Find all mappings where oldOfficer is present
+    const mappings = await prisma.branchMapping.findMany({
+      where: { officers: { some: { userId: oldOfficerId } } },
+      include: { officers: true },
+    });
+
+    if (mappings.length === 0) return { count: 0 };
+
+    await prisma.$transaction(async (tx) => {
+      for (const mapping of mappings) {
+        const oldEntry = mapping.officers.find((o) => o.userId === oldOfficerId)!;
+        const newEntry = mapping.officers.find((o) => o.userId === newOfficerId);
+
+        if (newEntry) {
+          // New officer is already in this mapping.
+          // If old was primary, make new primary.
+          if (oldEntry.isPrimary) {
+            await tx.branchMappingOfficer.update({
+              where: { mappingId_userId: { mappingId: mapping.id, userId: newOfficerId } },
+              data: { isPrimary: true },
+            });
+          }
+          // Remove old officer
+          await tx.branchMappingOfficer.delete({
+            where: { mappingId_userId: { mappingId: mapping.id, userId: oldOfficerId } },
+          });
+        } else {
+          // New officer is not in this mapping.
+          // Replace old with new (same primary status).
+          await tx.branchMappingOfficer.delete({
+            where: { mappingId_userId: { mappingId: mapping.id, userId: oldOfficerId } },
+          });
+          await tx.branchMappingOfficer.create({
+            data: {
+              mappingId: mapping.id,
+              userId: newOfficerId,
+              isPrimary: oldEntry.isPrimary,
+            },
+          });
+        }
+      }
+    });
+
+    await recomputeAssignedBranches([oldOfficerId, newOfficerId]);
+
+    await createAuditLog({
+      userId: actor.id,
+      userEmail: actor.email,
+      userName: actor.name,
+      action: 'BRANCH_MAPPING_MASS_REASSIGN',
+      details: `Reassigned all ${mappings.length} branch mapping(s) from ${oldUser.firstName} ${oldUser.lastName} to ${newUser.firstName} ${newUser.lastName}.`,
+    });
+
+    revalidatePath('/admin/assignments');
+    return { count: mappings.length };
+  } catch (error: any) {
+    if (error?.message && !error.message.startsWith('Institutional')) throw error;
+    logInstitutionalError(error, 'DB_MASS_REASSIGN_MAPPINGS');
+    throw new Error('Institutional database fault during mass reassignment.');
+  }
+}

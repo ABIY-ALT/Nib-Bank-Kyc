@@ -35,6 +35,7 @@ import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
 import {
   getBranchMappings, createMapping, updateMapping, setMappingActive, setMappingsActive,
   deleteMapping, setPrimaryOfficer, addOfficers, removeOfficer, setSaturdayVisibility,
+  reassignAllOfficerBranches,
 } from '@/actions/branch-mappings';
 import { getAllUsers } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
@@ -384,7 +385,7 @@ function SingleOfficerPicker({
 function OfficerAccordionRow({
   officerEntry, canManage,
   onAddBranch, onToggleMappings, onToggleSaturday,
-  onEdit, onToggleActive, onManageOfficers, onDelete,
+  onEdit, onToggleActive, onManageOfficers, onDelete, onMassReassign,
 }: {
   officerEntry: { officer: any; mappings: any[] };
   canManage: boolean;
@@ -395,6 +396,7 @@ function OfficerAccordionRow({
   onToggleActive: (m: any) => void;
   onManageOfficers: (m: any) => void;
   onDelete: (m: any) => void;
+  onMassReassign: (officer: any) => void;
 }) {
   const [open, setOpen] = useState(false);
   const { officer, mappings } = officerEntry;
@@ -469,6 +471,13 @@ function OfficerAccordionRow({
                 className="h-9 px-4 rounded-xl font-black border-primary/30 text-primary hover:bg-primary/5 gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Branch
+              </Button>
+              <Button
+                variant="outline" size="sm"
+                onClick={() => onMassReassign(officer)}
+                className="h-9 px-4 rounded-xl font-black border-amber-500/30 text-amber-600 hover:bg-amber-50 gap-1.5"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" /> Change Officer
               </Button>
             </div>
           )}
@@ -578,6 +587,9 @@ export default function BranchMappingPage() {
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [officersTarget, setOfficersTarget] = useState<any | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [massReassignTarget, setMassReassignTarget] = useState<any | null>(null);
+  const [massReassignNewId, setMassReassignNewId] = useState('');
+  const [massReassigning, setMassReassigning] = useState(false);
 
   // create form — officerIds[0] = primary, rest = additional
   const [createForm, setCreateForm] = useState({
@@ -813,6 +825,22 @@ export default function BranchMappingPage() {
     setCreateOpen(true);
   };
 
+  const handleMassReassign = async () => {
+    if (!massReassignTarget || !massReassignNewId) return;
+    setMassReassigning(true);
+    try {
+      const res = await reassignAllOfficerBranches(massReassignTarget.id, massReassignNewId);
+      toast({ title: `Successfully reassigned ${res.count} branch mapping(s).` });
+      setMassReassignTarget(null);
+      setMassReassignNewId('');
+      await load();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Reassignment failed', description: e.message });
+    } finally {
+      setMassReassigning(false);
+    }
+  };
+
   if (loading || permLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -924,6 +952,7 @@ export default function BranchMappingPage() {
                 onToggleActive={handleToggleActive}
                 onManageOfficers={openOfficers}
                 onDelete={setDeleteTarget}
+                onMassReassign={setMassReassignTarget}
               />
             ))
           )}
@@ -1313,6 +1342,53 @@ export default function BranchMappingPage() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          MASS REASSIGN DIALOG
+      ══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={!!massReassignTarget} onOpenChange={(o) => { if (!o) { setMassReassignTarget(null); setMassReassignNewId(''); } }}>
+        <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-8 bg-amber-500 text-white">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-2xl"><ArrowRightLeft className="w-6 h-6 text-white" /></div>
+              <div>
+                <DialogTitle className="text-2xl font-black tracking-tight">Change Officer</DialogTitle>
+                <DialogDescription className="text-white/80 text-[10px] font-bold uppercase tracking-widest mt-1">
+                  Reassign all branches from {massReassignTarget ? formatName(massReassignTarget) : ''}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="p-8 space-y-6">
+            <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl space-y-2">
+              <p className="text-sm font-medium text-amber-900 leading-relaxed">
+                This will transfer <span className="font-black text-amber-600">ALL</span> branch mappings currently assigned to this officer to a new officer of your choice.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target Officer</Label>
+              <SingleOfficerPicker
+                officers={officers.filter(o => o.id !== massReassignTarget?.id)}
+                value={massReassignNewId}
+                onChange={setMassReassignNewId}
+                placeholder="Select replacement officer…"
+              />
+            </div>
+          </div>
+          <DialogFooter className="p-8 bg-slate-50 border-t flex gap-4 items-center justify-end">
+            <button onClick={() => { setMassReassignTarget(null); setMassReassignNewId(''); }} className="text-sm font-bold text-slate-400 hover:text-slate-700 transition-colors">Cancel</button>
+            <Button 
+              onClick={handleMassReassign} 
+              disabled={massReassigning || !massReassignNewId} 
+              className="bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl px-10 h-12 shadow-xl"
+            >
+              {massReassigning && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Confirm Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
