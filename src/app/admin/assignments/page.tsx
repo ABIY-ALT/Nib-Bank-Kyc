@@ -670,6 +670,7 @@ export default function BranchMappingPage() {
   const [loading, setLoading] = useState(true);
 
   const [officerSearchQ, setOfficerSearchQ] = useState('');
+  const [branchSearchQ, setBranchSearchQ] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'PERMANENT' | 'TEMPORARY'>('ALL');
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -731,6 +732,8 @@ export default function BranchMappingPage() {
   const officerEntries = useMemo(() => {
     const map = new Map<string, { officer: any; mappings: any[] }>();
     for (const m of mappings) {
+      // Apply type filter at the mapping level so only matching-type mappings appear per officer
+      if (typeFilter !== 'ALL' && m.type !== typeFilter) continue;
       for (const o of m.officers) {
         if (!map.has(o.id)) {
           const full = allUsers.find((u: any) => u.id === o.id) || {
@@ -743,14 +746,19 @@ export default function BranchMappingPage() {
       }
     }
     const q = officerSearchQ.toLowerCase();
+    const bq = branchSearchQ.toLowerCase();
     return Array.from(map.values())
+      .map((e) => ({
+        ...e,
+        // When a branch search is active, filter each officer's mapping list to matching branches only
+        mappings: bq ? e.mappings.filter((m) => m.branchName.toLowerCase().includes(bq)) : e.mappings,
+      }))
       .filter((e) => {
-        const matchesSearch = !q || formatName(e.officer).toLowerCase().includes(q) || e.officer.email?.toLowerCase().includes(q);
-        const matchesType = typeFilter === 'ALL' || e.mappings.some(m => m.type === typeFilter);
-        return matchesSearch && matchesType;
+        if (e.mappings.length === 0) return false;
+        return !q || formatName(e.officer).toLowerCase().includes(q) || e.officer.email?.toLowerCase().includes(q);
       })
       .sort((a, b) => formatName(a.officer).localeCompare(formatName(b.officer)));
-  }, [mappings, allUsers, officerSearchQ, typeFilter]);
+  }, [mappings, allUsers, officerSearchQ, branchSearchQ, typeFilter]);
 
   const saturdayEnabledOfficers = useMemo(() =>
     officers.filter((o: any) => (allUsers.find((u: any) => u.id === o.id) as any)?.saturdayAllBranches),
@@ -1056,14 +1064,25 @@ export default function BranchMappingPage() {
               </button>
             </div>
           </div>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <Input
-              placeholder="Search officer…"
-              className="pl-10 h-10 rounded-xl font-medium bg-white text-sm"
-              value={officerSearchQ}
-              onChange={(e) => setOfficerSearchQ(e.target.value)}
-            />
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative w-full sm:w-56">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder="Search officer…"
+                className="pl-10 h-10 rounded-xl font-medium bg-white text-sm"
+                value={officerSearchQ}
+                onChange={(e) => setOfficerSearchQ(e.target.value)}
+              />
+            </div>
+            <div className="relative w-full sm:w-56">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder="Search by branch…"
+                className="pl-10 h-10 rounded-xl font-medium bg-white text-sm"
+                value={branchSearchQ}
+                onChange={(e) => setBranchSearchQ(e.target.value)}
+              />
+            </div>
           </div>
         </div>
         <div className="border rounded-2xl bg-white shadow-xl overflow-hidden border-slate-200">

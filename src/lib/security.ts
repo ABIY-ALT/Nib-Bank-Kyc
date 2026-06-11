@@ -124,7 +124,7 @@ export function secureShuffle<T>(array: T[]): T[] {
  * @param memoId The database ID of the memo
  * @param ttlSeconds Token validity period (default 1 hour)
  */
-export function signDownloadToken(memoId: string, ttlSeconds: number = 3600): string {
+export function signDownloadToken(memoId: string, ttlSeconds: number = 28800): string {
   const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error('FATAL: JWT_SECRET environment variable is not set. Cannot sign download tokens.');

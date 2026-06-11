@@ -54,26 +54,31 @@ export default function ExceptionalCasesPage() {
   const isAdmin = isSuperAdmin;
   const canTrigger = hasPermission('TRIGGER_GOVERNANCE_FLOW');
   const isDistrictDirector = hasPermission('DISTRICT_DIRECTOR_REVIEW');
+  // Governance reviewers above district level see all exceptional cases (bank-wide)
+  const isGlobalGovernanceReviewer =
+    hasPermission('KYC_DIRECTOR_APPROVAL') ||
+    hasPermission('CHIEF_RETAIL_REVIEW') ||
+    hasPermission('DIVISION_MANAGER_REVIEW');
 
   const loadData = async () => {
     if (!user) return;
     setLoading(true);
     try {
       const assignedBranches = user.assignedBranches || [];
-      const branchContext = isAdmin ? undefined : (user.branchName || "RESTRICTED_BRANCH");
-      const branchesContext = isAdmin ? undefined : (assignedBranches.length > 0 ? assignedBranches : branchContext ? [branchContext] : undefined);
-      const districtContext = isDistrictDirector ? (user.districtName ?? undefined) : undefined;
+      const branchContext = isAdmin || isGlobalGovernanceReviewer ? undefined : (user.branchName || "RESTRICTED_BRANCH");
+      const branchesContext = isAdmin || isGlobalGovernanceReviewer ? undefined : (assignedBranches.length > 0 ? assignedBranches : branchContext ? [branchContext] : undefined);
+      const districtContext = isDistrictDirector && !isGlobalGovernanceReviewer ? (user.districtName ?? undefined) : undefined;
 
-      const exceptionalPromise = getSubmissions({ 
+      const exceptionalPromise = getSubmissions({
         isExceptional: true,
-        branches: !isDistrictDirector ? branchesContext : undefined,
-        district: districtContext
+        branches: (!isDistrictDirector && !isGlobalGovernanceReviewer) ? branchesContext : undefined,
+        district: districtContext,
       });
 
-      const availablePromise = getSubmissions({ 
+      const availablePromise = getSubmissions({
         isExceptional: false,
-        branches: !isDistrictDirector ? branchesContext : undefined,
-        district: districtContext
+        branches: (!isDistrictDirector && !isGlobalGovernanceReviewer) ? branchesContext : undefined,
+        district: districtContext,
       });
 
       const [exceptional, all] = await Promise.all([exceptionalPromise, availablePromise]);
@@ -93,7 +98,7 @@ export default function ExceptionalCasesPage() {
 
   useEffect(() => {
     loadData();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, isDistrictDirector, isGlobalGovernanceReviewer]);
 
   const selectedCase = useMemo(() => 
     availableCases.find(c => c.id === selectedCaseId), 

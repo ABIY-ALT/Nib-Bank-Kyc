@@ -420,7 +420,8 @@ export default function BranchMonitoringPage() {
                         <TableHead className="font-bold text-center">Total Requests</TableHead>
                         <TableHead className="font-bold text-center text-emerald-600">Authorized</TableHead>
                         <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
-                        <TableHead className="font-bold text-center text-primary">Total Cycles</TableHead>
+                        <TableHead className="font-bold text-center text-primary">Unseen</TableHead>
+                        <TableHead className="font-bold text-center text-slate-500">Total Cycles</TableHead>
                         <TableHead className="font-bold text-right pr-8">Efficiency Score</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -435,6 +436,9 @@ export default function BranchMonitoringPage() {
                             <TableCell className="text-center font-bold">{officer.total}</TableCell>
                             <TableCell className="text-center"><Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold">{officer.approved}</Badge></TableCell>
                             <TableCell className="text-center"><Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold">{officer.amended}</Badge></TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="secondary" className="bg-primary/10 text-primary font-bold">{officer.pending}</Badge>
+                            </TableCell>
                             <TableCell className="text-center">
                               <Badge variant="outline" className="border-primary/30 text-primary font-black flex items-center gap-1.5 w-fit mx-auto">
                                 <RefreshCw className="w-3 h-3" /> {officer.cycles}

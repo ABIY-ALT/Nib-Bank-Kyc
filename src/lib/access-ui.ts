@@ -203,6 +203,12 @@ export const ACCESS_CAPABILITY_CATALOG = [
     group: "WORKFLOWS",
   },
   {
+    slug: "DASHBOARD_VIEW_BRANCH",
+    label: "Branch Dashboard",
+    description: "Access the branch-level dashboard and summary view.",
+    group: "MONITORING",
+  },
+  {
     slug: "CASE_VIEW_BRANCH",
     label: "Branch Monitoring",
     description: "Monitor case activity for a branch.",

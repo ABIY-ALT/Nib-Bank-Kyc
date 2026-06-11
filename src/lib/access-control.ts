@@ -74,7 +74,6 @@ const ROUTE_RULES: RouteRule[] = [
       "DASHBOARD_VIEW_SYSTEM",
       "DASHBOARD_VIEW_BRANCH",
       "DASHBOARD_VIEW_DISTRICT",
-      "DASHBOARD_VIEW_DISTRICT_NODE",
     ],
     requiredLabel: "DASHBOARD_VIEW",
   },
@@ -165,7 +164,7 @@ const ROUTE_RULES: RouteRule[] = [
   },
   {
     matches: (pathname) => pathname === "/submissions/district-node",
-    requireAnyPermission: ["DASHBOARD_VIEW_DISTRICT", "DASHBOARD_VIEW_DISTRICT_NODE"],
+    requireAnyPermission: ["DASHBOARD_VIEW_DISTRICT"],
     requiredLabel: "DASHBOARD_VIEW_DISTRICT",
   },
   {

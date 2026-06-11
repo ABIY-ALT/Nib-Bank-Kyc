@@ -92,14 +92,22 @@ export async function GET(
     }
 
     // 4. Streamed Read to prevent memory exhaustion
-    const stream = createReadStream(memo.storageKey);
+    let stream: any;
+    try {
+      stream = createReadStream(memo.storageKey);
+    } catch (err: any) {
+      if (err?.code === 'ENOENT' || err?.message?.includes('ENOENT')) {
+        return NextResponse.json({ error: "File not found on server" }, { status: 404 });
+      }
+      throw err;
+    }
 
-    await createAuditLog({ 
-      userId: session.id, 
-      userEmail: session.email, 
-      action: 'FILE_ACCESS', 
-      details: `Accessed file: ${memo.originalName} (${memo.storageKey})`, 
-      kycId: memo.kycId 
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'FILE_ACCESS',
+      details: `Accessed file: ${memo.originalName} (${memo.storageKey})`,
+      kycId: memo.kycId
     });
 
     const contentType =
