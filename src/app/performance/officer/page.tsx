@@ -509,6 +509,9 @@ Document Count:    ${fullSub?.documents?.length || 0}
         case 'branch':
           comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
           break;
+        case 'approved':
+          comparison = a.approved - b.approved;
+          break;
         case 'totalFiles':
           comparison = a.totalFiles - b.totalFiles;
           break;
@@ -983,7 +986,19 @@ Document Count:    ${fullSub?.documents?.length || 0}
                             <SortIndicator field="branch" currentField={branchSortField} currentOrder={branchSortOrder} />
                           </div>
                         </TableHead>
-                        <TableHead 
+                        <TableHead
+                          className={cn(
+                            "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                            branchSortField === 'approved' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                          )}
+                          onClick={() => toggleBranchSort('approved')}
+                        >
+                          <div className="flex items-center justify-center">
+                            Authorized
+                            <SortIndicator field="approved" currentField={branchSortField} currentOrder={branchSortOrder} />
+                          </div>
+                        </TableHead>
+                        <TableHead
                           className={cn(
                             "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
                             branchSortField === 'totalFiles' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
@@ -1066,6 +1081,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
                               <span className="font-black text-slate-900 text-base">{b.name}</span>
                             </div>
                           </TableCell>
+                          <TableCell className="text-center font-black text-emerald-600 text-lg">{b.approved}</TableCell>
                           <TableCell className="text-center font-black text-slate-700">{b.totalFiles}</TableCell>
                           <TableCell className="text-center">
                             {b.unseen > 0 ? (
@@ -1274,8 +1290,8 @@ Document Count:    ${fullSub?.documents?.length || 0}
                 <p className="text-3xl font-black text-primary">{showSummary?.stats.branchesMapped}</p>
               </div>
               <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approved Cases</p>
-                <p className="text-3xl font-black text-emerald-600">{showSummary?.stats.approved}</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Authorized Cases</p>
+                <p className="text-3xl font-black text-emerald-600">{showSummary?.stats.authorized ?? 0}</p>
               </div>
               <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Amendment Cycles</p>

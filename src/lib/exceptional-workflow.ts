@@ -102,6 +102,12 @@ const EXCEPTIONAL_WORKFLOW_STAGES: Record<ExceptionalStatus, ExceptionalWorkflow
         requiresRemarks: true,
       },
       {
+        nextStatus: EXCEPTIONAL_STATUS.AWAITING_KYC_OFFICER,
+        label: 'Forward Directly to KYC Officer',
+        actionType: 'FORWARD',
+        requiresRemarks: true,
+      },
+      {
         nextStatus: EXCEPTIONAL_STATUS.AWAITING_DIRECTOR,
         label: 'Return to Branch Banking Director',
         actionType: 'RETURN',

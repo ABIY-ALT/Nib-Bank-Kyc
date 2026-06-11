@@ -762,10 +762,10 @@ Document Count:    ${previewableDocuments.length}
     }
 
     if (actionDetails?.requiresMemo && !govMemo) {
-      toast({ 
-        variant: "destructive", 
-        title: "Memo Required", 
-        description: "A PDF authorization memo is mandatory for this action." 
+      toast({
+        variant: "destructive",
+        title: "Memo Required",
+        description: "A PDF authorization memo is mandatory for this action."
       });
       return;
     }
@@ -1671,7 +1671,7 @@ Document Count:    ${previewableDocuments.length}
 
                       <div className="grid grid-cols-1 gap-3">
                         {actions.map((action, idx) => (
-                          <Button 
+                          <Button
                             key={idx}
                             onClick={() => handleExceptionalStep(action.nextStatus, action.label, action)}
                             className={cn(
