@@ -28,6 +28,7 @@ import {
   getNormalizedRole,
   hasJurisdictionalAccess,
   isSaturdayNow,
+  DISTRICT_DIRECTOR_ROLE,
   GLOBAL_SCOPE_PERMISSIONS,
   PORTFOLIO_SCOPE_PERMISSIONS,
   BRANCH_SCOPE_PERMISSIONS
@@ -123,7 +124,10 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
     ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
   );
 
-  const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
+  const roleNames = user.roles.map((ur: any) => ur.role?.name).filter(Boolean);
+  const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') ||
+    userPermissions.includes('DASHBOARD_VIEW_DISTRICT') ||
+    roleNames.includes(DISTRICT_DIRECTOR_ROLE);
   const assignedBranches = normalizeAssignedBranches(user.assignedBranches);
   const branchName = getResolvedUserBranchName(user);
   const districtName = getResolvedUserDistrictName(user);
@@ -352,18 +356,23 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
       : { equals: filters.status }
     : undefined;
 
-  const where: any = {
-    ...jurisdictionalFilter,
-    branchId: filters?.branchId,
-    createdById: filters?.submittedBy || filters?.createdById,
-    assignedToId: filters?.assignedToId,
-    isResubmitted: filters?.isResubmitted,
-    isExceptional: filters?.isExceptional,
-    entityType: filters?.entityType,
-    submittedAt: dateFilter,
-    status: statusFilter,
-    active: true,
-  };
+  // SECURITY: Request filters must never clobber jurisdictional filter keys.
+  // Spreading raw (possibly undefined) request values over the jurisdiction
+  // object previously erased the branch restriction (branchId: undefined wiped
+  // a branch user's scope), leaking organization-wide totals on dashboards.
+  const where: any = { ...jurisdictionalFilter, active: true };
+  const requestedCreatedById = filters?.submittedBy || filters?.createdById;
+  if (requestedCreatedById) where.createdById = requestedCreatedById;
+  if (filters?.assignedToId) where.assignedToId = filters.assignedToId;
+  if (filters?.isResubmitted !== undefined) where.isResubmitted = filters.isResubmitted;
+  if (filters?.isExceptional !== undefined) where.isExceptional = filters.isExceptional;
+  if (filters?.entityType) where.entityType = filters.entityType;
+  if (dateFilter) where.submittedAt = dateFilter;
+  if (statusFilter) where.status = statusFilter;
+  if (filters?.branchId) {
+    // A requested branch narrows the jurisdiction; it must never replace it.
+    where.AND = [{ branchId: filters.branchId }];
+  }
 
   // NEW: Assignment filter for KYC Officers / Specialists to ensure Dashboard matches My Cases
   // Only apply if filters.assignedToId is NOT explicitly provided (to avoid double filtering)
@@ -792,6 +801,28 @@ export async function resubmitSubmission(formData: FormData) {
   }
 }
 
+/**
+ * Resolves the acting primary KYC officer for a branch.
+ * BUSINESS RULE: the PERMANENT officer owns the branch; the TEMPORARY officer
+ * only acts while the permanent primary is absent (account not ACTIVE).
+ */
+async function getActingPrimaryOfficerId(branchId: string | null): Promise<string | null> {
+  if (!branchId) return null;
+
+  const mappings = await prisma.branchMapping.findMany({
+    where: { branchId, active: true },
+    include: { officers: { where: { isPrimary: true }, include: { user: true } } },
+  });
+
+  const withOfficers = mappings.filter((m: any) => m.officers.length > 0);
+  const permanentMapping = withOfficers.find((m: any) => m.type === 'PERMANENT');
+  const temporaryMapping = withOfficers.find((m: any) => m.type === 'TEMPORARY');
+  const permanentAvailable = permanentMapping?.officers[0]?.user?.status === 'ACTIVE';
+  const mapping = (permanentAvailable ? permanentMapping : temporaryMapping) ?? permanentMapping ?? withOfficers[0];
+
+  return mapping?.officers[0]?.userId ?? null;
+}
+
 export async function updateSubmissionStatus(id: string, status: string, reviewerId: string, remarks?: string) {
   const session = await getServerSession();
   if (!session) throw new Error("Please log in to continue.");
@@ -831,6 +862,20 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     throw new Error("You do not have permission to access this case.");
   }
 
+  // WORKFLOW INTEGRITY: only the mapped KYC Officer may pull a case out of
+  // "Unseen" (SUBMITTED -> IN_REVIEW). Admins, directors, managers or any
+  // other viewer opening a case must never alter its workflow state or move
+  // the Unseen/Authorized/Amendment statistics. This applies to every role,
+  // including SUPER_ADMIN — viewing is never a workflow action.
+  let isMappedOfficer = current.assignedToId === session.id;
+  if (!isMappedOfficer && !current.assignedToId) {
+    isMappedOfficer = (await getActingPrimaryOfficerId(current.branchId)) === session.id;
+  }
+
+  if (current.status === KYC_STATUS.SUBMITTED && status === KYC_STATUS.IN_REVIEW && !isMappedOfficer) {
+    throw new Error("Only the assigned KYC Officer can open this case for review.");
+  }
+
   // REDUCE DUPLICATE ENTRIES: Prevent rapid-fire or redundant status updates
   const lastEntry = history.length > 0 ? history[history.length - 1] : null;
   const isStatusChanging = current.status !== status;
@@ -863,7 +908,10 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     where: { id },
     data: {
       status,
-      assignedToId: session.id,
+      // Assignment stays with the mapped officer: actions by admins,
+      // directors or supervisors must not steal the case or shift
+      // per-officer workflow statistics to themselves.
+      assignedToId: isMappedOfficer ? session.id : current.assignedToId,
       updatedAt: new Date(),
       commentHistory: updatedHistory,
       isResubmitted: status === KYC_STATUS.SUBMITTED && current.status === KYC_STATUS.ACTION_REQUIRED,
