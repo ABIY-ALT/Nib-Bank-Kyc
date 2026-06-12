@@ -386,12 +386,10 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
   }
 
   try {
-    const auditLogs = await prisma.auditLog.findMany({
-      where: { userId: session.id, action: 'VIEW' },
-      select: { kycId: true }
-    });
-    const viewedIds = Array.from(new Set(auditLogs.map(log => log.kycId).filter(Boolean))) as string[];
-
+    // "Unseen" is purely status-driven: a case stays SUBMITTED (unseen) until the
+    // mapped KYC Officer opens it, which transitions it to IN_REVIEW. This keeps
+    // counts identical for every viewer and ensures stats only move when the
+    // mapped officer acts on a case.
     const [rawTotal, authorized, needAmendment, running, viewed, resubmitted, escalated, exceptional, pending, unseen] = await Promise.all([
       prisma.kYC.count({ where }),
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.APPROVED, isExceptional: false } }),
@@ -402,7 +400,7 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ESCALATED, isExceptional: false } }),
       prisma.kYC.count({ where: { ...where, isExceptional: true } }),
       prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isExceptional: false } }),
-      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.SUBMITTED, id: { notIn: viewedIds }, isExceptional: false } })
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.SUBMITTED, isExceptional: false } })
     ]);
 
     // NEW: Refined Performance Calculation Rule
@@ -739,13 +737,22 @@ export async function resubmitSubmission(formData: FormData) {
       operations.push(prisma.memo.createMany({ data: memoData }));
     }
 
-    // Route resubmission to the currently assigned primary officer for the branch.
-    const primaryOfficerRecord = current.branchId
-      ? await prisma.branchMappingOfficer.findFirst({
-          where: { mapping: { branchId: current.branchId, type: 'PERMANENT', active: true }, isPrimary: true },
-          select: { userId: true },
+    // Route resubmission to the branch's acting primary officer.
+    // BUSINESS RULE: the PERMANENT officer always has first priority; the
+    // TEMPORARY officer only receives cases while the permanent primary is
+    // absent (account not ACTIVE) or has no active mapping.
+    const primaryOfficers = current.branchId
+      ? await prisma.branchMappingOfficer.findMany({
+          where: { mapping: { branchId: current.branchId, active: true }, isPrimary: true },
+          select: { userId: true, user: { select: { status: true } }, mapping: { select: { type: true } } },
         })
-      : null;
+      : [];
+    const permanentPrimary = primaryOfficers.find((o) => o.mapping.type === 'PERMANENT');
+    const temporaryPrimary = primaryOfficers.find((o) => o.mapping.type === 'TEMPORARY');
+    const primaryOfficerRecord =
+      (permanentPrimary?.user.status === 'ACTIVE' ? permanentPrimary : null) ??
+      (temporaryPrimary?.user.status === 'ACTIVE' ? temporaryPrimary : null) ??
+      permanentPrimary ?? temporaryPrimary ?? null;
 
     const isExceptionalAmendment = current.isExceptional && current.exceptionalStatus === EXCEPTIONAL_STATUS.AMENDMENT_REQUESTED;
 
@@ -896,8 +903,14 @@ export async function returnEscalatedCaseToOfficer(id: string, remarks: string) 
 
   if (!current) throw new Error("The case could not be found.");
 
-  // Find mapped primary officer
-  const mapping = current.branch.mappings[0];
+  // Find the acting primary officer for the branch.
+  // BUSINESS RULE: PERMANENT officer first; the TEMPORARY officer only takes
+  // over while the permanent primary is absent (account not ACTIVE).
+  const branchMappings = current.branch.mappings.filter((m: any) => m.officers.length > 0);
+  const permanentMapping = branchMappings.find((m: any) => m.type === 'PERMANENT');
+  const temporaryMapping = branchMappings.find((m: any) => m.type === 'TEMPORARY');
+  const permanentAvailable = permanentMapping?.officers[0]?.user?.status === 'ACTIVE';
+  const mapping = (permanentAvailable ? permanentMapping : temporaryMapping) ?? permanentMapping ?? branchMappings[0];
   const mappedOfficerId = mapping?.officers[0]?.userId;
 
   if (!mappedOfficerId) {
@@ -1118,12 +1131,6 @@ export async function getWorkflowCounts() {
       return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, unseenCases: 0, branchNode: 0 };
     }
 
-    const auditLogs = await prisma.auditLog.findMany({
-      where: { userId: session.id, action: 'VIEW' },
-      select: { kycId: true }
-    });
-    const viewedIds = Array.from(new Set(auditLogs.map(log => log.kycId).filter(Boolean))) as string[];
-
     const [myCount, actionRequired, queueCounts, unseenCases, exceptionalCount, escalatedCount, resubmittedCount] = await Promise.all([
       prisma.kYC.count({ where: { createdById: session.id, active: true, isExceptional: false } }),
       prisma.kYC.count({
@@ -1139,13 +1146,14 @@ export async function getWorkflowCounts() {
         where: { ...jurisdictionalFilter, active: true, isExceptional: false },
         _count: true
       }),
+      // Status-driven: a case is "unseen" until the mapped officer opens it
+      // (open transitions SUBMITTED -> IN_REVIEW), regardless of who is viewing.
       prisma.kYC.count({
         where: {
           ...jurisdictionalFilter,
           status: KYC_STATUS.SUBMITTED,
           active: true,
-          isExceptional: false,
-          id: { notIn: viewedIds }
+          isExceptional: false
         }
       }),
       prisma.kYC.count({

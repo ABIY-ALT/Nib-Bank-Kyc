@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useToast } from "@/hooks/use-toast";
@@ -77,6 +78,7 @@ export default function ManagementReportingPage() {
   const { user } = useAuth();
   const { isSuperAdmin } = usePermissions();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -281,8 +283,10 @@ export default function ManagementReportingPage() {
     const start = startOfMonth(subDays(end, 180));
     const months = eachMonthOfInterval({ start, end });
     
+    // Unambiguous month labels: 'MMM yy' rendered "Jun 26" (June 2026), which
+    // reads like a future calendar day. Spell the year out instead.
     const trendLine = months.map(m => {
-      const monthLabel = format(m, 'MMM yy');
+      const monthLabel = format(m, 'MMM yyyy');
       const count = filteredData.filter(s => isSameMonth(new Date(s.submittedAt || s.createdAt), m)).length;
       return { name: monthLabel, volume: count };
     });
@@ -614,13 +618,28 @@ export default function ManagementReportingPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {[
-          { label: 'Total Cases', value: summaryStats?.total ?? stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white' },
-          { label: 'Unseen Analysis', value: summaryStats?.unseen ?? stats.unseen, icon: Clock, color: 'text-primary', bg: 'bg-white' },
-          { label: 'Running (In Review)', value: summaryStats?.running ?? stats.running, icon: Activity, color: 'text-blue-500', bg: 'bg-white' },
-          { label: 'Authorized Recently', value: summaryStats?.authorized ?? stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white' },
-          { label: 'Need Amendment', value: summaryStats?.needAmendment ?? stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white' },
+          { label: 'Total Cases', value: summaryStats?.total ?? stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white', status: undefined as string | undefined },
+          { label: 'Unseen Analysis', value: summaryStats?.unseen ?? stats.unseen, icon: Clock, color: 'text-primary', bg: 'bg-white', status: KYC_STATUS.SUBMITTED },
+          { label: 'Running (In Review)', value: summaryStats?.running ?? stats.running, icon: Activity, color: 'text-blue-500', bg: 'bg-white', status: KYC_STATUS.IN_REVIEW },
+          { label: 'Authorized Recently', value: summaryStats?.authorized ?? stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white', status: KYC_STATUS.APPROVED },
+          { label: 'Need Amendment', value: summaryStats?.needAmendment ?? stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white', status: KYC_STATUS.ACTION_REQUIRED },
         ].map((item, i) => (
-          <Card key={i} className={cn("shadow-lg border-slate-200 overflow-hidden group hover:scale-[1.02] transition-all rounded-2xl", item.bg)}>
+          <Card
+            key={i}
+            onClick={() => {
+              // FILTER SYNCHRONIZATION: drill into the Case Archive carrying the
+              // card's status plus the dashboard's active district/branch/date filters.
+              const params = new URLSearchParams();
+              if (item.status) params.set('status', item.status);
+              if (selectedDistrict !== 'all') params.set('district', selectedDistrict);
+              if (selectedBranch !== 'all') params.set('branch', selectedBranch);
+              if (dateRange?.from) params.set('from', dateRange.from.toISOString());
+              if (dateRange?.to) params.set('to', dateRange.to.toISOString());
+              const qs = params.toString();
+              router.push(qs ? `/submissions?${qs}` : '/submissions');
+            }}
+            className={cn("shadow-lg border-slate-200 overflow-hidden group hover:scale-[1.02] hover:border-primary/40 transition-all rounded-2xl cursor-pointer", item.bg)}
+          >
             <CardHeader className="p-4 pb-2 border-b bg-slate-50/50">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">{item.label}</span>

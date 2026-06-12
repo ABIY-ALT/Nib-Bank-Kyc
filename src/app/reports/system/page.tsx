@@ -29,7 +29,7 @@ import {
   RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissions, getCaseMetrics } from "@/actions/submissions";
+import { getSubmissions } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
@@ -51,23 +51,38 @@ export default function SystemWideReportsPage() {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
-      const [data, metrics] = await Promise.all([
-        getSubmissions(filters),
-        getCaseMetrics(filters)
-      ]);
-      setSubmissions(data || []);
+      const data = await getSubmissions(filters);
       setReportDataActive(true);
-      const branches = (data || []).reduce((acc: Record<string, number>, sub: any) => {
+
+      if (!data || data.length === 0) {
+        setSubmissions([]);
+        setStats(null);
+        return;
+      }
+
+      setSubmissions(data);
+
+      // All figures derive from the same record set so the cards, the accuracy
+      // index, and the Branch Network throughput always reconcile exactly.
+      const approved = data.filter((s: any) => s.status === KYC_STATUS.APPROVED).length;
+      const actionRequired = data.filter((s: any) => s.status === KYC_STATUS.ACTION_REQUIRED).length;
+      const unseen = data.filter((s: any) => s.status === KYC_STATUS.SUBMITTED).length;
+      const pending = data.filter((s: any) => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length;
+      const decided = approved + actionRequired;
+
+      const branches = data.reduce((acc: Record<string, number>, sub: any) => {
         const name = sub.branchName || 'Unknown Branch';
         acc[name] = (acc[name] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
+
       setStats({
-        total: metrics.total,
-        approved: metrics.authorized,
-        pending: metrics.pending,
-        unseen: metrics.unseen,
-        accuracy: metrics.total > 0 ? ((metrics.authorized / (metrics.total - metrics.pending || 1)) * 100).toFixed(1) : '0.0',
+        total: data.length,
+        approved,
+        pending,
+        unseen,
+        // Accuracy = authorized share of all decided cases (authorized + amendments).
+        accuracy: decided > 0 ? ((approved / decided) * 100).toFixed(1) : '0.0',
         branches: Object.entries(branches).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
       });
       toast({
@@ -104,6 +119,7 @@ export default function SystemWideReportsPage() {
   const resetFilters = () => {
     setReportDataActive(false);
     setSubmissions([]);
+    setStats(null);
     setDateRange(undefined);
   };
 

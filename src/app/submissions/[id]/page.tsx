@@ -57,6 +57,7 @@ import {
  } from "@/actions/submissions";
 import { deleteInstitutionalFile } from "@/actions/storage";
 import { getGlobalSettings } from "@/actions/settings";
+import { getBranchOfficers } from "@/actions/branch-mappings";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import JSZip from 'jszip';
@@ -598,7 +599,10 @@ Document Count:    ${previewableDocuments.length}
     return updatedSubmission;
   }, []);
 
-  // Automatically move to IN_REVIEW when opened by a reviewer
+  // Automatically move to IN_REVIEW only when opened by the mapped KYC Officer.
+  // Other viewers (supervisors, directors, admins) must not change case state or
+  // branch statistics by merely opening a case — Unseen decreases only when the
+  // officer mapped to the branch (or explicitly assigned) reviews it.
   useEffect(() => {
     if (
       submission &&
@@ -613,6 +617,17 @@ Document Count:    ${previewableDocuments.length}
       const autoTransition = async () => {
         autoTransitionRef.current = true;
         try {
+          let isMappedOfficer = submission.assignedToId === user.id;
+          if (!isMappedOfficer && !submission.assignedToId && submission.branchId) {
+            // Only the branch's ACTING primary may pull a case out of Unseen:
+            // the PERMANENT officer while present, or the TEMPORARY officer
+            // only while the permanent officer is absent.
+            const officers = await getBranchOfficers(submission.branchId);
+            const acting = officers.find((o: any) => o.isPrimary) || officers[0];
+            isMappedOfficer = acting?.id === user.id;
+          }
+          if (!isMappedOfficer) return;
+
           // We don't want to show a toast for an automatic background action
           await updateSubmissionStatus(submission.id, KYC_STATUS.IN_REVIEW, user.id, "Case opened for analysis.");
           await refreshSubmission(submission.id);

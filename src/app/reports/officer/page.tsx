@@ -332,7 +332,7 @@ export default function OfficerReportsPage() {
                     <TableHead className="font-black py-5 pl-8 text-slate-500 text-[11px] uppercase">Officer Name</TableHead>
                     <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase text-center">Total Reviews</TableHead>
                     <TableHead className="font-black py-5 text-emerald-600 text-[11px] uppercase text-center">Authorized</TableHead>
-                    <TableHead className="font-black py-5 text-orange-600 text-[11px] uppercase text-center">Amended</TableHead>
+                    <TableHead className="font-black py-5 text-orange-600 text-[11px] uppercase text-center">Amendments</TableHead>
                     <TableHead className="text-right font-black py-5 pr-8 text-slate-500 text-[11px] uppercase">Accuracy Index</TableHead>
                   </TableRow>
                 </TableHeader>

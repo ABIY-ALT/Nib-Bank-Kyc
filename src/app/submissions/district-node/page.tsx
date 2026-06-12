@@ -2,11 +2,14 @@
 "use client"
 
 import { useMemo, useState, useEffect } from "react";
-import { 
+import {
+  ArrowDown,
+  ArrowUp,
   Check,
   ChevronsUpDown,
-  Loader2, 
-  Search, 
+  FileDown,
+  Loader2,
+  Search,
   ShieldCheck, 
   Users, 
   TrendingUp, 
@@ -84,6 +87,35 @@ export default function DistrictMonitoringPage() {
   const [staffMatrixSearch, setStaffMatrixSearch] = useState("");
   const [staffMatrixOpen, setStaffMatrixOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [branchSortField, setBranchSortField] = useState<string>("name");
+  const [branchSortOrder, setBranchSortOrder] = useState<'asc' | 'desc'>("asc");
+  const [staffSortField, setStaffSortField] = useState<string>("name");
+  const [staffSortOrder, setStaffSortOrder] = useState<'asc' | 'desc'>("asc");
+
+  const toggleBranchSort = (field: string) => {
+    if (branchSortField === field) {
+      setBranchSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setBranchSortField(field);
+      setBranchSortOrder('asc');
+    }
+  };
+
+  const toggleStaffSort = (field: string) => {
+    if (staffSortField === field) {
+      setStaffSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setStaffSortField(field);
+      setStaffSortOrder('asc');
+    }
+  };
+
+  const SortIndicator = ({ field, activeField, order }: { field: string, activeField: string, order: 'asc' | 'desc' }) => {
+    if (activeField !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 inline-block text-slate-300" />;
+    return order === 'asc'
+      ? <ArrowUp className="w-3 h-3 ml-1 inline-block text-primary" />
+      : <ArrowDown className="w-3 h-3 ml-1 inline-block text-primary" />;
+  };
 
   const isAdmin = isSuperAdmin;
   const districtName = user?.districtName || "";
@@ -113,15 +145,22 @@ export default function DistrictMonitoringPage() {
     loadData();
   }, [user, isAdmin, districtName, dateRange]);
 
+  // Branch filter scopes the entire page (cards, charts, matrices) so all
+  // counts and totals reflect the selected filter criteria.
+  const scopedSubmissions = useMemo(() => {
+    if (matrixBranchFilter === "all") return submissions;
+    return submissions.filter((s: any) => (s.branch?.name || s.branchName) === matrixBranchFilter);
+  }, [submissions, matrixBranchFilter]);
+
   const analytics = useMemo(() => {
-    if (!submissions || submissions.length === 0) return null;
+    if (!scopedSubmissions || scopedSubmissions.length === 0) return null;
 
     const stats = {
-      total: submissions.length,
-      approved: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
-      pending: submissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
-      rejected: submissions.filter(s => s.status === KYC_STATUS.REJECTED).length,
-      amended: submissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
+      total: scopedSubmissions.length,
+      approved: scopedSubmissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
+      pending: scopedSubmissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
+      rejected: scopedSubmissions.filter(s => s.status === KYC_STATUS.REJECTED).length,
+      amended: scopedSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
       branches: {} as Record<string, { name: string, total: number, approved: number, pending: number, amended: number }>,
       officers: {} as Record<string, { name: string, total: number, approved: number, amended: number, pending: number, cycles: number }>,
       byStatus: [
@@ -135,7 +174,7 @@ export default function DistrictMonitoringPage() {
 
     const dateMap: Record<string, number> = {};
 
-    submissions.forEach(sub => {
+    scopedSubmissions.forEach(sub => {
       // SECURITY: Log any district mismatches for audit (backend filtering should prevent these)
       if (!isAdmin && districtName) {
         const branchDistrict = sub.branch?.district?.name || '';
@@ -185,15 +224,28 @@ export default function DistrictMonitoringPage() {
       }
 
       if (sub.submittedAt) {
-        const d = format(new Date(sub.submittedAt), 'MMM dd');
-        dateMap[d] = (dateMap[d] || 0) + 1;
+        const submitted = new Date(sub.submittedAt);
+        // Guard against invalid or future-dated records corrupting the trend graph.
+        if (!isNaN(submitted.getTime()) && submitted.getTime() <= Date.now()) {
+          const key = format(submitted, 'yyyy-MM-dd');
+          dateMap[key] = (dateMap[key] || 0) + 1;
+        }
       }
     });
 
-    stats.volumeHistory = Object.entries(dateMap).map(([date, count]) => ({ date, count }));
+    // Chronological order; keep the year visible for non-current-year records so
+    // days from different years never collapse into a single misleading label.
+    const currentYear = new Date().getFullYear();
+    stats.volumeHistory = Object.keys(dateMap)
+      .sort()
+      .map((key) => {
+        const day = new Date(`${key}T00:00:00`);
+        const label = day.getFullYear() === currentYear ? format(day, 'MMM dd') : format(day, 'MMM dd, yyyy');
+        return { date: label, count: dateMap[key] };
+      });
 
     return stats;
-  }, [submissions]);
+  }, [scopedSubmissions, isAdmin, districtName]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -204,7 +256,7 @@ export default function DistrictMonitoringPage() {
       const matchesDistrict = isAdmin ? true : (sub.branch?.district?.name === districtName || sub.districtName === districtName);
       return matchesSearch && matchesBranch && matchesDistrict;
     });
-  }, [submissions, searchTerm]);
+  }, [submissions, searchTerm, matrixBranchFilter, isAdmin, districtName]);
 
   const branchMatrixOptions = useMemo(() => {
     return Object.keys(analytics?.branches || {}).sort((a, b) => a.localeCompare(b));
@@ -241,6 +293,57 @@ export default function DistrictMonitoringPage() {
     }
   }, [staffMatrixFilter, staffMatrixOptions]);
 
+  const sortRows = (rows: any[], field: string, order: 'asc' | 'desc') =>
+    [...rows].sort((a, b) => {
+      const va = a[field];
+      const vb = b[field];
+      const cmp = typeof va === 'string' ? va.localeCompare(String(vb)) : (va || 0) - (vb || 0);
+      return order === 'asc' ? cmp : -cmp;
+    });
+
+  const branchRows = useMemo(() => {
+    const rows = (Object.values(analytics?.branches || {}) as any[])
+      .filter((branch) => matrixBranchFilter === "all" || branch.name === matrixBranchFilter)
+      .map((branch) => ({
+        ...branch,
+        efficiency: Math.round((branch.approved / (branch.total - branch.pending || 1)) * 100),
+      }));
+    return sortRows(rows, branchSortField, branchSortOrder);
+  }, [analytics?.branches, matrixBranchFilter, branchSortField, branchSortOrder]);
+
+  const staffRows = useMemo(() => {
+    const rows = (Object.values(analytics?.officers || {}) as any[])
+      .filter((officer) => staffMatrixFilter === "all" || officer.name === staffMatrixFilter)
+      .map((officer) => ({
+        ...officer,
+        efficiency: Math.round((officer.approved / (officer.total - officer.pending || 1)) * 100),
+      }));
+    return sortRows(rows, staffSortField, staffSortOrder);
+  }, [analytics?.officers, staffMatrixFilter, staffSortField, staffSortOrder]);
+
+  const handleExportCSV = () => {
+    if (!filteredSubmissions || filteredSubmissions.length === 0) return;
+    const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Amendments', 'Submitted At', 'Updated At'];
+    const rows = filteredSubmissions.map((s: any) => [
+      s.id,
+      s.customerName,
+      s.branch?.name || s.branchName || '',
+      s.branch?.district?.name || s.districtName || '',
+      s.status,
+      s.amendCycles || 0,
+      s.submittedAt ? format(new Date(s.submittedAt), 'yyyy-MM-dd HH:mm') : '',
+      s.updatedAt ? format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm') : '',
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `district-monitoring-${format(new Date(), 'yyyyMMdd_HHmm')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -265,6 +368,9 @@ export default function DistrictMonitoringPage() {
         </div>
         <div className="flex gap-3">
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
+          <Button onClick={handleExportCSV} className="h-12 px-6 gap-2 bg-primary text-white font-bold rounded-xl shadow-sm hover:bg-primary/90">
+            <FileDown className="w-4 h-4" /> Export CSV
+          </Button>
         </div>
       </div>
 
@@ -423,19 +529,17 @@ export default function DistrictMonitoringPage() {
                   <Table>
                     <TableHeader className="bg-slate-50/80">
                       <TableRow>
-                        <TableHead className="font-bold py-4 pl-8">Branch</TableHead>
-                        <TableHead className="font-bold text-center">Case Volume</TableHead>
-                        <TableHead className="font-bold text-center text-emerald-600">Authorized</TableHead>
-                        <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
-                        <TableHead className="font-bold text-center text-primary">Unseen</TableHead>
-                        <TableHead className="font-bold text-right pr-8">Efficiency Index</TableHead>
+                        <TableHead className="font-bold py-4 pl-8 cursor-pointer select-none" onClick={() => toggleBranchSort('name')}>Branch<SortIndicator field="name" activeField={branchSortField} order={branchSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center cursor-pointer select-none" onClick={() => toggleBranchSort('total')}>Case Volume<SortIndicator field="total" activeField={branchSortField} order={branchSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center text-emerald-600 cursor-pointer select-none" onClick={() => toggleBranchSort('approved')}>Authorized<SortIndicator field="approved" activeField={branchSortField} order={branchSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center text-orange-600 cursor-pointer select-none" onClick={() => toggleBranchSort('amended')}>Amendments<SortIndicator field="amended" activeField={branchSortField} order={branchSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center text-primary cursor-pointer select-none" onClick={() => toggleBranchSort('pending')}>Unseen<SortIndicator field="pending" activeField={branchSortField} order={branchSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-right pr-8 cursor-pointer select-none" onClick={() => toggleBranchSort('efficiency')}>Efficiency Index<SortIndicator field="efficiency" activeField={branchSortField} order={branchSortOrder} /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {Object.values(analytics?.branches || {})
-                        .filter((branch) => matrixBranchFilter === "all" || branch.name === matrixBranchFilter)
-                        .map((branch) => {
-                        const efficiency = Math.round((branch.approved / (branch.total - branch.pending || 1)) * 100);
+                      {branchRows.map((branch) => {
+                        const efficiency = branch.efficiency;
                         return (
                           <TableRow key={branch.name} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="py-4 pl-8 font-bold text-slate-900 flex items-center gap-3">
@@ -531,20 +635,18 @@ export default function DistrictMonitoringPage() {
                   <Table>
                     <TableHeader className="bg-slate-50/80">
                       <TableRow>
-                        <TableHead className="font-bold py-4 pl-8">Staff Member</TableHead>
-                        <TableHead className="font-bold text-center">Total Requests</TableHead>
-                        <TableHead className="font-bold text-center text-emerald-600">Authorized</TableHead>
-                        <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
-                        <TableHead className="font-bold text-center text-primary">Unseen</TableHead>
-                        <TableHead className="font-bold text-center text-slate-500">Total Cycles</TableHead>
-                        <TableHead className="font-bold text-right pr-8">Efficiency Score</TableHead>
+                        <TableHead className="font-bold py-4 pl-8 cursor-pointer select-none" onClick={() => toggleStaffSort('name')}>Staff Member<SortIndicator field="name" activeField={staffSortField} order={staffSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center cursor-pointer select-none" onClick={() => toggleStaffSort('total')}>Total Requests<SortIndicator field="total" activeField={staffSortField} order={staffSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center text-emerald-600 cursor-pointer select-none" onClick={() => toggleStaffSort('approved')}>Authorized<SortIndicator field="approved" activeField={staffSortField} order={staffSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center text-orange-600 cursor-pointer select-none" onClick={() => toggleStaffSort('amended')}>Amendments<SortIndicator field="amended" activeField={staffSortField} order={staffSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center text-primary cursor-pointer select-none" onClick={() => toggleStaffSort('pending')}>Unseen<SortIndicator field="pending" activeField={staffSortField} order={staffSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center text-slate-500 cursor-pointer select-none" onClick={() => toggleStaffSort('cycles')}>Total Cycles<SortIndicator field="cycles" activeField={staffSortField} order={staffSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-right pr-8 cursor-pointer select-none" onClick={() => toggleStaffSort('efficiency')}>Efficiency Score<SortIndicator field="efficiency" activeField={staffSortField} order={staffSortOrder} /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {Object.values(analytics?.officers || {})
-                        .filter((officer) => staffMatrixFilter === "all" || officer.name === staffMatrixFilter)
-                        .map((officer) => {
-                        const efficiency = Math.round((officer.approved / (officer.total - officer.pending || 1)) * 100);
+                      {staffRows.map((officer) => {
+                        const efficiency = officer.efficiency;
                         return (
                           <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="py-4 pl-8 font-bold text-slate-900">{officer.name}</TableCell>

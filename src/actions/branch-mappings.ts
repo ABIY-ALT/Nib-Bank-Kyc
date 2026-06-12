@@ -127,10 +127,24 @@ export async function getBranchOfficers(branchId: string) {
       include: {
         officers: {
           include: {
-            user: { select: { id: true, firstName: true, lastName: true, email: true } },
+            user: { select: { id: true, firstName: true, lastName: true, email: true, status: true } },
           },
         },
       },
+    });
+
+    // BUSINESS RULE: the PERMANENT officer owns the branch and always has first
+    // priority. The TEMPORARY officer is absence coverage only — they become the
+    // acting officer solely when the permanent primary is absent (account not
+    // ACTIVE) or no active permanent mapping exists.
+    const permanentPrimary = mappings
+      .find((m) => m.type === 'PERMANENT')
+      ?.officers.find((o) => o.isPrimary);
+    const permanentAvailable = !!permanentPrimary && permanentPrimary.user.status === 'ACTIVE';
+    mappings.sort((a, b) => {
+      if (a.type === b.type) return 0;
+      const first = permanentAvailable ? 'PERMANENT' : 'TEMPORARY';
+      return a.type === first ? -1 : 1;
     });
 
     const seen = new Set<string>();
@@ -193,16 +207,30 @@ export async function createMapping(input: {
         continue;
       }
 
-      // A branch may have at most one PERMANENT mapping (edit it instead of recreating).
-      if (type === 'PERMANENT') {
-        const existing = await prisma.branchMapping.findFirst({
-          where: { branchId, type: 'PERMANENT' },
-          select: { id: true },
-        });
-        if (existing) {
-          skipped.push(branchName);
-          continue;
-        }
+      // A branch may have at most one PERMANENT and one TEMPORARY mapping
+      // (edit the existing one instead of recreating it).
+      const existingSameType = await prisma.branchMapping.findFirst({
+        where: { branchId, type },
+        select: { id: true },
+      });
+      if (existingSameType) {
+        skipped.push(branchName);
+        continue;
+      }
+
+      // Prevent duplicate mappings: the same branch must not be assigned to the
+      // same KYC officer twice (e.g. as both permanent and temporary primary).
+      const duplicateOfficer = await prisma.branchMapping.findFirst({
+        where: {
+          branchId,
+          active: true,
+          officers: { some: { userId: input.primaryOfficerId, isPrimary: true } },
+        },
+        select: { id: true },
+      });
+      if (duplicateOfficer) {
+        skipped.push(branchName);
+        continue;
       }
 
       await prisma.branchMapping.create({
@@ -224,9 +252,7 @@ export async function createMapping(input: {
 
     if (created.length === 0) {
       throw new Error(
-        type === 'PERMANENT'
-          ? 'All selected branches already have a permanent mapping. Edit those instead.'
-          : 'No mappings could be created for the selected branches.',
+        `All selected branches already have a ${type.toLowerCase()} mapping or are already assigned to this officer. Edit the existing mapping instead.`,
       );
     }
 
@@ -261,14 +287,14 @@ export async function updateMapping(
     });
     if (!current) throw new Error('Mapping not found.');
 
-    // Prevent creating a second permanent mapping on the same branch via type change.
-    if (input.type === 'PERMANENT' && current.type !== 'PERMANENT') {
+    // Prevent creating a second mapping of the same type on a branch via type change.
+    if (input.type && input.type !== current.type) {
       const existing = await prisma.branchMapping.findFirst({
-        where: { branchId: current.branchId, type: 'PERMANENT', id: { not: id } },
+        where: { branchId: current.branchId, type: input.type, id: { not: id } },
         select: { id: true },
       });
       if (existing) {
-        throw new Error(`"${current.branch?.name}" already has a permanent mapping.`);
+        throw new Error(`"${current.branch?.name}" already has a ${input.type.toLowerCase()} mapping.`);
       }
     }
 

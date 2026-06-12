@@ -3,8 +3,11 @@
 
 import { useMemo, useState, useEffect } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   Check,
   ChevronsUpDown,
+  FileDown,
   Loader2,
   Search,
   ShieldCheck,
@@ -82,6 +85,24 @@ export default function BranchMonitoringPage() {
   const [staffMatrixSearch, setStaffMatrixSearch] = useState("");
   const [staffMatrixOpen, setStaffMatrixOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [staffSortField, setStaffSortField] = useState<string>("name");
+  const [staffSortOrder, setStaffSortOrder] = useState<'asc' | 'desc'>("asc");
+
+  const toggleStaffSort = (field: string) => {
+    if (staffSortField === field) {
+      setStaffSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setStaffSortField(field);
+      setStaffSortOrder('asc');
+    }
+  };
+
+  const StaffSortIndicator = ({ field }: { field: string }) => {
+    if (staffSortField !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 inline-block text-slate-300" />;
+    return staffSortOrder === 'asc'
+      ? <ArrowUp className="w-3 h-3 ml-1 inline-block text-primary" />
+      : <ArrowDown className="w-3 h-3 ml-1 inline-block text-primary" />;
+  };
 
   const isAdmin = isSuperAdmin;
 
@@ -168,12 +189,25 @@ export default function BranchMonitoringPage() {
       }
 
       if (sub.submittedAt) {
-        const d = format(new Date(sub.submittedAt), 'MMM dd');
-        dateMap[d] = (dateMap[d] || 0) + 1;
+        const submitted = new Date(sub.submittedAt);
+        // Guard against invalid or future-dated records corrupting the trend graph.
+        if (!isNaN(submitted.getTime()) && submitted.getTime() <= Date.now()) {
+          const key = format(submitted, 'yyyy-MM-dd');
+          dateMap[key] = (dateMap[key] || 0) + 1;
+        }
       }
     });
 
-    stats.volumeHistory = Object.entries(dateMap).map(([date, count]) => ({ date, count }));
+    // Chronological order; keep the year visible for non-current-year records so
+    // days from different years never collapse into a single misleading label.
+    const currentYear = new Date().getFullYear();
+    stats.volumeHistory = Object.keys(dateMap)
+      .sort()
+      .map((key) => {
+        const day = new Date(`${key}T00:00:00`);
+        const label = day.getFullYear() === currentYear ? format(day, 'MMM dd') : format(day, 'MMM dd, yyyy');
+        return { date: label, count: dateMap[key] };
+      });
 
     return stats;
   }, [submissions]);
@@ -214,6 +248,44 @@ export default function BranchMonitoringPage() {
       setStaffMatrixFilter("all");
     }
   }, [staffMatrixFilter, staffMatrixOptions]);
+
+  const staffRows = useMemo(() => {
+    const rows = (Object.values(analytics?.officers || {}) as any[])
+      .filter((officer) => staffMatrixFilter === "all" || officer.name === staffMatrixFilter)
+      .map((officer) => ({
+        ...officer,
+        efficiency: Math.round((officer.approved / (officer.total - officer.pending || 1)) * 100),
+      }));
+    return rows.sort((a, b) => {
+      const va = a[staffSortField];
+      const vb = b[staffSortField];
+      const cmp = typeof va === 'string' ? va.localeCompare(String(vb)) : (va || 0) - (vb || 0);
+      return staffSortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [analytics?.officers, staffMatrixFilter, staffSortField, staffSortOrder]);
+
+  const handleExportCSV = () => {
+    if (!filteredSubmissions || filteredSubmissions.length === 0) return;
+    const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Amendments', 'Submitted At', 'Updated At'];
+    const rows = filteredSubmissions.map((s: any) => [
+      s.id,
+      s.customerName,
+      s.branch?.name || s.branchName || '',
+      s.branch?.district?.name || s.districtName || '',
+      s.status,
+      s.amendCycles || 0,
+      s.submittedAt ? format(new Date(s.submittedAt), 'yyyy-MM-dd HH:mm') : '',
+      s.updatedAt ? format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm') : '',
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `branch-monitoring-${format(new Date(), 'yyyyMMdd_HHmm')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -262,6 +334,9 @@ export default function BranchMonitoringPage() {
         </div>
         <div className="flex gap-3">
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
+          <Button onClick={handleExportCSV} className="h-12 px-6 gap-2 bg-primary text-white font-bold rounded-xl shadow-sm hover:bg-primary/90">
+            <FileDown className="w-4 h-4" /> Export CSV
+          </Button>
         </div>
       </div>
 
@@ -416,20 +491,18 @@ export default function BranchMonitoringPage() {
                   <Table>
                     <TableHeader className="bg-slate-50/80">
                       <TableRow>
-                        <TableHead className="font-bold py-4 pl-8">Staff Member</TableHead>
-                        <TableHead className="font-bold text-center">Total Requests</TableHead>
-                        <TableHead className="font-bold text-center text-emerald-600">Authorized</TableHead>
-                        <TableHead className="font-bold text-center text-orange-600">Amended</TableHead>
-                        <TableHead className="font-bold text-center text-primary">Unseen</TableHead>
-                        <TableHead className="font-bold text-center text-slate-500">Total Cycles</TableHead>
-                        <TableHead className="font-bold text-right pr-8">Efficiency Score</TableHead>
+                        <TableHead className="font-bold py-4 pl-8 cursor-pointer select-none" onClick={() => toggleStaffSort('name')}>Staff Member<StaffSortIndicator field="name" /></TableHead>
+                        <TableHead className="font-bold text-center cursor-pointer select-none" onClick={() => toggleStaffSort('total')}>Total Requests<StaffSortIndicator field="total" /></TableHead>
+                        <TableHead className="font-bold text-center text-emerald-600 cursor-pointer select-none" onClick={() => toggleStaffSort('approved')}>Authorized<StaffSortIndicator field="approved" /></TableHead>
+                        <TableHead className="font-bold text-center text-orange-600 cursor-pointer select-none" onClick={() => toggleStaffSort('amended')}>Amendments<StaffSortIndicator field="amended" /></TableHead>
+                        <TableHead className="font-bold text-center text-primary cursor-pointer select-none" onClick={() => toggleStaffSort('pending')}>Unseen<StaffSortIndicator field="pending" /></TableHead>
+                        <TableHead className="font-bold text-center text-slate-500 cursor-pointer select-none" onClick={() => toggleStaffSort('cycles')}>Total Cycles<StaffSortIndicator field="cycles" /></TableHead>
+                        <TableHead className="font-bold text-right pr-8 cursor-pointer select-none" onClick={() => toggleStaffSort('efficiency')}>Efficiency Score<StaffSortIndicator field="efficiency" /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {Object.values(analytics?.officers || {})
-                        .filter((officer) => staffMatrixFilter === "all" || officer.name === staffMatrixFilter)
-                        .map((officer) => {
-                        const efficiency = Math.round((officer.approved / (officer.total - officer.pending || 1)) * 100);
+                      {staffRows.map((officer) => {
+                        const efficiency = officer.efficiency;
                         return (
                           <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="py-4 pl-8 font-bold text-slate-900">{officer.name}</TableCell>

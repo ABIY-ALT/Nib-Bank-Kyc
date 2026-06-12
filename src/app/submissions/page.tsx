@@ -15,9 +15,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Search, 
-  Filter, 
+import {
+  Search,
+  Filter,
   Eye,
   FileDown,
   Archive,
@@ -25,7 +25,11 @@ import {
   Loader2,
   RotateCcw,
   ShieldAlert,
-  Flame
+  Flame,
+  Download,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUpDown
 } from "lucide-react";
 import { 
   DropdownMenu,
@@ -43,11 +47,15 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { getSubmissions } from "@/actions/submissions";
+import { getSubmissions, getSubmissionById, logBundleDownload } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import { format } from "date-fns";
 import { sortSubmissionsOldestFirst } from "@/lib/submission-sort";
+import JSZip from 'jszip';
+import { sanitizeBundleSegment } from "@/lib/bundle-path";
+import { resolveDownloadFileName } from "@/lib/documents";
+import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS = [
   { id: KYC_STATUS.APPROVED, label: 'Authorized' },
@@ -69,6 +77,31 @@ export default function CaseArchivePage() {
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [sortField, setSortField] = useState<string>('submittedAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [isZipping, setIsZipping] = useState<string | null>(null);
+
+  // FILTER SYNCHRONIZATION: dashboard cards redirect here with their active
+  // filters (e.g. /submissions?status=SUBMITTED&district=X&branch=Y&from=...&to=...)
+  // so the archive shows exactly the records behind the clicked card.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('status');
+    if (status) setSelectedStatuses(status.split(',').filter(Boolean));
+    const district = params.get('district');
+    if (district) setSelectedDistricts(district.split(',').filter(Boolean));
+    const branch = params.get('branch');
+    if (branch) setSelectedBranches(branch.split(',').filter(Boolean));
+    const from = params.get('from');
+    const to = params.get('to');
+    if (from) {
+      const fromDate = new Date(from);
+      if (!isNaN(fromDate.getTime())) {
+        const toDate = to ? new Date(to) : undefined;
+        setDateRange({ from: fromDate, to: toDate && !isNaN(toDate.getTime()) ? toDate : undefined });
+      }
+    }
+  }, []);
 
   useEffect(() => {
     loadArchive();
@@ -131,10 +164,85 @@ export default function CaseArchivePage() {
     });
   }, [submissions, searchTerm, selectedStatuses, selectedDistricts, selectedBranches]);
 
-  // Ensure oldest-first ordering (first submitted at top)
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  // Default oldest-first ordering, overridable by clicking column headers.
   const orderedFilteredSubmissions = useMemo(() => {
-    return sortSubmissionsOldestFirst(filteredSubmissions || []);
-  }, [filteredSubmissions]);
+    const base = sortSubmissionsOldestFirst(filteredSubmissions || []);
+    const valueOf = (s: any): string | number => {
+      switch (sortField) {
+        case 'id': return (s.id || '').toLowerCase();
+        case 'customer': return (s.customerName || '').toLowerCase();
+        case 'branch': return (s.branchName || '').toLowerCase();
+        case 'district': return (s.districtName || '').toLowerCase();
+        case 'status': return s.status || '';
+        case 'updatedAt': return s.updatedAt ? new Date(s.updatedAt).getTime() : 0;
+        case 'submittedAt':
+        default: return s.submittedAt ? new Date(s.submittedAt).getTime() : 0;
+      }
+    };
+    return [...base].sort((a, b) => {
+      const va = valueOf(a);
+      const vb = valueOf(b);
+      const cmp = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb));
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [filteredSubmissions, sortField, sortOrder]);
+
+  const handleDownloadZip = async (sub: any) => {
+    setIsZipping(sub.id);
+    try {
+      const fullSub = await getSubmissionById(sub.id);
+      if (!fullSub || !fullSub.documents || fullSub.documents.length === 0) {
+        toast({ variant: "destructive", title: "No Documents", description: "This case has no documents available for download." });
+        return;
+      }
+      const zip = new JSZip();
+      const folderName = `${sanitizeBundleSegment(sub.id, 'CASE')}_${sanitizeBundleSegment(sub.customerName, 'CUSTOMER')}`;
+      const folder = zip.folder(folderName);
+      for (const doc of fullSub.documents) {
+        try {
+          const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : doc.url);
+          const res = await fetch(downloadUrl, { method: 'GET', credentials: 'include' });
+          if (!res.ok) throw new Error(`Fetch status: ${res.status}`);
+          const buffer = await res.arrayBuffer();
+          if (buffer.byteLength === 0) throw new Error("Empty buffer received");
+          folder?.file(resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType), buffer, { binary: true });
+        } catch (err) {
+          console.error(`Archive ZIP extraction failed for ${doc.name}:`, err);
+        }
+      }
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${folderName}.zip`;
+      link.click();
+      URL.revokeObjectURL(url);
+      await logBundleDownload({ submissionId: sub.id, bundleName: folderName });
+      toast({ title: "ZIP Downloaded", description: `${fullSub.documents.length} document(s) bundled.` });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Download Failed", description: "Could not assemble the case ZIP bundle." });
+    } finally {
+      setIsZipping(null);
+    }
+  };
+
+  const SortIndicator = ({ field }: { field: string }) => {
+    if (sortField !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 inline-block text-slate-300" />;
+    return sortOrder === 'asc'
+      ? <ArrowUp className="w-3 h-3 ml-1 inline-block text-primary" />
+      : <ArrowDown className="w-3 h-3 ml-1 inline-block text-primary" />;
+  };
 
   const handleExportCSV = () => {
     if (filteredSubmissions.length === 0) return;
@@ -292,19 +400,44 @@ export default function CaseArchivePage() {
         <Table>
           <TableHeader className="bg-slate-50/50">
             <TableRow>
-              <TableHead className="font-bold text-slate-600 w-[120px] py-4">Case ID</TableHead>
-              <TableHead className="font-bold text-slate-600">Customer Details</TableHead>
-              <TableHead className="font-bold text-slate-600">District & Branch</TableHead>
-              <TableHead className="font-bold text-slate-600">Workflow Status</TableHead>
-              <TableHead className="font-bold text-slate-600">Submitted On</TableHead>
+              <TableHead className={cn("font-bold w-[120px] py-4 cursor-pointer select-none", sortField === 'id' ? "text-primary" : "text-slate-600")} onClick={() => toggleSort('id')}>
+                Case ID<SortIndicator field="id" />
+              </TableHead>
+              <TableHead className={cn("font-bold cursor-pointer select-none", sortField === 'customer' ? "text-primary" : "text-slate-600")} onClick={() => toggleSort('customer')}>
+                Customer Details<SortIndicator field="customer" />
+              </TableHead>
+              <TableHead
+                className={cn("font-bold cursor-pointer select-none", ['branch', 'district'].includes(sortField) ? "text-primary" : "text-slate-600")}
+                onClick={() => {
+                  // Cycle: branch asc -> branch desc -> district asc -> district desc -> branch asc
+                  if (sortField === 'branch' && sortOrder === 'asc') setSortOrder('desc');
+                  else if (sortField === 'branch') { setSortField('district'); setSortOrder('asc'); }
+                  else if (sortField === 'district' && sortOrder === 'asc') setSortOrder('desc');
+                  else { setSortField('branch'); setSortOrder('asc'); }
+                }}
+              >
+                District & Branch
+                {sortField === 'district' && <span className="text-[9px] uppercase ml-1">(District)</span>}
+                {sortField === 'branch' && <span className="text-[9px] uppercase ml-1">(Branch)</span>}
+                <SortIndicator field={['branch', 'district'].includes(sortField) ? sortField : 'branch'} />
+              </TableHead>
+              <TableHead className={cn("font-bold cursor-pointer select-none", sortField === 'status' ? "text-primary" : "text-slate-600")} onClick={() => toggleSort('status')}>
+                Workflow Status<SortIndicator field="status" />
+              </TableHead>
+              <TableHead className={cn("font-bold cursor-pointer select-none", sortField === 'submittedAt' ? "text-primary" : "text-slate-600")} onClick={() => toggleSort('submittedAt')}>
+                Submitted On<SortIndicator field="submittedAt" />
+              </TableHead>
+              <TableHead className={cn("font-bold cursor-pointer select-none", sortField === 'updatedAt' ? "text-primary" : "text-slate-600")} onClick={() => toggleSort('updatedAt')}>
+                Updated On<SortIndicator field="updatedAt" />
+              </TableHead>
               <TableHead className="text-right font-bold text-slate-600 pr-8">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-20"><Loader2 className="animate-spin inline-block w-6 h-6 text-primary" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-20"><Loader2 className="animate-spin inline-block w-6 h-6 text-primary" /></TableCell></TableRow>
             ) : orderedFilteredSubmissions.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-20">No records found matching your selection.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-20">No records found matching your selection.</TableCell></TableRow>
             ) : orderedFilteredSubmissions.map((sub) => (
               <TableRow key={sub.id} className="group hover:bg-slate-50">
                 <TableCell className="font-bold text-primary py-4">{sub.id}</TableCell>
@@ -317,7 +450,22 @@ export default function CaseArchivePage() {
                 </TableCell>
                 <TableCell>{getStatusBadge(sub)}</TableCell>
                 <TableCell className="text-slate-500 font-medium text-xs">{sub.submittedAt ? format(new Date(sub.submittedAt), 'MMM dd, yyyy') : 'N/A'}</TableCell>
-                <TableCell className="text-right pr-8"><Button variant="ghost" size="icon" asChild className="rounded-full text-primary"><Link href={`/submissions/${sub.id}`}><Eye className="h-4 w-4" /></Link></Button></TableCell>
+                <TableCell className="text-slate-500 font-medium text-xs">{sub.updatedAt ? format(new Date(sub.updatedAt), 'MMM dd, yyyy') : 'N/A'}</TableCell>
+                <TableCell className="text-right pr-8">
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDownloadZip(sub)}
+                      disabled={isZipping === sub.id}
+                      className="rounded-full text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                      title="Download all case documents (ZIP)"
+                    >
+                      {isZipping === sub.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" asChild className="rounded-full text-primary"><Link href={`/submissions/${sub.id}`}><Eye className="h-4 w-4" /></Link></Button>
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

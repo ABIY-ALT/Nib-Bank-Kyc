@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  MoreVertical, 
+import {
+  MoreVertical,
   Eye,
   History,
   AlertCircle,
@@ -26,7 +26,10 @@ import {
   ShieldAlert,
   Building2,
   MapPin,
-  Flame
+  Flame,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUpDown
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -57,7 +60,47 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
   const { toast } = useToast();
   const { user } = useAuth();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const sortedSubmissions = useMemo(() => sortSubmissionsOldestFirst(submissions || []), [submissions]);
+  const [sortField, setSortField] = useState<string>('submittedAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const SortIndicator = ({ field }: { field: string }) => {
+    if (sortField !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 inline-block text-slate-300" />;
+    return sortOrder === 'asc'
+      ? <ArrowUp className="w-3 h-3 ml-1 inline-block text-primary" />
+      : <ArrowDown className="w-3 h-3 ml-1 inline-block text-primary" />;
+  };
+
+  // Default oldest-first ordering, overridable by clicking column headers.
+  const sortedSubmissions = useMemo(() => {
+    const base = sortSubmissionsOldestFirst(submissions || []);
+    const valueOf = (s: any): string | number => {
+      switch (sortField) {
+        case 'id': return (s.id || '').toLowerCase();
+        case 'customer': return (s.customerName || '').toLowerCase();
+        case 'branch': return ((s.branch?.name || s.branchName || '')).toLowerCase();
+        case 'status': return s.status || '';
+        case 'submittedAt':
+        default: return s.submittedAt ? new Date(s.submittedAt).getTime() : 0;
+      }
+    };
+    return [...base].sort((a, b) => {
+      const va = valueOf(a);
+      const vb = valueOf(b);
+      const cmp = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb));
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [submissions, sortField, sortOrder]);
 
   const handleDownloadBundle = async (sub: any) => {
     if (!user) return;
@@ -222,11 +265,21 @@ Document Count:    ${fullSub?.documents?.length || 0}
       <Table>
         <TableHeader className="bg-slate-50/80">
           <TableRow>
-            <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest py-5 pl-8">Case ID</TableHead>
-            <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Customer Entity</TableHead>
-            <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Authorized Branch</TableHead>
-            <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Workflow Status</TableHead>
-            <TableHead className="font-black text-slate-500 text-[11px] uppercase tracking-widest">Dispatch Date</TableHead>
+            <TableHead className={cn("font-black text-[11px] uppercase tracking-widest py-5 pl-8 cursor-pointer select-none", sortField === 'id' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('id')}>
+              Case ID<SortIndicator field="id" />
+            </TableHead>
+            <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'customer' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('customer')}>
+              Customer Entity<SortIndicator field="customer" />
+            </TableHead>
+            <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'branch' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('branch')}>
+              Authorized Branch<SortIndicator field="branch" />
+            </TableHead>
+            <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'status' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('status')}>
+              Workflow Status<SortIndicator field="status" />
+            </TableHead>
+            <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'submittedAt' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('submittedAt')}>
+              Dispatch Date<SortIndicator field="submittedAt" />
+            </TableHead>
             <TableHead className="text-right font-black text-slate-500 text-[11px] uppercase tracking-widest pr-8">Actions</TableHead>
           </TableRow>
         </TableHeader>
