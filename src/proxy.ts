@@ -36,7 +36,6 @@ function isPublicAuthApiPath(pathname: string): boolean {
     '/api/auth/refresh',
     '/api/auth/me',
     '/api/auth/logout',
-    '/api/auth/request-password-reset',
     '/api/auth/reset-password',
     '/api/auth/complete-password-reset',
     '/api/auth/verify-password',
@@ -111,7 +110,7 @@ export async function proxy(req: NextRequest) {
 
   if (
     pathname.startsWith('/_next') ||
-    (isPublicAuth && (pathname === '/api/auth/login' || pathname === '/api/auth/register' || pathname.startsWith('/api/auth/reset-password') || pathname.startsWith('/api/auth/complete-password-reset') || pathname === '/api/auth/request-password-reset')) ||
+    (isPublicAuth && (pathname === '/api/auth/login' || pathname === '/api/auth/register' || pathname.startsWith('/api/auth/reset-password') || pathname.startsWith('/api/auth/complete-password-reset'))) ||
     pathname === '/favicon.ico' ||
     pathname === '/login' ||
     pathname === '/unauthorized' ||

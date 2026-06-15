@@ -18,7 +18,7 @@ import bcrypt from 'bcryptjs';
 
 // Minimum password requirements
 const PASSWORD_REQUIREMENTS = {
-  MIN_LENGTH: 12,
+  MIN_LENGTH: 8,
   REQUIRE_UPPERCASE: true,
   REQUIRE_LOWERCASE: true,
   REQUIRE_NUMBERS: true,
@@ -27,7 +27,7 @@ const PASSWORD_REQUIREMENTS = {
 
 function validatePassword(password: string): { valid: boolean; error?: string } {
   if (!password || password.length < PASSWORD_REQUIREMENTS.MIN_LENGTH) {
-    return { valid: false, error: `Password must be at least ${PASSWORD_REQUIREMENTS.MIN_LENGTH} characters.` };
+    return { valid: false, error: `Password must be at least ${PASSWORD_REQUIREMENTS.MIN_LENGTH} characters long.` };
   }
 
   if (PASSWORD_REQUIREMENTS.REQUIRE_UPPERCASE && !/[A-Z]/.test(password)) {

@@ -141,9 +141,9 @@ function LoginContent() {
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input 
-                  type={showPassword ? "text" : "password"} 
-                  placeholder="••••••••" 
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
                   className="pl-12 pr-12 h-14 bg-background border-2 focus:border-[#B89334] font-black text-foreground rounded-xl focus-visible:ring-[#B89334]/20 transition-all"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

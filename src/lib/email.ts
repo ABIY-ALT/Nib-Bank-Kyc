@@ -29,7 +29,7 @@ interface EmailAuditContext {
   userId?: string | null;
   userEmail: string;
   userName?: string;
-  action: 'USER_WELCOME' | 'ADMIN_PASSWORD_RESET' | 'PASSWORD_RESET_REQUEST' | 'ACCOUNT_SETUP';
+  action: 'USER_WELCOME' | 'ADMIN_PASSWORD_RESET' | 'ACCOUNT_SETUP';
   description: string;
 }
 
@@ -293,40 +293,120 @@ export function queueMail(options: SendMailOptions, audit: EmailAuditContext) {
   return true;
 }
 
-function buildEmailButton(url: string, label: string) {
-  return `<table role="presentation" width="100%" style="margin: 24px 0;">
-    <tr>
-      <td align="center">
-        <a href="${url}" style="background-color:#B89334;border-radius:8px;color:#ffffff;display:inline-block;font-weight:700;line-height:1.5;padding:14px 24px;text-decoration:none;">${label}</a>
-      </td>
-    </tr>
-  </table>`;
-}
-
 function buildEmailTemplate(options: {
+  logoUrl: string;
   subject: string;
+  heading: string;
   greeting: string;
-  introduction?: string;
+  bodyLines: string[];
+  validityLine?: string;
   callToActionLabel: string;
   callToActionUrl: string;
-  lines: string[];
-  footerNote: string;
+  ignoreNote: string;
 }) {
-  const introHtml = options.introduction ? `<p style="margin: 0 0 16px; line-height:1.75;">${options.introduction}</p>` : '';
-  const htmlLines = options.lines.map((line) => `<p style="margin: 0 0 16px; line-height:1.75;">${line}</p>`).join('');
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><style>body{margin:0;padding:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f172a;}table{border-collapse:collapse;width:100%;}img{border:none;display:block;}a{color:#ffffff;text-decoration:none;} .container{max-width:640px;margin:0 auto;padding:24px;} .card{background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 20px 80px rgba(15,23,42,0.08);} .header{background:#B89334;color:#f8fafc;padding:32px 24px;text-align:center;} .brand{font-size:18px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#f8fafc;} .body{padding:32px 24px;color:#0f172a;} .footer{padding:24px;color:#64748b;font-size:13px;text-align:center;} .button-wrapper{padding:0 0 24px;} .notice{background:#f8fafc;border-left:4px solid #B89334;padding:18px;border-radius:12px;margin:24px 0 0;color:#0f172a;}</style></head><body><div class="container"><div class="card"><div class="header"><div class="brand">NIB Bank</div><h1 style="font-size:28px;line-height:1.1;margin:16px 0 0;">${options.subject}</h1></div><div class="body"><p style="margin:0 0 24px;font-size:16px;line-height:1.75;">${options.greeting}</p>${introHtml}${htmlLines}<div class="button-wrapper">${buildEmailButton(options.callToActionUrl, options.callToActionLabel)}</div><div class="notice"><strong>Important:</strong> ${options.footerNote}</div></div><div class="footer">© 2026 NIB Bank. For assistance, contact your IT support team.</div></div></div></body></html>`;
+  const bodyHtml = options.bodyLines
+    .map((l) => `<p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.75;">${l}</p>`)
+    .join('');
+
+  const validityHtml = options.validityLine
+    ? `<p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.75;">${options.validityLine}</p>`
+    : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>${options.subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f0eb;font-family:Helvetica Neue,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f0eb;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+          <!-- CARD -->
+          <tr>
+            <td style="background:#ffffff;border-radius:12px;padding:40px 40px 32px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+
+              <!-- LOGO -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding-bottom:24px;">
+                    <img src="${options.logoUrl}" alt="NIB Bank" width="64" height="64" style="border-radius:50%;display:block;"/>
+                  </td>
+                </tr>
+
+                <!-- HEADING -->
+                <tr>
+                  <td style="padding-bottom:24px;">
+                    <h1 style="margin:0;font-size:22px;font-weight:700;color:#111827;line-height:1.3;">${options.heading}</h1>
+                  </td>
+                </tr>
+
+                <!-- GREETING -->
+                <tr>
+                  <td style="padding-bottom:12px;">
+                    <p style="margin:0;color:#374151;font-size:15px;line-height:1.75;">${options.greeting}</p>
+                  </td>
+                </tr>
+
+                <!-- BODY -->
+                <tr>
+                  <td style="padding-bottom:4px;">
+                    ${bodyHtml}
+                    ${validityHtml}
+                  </td>
+                </tr>
+
+                <!-- BUTTON -->
+                <tr>
+                  <td align="center" style="padding:8px 0 28px;">
+                    <a href="${options.callToActionUrl}"
+                       style="display:inline-block;background:#8B5E2E;color:#ffffff;font-size:16px;font-weight:700;padding:14px 32px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
+                      ${options.callToActionLabel} &rarr;
+                    </a>
+                  </td>
+                </tr>
+
+                <!-- IGNORE NOTE -->
+                <tr>
+                  <td>
+                    <p style="margin:0;color:#6B7280;font-size:13px;line-height:1.6;">${options.ignoreNote}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td align="center" style="padding:24px 0 0;">
+              <p style="margin:0;color:#9CA3AF;font-size:12px;">This is an automated message. Please do not reply.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
   const textLines = [
-    options.subject,
+    options.heading,
     '',
     options.greeting,
+    '',
+    ...options.bodyLines,
   ];
-
-  if (options.introduction) {
-    textLines.push('', options.introduction);
-  }
-
-  textLines.push('', ...options.lines, '', `${options.callToActionLabel}: ${options.callToActionUrl}`, '', `Important: ${options.footerNote}`, '', '© 2026 NIB Bank. For assistance, contact your IT support team.');
+  if (options.validityLine) textLines.push('', options.validityLine);
+  textLines.push(
+    '',
+    `${options.callToActionLabel}: ${options.callToActionUrl}`,
+    '',
+    options.ignoreNote,
+    '',
+    'This is an automated message. Please do not reply.',
+  );
 
   return { subject: options.subject, html, text: textLines.join('\n') };
 }
@@ -339,24 +419,24 @@ export function queueWelcomeEmail(params: {
   temporaryPassword: string;
 }) {
   const config = getMailConfig();
-  const loginUrl = `${config.loginUrl.replace(/\/$/, '')}/login`;
+  const baseUrl = config.loginUrl.replace(/\/$/, '');
+  const loginUrl = `${baseUrl}/login`;
   const subject = 'Welcome to the NIB Bank KYC Portal';
-  const greeting = `Hello ${params.userName},`;
-  const lines = [
-    `Your account has been created for the NIB Bank KYC Portal.`,
-    `Username: ${params.username}`,
-    `Temporary password: ${params.temporaryPassword}`,
-    'Please sign in using the button below and change your password immediately after your first login.',
-  ];
 
   const template = buildEmailTemplate({
+    logoUrl: `${baseUrl}/logo.png`,
     subject,
-    greeting,
-    introduction: '',
-    callToActionLabel: 'Sign in to NIB KYC Portal',
+    heading: 'Welcome to NIB Bank KYC',
+    greeting: `Hello ${params.userName},`,
+    bodyLines: [
+      'Your account has been created on the NIB Bank KYC Portal.',
+      `Your username is: <strong>${params.username}</strong>`,
+      `Temporary password: <strong>${params.temporaryPassword}</strong>`,
+      'Please sign in using the button below and change your password immediately after your first login.',
+    ],
+    callToActionLabel: 'Sign In to NIB KYC Portal',
     callToActionUrl: loginUrl,
-    lines,
-    footerNote: 'For security, change your password immediately after signing in and do not share it with anyone.',
+    ignoreNote: 'If you did not expect this email, please contact your IT administrator immediately.',
   });
 
   const mailOptions: SendMailOptions = {
@@ -384,24 +464,24 @@ export function queueAdminPasswordResetEmail(params: {
   temporaryPassword: string;
 }) {
   const config = getMailConfig();
-  const loginUrl = `${config.loginUrl.replace(/\/$/, '')}/login`;
-  const subject = 'NIB Bank KYC Portal Password Reset Notification';
-  const greeting = `Hello ${params.userName},`;
-  const lines = [
-    `Your password has been reset by an administrator.`,
-    `Username: ${params.username}`,
-    `Temporary password: ${params.temporaryPassword}`,
-    'For your security, sign in and change your password immediately after logging in.',
-  ];
+  const baseUrl = config.loginUrl.replace(/\/$/, '');
+  const loginUrl = `${baseUrl}/login`;
+  const subject = 'Your NIB Bank KYC Password Has Been Reset';
 
   const template = buildEmailTemplate({
+    logoUrl: `${baseUrl}/logo.png`,
     subject,
-    greeting,
-    introduction: '',
-    callToActionLabel: 'Sign in to NIB KYC Portal',
+    heading: 'Your Password Has Been Reset',
+    greeting: `Hello ${params.userName},`,
+    bodyLines: [
+      'An administrator has reset your password on the NIB Bank KYC Portal.',
+      `Your username is: <strong>${params.username}</strong>`,
+      `Temporary password: <strong>${params.temporaryPassword}</strong>`,
+      'Please sign in using the button below and change your password immediately.',
+    ],
+    callToActionLabel: 'Sign In to NIB KYC Portal',
     callToActionUrl: loginUrl,
-    lines,
-    footerNote: 'This email was sent over a secure channel. If you did not request a password reset, contact IT security immediately.',
+    ignoreNote: 'If you did not expect this change, contact IT security immediately.',
   });
 
   const mailOptions: SendMailOptions = {
@@ -428,26 +508,26 @@ export function queueAccountSetupEmail(params: {
   username: string;
   setupLink: string;
 }) {
+  const config = getMailConfig();
+  const baseUrl = config.loginUrl.replace(/\/$/, '');
   const subject = 'Set Up Your NIB Bank KYC Portal Password';
-  const greeting = `Hello ${params.userName},`;
-  const lines = [
-    `Your account has been created on the NIB Bank KYC Portal.`,
-    `Username: ${params.username}`,
-    'Click the button below to set your password and activate your account.',
-    'This link is valid for <strong>24 hours</strong> and can only be used once.',
-  ];
 
   const template = buildEmailTemplate({
+    logoUrl: `${baseUrl}/logo.png`,
     subject,
-    greeting,
-    introduction: '',
+    heading: 'Activate Your Account',
+    greeting: `Hello ${params.userName},`,
+    bodyLines: [
+      'Your account has been created on the NIB Bank KYC Portal.',
+      `Your username is: <strong>${params.username}</strong>`,
+      'Click the button below to set your password and activate your account.',
+    ],
+    validityLine: 'This link is valid for <strong>24 hours</strong> and can only be used once.',
     callToActionLabel: 'Set Up My Password',
     callToActionUrl: params.setupLink,
-    lines,
-    footerNote: 'If you did not expect this email, contact IT security immediately. Do not share this link with anyone.',
+    ignoreNote: 'If you did not expect this email, please contact your IT administrator immediately. Do not share this link with anyone.',
   });
 
-  const config = getMailConfig();
   const mailOptions: SendMailOptions = {
     from: getFromHeader(config),
     to: params.userEmail,
@@ -472,25 +552,25 @@ export function queueAdminResetSetupEmail(params: {
   username: string;
   setupLink: string;
 }) {
-  const subject = 'NIB Bank KYC Portal — Password Reset Required';
-  const greeting = `Hello ${params.userName},`;
-  const lines = [
-    'An administrator has initiated a password reset for your account.',
-    `Username: ${params.username}`,
-    'Click the button below to set a new password. The link expires in <strong>24 hours</strong>.',
-  ];
+  const config = getMailConfig();
+  const baseUrl = config.loginUrl.replace(/\/$/, '');
+  const subject = 'Your NIB Bank KYC Password Reset Request';
 
   const template = buildEmailTemplate({
+    logoUrl: `${baseUrl}/logo.png`,
     subject,
-    greeting,
-    introduction: '',
-    callToActionLabel: 'Set New Password',
+    heading: 'Your Password Reset Request',
+    greeting: `Hello ${params.userName},`,
+    bodyLines: [
+      'An administrator has initiated a password reset for your NIB Bank KYC Portal account.',
+      'You can reset your password by clicking the link below.',
+    ],
+    validityLine: 'This link is valid for <strong>24 hours</strong>.',
+    callToActionLabel: 'Reset Your Password',
     callToActionUrl: params.setupLink,
-    lines,
-    footerNote: 'If you did not expect this reset, contact IT security immediately. Do not share this link.',
+    ignoreNote: 'If you did not expect this reset, you can safely ignore this email or contact IT security.',
   });
 
-  const config = getMailConfig();
   const mailOptions: SendMailOptions = {
     from: getFromHeader(config),
     to: params.userEmail,
@@ -508,75 +588,3 @@ export function queueAdminResetSetupEmail(params: {
   });
 }
 
-export function queuePasswordResetRequestEmail(params: {
-  userId?: string | null;
-  userName: string;
-  userEmail: string;
-  resetLink: string;
-}) {
-  const config = getMailConfig();
-  const subject = 'NIB Bank KYC Portal Password Reset Link';
-  const greeting = `Hello ${params.userName},`;
-  const lines = [
-    'A password reset request was received for your account.',
-    'If you did not request this reset, please ignore this email or contact IT security.',
-  ];
-
-  const template = buildEmailTemplate({
-    subject,
-    greeting,
-    introduction: '',
-    callToActionLabel: 'Complete Password Reset',
-    callToActionUrl: params.resetLink,
-    lines,
-    footerNote: 'This link expires in 15 minutes and is valid for one use only. Do not share it with anyone.',
-  });
-
-  const mailOptions: SendMailOptions = {
-    from: getFromHeader(config),
-    to: params.userEmail,
-    subject: template.subject,
-    text: template.text,
-    html: template.html,
-  };
-
-  return queueMail(mailOptions, {
-    userId: params.userId ?? null,
-    userEmail: params.userEmail,
-    userName: params.userName,
-    action: 'PASSWORD_RESET_REQUEST',
-    description: 'Password reset request email queued.',
-  });
-}
-
-/**
- * Send a test email synchronously (bypasses the queue) so the caller gets
- * immediate SMTP success/failure feedback. Only used from the admin test action.
- */
-
-export async function sendPasswordResetEmail(
-  userEmail: string,
-  resetLink: string,
-  userName?: string
-): Promise<boolean> {
-  const config = getMailConfig();
-  if (!config.enabled) {
-    return false;
-  }
-
-  const mailOptions: SendMailOptions = {
-    from: getFromHeader(config),
-    to: userEmail,
-    subject: 'Password Reset Request',
-    html: `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><style>body{margin:0;padding:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f172a;} .container{max-width:640px;margin:0 auto;padding:24px;} .card{background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 20px 80px rgba(15,23,42,0.08);} .header{background:#0f172a;color:#f8fafc;padding:32px 24px;text-align:center;} .button{display:inline-block;background:#B89334;color:#ffffff;padding:14px 22px;border-radius:12px;text-decoration:none;font-weight:700;}.body{padding:32px 24px;color:#0f172a;line-height:1.75;} .footer{padding:24px;color:#64748b;font-size:13px;text-align:center;} .notice{background:#f8fafc;border-left:4px solid #B89334;padding:18px;border-radius:12px;margin-top:24px;}</style></head><body><div class="container"><div class="card"><div class="header"><h1>Password Reset Request</h1></div><div class="body"><p>${userName ? `Hello ${userName},` : 'Hello,'}</p><p>We received a request to reset your password for the NIB Bank KYC Portal.</p><p>Please click the button below to complete your password reset. This link will expire in 15 minutes.</p><p style="text-align:center;"> <a href="${resetLink}" class="button">Reset Password</a> </p><p>If the button does not work, copy and paste the following link into your browser:</p><p><a href="${resetLink}" style="color:#0f172a;word-break:break-all;">${resetLink}</a></p><div class="notice"><strong>Security Notice:</strong> Never share this link or your password with anyone. NIB Bank staff will never ask for your password.</div></div><div class="footer">© 2026 NIB Bank. All rights reserved.</div></div></div></body></html>`,
-    text: `Password Reset Request\n\n${userName ? `Hello ${userName},` : 'Hello,'}\n\nWe received a request to reset your password for the NIB Bank KYC Portal.\n\nComplete your password reset: ${resetLink}\n\nIf you did not request this, ignore this email. Never share your password or reset link with anyone.\n\n© 2026 NIB Bank. All rights reserved.`,
-  };
-
-  return queueMail(mailOptions, {
-    userId: null,
-    userEmail,
-    userName,
-    action: 'PASSWORD_RESET_REQUEST',
-    description: 'Password reset link email queued.',
-  });
-}

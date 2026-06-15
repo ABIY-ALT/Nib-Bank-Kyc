@@ -11,7 +11,6 @@ const PUBLIC_ROUTES = new Set([
   '/unauthorized',
   '/auth/setup-password',
   '/auth/complete-password-reset',
-  '/auth/request-password-reset',
 ]);
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {

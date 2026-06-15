@@ -1,8 +1,5 @@
 'use client';
 
-// Token is extracted from the URL query parameter only — never stored client-side.
-// Password is never persisted locally; sent to the server over HTTPS and cleared after submit.
-
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -10,16 +7,44 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, KeyRound, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, KeyRound, Eye, EyeOff, AlertCircle, CheckCircle2, XCircle, ShieldAlert } from 'lucide-react';
+import { isBreachedPassword } from '@/lib/breached-password';
+
+type StrengthState = {
+  minLength: boolean;
+  hasUppercase: boolean;
+  hasLowercase: boolean;
+  hasNumber: boolean;
+  hasSpecial: boolean;
+};
+
+function checkStrength(pwd: string): StrengthState {
+  return {
+    minLength: pwd.length >= 12,
+    hasUppercase: /[A-Z]/.test(pwd),
+    hasLowercase: /[a-z]/.test(pwd),
+    hasNumber: /\d/.test(pwd),
+    hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(pwd),
+  };
+}
 
 function validatePassword(pwd: string): string | null {
-  if (!pwd || pwd.length < 12) return 'Password must be at least 12 characters.';
-  if (!/[A-Z]/.test(pwd)) return 'Password must contain an uppercase letter.';
-  if (!/[a-z]/.test(pwd)) return 'Password must contain a lowercase letter.';
-  if (!/\d/.test(pwd)) return 'Password must contain a number.';
-  if (!/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) return 'Password must contain a special character.';
+  const s = checkStrength(pwd);
+  if (!s.minLength) return 'Password must be at least 12 characters.';
+  if (!s.hasUppercase) return 'Password must contain an uppercase letter.';
+  if (!s.hasLowercase) return 'Password must contain a lowercase letter.';
+  if (!s.hasNumber) return 'Password must contain a number.';
+  if (!s.hasSpecial) return 'Password must contain a special character.';
   return null;
 }
+
+const REQUIREMENTS: { key: keyof StrengthState; label: string }[] = [
+  { key: 'minLength',    label: 'At least 12 characters' },
+  { key: 'hasUppercase', label: 'One uppercase letter' },
+  { key: 'hasLowercase', label: 'One lowercase letter' },
+  { key: 'hasNumber',    label: 'One number' },
+  { key: 'hasSpecial',   label: 'One special character' },
+];
 
 export default function SetupPasswordPage() {
   return (
@@ -46,6 +71,14 @@ function SetupPasswordForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [isBreached, setIsBreached] = useState(false);
+  const [strength, setStrength] = useState<StrengthState>({
+    minLength: false,
+    hasUppercase: false,
+    hasLowercase: false,
+    hasNumber: false,
+    hasSpecial: false,
+  });
 
   useEffect(() => {
     const t = searchParams?.get('token');
@@ -55,6 +88,26 @@ function SetupPasswordForm() {
     }
     setToken(t);
   }, [searchParams]);
+
+  const handlePasswordChange = async (val: string) => {
+    setPassword(val);
+    setStrength(checkStrength(val));
+    if (val.length >= 8) {
+      const breached = await isBreachedPassword(val);
+      setIsBreached(breached);
+    } else {
+      setIsBreached(false);
+    }
+  };
+
+  const metCount = Object.values(strength).filter(Boolean).length;
+  const strengthPercent = (metCount / 5) * 100;
+  const strengthColor =
+    metCount <= 1 ? 'bg-red-500' :
+    metCount <= 2 ? 'bg-orange-500' :
+    metCount <= 3 ? 'bg-amber-400' :
+    metCount === 4 ? 'bg-yellow-400' :
+    'bg-emerald-500';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,6 +228,16 @@ function SetupPasswordForm() {
               </div>
             )}
 
+            {isBreached && (
+              <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg flex gap-3">
+                <ShieldAlert className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                <p className="text-sm text-orange-800 font-medium">
+                  This password was found in a public data breach. Please choose a different password.
+                </p>
+              </div>
+            )}
+
+            {/* New Password */}
             <div className="space-y-2">
               <Label htmlFor="password" className="font-bold text-slate-700">
                 New Password
@@ -184,7 +247,7 @@ function SetupPasswordForm() {
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => handlePasswordChange(e.target.value)}
                   placeholder="Enter new password"
                   disabled={loading}
                   className="pr-10 h-11 font-medium"
@@ -199,11 +262,38 @@ function SetupPasswordForm() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-xs text-slate-500">
-                Minimum 12 characters · uppercase · lowercase · number · special character
-              </p>
+
+              {/* Strength bar */}
+              {password.length > 0 && (
+                <div className="h-1 w-full bg-slate-200 rounded-full overflow-hidden mt-1">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${strengthColor}`}
+                    style={{ width: `${strengthPercent}%` }}
+                  />
+                </div>
+              )}
+
+              {/* Per-requirement checklist */}
+              <div className="space-y-1.5 pt-1">
+                {REQUIREMENTS.map(({ key, label }) => {
+                  const met = strength[key];
+                  return (
+                    <div key={key} className="flex items-center gap-2">
+                      {met ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-slate-300 shrink-0" />
+                      )}
+                      <span className={`text-xs font-medium ${met ? 'text-emerald-600' : 'text-slate-500'}`}>
+                        {label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
+            {/* Confirm Password */}
             <div className="space-y-2">
               <Label htmlFor="confirmPassword" className="font-bold text-slate-700">
                 Confirm Password
@@ -216,7 +306,13 @@ function SetupPasswordForm() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter new password"
                   disabled={loading}
-                  className="pr-10 h-11 font-medium"
+                  className={`pr-10 h-11 font-medium ${
+                    confirmPassword && confirmPassword !== password
+                      ? 'border-red-400 focus-visible:ring-red-400'
+                      : confirmPassword && confirmPassword === password
+                      ? 'border-emerald-400 focus-visible:ring-emerald-400'
+                      : ''
+                  }`}
                   autoComplete="new-password"
                 />
                 <button
@@ -228,11 +324,17 @@ function SetupPasswordForm() {
                   {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {confirmPassword && confirmPassword !== password && (
+                <p className="text-xs text-red-600 font-medium">Passwords do not match.</p>
+              )}
+              {confirmPassword && confirmPassword === password && (
+                <p className="text-xs text-emerald-600 font-medium">Passwords match.</p>
+              )}
             </div>
 
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || metCount < 5 || password !== confirmPassword || isBreached}
               className="w-full h-11 bg-primary hover:bg-primary/90 font-bold text-base"
             >
               {loading ? (
