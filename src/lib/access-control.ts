@@ -301,6 +301,32 @@ export function hasPermission(user: AccessUserLike, permission: string) {
   return slugs.has(normalizePermissionSlug(permission));
 }
 
+export function getFirstAccessibleRoute(user: AccessUserLike): string {
+  if (!user || !hasDefinedRole(user)) return '/unauthorized';
+  if (isSuperAdminUser(user)) return '/';
+
+  const perms = getPermissionSlugs(user);
+
+  if (
+    perms.has('DASHBOARD_VIEW') ||
+    perms.has('DASHBOARD_VIEW_SYSTEM') ||
+    perms.has('DASHBOARD_VIEW_BRANCH') ||
+    perms.has('DASHBOARD_VIEW_DISTRICT')
+  ) return '/';
+
+  if (perms.has('KYC_VIEW_QUEUE')) return '/submissions/queue';
+  if (perms.has('CASE_VIEW_OWN')) return '/submissions/my';
+  if (perms.has('CASE_SUBMIT')) return '/submissions/new';
+  if (perms.has('CASE_VIEW_BRANCH')) return '/submissions/branch-node';
+  if (perms.has('USER_CREATE')) return '/admin/users';
+  if (perms.has('ROLE_CREATE')) return '/admin/roles';
+  if (perms.has('MAP_USERS_TO_BRANCH')) return '/admin/assignments';
+  if (perms.has('REPORT_VIEW_SYSTEM')) return '/reports/system';
+  if (perms.has('VIEW_SPECIALIST_PRODUCTIVITY')) return '/performance/officer';
+
+  return '/unauthorized';
+}
+
 function buildUnauthorizedPath(params: { required?: string; reason?: string }) {
   const query = new URLSearchParams();
 

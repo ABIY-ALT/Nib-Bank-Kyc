@@ -25,7 +25,7 @@ export interface UserProfile {
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
-  login: (email: string, pass: string) => Promise<void>;
+  login: (email: string, pass: string) => Promise<UserProfile>;
   logout: (reason?: string) => void;
   changePassword: (newPass: string, currentPass: string) => Promise<void>;
 }
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(refreshInterval);
   }, []);
 
-  const login = async (email: string, pass: string) => {
+  const login = async (email: string, pass: string): Promise<UserProfile> => {
     const loginId = getInstitutionalLoginLocalPart(email);
     if (!isValidInstitutionalLoginInput(loginId)) {
       throw new Error('Invalid username or password.');
@@ -117,10 +117,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setUser(data.user);
-    toast({ 
-      title: "Login Successful", 
-      description: `Welcome back, ${data.user.firstName}!` 
+    toast({
+      title: "Login Successful",
+      description: `Welcome back, ${data.user.firstName}!`
     });
+    return data.user as UserProfile;
   };
 
   const logout = async (reason: string = 'User Logout') => {

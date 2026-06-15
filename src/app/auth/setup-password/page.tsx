@@ -3,7 +3,7 @@
 // Token is extracted from the URL query parameter only — never stored client-side.
 // Password is never persisted locally; sent to the server over HTTPS and cleared after submit.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,18 @@ function validatePassword(pwd: string): string | null {
 }
 
 export default function SetupPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    }>
+      <SetupPasswordForm />
+    </Suspense>
+  );
+}
+
+function SetupPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();

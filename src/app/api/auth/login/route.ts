@@ -125,6 +125,11 @@ export async function POST(req: Request) {
     const isMatch = await bcrypt.compare(password.trim(), user.password);
     if (!isMatch) {
       await logFailure(userEmail, ipAddress, "Credential mismatch");
+      if (user.needsPasswordChange) {
+        return unauthorizedResponse(
+          "Your account has not been activated yet. Please check your email for an account setup link, or contact your administrator."
+        );
+      }
       return unauthorizedResponse(genericErrorMessage);
     }
 

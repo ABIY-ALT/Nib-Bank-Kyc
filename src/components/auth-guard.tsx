@@ -6,7 +6,13 @@ import { useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { getRouteAccessDecision } from '@/lib/access-control';
 
-const PUBLIC_ROUTES = new Set(['/login', '/unauthorized']);
+const PUBLIC_ROUTES = new Set([
+  '/login',
+  '/unauthorized',
+  '/auth/setup-password',
+  '/auth/complete-password-reset',
+  '/auth/request-password-reset',
+]);
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();

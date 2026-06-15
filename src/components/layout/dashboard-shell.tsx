@@ -20,10 +20,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const isLoginPage = pathname === '/login';
   const isUnauthorizedPage = pathname === '/unauthorized';
+  const isAuthPage = (pathname || "").startsWith('/auth/');
   const isAdminPage = (pathname || "").startsWith('/admin');
 
-  // Render clean layout for the gateway entry point
-  if (isLoginPage || isUnauthorizedPage) {
+  // Render clean layout for auth and gateway pages (no sidebar)
+  if (isLoginPage || isUnauthorizedPage || isAuthPage) {
     return (
       <div className="min-h-screen w-full bg-[#FCFAF7] overflow-x-hidden">
         {children}

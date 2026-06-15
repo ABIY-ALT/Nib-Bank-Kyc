@@ -11,7 +11,7 @@
 // Form state is cleared immediately after submission.
 // Input is sanitized by React; server validates all inputs.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,18 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, KeyRound, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export default function CompletePasswordResetPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    }>
+      <CompletePasswordResetForm />
+    </Suspense>
+  );
+}
+
+function CompletePasswordResetForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();

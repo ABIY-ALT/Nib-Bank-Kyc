@@ -25,6 +25,7 @@ import {
 import { isValidInternalRedirect } from '@/lib/url-security';
 import { LogoResponsive } from '@/components/logo';
 import { getInstitutionalLoginInputValue } from '@/lib/login-identifier';
+import { getFirstAccessibleRoute } from '@/lib/access-control';
 
 export default function LoginPage() {
   return (
@@ -53,13 +54,17 @@ function LoginContent() {
   const [error, setError] = useState<string | null>(null);
 
   const callbackUrl = searchParams?.get('callbackUrl');
-  const redirectTarget = isValidInternalRedirect(callbackUrl) ? callbackUrl! : '/';
+
+  const computeRedirect = (loggedInUser: any) => {
+    if (callbackUrl && isValidInternalRedirect(callbackUrl)) return callbackUrl;
+    return getFirstAccessibleRoute(loggedInUser);
+  };
 
   useEffect(() => {
     if (!authLoading && user) {
-      window.location.href = redirectTarget;
+      window.location.href = computeRedirect(user);
     }
-  }, [authLoading, user, redirectTarget]);
+  }, [authLoading, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,10 +72,8 @@ function LoginContent() {
     setError(null);
 
     try {
-      await login(loginId, password);
-      
-      // Use hard redirect to ensure clean state transition
-      window.location.href = redirectTarget;
+      const loggedInUser = await login(loginId, password);
+      window.location.href = computeRedirect(loggedInUser);
     } catch (err: any) {
       setError(err.message || "Invalid username or password.");
     } finally {
