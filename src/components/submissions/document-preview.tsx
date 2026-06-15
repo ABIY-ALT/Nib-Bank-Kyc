@@ -275,15 +275,31 @@ export function DocumentPreviewNavigation({
 
 function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSelect?: (file: PreviewableDocument) => void }) {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const isPdf = isPdfDocument(file);
   const isImage = isImageDocument(file);
 
+  // Only fetch the thumbnail once the card scrolls into view.
   useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setIsVisible(true); observer.disconnect(); } },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
     let active = true;
     setIsLoaded(false);
-    setError(false);
+    setError(null);
 
     if (blobUrl) {
       URL.revokeObjectURL(blobUrl);
@@ -294,11 +310,18 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
 
     const loadPreview = async () => {
       try {
-        const response = await fetch(file.previewUrl);
+        const response = await fetch(file.previewUrl, { credentials: "include" });
         if (!active) return;
 
         if (!response.ok) {
-          setError(true);
+          const status = response.status;
+          if (status === 429) {
+            setError("Too many requests — please wait a moment and try again.");
+          } else if (status === 401 || status === 403) {
+            setError("Access denied.");
+          } else {
+            setError("Preview unavailable.");
+          }
           setIsLoaded(true);
           return;
         }
@@ -316,7 +339,7 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
         if (isPdf) {
           const buffer = await blob.arrayBuffer();
           if (!isPdfBuffer(buffer)) {
-            setError(true);
+            setError("Not a valid PDF.");
             setIsLoaded(true);
             return;
           }
@@ -324,9 +347,9 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
 
         const url = URL.createObjectURL(blob);
         setBlobUrl(url);
-      } catch (err) {
+      } catch {
         if (!active) return;
-        setError(true);
+        setError("Preview unavailable.");
         setIsLoaded(true);
       }
     };
@@ -336,7 +359,7 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
     return () => {
       active = false;
     };
-  }, [file?.id, file?.previewUrl, file?.mimeType, file?.name, isPdf, isImage]);
+  }, [isVisible, file?.id, file?.previewUrl, file?.mimeType, file?.name, isPdf, isImage]);
 
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -345,6 +368,7 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
 
   return (
     <div
+      ref={cardRef}
       className="group relative flex flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm transition-all duration-500 hover:border-primary/40 hover:shadow-[0_20px_40px_rgba(15,23,42,0.12)] cursor-pointer"
       onClick={() => onSelect?.(file)}
       role="button"
@@ -357,17 +381,18 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
       }}
     >
       <div className="relative h-56 w-full overflow-hidden bg-slate-50">
-        {!isLoaded && (isPdf || isImage) && !error && (
+        {!isLoaded && (isPdf || isImage) && !error && isVisible && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
         )}
 
         {error ? (
-          <div className="flex h-full w-full items-center justify-center bg-red-50">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-red-50 px-4 text-center">
             <div className="rounded-full bg-red-100 p-4">
               <AlertTriangle className="h-8 w-8 text-red-500" />
             </div>
+            <p className="text-[10px] font-bold text-red-500 leading-tight">{error}</p>
           </div>
         ) : isPdf && blobUrl ? (
           <PdfPreview
@@ -384,7 +409,7 @@ function MultipleFileCard({ file, onSelect }: { file: PreviewableDocument; onSel
             loading="lazy"
             decoding="async"
             onLoad={() => setIsLoaded(true)}
-            onError={() => { setError(true); setIsLoaded(true); }}
+            onError={() => { setError("Failed to load image"); setIsLoaded(true); }}
             className={cn(
               "h-full w-full object-cover transition-all duration-300 group-hover:scale-105",
               isLoaded ? "opacity-100" : "opacity-0"
@@ -505,22 +530,29 @@ export function DocumentPreviewViewer({
 
     if (!file?.previewUrl) return;
 
-    // Fetch the document to check for errors (401, 403, 404, etc.)
-    // this allows us to show the user exactly why the preview failed.
     const loadPreview = async () => {
       try {
-        const response = await fetch(file.previewUrl);
+        const response = await fetch(file.previewUrl, { credentials: "include" });
         
         if (!active) return;
 
         if (!response.ok) {
           const status = response.status;
-          let message = `Failed to load preview (Status: ${status})`;
-          
-          if (status === 401) message = "Session expired or unauthenticated. Please log in again.";
-          else if (status === 403) message = "Access denied. You do not have permissions to view this document.";
-          else if (status === 404) message = "The requested document was not found on the server.";
-          else if (status >= 500) message = "Internal server error while retrieving document.";
+          let message: string;
+
+          if (status === 401) {
+            message = "Your session has expired. Please log in again to view this document.";
+          } else if (status === 403) {
+            message = "You do not have permission to view this document.";
+          } else if (status === 404) {
+            message = "This document could not be found. It may have been removed.";
+          } else if (status === 429) {
+            message = "You have viewed too many documents in a short time. Please wait a few minutes and try again.";
+          } else if (status >= 500) {
+            message = "A server error occurred while loading this document. Please try again.";
+          } else {
+            message = "Unable to load document preview. Please try downloading the file instead.";
+          }
 
           setError(message);
           setIsLoaded(true);

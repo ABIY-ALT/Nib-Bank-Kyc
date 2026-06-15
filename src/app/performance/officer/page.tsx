@@ -28,7 +28,7 @@ import {
   Download,
   Eye,
   Monitor,
-  Map,
+  Map as MapIcon,
   Check,
   ChevronsUpDown,
   Info,
@@ -57,6 +57,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getSubmissions, updateSubmissionStatus, logBundleDownload, getSubmissionById } from "@/actions/submissions";
 import { getAllUsers } from "@/actions/users";
+import { getBranchMappings } from "@/actions/branch-mappings";
 import { getDistricts, getBranches } from "@/actions/hierarchy";
 import { getGlobalSettings } from "@/actions/settings";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -109,6 +110,7 @@ export default function KYCOperationsMonitoringPage() {
   const [loading, setLoading] = useState(false);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [officers, setOfficers] = useState<any[]>([]);
+  const [allMappings, setAllMappings] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
@@ -131,6 +133,9 @@ export default function KYCOperationsMonitoringPage() {
 
   const [branchSortField, setBranchSortField] = useState<string>("branch");
   const [branchSortOrder, setBranchSortOrder] = useState<'asc' | 'desc'>("asc");
+
+  const [caseSortField, setCaseSortField] = useState<string>("submittedAt");
+  const [caseSortOrder, setCaseSortOrder] = useState<'asc' | 'desc'>("desc");
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   
@@ -158,6 +163,15 @@ export default function KYCOperationsMonitoringPage() {
     } else {
       setBranchSortField(field);
       setBranchSortOrder('asc');
+    }
+  };
+
+  const toggleCaseSort = (field: string) => {
+    if (caseSortField === field) {
+      setCaseSortOrder(caseSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setCaseSortField(field);
+      setCaseSortOrder('asc');
     }
   };
 
@@ -192,12 +206,14 @@ export default function KYCOperationsMonitoringPage() {
 
   const loadBaseData = async () => {
     try {
-      const [u, d, b, s] = await Promise.all([
+      const [u, d, b, s, m] = await Promise.all([
         getAllUsers(),
         getDistricts(),
         getBranches(),
-        getGlobalSettings()
+        getGlobalSettings(),
+        getBranchMappings(),
       ]);
+      setAllMappings(m || []);
       
       // Filter personnel based on roles
       let kycPersonnel = u.filter((usr: any) => 
@@ -350,6 +366,20 @@ Document Count:    ${fullSub?.documents?.length || 0}
     }
   };
 
+  // Map: officerId -> Set of temporary branch names (lower-cased)
+  const officerTempBranches = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const m of allMappings) {
+      if (m.type === 'TEMPORARY' && m.active) {
+        for (const o of m.officers) {
+          if (!map.has(o.id)) map.set(o.id, new Set());
+          map.get(o.id)!.add((m.branchName || '').toLowerCase());
+        }
+      }
+    }
+    return map;
+  }, [allMappings]);
+
   const processedOfficers = useMemo(() => {
     const data = officers.map(off => {
       const offBranchNames = (off.assignedBranches?.length > 0
@@ -380,6 +410,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
       const escalated = offSubs.filter(s => s.status === KYC_STATUS.ESCALATED).length;
       const unseen = offSubs.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
       const running = offSubs.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;
+      const resubmitted = offSubs.filter(s => s.isResubmitted).length;
       const branchesMapped = off.assignedBranches?.length || (off.branchName ? 1 : 0);
 
       // Calculate Average Resolution Time for Approved Cases
@@ -400,7 +431,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
         total: offSubs.length,
         unseen,
         amended,
-        authorized
+        authorized,
       });
 
       return {
@@ -413,10 +444,11 @@ Document Count:    ${fullSub?.documents?.length || 0}
           escalated,
           unseen,
           running,
+          resubmitted,
           avgResolutionMinutes,
           branchesMapped,
-          performanceIndex
-        }
+          performanceIndex,
+        },
       };
     }).filter(off => {
       const matchesSelection = selectedOfficerFilter === 'all' || off.id === selectedOfficerFilter;
@@ -468,9 +500,12 @@ Document Count:    ${fullSub?.documents?.length || 0}
       ? selectedOfficer.assignedBranches
       : (selectedOfficer.branchName ? [selectedOfficer.branchName] : []);
 
+    const tempSet = officerTempBranches.get(selectedOfficer.id) ?? new Set<string>();
+
     const data = bNames.map((name: string) => {
-      const branchSubs = submissions.filter(s => 
-        s.branchName === name && 
+      const isTemporary = tempSet.has(name.toLowerCase());
+      const branchSubs = submissions.filter(s =>
+        s.branchName === name &&
         (s.assignedToId === selectedOfficer.id || s.assignedToId === null)
       );
       const approved = branchSubs.filter(s => s.status === KYC_STATUS.APPROVED);
@@ -491,6 +526,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
       const pending = branchSubs.filter(s => ![KYC_STATUS.APPROVED, KYC_STATUS.REJECTED, KYC_STATUS.ESCALATED].includes(s.status as any)).length;
       return {
         name,
+        isTemporary,
         totalFiles: branchSubs.reduce((acc, s) => acc + (s.documents?.length || 0), 0),
         total: branchSubs.length,
         approved: approved.length,
@@ -498,7 +534,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
         running: branchSubs.filter(s => s.status === KYC_STATUS.IN_REVIEW).length,
         amended: branchSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0),
         avgResolutionMinutes,
-        pending
+        pending,
       };
     });
 
@@ -532,15 +568,38 @@ Document Count:    ${fullSub?.documents?.length || 0}
       }
       return branchSortOrder === 'asc' ? comparison : -comparison;
     });
-  }, [selectedOfficer, submissions, branchSortField, branchSortOrder]);
+  }, [selectedOfficer, submissions, branchSortField, branchSortOrder, officerTempBranches]);
 
   const currentCases = useMemo(() => {
     if (!selectedBranch || !selectedOfficer) return [];
-    return submissions.filter(s => 
-      s.branchName === selectedBranch && 
+    const filtered = submissions.filter(s =>
+      s.branchName === selectedBranch &&
       (s.assignedToId === selectedOfficer.id || s.assignedToId === null)
     );
-  }, [selectedBranch, selectedOfficer, submissions]);
+
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (caseSortField) {
+        case 'id':
+          cmp = a.id.localeCompare(b.id);
+          break;
+        case 'customer':
+          cmp = (a.customerName || '').localeCompare(b.customerName || '');
+          break;
+        case 'status':
+          cmp = (a.status || '').localeCompare(b.status || '');
+          break;
+        case 'submittedAt':
+        default: {
+          const aTime = new Date(a.submittedAt || a.createdAt).getTime();
+          const bTime = new Date(b.submittedAt || b.createdAt).getTime();
+          cmp = aTime - bTime;
+          break;
+        }
+      }
+      return caseSortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [selectedBranch, selectedOfficer, submissions, caseSortField, caseSortOrder]);
 
   const handleExportCSV = () => {
     const headers = ['KYC Officer', 'Mapped Branches', 'Case Volume', 'Authorized', 'Unseen', 'Avg. Resolution', 'Amendment Cycles', 'Performance Index'];
@@ -627,7 +686,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
                       className={cn("flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors text-sm font-bold", selectedDistrict === 'all' ? "bg-primary/10 text-primary" : "hover:bg-slate-50")}
                       onClick={() => { setSelectedDistrict('all'); setSelectedBranchFilter('all'); setDistOpen(false); }}
                     >
-                      <div className="flex items-center gap-2"><Map className="w-4 h-4" /> Overall Network</div>
+                      <div className="flex items-center gap-2"><MapIcon className="w-4 h-4" /> Overall Network</div>
                       {selectedDistrict === 'all' && <Check className="w-4 h-4" />}
                     </div>
                     {filteredDistricts.map(d => (
@@ -798,7 +857,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
                         <SortIndicator field="name" />
                       </div>
                     </TableHead>
-                    <TableHead 
+                    <TableHead
                       className={cn(
                         "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
                         sortField === 'branchesMapped' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
@@ -1078,7 +1137,14 @@ Document Count:    ${fullSub?.documents?.length || 0}
                           <TableCell className="py-8 pl-10">
                             <div className="flex items-center gap-4">
                               <div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/10 group-hover:text-primary transition-colors"><Building2 className="w-5 h-5" /></div>
-                              <span className="font-black text-slate-900 text-base">{b.name}</span>
+                              <div className="flex flex-col gap-1">
+                                <span className="font-black text-slate-900 text-base">{b.name}</span>
+                                {b.isTemporary && (
+                                  <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[8px] font-black px-2 py-0 h-4 w-fit">
+                                    Temporary
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="text-center font-black text-emerald-600 text-lg">{b.approved}</TableCell>
@@ -1173,11 +1239,19 @@ Document Count:    ${fullSub?.documents?.length || 0}
               <Table>
                 <TableHeader className="bg-slate-50 border-b">
                   <TableRow>
-                    <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Case ID</TableHead>
-                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Customer Identity</TableHead>
-                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Age / Resolution SLA</TableHead>
+                    <TableHead className="py-6 pl-10 font-black text-[11px] uppercase tracking-widest text-slate-500 cursor-pointer select-none" onClick={() => toggleCaseSort('id')}>
+                      <div className="flex items-center gap-1">Case ID <SortIndicator field="id" currentField={caseSortField} currentOrder={caseSortOrder} /></div>
+                    </TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500 cursor-pointer select-none" onClick={() => toggleCaseSort('customer')}>
+                      <div className="flex items-center gap-1">Customer Identity <SortIndicator field="customer" currentField={caseSortField} currentOrder={caseSortOrder} /></div>
+                    </TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500 cursor-pointer select-none" onClick={() => toggleCaseSort('submittedAt')}>
+                      <div className="flex items-center gap-1">Age / Resolution SLA <SortIndicator field="submittedAt" currentField={caseSortField} currentOrder={caseSortOrder} /></div>
+                    </TableHead>
                     <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Institutional Oversight</TableHead>
-                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500">Status</TableHead>
+                    <TableHead className="font-black text-[11px] uppercase tracking-widest text-slate-500 cursor-pointer select-none" onClick={() => toggleCaseSort('status')}>
+                      <div className="flex items-center gap-1">Status <SortIndicator field="status" currentField={caseSortField} currentOrder={caseSortOrder} /></div>
+                    </TableHead>
                     <TableHead className="text-right pr-10 font-black text-[11px] uppercase tracking-widest text-slate-500">Actions</TableHead>
                   </TableRow>
                 </TableHeader>

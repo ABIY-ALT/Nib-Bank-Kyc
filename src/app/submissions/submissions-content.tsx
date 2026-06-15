@@ -329,9 +329,14 @@ Document Count:    ${fullSub?.documents?.length || 0}
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex flex-col">
+                <div className="flex flex-col gap-0.5">
                   <span className="text-slate-600 font-bold text-xs">{sub.branch?.name || sub.branchName}</span>
                   <span className="text-[9px] text-slate-400 font-black uppercase">{sub.branch?.district?.name || "Central"} District</span>
+                  {sub.isTemporaryBranch && (
+                    <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[8px] font-black px-2 py-0 h-4 w-fit mt-0.5">
+                      Temporary Branch
+                    </Badge>
+                  )}
                 </div>
               </TableCell>
               <TableCell>{getStatusBadge(sub)}</TableCell>

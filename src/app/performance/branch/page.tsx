@@ -145,13 +145,14 @@ export default function BranchPerformancePage() {
     scopedSubmissions.forEach(sub => {
       const bName = sub.branchName || 'Unknown';
       if (!stats[bName]) {
-        stats[bName] = { 
-          name: bName, 
-          district: sub.districtName, 
-          volume: 0, 
+        stats[bName] = {
+          name: bName,
+          district: sub.districtName,
+          volume: 0,
           unseen: 0,
-          authorized: 0, 
-          amended: 0
+          authorized: 0,
+          amended: 0,
+          resubmitted: 0
         };
       }
       
@@ -169,6 +170,10 @@ export default function BranchPerformancePage() {
         stats[bName].unseen++;
         stats[bName].volume++;
       }
+
+      if (sub.isResubmitted) {
+        stats[bName].resubmitted++;
+      }
     });
 
     return Object.values(stats)
@@ -177,7 +182,8 @@ export default function BranchPerformancePage() {
           total: b.volume,
           unseen: b.unseen || 0,
           amended: b.amended || 0,
-          authorized: b.authorized || 0
+          authorized: b.authorized || 0,
+          recycles: b.resubmitted || 0
         });
         return { ...b, accuracy };
       })
@@ -201,12 +207,14 @@ export default function BranchPerformancePage() {
     const unseen = branchMetrics.reduce((acc, b) => acc + (b.unseen || 0), 0);
     const authorized = branchMetrics.reduce((acc, b) => acc + (b.authorized || 0), 0);
     const amended = branchMetrics.reduce((acc, b) => acc + (b.amended || 0), 0);
-    
+    const resubmitted = branchMetrics.reduce((acc, b) => acc + (b.resubmitted || 0), 0);
+
     const accuracy = calculatePerformanceIndex({
       total,
       unseen,
       amended,
-      authorized
+      authorized,
+      recycles: resubmitted
     });
 
     return { total, authorized, amended, accuracy };

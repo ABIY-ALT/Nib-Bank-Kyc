@@ -72,10 +72,11 @@ export function AppSidebar() {
 
   if (!user) return null;
 
-  const activeRoleNames = getActiveRoleNames(user);
-  const canSeeMyPerformance = activeRoleNames.some((roleName) =>
-    ['KYC_OFFICER', 'SUPERVISOR', 'SUPER_ADMIN', 'KYC_SPECIALIST', 'KYC_SPECIALIST_OFFICER'].includes(roleName)
-  ) || isSuperAdmin;
+  // Permission-based check so any custom role with officer-level permissions also sees this menu item.
+  const canSeeMyPerformance = isSuperAdmin ||
+    hasPermission('KYC_VIEW_QUEUE') ||
+    hasPermission('KYC_OFFICER_PROCESS') ||
+    hasPermission('SUPERVISOR_FORWARD');
 
   return (
     <Sidebar collapsible="icon" className="border-r-0 shadow-2xl">

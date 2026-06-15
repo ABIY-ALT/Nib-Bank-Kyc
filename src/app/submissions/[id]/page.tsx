@@ -1386,8 +1386,15 @@ Document Count:    ${previewableDocuments.length}
                       <div className="z-10 w-10 h-10 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5 text-slate-400" /></div>
                       <div className="flex-1 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
                         <div className="flex justify-between mb-2">
-                          <span className="text-xs font-black text-slate-900 uppercase">{entry.performedBy} <span className="text-primary">[{entry.role}]</span></span>
-                          <span className="text-[10px] font-bold text-slate-400">{new Date(entry.timestamp).toLocaleString()}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black text-slate-900 uppercase">{entry.performedBy} <span className="text-primary">[{entry.role}]</span></span>
+                            {entry.isTemporary && (
+                              <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[8px] font-black px-2 py-0.5 h-auto">
+                                Temporary Officer
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-400 shrink-0">{new Date(entry.timestamp).toLocaleString()}</span>
                         </div>
                         <p className="text-sm text-slate-700 font-medium italic">"{entry.comment}"</p>
                       </div>

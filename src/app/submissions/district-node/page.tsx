@@ -162,7 +162,7 @@ export default function DistrictMonitoringPage() {
       rejected: scopedSubmissions.filter(s => s.status === KYC_STATUS.REJECTED).length,
       amended: scopedSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
       branches: {} as Record<string, { name: string, total: number, approved: number, pending: number, amended: number }>,
-      officers: {} as Record<string, { name: string, total: number, approved: number, amended: number, pending: number, cycles: number }>,
+      officers: {} as Record<string, { name: string, total: number, approved: number, amended: number, pending: number, cycles: number, branches: Set<string> }>,
       byStatus: [
         { name: 'APPROVED', value: 0, fill: STATUS_COLORS.APPROVED },
         { name: 'SUBMITTED', value: 0, fill: STATUS_COLORS.SUBMITTED },
@@ -202,10 +202,11 @@ export default function DistrictMonitoringPage() {
       const officerName = sub.createdBy ? `${sub.createdBy.firstName} ${sub.createdBy.lastName}` : 'Institutional Staff';
       const officerKey = sub.createdById || 'SYSTEM';
       if (!stats.officers[officerKey]) {
-        stats.officers[officerKey] = { name: officerName, total: 0, approved: 0, amended: 0, pending: 0, cycles: 0 };
+        stats.officers[officerKey] = { name: officerName, total: 0, approved: 0, amended: 0, pending: 0, cycles: 0, branches: new Set<string>() };
       }
       stats.officers[officerKey].total++;
       stats.officers[officerKey].cycles += (sub.amendCycles || 0);
+      stats.officers[officerKey].branches.add(bName);
       
       if (sub.status === KYC_STATUS.APPROVED) {
         stats.branches[bName].approved++;
@@ -636,6 +637,7 @@ export default function DistrictMonitoringPage() {
                     <TableHeader className="bg-slate-50/80">
                       <TableRow>
                         <TableHead className="font-bold py-4 pl-8 cursor-pointer select-none" onClick={() => toggleStaffSort('name')}>Staff Member<SortIndicator field="name" activeField={staffSortField} order={staffSortOrder} /></TableHead>
+                        <TableHead className="font-bold cursor-pointer select-none">Branch</TableHead>
                         <TableHead className="font-bold text-center cursor-pointer select-none" onClick={() => toggleStaffSort('total')}>Total Requests<SortIndicator field="total" activeField={staffSortField} order={staffSortOrder} /></TableHead>
                         <TableHead className="font-bold text-center text-emerald-600 cursor-pointer select-none" onClick={() => toggleStaffSort('approved')}>Authorized<SortIndicator field="approved" activeField={staffSortField} order={staffSortOrder} /></TableHead>
                         <TableHead className="font-bold text-center text-orange-600 cursor-pointer select-none" onClick={() => toggleStaffSort('amended')}>Amendments<SortIndicator field="amended" activeField={staffSortField} order={staffSortOrder} /></TableHead>
@@ -650,6 +652,19 @@ export default function DistrictMonitoringPage() {
                         return (
                           <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="py-4 pl-8 font-bold text-slate-900">{officer.name}</TableCell>
+                            <TableCell>
+                              {(() => {
+                                const branches = Array.from(officer.branches as Set<string>).sort();
+                                if (branches.length === 0) return <span className="text-slate-300 font-bold">—</span>;
+                                if (branches.length === 1) return <span className="font-bold text-slate-700 text-sm">{branches[0]}</span>;
+                                return (
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-bold text-slate-700 text-sm">{branches[0]}</span>
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">+{branches.length - 1} more</span>
+                                  </div>
+                                );
+                              })()}
+                            </TableCell>
                             <TableCell className="text-center font-bold">{officer.total}</TableCell>
                             <TableCell className="text-center"><Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold">{officer.approved}</Badge></TableCell>
                             <TableCell className="text-center"><Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold">{officer.amended}</Badge></TableCell>

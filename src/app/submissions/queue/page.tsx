@@ -8,6 +8,7 @@ import { Search, Loader2, Inbox, ShieldCheck, MapPin } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { getSubmissions } from "@/actions/submissions";
+import { getBranchMappings } from "@/actions/branch-mappings";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 
@@ -15,6 +16,7 @@ export default function ReviewActionPage() {
   const { user } = useAuth();
   const { isSuperAdmin } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [tempBranchNames, setTempBranchNames] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -24,17 +26,31 @@ export default function ReviewActionPage() {
       setLoading(true);
       
       const assignedBranches = user.assignedBranches || [];
-      
-      const data = await getSubmissions({
-        status: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW],
-        isExceptional: false,
-        isResubmitted: false,
-        branches: isSuperAdmin ? undefined : (
-          assignedBranches.length > 0 
-            ? assignedBranches 
-            : [user.branchName || "RESTRICTED_NODE_UNASSIGNED"]
-        )
-      });
+
+      const [data, mappings] = await Promise.all([
+        getSubmissions({
+          status: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW],
+          isExceptional: false,
+          isResubmitted: false,
+          branches: isSuperAdmin ? undefined : (
+            assignedBranches.length > 0
+              ? assignedBranches
+              : [user.branchName || "RESTRICTED_NODE_UNASSIGNED"]
+          )
+        }),
+        getBranchMappings(),
+      ]);
+
+      const tempNames = new Set<string>(
+        mappings
+          .filter((m: any) =>
+            m.active &&
+            m.type === 'TEMPORARY' &&
+            m.officers.some((o: any) => o.user?.id === user.id)
+          )
+          .map((m: any) => (m.branchName || '').toLowerCase())
+      );
+      setTempBranchNames(tempNames);
       setSubmissions(data);
       setLoading(false);
     }
@@ -44,10 +60,13 @@ export default function ReviewActionPage() {
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
-    return submissions.filter(sub => 
-      sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
-    );
-  }, [submissions, searchTerm]);
+    return submissions
+      .filter(sub => sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term))
+      .map(sub => ({
+        ...sub,
+        isTemporaryBranch: tempBranchNames.has((sub.branchName || '').toLowerCase()),
+      }));
+  }, [submissions, searchTerm, tempBranchNames]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

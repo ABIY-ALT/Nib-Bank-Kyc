@@ -35,6 +35,54 @@ import {
 } from '@/lib/jurisdiction';
 
 
+// Permission slugs that indicate a user is authorized to perform KYC review/action.
+// Used to filter the "running" (IN_REVIEW) count so it only includes cases actively
+// being worked on by a permissioned reviewer, not orphaned IN_REVIEW records.
+const REVIEW_ACTION_PERMISSIONS = ['KYC_VIEW_QUEUE', 'KYC_OFFICER_PROCESS', 'SUPERVISOR_FORWARD'];
+
+/**
+ * Converts raw file-validation error strings into user-friendly messages.
+ * Keeps all technical detail server-side (audit logs); only safe descriptions reach the client.
+ */
+function toFriendlyUploadError(rawError?: string): string {
+  if (!rawError) return 'The file could not be uploaded. Please try again.';
+  const e = rawError.toLowerCase();
+
+  if (e.includes('extension not allowed') || e.includes('mime type not allowed') || e.includes('not recognized or not allowed')) {
+    return 'This file type is not supported. Please upload a PDF, JPG, PNG, or TIFF file and try again.';
+  }
+  if (e.includes('double extension')) {
+    return 'The filename appears to have multiple extensions. Please rename the file (e.g. "document.pdf") and try again.';
+  }
+  if (e.includes('size exceeds') || e.includes('too large') || e.includes('too big')) {
+    const match = rawError.match(/(\d+(\.\d+)?\s*MB)/i);
+    return match
+      ? `The file is too large. The maximum allowed size is ${match[1]}.`
+      : 'The file is too large. Please reduce its size and try again.';
+  }
+  if (e.includes('empty')) {
+    return 'The file appears to be empty. Please check the file and try again.';
+  }
+  if (e.includes('dimension') || e.includes('5000px')) {
+    return 'This image is too large (maximum 5,000 × 5,000 pixels). Please resize it and try again.';
+  }
+  if (
+    e.includes('security check failed') ||
+    e.includes('security risk') ||
+    e.includes('threat') ||
+    e.includes('executable') ||
+    e.includes('script') ||
+    e.includes('malicious') ||
+    e.includes('quarantine')
+  ) {
+    return 'This file cannot be uploaded because it failed a security check. Please use a valid document (PDF, JPG, PNG, or TIFF) and try again. If you believe this is a mistake, contact your administrator.';
+  }
+  if (e.includes('corrupted') || e.includes('not a valid')) {
+    return 'This file appears to be corrupted or invalid. Please try a different file.';
+  }
+  return 'The file could not be uploaded. Please check that it is a valid document and try again.';
+}
+
 function hasPermission(user: any, slug: string) {
   const normalized = normalizePermissionSlug(slug);
   return Boolean(
@@ -226,29 +274,46 @@ export async function getSubmissions(filters?: {
     const isOfficer = roleNames.some(r => ['KYC_OFFICER', 'KYC_SPECIALIST', 'SUPERVISOR'].includes(r));
     const isManagement = session.role === 'SUPER_ADMIN' || roleNames.includes('DISTRICT_DIRECTOR');
 
-    const where: any = {
+    // Base conditions that always apply, regardless of role.
+    const baseWhere: any = {
       status: filters?.status ? { in: filters.status } : undefined,
       branchId: filters?.branchId,
       createdById: filters?.submittedBy || filters?.createdById,
-      assignedToId: filters?.assignedToId,
       isResubmitted: filters?.isResubmitted,
       isExceptional: filters?.isExceptional ?? false,
       entityType: filters?.entityType,
       submittedAt: dateFilter,
       active: true,
-      ...jurisdictionalFilter,
     };
 
+    let where: any;
+    const hasJurisFilter = Object.keys(jurisdictionalFilter).length > 0;
+
     if (isOfficer && !isManagement && !filters?.assignedToId) {
-      where.OR = [
-        { assignedToId: session.id },
-        { assignedToId: null },
-        { status: KYC_STATUS.SUBMITTED }
-      ];
+      // Officers must always see cases directly assigned to them, regardless of branch.
+      // For all other cases they follow normal portfolio/branch jurisdiction.
+      const portfolioConditions: any[] = hasJurisFilter
+        ? [
+            { ...jurisdictionalFilter, assignedToId: null },
+            { ...jurisdictionalFilter, status: KYC_STATUS.SUBMITTED },
+          ]
+        : [{ assignedToId: null }, { status: KYC_STATUS.SUBMITTED }];
+
+      where = {
+        ...baseWhere,
+        OR: [{ assignedToId: session.id }, ...portfolioConditions],
+      };
+    } else {
+      // All other roles: spread jurisdictional filter directly.
+      where = {
+        ...baseWhere,
+        assignedToId: filters?.assignedToId,
+        ...jurisdictionalFilter,
+      };
     }
 
     // Log for suspicious patterns (non-admin accessing unfiltered submissions)
-    if (session.role !== 'SUPER_ADMIN' && Object.keys(jurisdictionalFilter).length === 0) {
+    if (session.role !== 'SUPER_ADMIN' && !hasJurisFilter) {
       logInstitutionalError(
         new Error(`SECURITY ALERT: Non-admin user accessed submissions without jurisdiction filter`),
         'UNFILTERED_DATA_ACCESS_ATTEMPT'
@@ -268,28 +333,31 @@ export async function getSubmissions(filters?: {
       skip: filters?.offset || 0,
     });
 
-    // Defense-in-depth validation
-    if (session.role !== 'SUPER_ADMIN' && Object.keys(jurisdictionalFilter).length > 0) {
+    // Defense-in-depth branch validation (skipped for officers: their OR clause already
+    // guarantees they only see assigned cases or portfolio-branch cases).
+    if (session.role !== 'SUPER_ADMIN' && !isOfficer && hasJurisFilter) {
       const filtered = data.filter((item: any) => {
         const itemDistrictName = item.districtName ? normalizeBranchName(item.districtName) : null;
         const itemBranchName = item.branchName ? normalizeBranchName(item.branchName) : null;
-        
+
         if (jurisdictionalFilter.districtName) {
-          const filterDistrict = jurisdictionalFilter.districtName?.equals 
+          const filterDistrict = jurisdictionalFilter.districtName?.equals
             ? normalizeBranchName(jurisdictionalFilter.districtName.equals)
             : null;
           if (filterDistrict && (!itemDistrictName || itemDistrictName.toLowerCase() !== filterDistrict.toLowerCase())) return false;
         }
-        
+
         if (jurisdictionalFilter.branchName) {
-          const allowedBranches = jurisdictionalFilter.branchName?.in ? jurisdictionalFilter.branchName.in : [jurisdictionalFilter.branchName?.equals];
+          const allowedBranches = jurisdictionalFilter.branchName?.in
+            ? jurisdictionalFilter.branchName.in
+            : [jurisdictionalFilter.branchName?.equals];
           const normAllowed = allowedBranches.map((b: any) => normalizeBranchName(b).toLowerCase());
           if (!normAllowed.some((b: string) => b === itemBranchName?.toLowerCase())) return false;
         }
-        
+
         return true;
       });
-      
+
       return filtered.map((item: any) => formatKYC(item));
     }
 
@@ -403,7 +471,27 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
       prisma.kYC.count({ where }),
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.APPROVED, isExceptional: false } }),
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ACTION_REQUIRED, isExceptional: false } }),
-      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.IN_REVIEW, isExceptional: false } }),
+      prisma.kYC.count({
+        where: {
+          ...where,
+          status: KYC_STATUS.IN_REVIEW,
+          isExceptional: false,
+          assignedToId: { not: null },
+          assignedTo: {
+            roles: {
+              some: {
+                role: {
+                  active: true,
+                  OR: [
+                    { name: 'SUPER_ADMIN' },
+                    { permissions: { some: { permission: { slug: { in: REVIEW_ACTION_PERMISSIONS } } } } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }),
       prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED] }, isExceptional: false } }),
       prisma.kYC.count({ where: { ...where, isResubmitted: true, isExceptional: false } }),
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ESCALATED, isExceptional: false } }),
@@ -572,7 +660,7 @@ export async function createSubmission(formData: FormData) {
           action: 'FILE_UPLOAD_REJECTED',
           details: `Threat Detected: ${file.name} - ${validation.error}`,
         });
-        return { success: false, error: `Security check failed: ${validation.error}` };
+        return { success: false, error: toFriendlyUploadError(validation.error) };
       }
 
       const persistableBuffer = validation.sanitisedBuffer || buffer;
@@ -710,7 +798,7 @@ export async function resubmitSubmission(formData: FormData) {
           details: `Threat Detected in Resubmission: ${file.name} - ${validation.error}`,
           kycId: id,
         });
-        return { success: false, error: `Security check failed: ${validation.error}` };
+        return { success: false, error: toFriendlyUploadError(validation.error) };
       }
 
       const persistableBuffer = validation.sanitisedBuffer || buffer;
@@ -891,16 +979,27 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
 
   const isDuplicateAction = (isSameStatusAndPerson && !hasNewRemarks) || isDuplicateOpen;
 
+  // Detect if the acting officer is under a TEMPORARY mapping for this branch.
+  let isTemporaryOfficer = false;
+  if (isMappedOfficer && current.branchId) {
+    const tempMapping = await prisma.branchMappingOfficer.findFirst({
+      where: { userId: session.id, mapping: { branchId: current.branchId, active: true, type: 'TEMPORARY' } },
+      select: { mappingId: true },
+    });
+    isTemporaryOfficer = !!tempMapping;
+  }
+
   let updatedHistory = history;
   if ((isStatusChanging || hasNewRemarks) && !isDuplicateAction && !isAutoOpen) {
-    const newEntry = {
+    const newEntry: any = {
       role: session.role || 'OFFICER',
       performedBy: `${reviewer?.firstName} ${reviewer?.lastName}`,
       userId: session.id,
       timestamp: new Date().toISOString(),
       comment: remarks || `Status updated to ${status}`,
-      action: status
+      action: status,
     };
+    if (isTemporaryOfficer) newEntry.isTemporary = true;
     updatedHistory = [...history, newEntry];
   }
 
@@ -1109,7 +1208,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
         details: `Exceptional memo rejected: ${memo.name} - ${validation.error}`, 
         kycId: id 
       }).catch(() => {});
-      throw new Error(`The file failed security checks: ${validation.error}`);
+      throw new Error(toFriendlyUploadError(validation.error));
     }
 
     const storedKey = validation.storageKey!;
@@ -1334,7 +1433,7 @@ export async function processExceptionalStep(formData: FormData) {
       memoValidation = await performCompleteFileValidation(memo!.name, memo!.type, buffer, session.id);
 
       if (!memoValidation.valid || !memoValidation.storageKey) {
-        throw new Error(`Memo validation failed: ${memoValidation.error}`);
+        throw new Error(toFriendlyUploadError(memoValidation.error));
       }
 
       storedMemoKey = memoValidation.storageKey as string;
@@ -1391,7 +1490,7 @@ export async function processExceptionalStep(formData: FormData) {
         const buffer = Buffer.from(await file.arrayBuffer());
         const validation = await performCompleteFileValidation(file.name, file.type, buffer, session.id);
         if (!validation.valid || !validation.storageKey) {
-          throw new Error(`File validation failed: ${validation.error}`);
+          throw new Error(toFriendlyUploadError(validation.error));
         }
         const persistableBuffer = validation.sanitisedBuffer || buffer;
         await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
@@ -1524,7 +1623,7 @@ export async function uploadAdditionalDocuments(formData: FormData) {
           details: `Additional document rejected: ${file.name} - ${validation.error}`, 
           kycId: id 
         }).catch(() => {});
-        return { success: false, error: `Security check failed: ${validation.error}` };
+        return { success: false, error: toFriendlyUploadError(validation.error) };
       }
 
       const storedKey = validation.storageKey!;

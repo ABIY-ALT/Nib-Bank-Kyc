@@ -128,94 +128,100 @@ export default function MasterBundleDownloadPage() {
     );
   };
 
+  /** Fetch a document with up to 3 retries on rate-limit (429) responses. */
+  const fetchDocumentWithRetry = async (url: string, retries = 3): Promise<ArrayBuffer | null> => {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      const res = await fetch(url, { method: 'GET', credentials: 'include', headers: { 'Accept': '*/*' } });
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        return buf.byteLength > 0 ? buf : null;
+      }
+      if (res.status === 429 && attempt < retries - 1) {
+        // Back off before retrying: 3 s, 6 s …
+        await new Promise(r => setTimeout(r, 3000 * (attempt + 1)));
+        continue;
+      }
+      // Non-retryable error
+      return null;
+    }
+    return null;
+  };
+
   const handleDownloadMasterBundle = async () => {
     if (!user || filteredSubmissions.length === 0) return;
     setIsProcessing(true);
     setProgress(0);
 
+    const failedDocs: { caseId: string; docName: string; reason: string }[] = [];
+
     try {
       const zip = new JSZip();
       const now = new Date();
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
-      
-      // Build filter type label
-      const filterTypeLabel = selectedStatuses.length === 0 
+
+      const filterTypeLabel = selectedStatuses.length === 0
         ? 'ALL_STATUSES'
         : selectedStatuses.map(s => STATUS_OPTIONS.find(opt => opt.id === s)?.label || s).join('_');
-      
-      // Build date range label
+
       const dateRangeLabel = dateRange?.from && dateRange?.to
         ? `${format(dateRange.from, 'yyyyMMdd')}_to_${format(dateRange.to, 'yyyyMMdd')}`
         : dateRange?.from
         ? `from_${format(dateRange.from, 'yyyyMMdd')}`
         : 'ALL_DATES';
-      
-      // Root folder structure: District > Branch > FilterType_DateRange > Customer
+
       const rootFolder = zip.folder('NIB_KYC_MASTER_EXPORT');
-      
-      // Group submissions by district and branch
+
       const groupedByDistrict: Record<string, Record<string, any[]>> = {};
-      
       for (const sub of filteredSubmissions) {
         const distName = getSubmissionDistrictName(sub);
         const branchName = getSubmissionBranchName(sub);
-        
-        if (!groupedByDistrict[distName]) {
-          groupedByDistrict[distName] = {};
-        }
-        if (!groupedByDistrict[distName][branchName]) {
-          groupedByDistrict[distName][branchName] = [];
-        }
+        if (!groupedByDistrict[distName]) groupedByDistrict[distName] = {};
+        if (!groupedByDistrict[distName][branchName]) groupedByDistrict[distName][branchName] = [];
         groupedByDistrict[distName][branchName].push(sub);
       }
-      
-      // Build nested structure
+
       let manifestBody = "";
       let processedCount = 0;
 
       for (const [districtName, branches] of Object.entries(groupedByDistrict)) {
         const districtFolder = rootFolder?.folder(sanitizeBundleSegment(districtName, 'DISTRICT'));
-        
+
         for (const [branchName, submissions] of Object.entries(branches)) {
           const branchFolder = districtFolder?.folder(sanitizeBundleSegment(branchName, 'BRANCH'));
-          
-          // Create filter type and date range subfolder
           const filterFolder = branchFolder?.folder(`${sanitizeBundleSegment(filterTypeLabel, 'FILTER')}_${dateRangeLabel}`);
-          
+
           for (const sub of submissions) {
             const customerFolderName = sanitizeBundleSegment(sub.customerName, 'CUSTOMER');
             const customerFolder = filterFolder?.folder(customerFolderName);
-            
-            setCurrentActionLabel(`Packaging: ${sub.id} (${sub.customerName})`);
-            
-            const fullSub = await getSubmissionById(sub.id);
-            
-            if (fullSub && fullSub.documents && fullSub.documents.length > 0) {
-              for (const doc of fullSub.documents) {
-                try {
-                  // FIX: Use downloadUrl or formatted previewUrl for secure extraction
-                  const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : doc.url);
-                  
-                  const fileRes = await fetch(downloadUrl, {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: { 'Accept': '*/*' }
-                  });
 
-                  if (!fileRes.ok) throw new Error(`Fetch failed: ${fileRes.status}`);
-                  
-                  const buffer = await fileRes.arrayBuffer();
-                  if (buffer.byteLength === 0) throw new Error("Empty buffer received");
-                  
+            setCurrentActionLabel(`Packaging: ${sub.id} (${sub.customerName})`);
+
+            const fullSub = await getSubmissionById(sub.id);
+            let successfulDocs = 0;
+
+            if (fullSub?.documents?.length) {
+              for (const doc of fullSub.documents) {
+                const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : null);
+                if (!downloadUrl) {
+                  failedDocs.push({ caseId: sub.id, docName: doc.name || 'Unknown', reason: 'No download URL available' });
+                  continue;
+                }
+
+                try {
+                  const buffer = await fetchDocumentWithRetry(downloadUrl);
+                  if (!buffer) {
+                    failedDocs.push({ caseId: sub.id, docName: doc.name || 'Unknown', reason: 'File could not be retrieved from server' });
+                    continue;
+                  }
                   const safeFileName = resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType);
                   customerFolder?.file(safeFileName, buffer, { binary: true });
-                } catch (err) {
-                  console.error(`Master bundle extraction failed for ${doc.name}:`, err);
+                  successfulDocs++;
+                } catch {
+                  failedDocs.push({ caseId: sub.id, docName: doc.name || 'Unknown', reason: 'Download error' });
                 }
               }
             }
-            
-            // Create case metadata file
+
             const caseMetadata = `CASE METADATA
 ==================================================
 Case ID:           ${sub.id}
@@ -226,19 +232,25 @@ District:          ${districtName}
 Status:            ${sub.status}
 Submitted Date:    ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : 'N/A'}
 Last Updated:      ${sub.updatedAt ? new Date(sub.updatedAt).toLocaleString() : 'N/A'}
-Document Count:    ${fullSub?.documents?.length || 0}
+Documents Included: ${successfulDocs} of ${fullSub?.documents?.length || 0}
 ==================================================`;
-            
+
             customerFolder?.file('CASE_METADATA.txt', caseMetadata);
-            
-            manifestBody += `[${sub.status}] ${districtName} > ${branchName} > ${sub.id} (${sub.customerName}) - ${fullSub?.documents?.length || 0} documents\n`;
+            manifestBody += `[${sub.status}] ${districtName} > ${branchName} > ${sub.id} (${sub.customerName}) - ${successfulDocs}/${fullSub?.documents?.length || 0} documents\n`;
             processedCount++;
             setProgress(Math.round((processedCount / filteredSubmissions.length) * 100));
           }
         }
       }
-      
-      // Create comprehensive manifest
+
+      // Failure report appended to manifest when docs were skipped
+      let failureReport = '';
+      if (failedDocs.length > 0) {
+        failureReport = `\n\nFAILED DOCUMENTS (${failedDocs.length} file(s) could not be included)\n==================================================\n`;
+        failureReport += failedDocs.map(f => `Case ${f.caseId} | ${f.docName}: ${f.reason}`).join('\n');
+        failureReport += '\n';
+      }
+
       const manifestHeader = `NIB BANK MASTER KYC EXPORT
 ==================================================
 EXPORT METADATA
@@ -246,7 +258,9 @@ EXPORT METADATA
 Authorizing Official:  ${user.name}
 Export Timestamp:      ${now.toLocaleString()}
 Total Cases:           ${filteredSubmissions.length}
-Total Documents:       ${filteredSubmissions.reduce((sum, sub) => sum + (sub.documents?.length || 0), 0)}
+Documents Requested:   ${filteredSubmissions.reduce((sum, sub) => sum + (sub.documents?.length || 0), 0)}
+Documents Included:    ${filteredSubmissions.reduce((sum, sub) => sum + (sub.documents?.length || 0), 0) - failedDocs.length}
+Documents Failed:      ${failedDocs.length}
 
 FILTER CRITERIA
 ==================================================
@@ -267,10 +281,9 @@ Root: NIB_KYC_MASTER_EXPORT
 CASE INVENTORY
 ==================================================
 `;
-      
-      rootFolder?.file('EXPORT_MANIFEST.txt', manifestHeader + manifestBody);
-      
-      // Create filter summary
+
+      rootFolder?.file('EXPORT_MANIFEST.txt', manifestHeader + manifestBody + failureReport);
+
       const filterSummary = `FILTER SUMMARY
 ==================================================
 Export Date:           ${format(now, 'yyyy-MM-dd HH:mm:ss')}
@@ -279,8 +292,9 @@ Date Range:            ${dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') 
 District:              ${selectedDistrict !== 'all' ? selectedDistrict : 'All'}
 Branch:                ${selectedBranch !== 'all' ? selectedBranch : 'All'}
 Total Records:         ${filteredSubmissions.length}
+Failed Documents:      ${failedDocs.length}
 ==================================================`;
-      
+
       rootFolder?.file('FILTER_SUMMARY.txt', filterSummary);
 
       setCurrentActionLabel("Compressing Archive...");
@@ -294,9 +308,20 @@ Total Records:         ${filteredSubmissions.length}
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast({ title: "Successful", description: `Master bundle exported with ${filteredSubmissions.length} cases organized by district, branch, and filter criteria.` });
+      if (failedDocs.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Export completed with warnings",
+          description: `${processedCount} cases exported. ${failedDocs.length} document(s) could not be retrieved and were skipped. See EXPORT_MANIFEST.txt inside the ZIP for details.`,
+        });
+      } else {
+        toast({
+          title: "Export Successful",
+          description: `${processedCount} cases exported successfully, organized by district, branch, and filter criteria.`,
+        });
+      }
     } catch (error) {
-      toast({ variant: "destructive", title: "Export Failure", description: "Could not complete the master bundle export." });
+      toast({ variant: "destructive", title: "Export Failed", description: "The export could not be completed. Please try again. If the problem persists, try narrowing your filter criteria." });
     } finally {
       setIsProcessing(false);
       setProgress(0);

@@ -232,16 +232,16 @@ export function validateFile(
   if (!isExtensionAllowed(filename)) {
     return {
       valid: false,
-      error: `File extension not allowed. Allowed types: ${getAllowedExtensions().join(', ')}`,
+      error: `File type not allowed. Only PDF, JPG, PNG, and TIFF files are accepted.`,
     };
   }
 
-  // Security: Prevent double extensions (e.g. file.pdf.exe)
+  // Prevent double extensions (e.g. file.pdf.exe)
   const parts = filename.split('.');
   if (parts.length > 2) {
     return {
       valid: false,
-      error: 'Security risk: Double extensions are prohibited.',
+      error: 'Double extensions are not allowed. Please rename the file (e.g. "document.pdf") and try again.',
     };
   }
 
@@ -249,7 +249,7 @@ export function validateFile(
   if (!isMimeTypeAllowed(mimeType)) {
     return {
       valid: false,
-      error: `MIME type not allowed: ${mimeType}`,
+      error: `File type not allowed. Only PDF, JPG, PNG, and TIFF files are accepted.`,
     };
   }
 

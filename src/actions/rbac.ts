@@ -19,7 +19,16 @@ import { prisma } from '@/lib/prisma';
 //  TYPES
 // ─────────────────────────────────────────────
 
-export type ServerRole = 'SUPER_ADMIN' | 'BRANCH_MANAGER' | 'DISTRICT_DIRECTOR' | 'BRANCH_OFFICER' | 'UNASSIGNED';
+export type ServerRole =
+  | 'SUPER_ADMIN'
+  | 'BRANCH_MANAGER'
+  | 'DISTRICT_DIRECTOR'
+  | 'BRANCH_OFFICER'
+  | 'KYC_OFFICER'
+  | 'KYC_SPECIALIST'
+  | 'KYC_SPECIALIST_OFFICER'
+  | 'SUPERVISOR'
+  | 'UNASSIGNED';
 
 export interface RbacContext {
   userId: string;
@@ -85,7 +94,7 @@ export async function resolveRbacContext(): Promise<RbacContext | null> {
     email: user.email,
     role,
     isSuperAdmin: role === 'SUPER_ADMIN',
-    isAdmin: role === 'SUPER_ADMIN' || role === 'BRANCH_MANAGER' || role === 'DISTRICT_DIRECTOR',
+    isAdmin: role === 'SUPER_ADMIN' || role === 'BRANCH_MANAGER' || role === 'DISTRICT_DIRECTOR' || role === 'SUPERVISOR',
     permissions,
   };
 }

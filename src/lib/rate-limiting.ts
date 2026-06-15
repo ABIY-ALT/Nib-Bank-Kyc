@@ -34,11 +34,11 @@ export const RATE_LIMIT_CONFIG = {
     windowMs: 60 * 60 * 1000, // 1 hour
   },
   MEMO_UPLOAD: {
-    maxAttempts: 20,
+    maxAttempts: 50,
     windowMs: 60 * 60 * 1000, // 1 hour
   },
   MEMO_ACCESS: {
-    maxAttempts: 100,
+    maxAttempts: 600,
     windowMs: 60 * 60 * 1000, // 1 hour
   },
 };

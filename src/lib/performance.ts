@@ -4,19 +4,25 @@
 
 export interface OfficerPerformanceStats {
   total: number;      // Historical total (all cases)
-  unseen: number;     // Unseen/Pending Cases
-  amended: number;    // Amendment Cases
-  authorized: number; // Authorized Cases
+  unseen: number;     // Unseen/Pending Cases — rewards officer's active workload
+  amended: number;    // Amendment Cases — penalises quality issues
+  authorized: number; // Authorized Cases — primary positive signal
+  recycles?: number;  // Resubmitted/recycled cases — additional quality penalty
 }
 
 /**
- * Performance Score (%) = ((Authorized + Amendment) / (Authorized + Amendment + Unseen)) × 100
+ * Efficiency Score (%) = (Authorized + Unseen) / (Authorized + Unseen + Amendments + Recycles) × 100
+ *
+ * Rewards:  Higher Authorized → score up. Higher Unseen (active workload) → score up.
+ * Penalises: Higher Amendments or Recycles → score down.
+ * No work at all → 100 (nothing done wrong yet).
  */
 export function calculatePerformanceIndex(stats: OfficerPerformanceStats): number {
-  const { unseen, amended, authorized } = stats;
-  const denominator = authorized + amended + unseen;
-  if (denominator === 0) return 100; // Return 100% if no work is pending or finished
-  return Math.round(Math.min(((authorized + amended) / denominator) * 100, 100));
+  const { unseen, amended, authorized, recycles = 0 } = stats;
+  const numerator = authorized + unseen;
+  const denominator = authorized + unseen + amended + recycles;
+  if (denominator === 0) return 100;
+  return Math.round(Math.min((numerator / denominator) * 100, 100));
 }
 
 /**

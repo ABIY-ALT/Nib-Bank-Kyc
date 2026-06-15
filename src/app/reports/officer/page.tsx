@@ -109,11 +109,12 @@ export default function OfficerReportsPage() {
           unseen: 0,
           running: 0,
           escalated: 0,
+          resubmitted: 0,
           totalCycles: 0,
           totalResolutionMins: 0,
           approvedCount: 0,
-          // track case IDs to avoid double-counting per officer
           _caseIds: new Set<string>(),
+          _branches: new Set<string>(),
         };
       }
     };
@@ -137,6 +138,7 @@ export default function OfficerReportsPage() {
       actorMap.forEach((officerName, officerId) => {
         ensureEntry(officerId, officerName);
         const entry = matrix[officerId];
+        if (sub.branchName) entry._branches.add(sub.branchName);
 
         // Count each case once per officer
         if (!entry._caseIds.has(sub.id)) {
@@ -155,18 +157,23 @@ export default function OfficerReportsPage() {
           sub.commentHistory?.some((h: any) => h.userId === officerId && h.action === KYC_STATUS.ACTION_REQUIRED) ||
           (!hasUserIdHistory && sub.assignedToId === officerId && sub.status === KYC_STATUS.ACTION_REQUIRED);
         if (officerAmended) entry.amended++;
+
+        // Recycles: case was resubmitted (customer recycled after amendment)
+        if (sub.isResubmitted) entry.resubmitted++;
       });
     });
 
     return Object.values(matrix)
-      .map(({ _caseIds: _omit, ...o }) => {
+      .map(({ _caseIds: _omit, _branches, ...o }) => {
+        const branches = Array.from(_branches).sort();
         const accuracy = calculatePerformanceIndex({
           total: o.total,
           unseen: o.unseen || 0,
           amended: o.amended || 0,
-          authorized: o.approved || 0
+          authorized: o.approved || 0,
+          recycles: o.resubmitted || 0,
         });
-        return { ...o, accuracy };
+        return { ...o, branches, accuracy };
       })
       .filter(o => selectedOfficers.length === 0 || selectedOfficers.includes(o.id))
       .sort((a, b) => b.accuracy - a.accuracy);
@@ -330,6 +337,7 @@ export default function OfficerReportsPage() {
                 <TableHeader className="bg-slate-50/80">
                   <TableRow>
                     <TableHead className="font-black py-5 pl-8 text-slate-500 text-[11px] uppercase">Officer Name</TableHead>
+                    <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase">Branch</TableHead>
                     <TableHead className="font-black py-5 text-slate-500 text-[11px] uppercase text-center">Total Reviews</TableHead>
                     <TableHead className="font-black py-5 text-emerald-600 text-[11px] uppercase text-center">Authorized</TableHead>
                     <TableHead className="font-black py-5 text-orange-600 text-[11px] uppercase text-center">Amendments</TableHead>
@@ -340,6 +348,18 @@ export default function OfficerReportsPage() {
                   {performanceMatrix.map((officer) => (
                     <TableRow key={officer.id} className="hover:bg-slate-50 transition-colors">
                       <TableCell className="font-black text-slate-900 py-6 pl-8">{officer.name}</TableCell>
+                      <TableCell className="py-6">
+                        {officer.branches.length === 0 ? (
+                          <span className="text-slate-300 font-bold">—</span>
+                        ) : officer.branches.length === 1 ? (
+                          <span className="font-bold text-slate-700 text-sm">{officer.branches[0]}</span>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <span className="font-bold text-slate-700 text-sm">{officer.branches[0]}</span>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">+{officer.branches.length - 1} more</span>
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-center font-bold">{officer.total}</TableCell>
                       <TableCell className="text-center text-emerald-600 font-bold">{officer.approved}</TableCell>
                       <TableCell className="text-center text-orange-600 font-bold">{officer.amended}</TableCell>
@@ -357,7 +377,7 @@ export default function OfficerReportsPage() {
                     </TableRow>
                   ))}
                   {performanceMatrix.length === 0 && (
-                    <TableRow><TableCell colSpan={5} className="py-20 text-center text-muted-foreground italic">No review data found for selected criteria.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="py-20 text-center text-muted-foreground italic">No review data found for selected criteria.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

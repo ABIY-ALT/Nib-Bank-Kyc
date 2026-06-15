@@ -32,11 +32,12 @@ type RouteAccessDecision = {
   redirectTo?: string;
 };
 
-const MY_PERFORMANCE_ROLES = [
-  "KYC_OFFICER",
-  "SUPERVISOR",
-  "KYC_SPECIALIST",
-  "KYC_SPECIALIST_OFFICER",
+// Permissions that indicate an officer-level user who should see their own performance page.
+// Using permissions instead of role names so any custom role with these permissions works.
+const MY_PERFORMANCE_PERMISSIONS = [
+  "KYC_VIEW_QUEUE",
+  "KYC_OFFICER_PROCESS",
+  "SUPERVISOR_FORWARD",
 ];
 
 const SYSTEM_ACCESS_PERMISSIONS = [
@@ -174,7 +175,7 @@ const ROUTE_RULES: RouteRule[] = [
   },
   {
     matches: (pathname) => pathname === "/submissions/my-performance",
-    requireAnyRole: MY_PERFORMANCE_ROLES,
+    requireAnyPermission: MY_PERFORMANCE_PERMISSIONS,
     requiredLabel: "KYC_REVIEW_ROLE",
   },
   {

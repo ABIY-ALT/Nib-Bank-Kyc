@@ -122,6 +122,7 @@ export default function DistrictPerformancePage() {
       authorized: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
       amended: submissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
       unseen: submissions.filter(s => s.status === KYC_STATUS.SUBMITTED).length,
+      resubmitted: submissions.filter(s => s.isResubmitted).length,
       byBranch: {} as Record<string, any>
     };
 
@@ -131,19 +132,14 @@ export default function DistrictPerformancePage() {
     submissions.forEach(sub => {
       const bName = sub.branchName || 'Unmapped Branch';
       if (!stats.byBranch[bName]) {
-        stats.byBranch[bName] = { 
-          total: 0, 
-          unseen: 0,
-          authorized: 0, 
-          amended: 0
-        };
+        stats.byBranch[bName] = { total: 0, unseen: 0, authorized: 0, amended: 0, resubmitted: 0 };
       }
-      
+
       if (sub.status === KYC_STATUS.APPROVED) {
         stats.byBranch[bName].authorized++;
         stats.byBranch[bName].total++;
       }
-      
+
       if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
         stats.byBranch[bName].amended++;
         stats.byBranch[bName].total++;
@@ -152,6 +148,10 @@ export default function DistrictPerformancePage() {
       if (sub.status === KYC_STATUS.SUBMITTED) {
         stats.byBranch[bName].unseen++;
         stats.byBranch[bName].total++;
+      }
+
+      if (sub.isResubmitted) {
+        stats.byBranch[bName].resubmitted++;
       }
     });
 
@@ -270,8 +270,9 @@ export default function DistrictPerformancePage() {
             total: data.total,
             unseen: data.unseen || 0,
             amended: data.amended || 0,
-            authorized: data.authorized || 0
-          }); 
+            authorized: data.authorized || 0,
+            recycles: data.resubmitted || 0,
+          });
           return (
             <TableRow key={name} className="hover:bg-slate-50 transition-colors group">
               <TableCell className="font-bold py-6 pl-8 text-slate-900 flex items-center gap-3">
@@ -310,14 +311,16 @@ export default function DistrictPerformancePage() {
             total: analytics.total,
             unseen: analytics.unseen || 0,
             amended: analytics.amended || 0,
-            authorized: analytics.authorized || 0
+            authorized: analytics.authorized || 0,
+            recycles: analytics.resubmitted || 0,
           });
         })()}%</span></div><Progress value={(() => {
           return calculatePerformanceIndex({
             total: analytics.total,
             unseen: analytics.unseen || 0,
             amended: analytics.amended || 0,
-            authorized: analytics.authorized || 0
+            authorized: analytics.authorized || 0,
+            recycles: analytics.resubmitted || 0,
           });
         })()} className="h-2 bg-white" /></div></div></CardContent></Card></div>
       </div>
