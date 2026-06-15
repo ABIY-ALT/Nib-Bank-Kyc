@@ -20,7 +20,7 @@ type StrengthState = {
 
 function checkStrength(pwd: string): StrengthState {
   return {
-    minLength: pwd.length >= 12,
+    minLength: pwd.length >= 8,
     hasUppercase: /[A-Z]/.test(pwd),
     hasLowercase: /[a-z]/.test(pwd),
     hasNumber: /\d/.test(pwd),
@@ -30,7 +30,7 @@ function checkStrength(pwd: string): StrengthState {
 
 function validatePassword(pwd: string): string | null {
   const s = checkStrength(pwd);
-  if (!s.minLength) return 'Password must be at least 12 characters.';
+  if (!s.minLength) return 'Password must be at least 8 characters.';
   if (!s.hasUppercase) return 'Password must contain an uppercase letter.';
   if (!s.hasLowercase) return 'Password must contain a lowercase letter.';
   if (!s.hasNumber) return 'Password must contain a number.';
@@ -39,7 +39,7 @@ function validatePassword(pwd: string): string | null {
 }
 
 const REQUIREMENTS: { key: keyof StrengthState; label: string }[] = [
-  { key: 'minLength',    label: 'At least 12 characters' },
+  { key: 'minLength',    label: 'At least 8 characters' },
   { key: 'hasUppercase', label: 'One uppercase letter' },
   { key: 'hasLowercase', label: 'One lowercase letter' },
   { key: 'hasNumber',    label: 'One number' },
