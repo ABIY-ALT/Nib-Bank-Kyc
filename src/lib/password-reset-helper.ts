@@ -116,6 +116,32 @@ export async function validateAndConsumePasswordResetToken(
 }
 
 /**
+ * Create a long-lived token for new-account password setup (24 hours).
+ * Stored in the same PasswordResetToken table; validated by the same
+ * validateAndConsumePasswordResetToken() function.
+ * Returns the plaintext token for inclusion in the emailed setup link.
+ */
+export async function createAccountSetupToken(
+  userId: string,
+  authorizerId?: string
+): Promise<string> {
+  const token = generatePasswordResetToken();
+  const tokenHash = hashPasswordResetToken(token);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+  await prisma.passwordResetToken.create({
+    data: {
+      userId,
+      tokenHash,
+      expiresAt,
+      authorizerId: authorizerId || null,
+    },
+  });
+
+  return token;
+}
+
+/**
  * Clean up expired password reset tokens.
  * Run periodically via cron or scheduled task.
  */

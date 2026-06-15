@@ -299,9 +299,17 @@ export async function getSubmissions(filters?: {
           ]
         : [{ assignedToId: null }, { status: KYC_STATUS.SUBMITTED }];
 
+      // For exceptional cases: any officer with portfolio access to the branch can see all
+      // exceptional cases from that branch regardless of assignedToId or base KYC status.
+      // This ensures the currently mapped KYC Officer can view and process cases waiting in
+      // AWAITING_KYC_OFFICER, and that closed (COMPLETED) cases remain visible for reference.
+      const exceptionalPortfolio: any[] = filters?.isExceptional && hasJurisFilter
+        ? [{ ...jurisdictionalFilter }]
+        : [];
+
       where = {
         ...baseWhere,
-        OR: [{ assignedToId: session.id }, ...portfolioConditions],
+        OR: [{ assignedToId: session.id }, ...portfolioConditions, ...exceptionalPortfolio],
       };
     } else {
       // All other roles: spread jurisdictional filter directly.

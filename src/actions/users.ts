@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma';
 import { Prisma, UserStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
-import { generateSecurePassword } from '@/lib/security';
 import { getServerSession, verifySensitiveSession, verifyPermission } from './auth-server';
 import { createAuditLog } from './audit';
 import { logPrivilegeChange } from './rbac';
@@ -13,9 +12,9 @@ import { normalizeAssignedBranches, normalizeBranchName } from '@/lib/jurisdicti
 import { ZodError } from 'zod';
 import { logInstitutionalError } from '@/lib/logger';
 import { normalizeInstitutionalLogin } from '@/lib/login-identifier';
-import { createPasswordResetToken } from '@/lib/password-reset-helper';
+import { createAccountSetupToken } from '@/lib/password-reset-helper';
 import { validatePhoneNumber } from '@/lib/phone-validation';
-import { queueWelcomeEmail, queueAdminPasswordResetEmail } from '@/lib/email';
+import { queueAccountSetupEmail, queueAdminResetSetupEmail } from '@/lib/email';
 
 const INSTITUTIONAL_EMAIL_DOMAIN = 'nibbank.com.et';
 
@@ -219,7 +218,7 @@ export async function provisionUser(data: {
     }
     
     const requestedEmail = validated.email ? normalizeInstitutionalLogin(validated.email) : '';
-    let tempPass = validated.password?.trim() || undefined;
+    const tempPass = validated.password?.trim() || undefined;
 
     if (!normalizedFirstName) {
       return { success: false, error: 'First name required' };
@@ -227,10 +226,6 @@ export async function provisionUser(data: {
 
     if (!normalizedLastName) {
       return { success: false, error: 'Last name required' };
-    }
-
-    if (!isUpdate && !tempPass) {
-      tempPass = generateSecurePassword(10);
     }
     
     // SECURITY SAFEGUARD: Prevent SUPER_ADMIN users from being created as INACTIVE
@@ -355,15 +350,18 @@ export async function provisionUser(data: {
           data: updateData
         });
       } else {
-        const createPassword = tempPass as string;
-        const hashedPassword = await bcrypt.hash(createPassword, 10);
+        // New users never receive a temporary password. A setup link is emailed instead.
+        // Store a cryptographically random unusable hash so the account cannot be logged
+        // into until the user activates it via the setup link.
+        const { randomBytes } = await import('crypto');
+        const unusableHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
 
         user = await (tx as any).user.create({
           data: {
             firstName: normalizedFirstName,
             lastName: normalizedLastName,
             email: finalEmail,
-            password: hashedPassword,
+            password: unusableHash,
             phoneNumber: normalizedPhoneNumber,
             branchId: resolvedBranchId,
             branchName: resolvedBranchName,
@@ -420,38 +418,24 @@ export async function provisionUser(data: {
     });
 
     if (!isUpdate) {
-      const emailQueued = queueWelcomeEmail({
+      const appBaseUrl = process.env.APP_BASE_URL?.replace(/\/$/, '') ?? '';
+      const setupToken = await createAccountSetupToken(result.id, session.id);
+      const setupLink = `${appBaseUrl}/auth/setup-password?token=${setupToken}`;
+
+      const emailQueued = queueAccountSetupEmail({
         userId: result.id,
         userName: `${result.firstName} ${result.lastName}`,
         userEmail: result.email,
         username: result.email,
-        temporaryPassword: tempPass as string,
+        setupLink,
       });
-      
+
       if (!emailQueued) {
         await createAuditLog({
           userId: session.id,
           userEmail: session.email,
           action: 'USER_PROVISION_EMAIL_FAILED',
-          details: `Welcome email failed to queue for new user: ${result.firstName} ${result.lastName}`,
-          severity: 'HIGH'
-        });
-      }
-    } else if (tempPass) {
-      const emailQueued = queueAdminPasswordResetEmail({
-        userId: result.id,
-        userName: `${result.firstName} ${result.lastName}`,
-        userEmail: result.email,
-        username: result.email,
-        temporaryPassword: tempPass,
-      });
-      
-      if (!emailQueued) {
-        await createAuditLog({
-          userId: session.id,
-          userEmail: session.email,
-          action: 'USER_PROFILE_UPDATE_EMAIL_FAILED',
-          details: `Password reset email failed to queue for user: ${result.firstName} ${result.lastName}`,
+          details: `Account setup email failed to queue for new user: ${result.firstName} ${result.lastName}`,
           severity: 'HIGH'
         });
       }
@@ -460,9 +444,9 @@ export async function provisionUser(data: {
     revalidatePath('/admin/users');
 
     let successMessage = isUpdate ? 'Profile updated successfully.' : 'New user provisioned successfully.';
-    
+
     if (!isUpdate) {
-      successMessage += ' Welcome email has been queued for delivery.';
+      successMessage += ' A password setup link has been emailed to the user.';
     }
 
     return {
@@ -532,25 +516,26 @@ export async function resetUserPassword(email: string) {
     });
 
     if (user) {
-      // Institutional Delivery Policy: Generate plaintext password for administrative handover
-      const newTempPass = generateSecurePassword(12);
-      const hashedPassword = await bcrypt.hash(newTempPass, 10);
-
+      // Mark account as requiring a password change, then send a setup link.
+      // The user's existing password is NOT changed — they can still log in with it
+      // (and will be prompted to change it), or activate the new password via the link.
       await prisma.user.update({
         where: { id: user.id },
         data: {
-          password: hashedPassword,
           needsPasswordChange: true,
           updatedAt: new Date()
         }
       });
 
-      // Audit log
+      const appBaseUrl = process.env.APP_BASE_URL?.replace(/\/$/, '') ?? '';
+      const setupToken = await createAccountSetupToken(user.id, authorizerId);
+      const setupLink = `${appBaseUrl}/auth/setup-password?token=${setupToken}`;
+
       await createAuditLog({
         userId: authorizerId,
         userEmail: session.email,
         action: 'PASSWORD_RESET_ADMIN_OVERRIDE',
-        details: `Administrator manually reset password for ${normalizedEmail}. Notification queued.`,
+        details: `Administrator initiated password reset for ${normalizedEmail}. Setup link emailed.`,
         metadata: {
           email: normalizedEmail,
           resource: 'USER',
@@ -558,12 +543,12 @@ export async function resetUserPassword(email: string) {
         },
       }).catch(() => {});
 
-      const emailQueued = queueAdminPasswordResetEmail({
+      const emailQueued = queueAdminResetSetupEmail({
         userId: user.id,
         userName: `${user.firstName} ${user.lastName}`,
         userEmail: user.email,
         username: normalizedEmail,
-        temporaryPassword: newTempPass,
+        setupLink,
       });
 
       if (!emailQueued) {
@@ -571,19 +556,19 @@ export async function resetUserPassword(email: string) {
           userId: authorizerId,
           userEmail: session.email,
           action: 'PASSWORD_RESET_EMAIL_FAILED',
-          details: `Password reset email failed to queue for ${normalizedEmail}. Temporary password: ${newTempPass}`,
+          details: `Password reset setup email failed to queue for ${normalizedEmail}.`,
           severity: 'HIGH'
         }).catch(() => {});
-        
+
         return {
           success: false,
-          error: 'Password reset completed, but notification email could not be delivered. Please check your email configuration (SMTP settings).'
+          error: 'Password reset initiated, but the setup email could not be delivered. Please check your SMTP configuration.'
         };
       }
 
       return {
         success: true,
-        message: 'Password reset processed. User notification has been queued.'
+        message: 'A password setup link has been sent to the user\'s email address. The link is valid for 24 hours.'
       };
     } else {
       // Log attempted reset for non-existent user for security auditing

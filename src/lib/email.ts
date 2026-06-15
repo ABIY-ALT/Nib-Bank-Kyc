@@ -29,7 +29,7 @@ interface EmailAuditContext {
   userId?: string | null;
   userEmail: string;
   userName?: string;
-  action: 'USER_WELCOME' | 'ADMIN_PASSWORD_RESET' | 'PASSWORD_RESET_REQUEST';
+  action: 'USER_WELCOME' | 'ADMIN_PASSWORD_RESET' | 'PASSWORD_RESET_REQUEST' | 'ACCOUNT_SETUP';
   description: string;
 }
 
@@ -105,7 +105,9 @@ function getMailConfig(): MailConfig {
   const secure = process.env.SMTP_SECURE === 'true' || process.env.EMAIL_SECURE === 'true';
   const rejectUnauthorized = process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false' && process.env.EMAIL_ALLOW_SELF_SIGNED !== 'true';
   const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+  // Gmail app passwords are shown with spaces for readability (e.g. "xxxx xxxx xxxx xxxx")
+  // but the SMTP server expects them without spaces. Strip all whitespace here.
+  const smtpPass = (process.env.SMTP_PASS || process.env.EMAIL_PASS)?.replace(/\s/g, '');
   
   // Parse EMAIL_FROM format: "Name <email@example.com>" or just "email@example.com"
   let fromAddress = process.env.EMAIL_FROM_ADDRESS?.trim() || process.env.EMAIL_FROM?.trim() || 'noreply@nibbank.com.et';
@@ -419,6 +421,93 @@ export function queueAdminPasswordResetEmail(params: {
   });
 }
 
+export function queueAccountSetupEmail(params: {
+  userId?: string | null;
+  userName: string;
+  userEmail: string;
+  username: string;
+  setupLink: string;
+}) {
+  const subject = 'Set Up Your NIB Bank KYC Portal Password';
+  const greeting = `Hello ${params.userName},`;
+  const lines = [
+    `Your account has been created on the NIB Bank KYC Portal.`,
+    `Username: ${params.username}`,
+    'Click the button below to set your password and activate your account.',
+    'This link is valid for <strong>24 hours</strong> and can only be used once.',
+  ];
+
+  const template = buildEmailTemplate({
+    subject,
+    greeting,
+    introduction: '',
+    callToActionLabel: 'Set Up My Password',
+    callToActionUrl: params.setupLink,
+    lines,
+    footerNote: 'If you did not expect this email, contact IT security immediately. Do not share this link with anyone.',
+  });
+
+  const config = getMailConfig();
+  const mailOptions: SendMailOptions = {
+    from: getFromHeader(config),
+    to: params.userEmail,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  };
+
+  return queueMail(mailOptions, {
+    userId: params.userId ?? null,
+    userEmail: params.userEmail,
+    userName: params.userName,
+    action: 'ACCOUNT_SETUP',
+    description: 'New user account setup email queued.',
+  });
+}
+
+export function queueAdminResetSetupEmail(params: {
+  userId?: string | null;
+  userName: string;
+  userEmail: string;
+  username: string;
+  setupLink: string;
+}) {
+  const subject = 'NIB Bank KYC Portal — Password Reset Required';
+  const greeting = `Hello ${params.userName},`;
+  const lines = [
+    'An administrator has initiated a password reset for your account.',
+    `Username: ${params.username}`,
+    'Click the button below to set a new password. The link expires in <strong>24 hours</strong>.',
+  ];
+
+  const template = buildEmailTemplate({
+    subject,
+    greeting,
+    introduction: '',
+    callToActionLabel: 'Set New Password',
+    callToActionUrl: params.setupLink,
+    lines,
+    footerNote: 'If you did not expect this reset, contact IT security immediately. Do not share this link.',
+  });
+
+  const config = getMailConfig();
+  const mailOptions: SendMailOptions = {
+    from: getFromHeader(config),
+    to: params.userEmail,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  };
+
+  return queueMail(mailOptions, {
+    userId: params.userId ?? null,
+    userEmail: params.userEmail,
+    userName: params.userName,
+    action: 'ACCOUNT_SETUP',
+    description: 'Admin-initiated password reset setup email queued.',
+  });
+}
+
 export function queuePasswordResetRequestEmail(params: {
   userId?: string | null;
   userName: string;
@@ -459,6 +548,11 @@ export function queuePasswordResetRequestEmail(params: {
     description: 'Password reset request email queued.',
   });
 }
+
+/**
+ * Send a test email synchronously (bypasses the queue) so the caller gets
+ * immediate SMTP success/failure feedback. Only used from the admin test action.
+ */
 
 export async function sendPasswordResetEmail(
   userEmail: string,
