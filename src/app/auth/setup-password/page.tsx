@@ -175,7 +175,7 @@ function SetupPasswordForm() {
 
       setSuccess(true);
       toast({ title: 'Password set', description: 'You can now log in with your new password.' });
-      setTimeout(() => router.push('/login'), 2500);
+      setTimeout(() => router.replace('/login'), 2000);
     } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {

@@ -176,7 +176,7 @@ function CompletePasswordResetForm() {
 
       setSuccess(true);
       toast({ title: 'Success', description: 'Your password has been reset successfully.' });
-      setTimeout(() => router.push('/login'), 2000);
+      setTimeout(() => router.replace('/login'), 2000);
     } catch {
       setError('An error occurred. Please try again.');
     } finally {
