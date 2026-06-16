@@ -28,6 +28,16 @@ function getHstsHeader(): string {
   return 'max-age=31536000; includeSubDomains';
 }
 
+/** Public auth PAGES reachable without a session (emailed links, login helpers). */
+function isPublicAuthPage(pathname: string): boolean {
+  const publicPages = [
+    '/auth/setup-password',
+    '/auth/complete-password-reset',
+    '/auth/request-password-reset',
+  ];
+  return publicPages.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 /** Auth APIs where missing/invalid session cookie is expected or handled in-route. */
 function isPublicAuthApiPath(pathname: string): boolean {
   const publicPrefixes = [
@@ -127,6 +137,7 @@ export async function proxy(req: NextRequest) {
     pathname === '/favicon.ico' ||
     pathname === '/login' ||
     pathname === '/unauthorized' ||
+    isPublicAuthPage(pathname) ||
     isPublicImageAsset
   ) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
