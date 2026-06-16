@@ -269,11 +269,15 @@ export default function KYCOperationsMonitoringPage() {
     if (!user) return;
     setIsEscalating(caseId);
     try {
-      await updateSubmissionStatus(caseId, KYC_STATUS.ESCALATED, user.id, "Strategic escalation triggered by Supervisor via Institutional Oversight.");
+      const res = await updateSubmissionStatus(caseId, KYC_STATUS.ESCALATED, user.id, "Strategic escalation triggered by Supervisor via Institutional Oversight.");
+      if (!res.success) {
+        toast({ variant: "destructive", title: "Escalation Failed", description: res.error });
+        return;
+      }
       toast({ title: "Escalation Successful" });
       await loadSubmissions();
     } catch (e) {
-      toast({ variant: "destructive", title: "Escalation Failed" });
+      toast({ variant: "destructive", title: "Escalation Failed", description: "Please try again." });
     } finally {
       setIsEscalating(null);
     }

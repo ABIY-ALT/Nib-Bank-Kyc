@@ -670,16 +670,28 @@ Document Count:    ${previewableDocuments.length}
 
     setIsActioning(action);
     try {
-      await updateSubmissionStatus(submission.id, action, user.id, finalRemarks);
+      const res = await updateSubmissionStatus(submission.id, action, user.id, finalRemarks);
+      if (!res.success) {
+        toast({
+          variant: "destructive",
+          title: "Action Not Completed",
+          description: res.error || "We couldn't complete this action. Please try again.",
+        });
+        return;
+      }
       toast({ title: "Successful", description: `Case moved to ${action.replace(/_/g, ' ')}.` });
       await refreshSubmission(submission.id);
-      
+
       // Reset states
       setRemarks("");
       setSelectedScenario([]);
       setIsCustomRemark(false);
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Action Failed", description: error.message });
+      toast({
+        variant: "destructive",
+        title: "Action Not Completed",
+        description: "We couldn't complete this action. Please check your connection and try again.",
+      });
     } finally {
       setIsActioning(null);
     }
@@ -815,10 +827,18 @@ Document Count:    ${previewableDocuments.length}
           });
         }
       } else {
-        throw new Error("Transition failed");
+        toast({
+          variant: "destructive",
+          title: "Action Not Completed",
+          description: res.error || "We couldn't complete this action. Please try again.",
+        });
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Transition Failed", description: error.message });
+      toast({
+        variant: "destructive",
+        title: "Action Not Completed",
+        description: "We couldn't complete this action. Please check your connection and try again.",
+      });
     } finally {
       setIsActioning(null);
     }
@@ -831,11 +851,23 @@ Document Count:    ${previewableDocuments.length}
     }
     setIsActioning("RETURN_ESCALATION");
     try {
-      await returnEscalatedCaseToOfficer(submission.id, remarks);
+      const res = await returnEscalatedCaseToOfficer(submission.id, remarks);
+      if (!res.success) {
+        toast({
+          variant: "destructive",
+          title: "Action Not Completed",
+          description: res.error || "We couldn't return this case. Please try again.",
+        });
+        return;
+      }
       toast({ title: "Case Returned", description: "Case has been returned to the mapped officer." });
       router.push('/submissions');
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Return Failed", description: error.message });
+      toast({
+        variant: "destructive",
+        title: "Action Not Completed",
+        description: "We couldn't return this case. Please check your connection and try again.",
+      });
     } finally {
       setIsActioning(null);
     }
@@ -944,10 +976,18 @@ Document Count:    ${previewableDocuments.length}
         setUrgentRemark("");
         await refreshSubmission(submission.id);
       } else {
-        toast({ variant: "destructive", title: "Failed", description: res.error });
+        toast({
+          variant: "destructive",
+          title: "Action Not Completed",
+          description: res.error || "We couldn't update the urgent flag. Please try again.",
+        });
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
+      toast({
+        variant: "destructive",
+        title: "Action Not Completed",
+        description: "We couldn't update the urgent flag. Please check your connection and try again.",
+      });
     } finally {
       setIsTogglingUrgent(false);
     }

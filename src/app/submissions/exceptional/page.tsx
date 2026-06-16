@@ -268,6 +268,7 @@ export default function ExceptionalCasesPage() {
                   <SelectItem value="High deposit amount">High deposit amount</SelectItem>
                   <SelectItem value="High-risk profile">High-risk profile</SelectItem>
                   <SelectItem value="Case aging beyond SLA">Case aging beyond SLA</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -83,6 +83,35 @@ function toFriendlyUploadError(rawError?: string): string {
   return 'The file could not be uploaded. Please check that it is a valid document and try again.';
 }
 
+/**
+ * Maps raw thrown error messages from workflow actions into clear, user-friendly
+ * text. Keeps technical/internal details out of the client (those stay in audit
+ * logs); short, already-friendly validation messages pass through unchanged.
+ */
+function toFriendlyActionError(rawError?: string): string {
+  const raw = String(rawError || '');
+  if (/unauthor|permission|access denied|\bdenied\b/i.test(raw)) {
+    return 'You are not authorized to perform this action on this case.';
+  }
+  if (/session|unauthenticated|log ?in/i.test(raw)) {
+    return 'Your session has expired. Please sign in again.';
+  }
+  if (/not found/i.test(raw)) {
+    return 'This case could not be found. It may have been moved or removed.';
+  }
+  if (/memo/i.test(raw)) {
+    return 'A valid PDF memo attachment is required for this action.';
+  }
+  if (/workflow|stage|invalid.*action/i.test(raw)) {
+    return "This action isn't available for the case's current stage. Please refresh and try again.";
+  }
+  // Already-friendly, short validation messages (remarks/officer/etc.) pass through.
+  if (raw.length > 0 && raw.length < 160 && !/prisma|database|fault|stack|\bat\b.*\(/i.test(raw)) {
+    return raw;
+  }
+  return "We couldn't complete this action. Please try again.";
+}
+
 function hasPermission(user: any, slug: string) {
   const normalized = normalizePermissionSlug(slug);
   return Boolean(
@@ -943,13 +972,13 @@ async function getActingPrimaryOfficerId(branchId: string | null): Promise<strin
 
 export async function updateSubmissionStatus(id: string, status: string, reviewerId: string, remarks?: string) {
   const session = await getServerSession();
-  if (!session) throw new Error("Please log in to continue.");
+  if (!session) return { success: false as const, error: "Your session has expired. Please sign in again." };
 
   const current = await prisma.kYC.findUnique({ where: { id } });
-  if (!current) throw new Error("The case could not be found.");
+  if (!current) return { success: false as const, error: "This case could not be found." };
 
   if (reviewerId !== session.id && session.role !== 'SUPER_ADMIN') {
-    throw new Error("Access denied.");
+    return { success: false as const, error: "Access denied." };
   }
 
   const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
@@ -977,7 +1006,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   ) || [];
 
   if (!reviewer || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(reviewer, userPermissions, session.id, current))) {
-    throw new Error("You do not have permission to access this case.");
+    return { success: false as const, error: "You do not have permission to access this case." };
   }
 
   // WORKFLOW INTEGRITY: only the mapped KYC Officer may pull a case out of
@@ -991,7 +1020,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   }
 
   if (current.status === KYC_STATUS.SUBMITTED && status === KYC_STATUS.IN_REVIEW && !isMappedOfficer) {
-    throw new Error("Only the assigned KYC Officer can open this case for review.");
+    return { success: false as const, error: "Only the assigned KYC Officer can open this case for review." };
   }
 
   // REDUCE DUPLICATE ENTRIES: Prevent rapid-fire or redundant status updates
@@ -1033,38 +1062,43 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     updatedHistory = [...history, newEntry];
   }
 
-  const kyc = await prisma.kYC.update({
-    where: { id },
-    data: {
-      status,
-      // Assignment stays with the mapped officer: actions by admins,
-      // directors or supervisors must not steal the case or shift
-      // per-officer workflow statistics to themselves.
-      assignedToId: isMappedOfficer ? session.id : current.assignedToId,
-      updatedAt: new Date(),
-      commentHistory: updatedHistory,
-      isResubmitted: status === KYC_STATUS.SUBMITTED && current.status === KYC_STATUS.ACTION_REQUIRED,
-      amendCycles: status === KYC_STATUS.ACTION_REQUIRED ? { increment: 1 } : undefined
-    }
-  });
+  try {
+    await prisma.kYC.update({
+      where: { id },
+      data: {
+        status,
+        // Assignment stays with the mapped officer: actions by admins,
+        // directors or supervisors must not steal the case or shift
+        // per-officer workflow statistics to themselves.
+        assignedToId: isMappedOfficer ? session.id : current.assignedToId,
+        updatedAt: new Date(),
+        commentHistory: updatedHistory,
+        isResubmitted: status === KYC_STATUS.SUBMITTED && current.status === KYC_STATUS.ACTION_REQUIRED,
+        amendCycles: status === KYC_STATUS.ACTION_REQUIRED ? { increment: 1 } : undefined
+      }
+    });
 
-  await createAuditLog({
-    userId: session.id,
-    userEmail: session.email,
-    action: `STATUS_CHANGE_${status}`,
-    details: `Status modified to ${status}. Remarks: ${remarks || 'N/A'}`,
-    kycId: id
-  });
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: `STATUS_CHANGE_${status}`,
+      details: `Status modified to ${status}. Remarks: ${remarks || 'N/A'}`,
+      kycId: id
+    });
 
-  revalidatePath(`/submissions/${id}`);
-  return kyc;
+    revalidatePath(`/submissions/${id}`);
+    return { success: true as const };
+  } catch (error: any) {
+    logInstitutionalError(error, 'DB_UPDATE_STATUS');
+    return { success: false as const, error: toFriendlyActionError(error?.message) };
+  }
 }
 
 export async function returnEscalatedCaseToOfficer(id: string, remarks: string) {
   const session = await getServerSession();
-  if (!session) throw new Error("Please log in to continue.");
+  if (!session) return { success: false as const, error: "Your session has expired. Please sign in again." };
 
-  const current = await prisma.kYC.findUnique({ 
+  const current = await prisma.kYC.findUnique({
     where: { id },
     include: {
       branch: {
@@ -1078,7 +1112,7 @@ export async function returnEscalatedCaseToOfficer(id: string, remarks: string) 
     },
   });
 
-  if (!current) throw new Error("The case could not be found.");
+  if (!current) return { success: false as const, error: "This case could not be found." };
 
   // Find the acting primary officer for the branch.
   // BUSINESS RULE: PERMANENT officer first; the TEMPORARY officer only takes
@@ -1091,7 +1125,7 @@ export async function returnEscalatedCaseToOfficer(id: string, remarks: string) 
   const mappedOfficerId = mapping?.officers[0]?.userId;
 
   if (!mappedOfficerId) {
-    throw new Error("No primary officer is currently mapped to this branch.");
+    return { success: false as const, error: "No primary officer is currently mapped to this branch." };
   }
 
   const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
@@ -1106,27 +1140,32 @@ export async function returnEscalatedCaseToOfficer(id: string, remarks: string) 
     action: 'RETURNED_FROM_ESCALATION'
   };
 
-  const kyc = await prisma.kYC.update({
-    where: { id },
-    data: {
-      status: KYC_STATUS.IN_REVIEW, // Normal workflow continues
-      assignedToId: mappedOfficerId,
-      updatedAt: new Date(),
-      commentHistory: [...history, newEntry],
-    }
-  });
+  try {
+    await prisma.kYC.update({
+      where: { id },
+      data: {
+        status: KYC_STATUS.IN_REVIEW, // Normal workflow continues
+        assignedToId: mappedOfficerId,
+        updatedAt: new Date(),
+        commentHistory: [...history, newEntry],
+      }
+    });
 
-  await createAuditLog({
-    userId: session.id,
-    userEmail: session.email,
-    action: 'ESCALATION_RETURN',
-    details: `Case ${current.id} returned to mapped officer with remarks.`,
-    kycId: id
-  });
+    await createAuditLog({
+      userId: session.id,
+      userEmail: session.email,
+      action: 'ESCALATION_RETURN',
+      details: `Case ${current.id} returned to mapped officer with remarks.`,
+      kycId: id
+    });
 
-  revalidatePath(`/submissions/${id}`);
-  revalidatePath('/submissions');
-  return kyc;
+    revalidatePath(`/submissions/${id}`);
+    revalidatePath('/submissions');
+    return { success: true as const };
+  } catch (error: any) {
+    logInstitutionalError(error, 'DB_RETURN_ESCALATION');
+    return { success: false as const, error: toFriendlyActionError(error?.message) };
+  }
 }
 
 export async function updateSubmissionChecklist(id: string, state: any) {
@@ -1384,7 +1423,7 @@ export async function getWorkflowCounts() {
 
 export async function processExceptionalStep(formData: FormData) {
   const session = await getServerSession();
-  if (!session) throw new Error("Unauthorized");
+  if (!session) return { success: false as const, error: "Your session has expired. Please sign in again." };
 
   try {
     const id = formData.get('id') as string;
@@ -1573,10 +1612,27 @@ export async function processExceptionalStep(formData: FormData) {
     });
 
     revalidatePath(`/submissions/${id}`);
-    return { success: true };
+    return { success: true as const };
   } catch (error: any) {
     logInstitutionalError(error, 'DB_PROCESS_EXCEPTIONAL');
-    throw new Error(error.message || "Institutional database fault.");
+    // Map internal errors to clear, user-friendly messages without leaking internals.
+    const raw = String(error?.message || '');
+    let friendly = "We couldn't complete this action. Please try again.";
+    if (/unauthor|permission|access/i.test(raw)) {
+      friendly = "You are not authorized to perform this step on this case.";
+    } else if (/memo/i.test(raw)) {
+      friendly = "A valid PDF memo attachment is required for this action.";
+    } else if (/remarks/i.test(raw)) {
+      friendly = "Please provide remarks before submitting this action.";
+    } else if (/not found/i.test(raw)) {
+      friendly = "This case could not be found. It may have been moved or removed.";
+    } else if (/workflow|stage|invalid.*action/i.test(raw)) {
+      friendly = "This action isn't available for the case's current stage. Please refresh and try again.";
+    } else if (raw && raw.length > 0 && raw.length < 120 && !/prisma|database|fault/i.test(raw)) {
+      // Already-friendly validation messages (e.g. file upload errors) pass through.
+      friendly = raw;
+    }
+    return { success: false as const, error: friendly };
   }
 }
 export async function logBundleDownload(data: any) {
@@ -1709,7 +1765,7 @@ export async function uploadAdditionalDocuments(formData: FormData) {
 
 export async function toggleSubmissionUrgentFlag(id: string, urgentRemark?: string) {
   const session = await getServerSession();
-  if (!session) throw new Error("Unauthorized");
+  if (!session) return { success: false as const, error: "Your session has expired. Please sign in again." };
 
   try {
     const remark = urgentRemark?.trim();
@@ -1794,13 +1850,13 @@ export async function toggleSubmissionUrgentFlag(id: string, urgentRemark?: stri
     });
 
     revalidatePath(`/submissions/${id}`);
-    return { 
-      success: true, 
+    return {
+      success: true as const,
       isUrgent: newUrgentStatus,
       urgentFlaggedBy: newUrgentStatus ? updatedKyc.urgentFlaggedBy : null
     };
   } catch (error: any) {
-    const { message } = logInstitutionalError(error, 'TOGGLE_URGENT_FLAG');
-    return { success: false, error: message };
+    logInstitutionalError(error, 'TOGGLE_URGENT_FLAG');
+    return { success: false as const, error: toFriendlyActionError(error?.message) };
   }
 }
