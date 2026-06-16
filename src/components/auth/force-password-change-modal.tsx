@@ -27,6 +27,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { isBreachedPassword } from '@/lib/breached-password';
+import { isCommonPassword } from '@/lib/common-passwords';
 import { useRouter } from 'next/navigation';
 
 export function ForcePasswordChangeModal() {
@@ -90,6 +91,19 @@ export function ForcePasswordChangeModal() {
 
     if (!passwordValidation.isValid) {
       setError("Password does not meet all institutional security requirements.");
+      setLoading(false);
+      return;
+    }
+
+    if (isCommonPassword(newPassword)) {
+      setError("This password is too common. Please choose a more unique password.");
+      setLoading(false);
+      return;
+    }
+
+    // Re-check the breach corpus at submit time (state may be stale).
+    if (isBreached || (await isBreachedPassword(newPassword))) {
+      setError("This password has appeared in a public data breach. Please choose a different password.");
       setLoading(false);
       return;
     }

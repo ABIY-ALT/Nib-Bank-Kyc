@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, KeyRound, Eye, EyeOff, AlertCircle, CheckCircle2, XCircle, ShieldAlert } from 'lucide-react';
 import { isBreachedPassword } from '@/lib/breached-password';
+import { isCommonPassword } from '@/lib/common-passwords';
 
 type StrengthState = {
   minLength: boolean;
@@ -35,6 +36,7 @@ function validatePassword(pwd: string): string | null {
   if (!s.hasLowercase) return 'Password must contain a lowercase letter.';
   if (!s.hasNumber) return 'Password must contain a number.';
   if (!s.hasSpecial) return 'Password must contain a special character.';
+  if (isCommonPassword(pwd)) return 'This password is too common. Please choose a more unique password.';
   return null;
 }
 
@@ -64,6 +66,8 @@ function SetupPasswordForm() {
   const { toast } = useToast();
 
   const [token, setToken] = useState('');
+  const [verifying, setVerifying] = useState(true);
+  const [tokenValid, setTokenValid] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -83,10 +87,33 @@ function SetupPasswordForm() {
   useEffect(() => {
     const t = searchParams?.get('token');
     if (!t) {
-      setError('This setup link is invalid or has already been used.');
+      setVerifying(false);
+      setTokenValid(false);
       return;
     }
     setToken(t);
+
+    // Verify the token before showing the form so an already-used or expired
+    // link never renders the password setup page.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/auth/complete-password-reset?token=${encodeURIComponent(t)}`, {
+          method: 'GET',
+          cache: 'no-store',
+        });
+        const data = await res.json();
+        if (!cancelled) setTokenValid(res.ok && data.valid === true);
+      } catch {
+        if (!cancelled) setTokenValid(false);
+      } finally {
+        if (!cancelled) setVerifying(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [searchParams]);
 
   const handlePasswordChange = async (val: string) => {
@@ -126,6 +153,11 @@ function SetupPasswordForm() {
       setError(pwdError);
       return;
     }
+    // Re-check the breach corpus at submit time (state may be stale).
+    if (isBreached || (await isBreachedPassword(password))) {
+      setError('This password has appeared in a public data breach. Please choose a different password.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -153,7 +185,15 @@ function SetupPasswordForm() {
     }
   };
 
-  if (!token) {
+  if (verifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!tokenValid && !success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 px-4">
         <Card className="w-full max-w-md shadow-2xl">

@@ -116,6 +116,33 @@ export async function validateAndConsumePasswordResetToken(
 }
 
 /**
+ * Verify a password reset / setup token WITHOUT consuming it.
+ * Returns true only if the token exists, is unused, and is not expired.
+ * Used to gate the password-setup page on load so already-used or expired
+ * links never render the form. Does not reveal the reason for failure.
+ */
+export async function verifyPasswordResetToken(token: string): Promise<boolean> {
+  try {
+    if (!token || typeof token !== 'string') return false;
+
+    const tokenHash = hashPasswordResetToken(token);
+
+    const record = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      select: { used: true, expiresAt: true },
+    });
+
+    if (!record) return false;
+    if (record.used) return false;
+    if (record.expiresAt < new Date()) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Create a long-lived token for new-account password setup (24 hours).
  * Stored in the same PasswordResetToken table; validated by the same
  * validateAndConsumePasswordResetToken() function.

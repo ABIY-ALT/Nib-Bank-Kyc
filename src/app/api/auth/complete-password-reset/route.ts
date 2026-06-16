@@ -11,9 +11,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { validateAndConsumePasswordResetToken } from '@/lib/password-reset-helper';
+import { validateAndConsumePasswordResetToken, verifyPasswordResetToken } from '@/lib/password-reset-helper';
 import { logInstitutionalError } from '@/lib/logger';
 import { createAuditLog } from '@/actions/audit';
+import { isBreachedPassword } from '@/lib/breached-password';
+import { isCommonPassword } from '@/lib/common-passwords';
 import bcrypt from 'bcryptjs';
 
 // Minimum password requirements
@@ -49,6 +51,26 @@ function validatePassword(password: string): { valid: boolean; error?: string } 
   return { valid: true };
 }
 
+// GET /api/auth/complete-password-reset?token=...
+// Non-consuming check used by the setup/reset pages to decide whether to render
+// the form. Returns { valid } only; never marks the token as used.
+export async function GET(req: NextRequest) {
+  const token = req.nextUrl.searchParams.get('token');
+
+  if (!token) {
+    return NextResponse.json({ valid: false }, { status: 200 });
+  }
+
+  const valid = await verifyPasswordResetToken(token);
+  return NextResponse.json(
+    { valid },
+    {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' },
+    }
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -73,6 +95,18 @@ export async function POST(req: NextRequest) {
     if (!passwordValidation.valid) {
       return NextResponse.json(
         { success: false, error: passwordValidation.error },
+        { status: 400 }
+      );
+    }
+
+    // SECURITY GATE: reject weak/common credentials (e.g. "Admin@123") that meet
+    // complexity rules. Local denylist runs first (never fails open), then HIBP.
+    if (isCommonPassword(password) || (await isBreachedPassword(password))) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'This password is too common or has appeared in a public data breach. Please choose a more unique password.',
+        },
         { status: 400 }
       );
     }

@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { getServerSession } from './auth-server';
 import { createAuditLog } from './audit';
 import { isBreachedPassword } from '@/lib/breached-password';
+import { isCommonPassword } from '@/lib/common-passwords';
 import { sessionAuthCookieDefaults } from '@/lib/server-session-auth';
 
 /**
@@ -65,7 +66,11 @@ export async function updateInstitutionalPassword(userId: string, newPassword: s
       return { success: false, error: 'Institutional policy: Minimum 8 characters.' };
     }
 
-    // FINAL SECURITY GATE: Breached Password Check
+    // FINAL SECURITY GATE: reject weak/common credentials first (offline, never
+    // fails open), then check the HIBP public breach corpus.
+    if (isCommonPassword(newPassword)) {
+      return { success: false, error: 'SECURITY ALERT: This password is too common. Please choose a unique credential.' };
+    }
     const breached = await isBreachedPassword(newPassword);
     if (breached) {
       return { success: false, error: 'SECURITY ALERT: This password was found in a public data breach. Please choose a unique credential.' };
