@@ -605,13 +605,18 @@ export async function getSubmissionById(id: string) {
   }
 }
 
+function generateKycId(branchName: string): string {
+  const branchSlug = branchName.replace(/\s+/g, '_').toUpperCase();
+  const suffix = generateSecureString(6, '0123456789');
+  return `${branchSlug}-KYC-${suffix}`;
+}
+
 export async function createSubmission(formData: FormData) {
   const session = await getServerSession();
-  if (!session) return { success: false, error: "Unauthenticated" };
+  if (!session) return { success: false as const, error: "Unauthenticated" };
 
   try {
     const validated = SubmissionSchema.parse({
-      id: formData.get('id'),
       customerName: formData.get('customerName'),
       entityType: formData.get('entityType'),
       branchName: formData.get('branchName'),
@@ -626,13 +631,13 @@ export async function createSubmission(formData: FormData) {
     // 1. Validate file count
     const fileCountValidation = validateFileCount(files.length);
     if (!fileCountValidation.valid) {
-      return { success: false, error: fileCountValidation.error };
+      return { success: false as const, error: fileCountValidation.error };
     }
 
     // 2. Validate total upload size
     const totalSizeValidation = validateTotalUploadSize(files);
     if (!totalSizeValidation.valid) {
-      return { success: false, error: totalSizeValidation.error };
+      return { success: false as const, error: totalSizeValidation.error };
     }
 
     const district = await prisma.district.upsert({
@@ -668,17 +673,17 @@ export async function createSubmission(formData: FormData) {
           action: 'FILE_UPLOAD_REJECTED',
           details: `Threat Detected: ${file.name} - ${validation.error}`,
         });
-        return { success: false, error: toFriendlyUploadError(validation.error) };
+        return { success: false as const, error: toFriendlyUploadError(validation.error) };
       }
 
       const persistableBuffer = validation.sanitisedBuffer || buffer;
       await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
 
-      memoData.push({ 
-        name: file.name.split('.').slice(0, -1).join('.'), 
-        originalName: file.name, 
-        type: type, 
-        storageKey: validation.storageKey!, 
+      memoData.push({
+        name: file.name.split('.').slice(0, -1).join('.'),
+        originalName: file.name,
+        type: type,
+        storageKey: validation.storageKey!,
         fileHash: validation.fileHash,
         uploadedBy: { connect: { id: session.id } },
         mimeType: validation.fileType || file.type,
@@ -695,22 +700,35 @@ export async function createSubmission(formData: FormData) {
       action: "SUBMIT"
     }];
 
-    const kyc = await prisma.kYC.create({
-      data: {
-        id: validated.id,
-        customerName: validated.customerName,
-        branchId: branch.id,
-        branchName: validated.branchName,
-        districtName: validated.districtName,
-        createdById: session.id,
-        status: KYC_STATUS.SUBMITTED,
-        entityType: validated.entityType,
-        remarks: validated.remarks,
-        checklistState: {},
-        commentHistory: initialHistory,
-        memos: { create: memoData }
+    const MAX_ID_ATTEMPTS = 5;
+    let kyc;
+    for (let attempt = 0; attempt < MAX_ID_ATTEMPTS; attempt++) {
+      try {
+        kyc = await prisma.kYC.create({
+          data: {
+            id: generateKycId(validated.branchName),
+            customerName: validated.customerName,
+            branchId: branch.id,
+            branchName: validated.branchName,
+            districtName: validated.districtName,
+            createdById: session.id,
+            status: KYC_STATUS.SUBMITTED,
+            entityType: validated.entityType,
+            remarks: validated.remarks,
+            checklistState: {},
+            commentHistory: initialHistory,
+            memos: { create: memoData }
+          }
+        });
+        break;
+      } catch (err: any) {
+        // Retry with a freshly generated ID only on a collision against the id field.
+        const isIdCollision = err?.code === 'P2002' && err?.meta?.target?.includes?.('id');
+        if (!isIdCollision || attempt === MAX_ID_ATTEMPTS - 1) throw err;
       }
-    });
+    }
+    if (!kyc) throw new Error('Failed to create KYC record');
+    const createdKyc = kyc;
 
     await createAuditLog({
       userId: session.id,
@@ -718,19 +736,23 @@ export async function createSubmission(formData: FormData) {
       userName: session.email.split('@')[0],
       action: 'CREATE',
       details: `Initial submission for ${validated.customerName}. Remarks persisted in history.`,
-      kycId: kyc.id
+      kycId: createdKyc.id
     });
 
     revalidatePath('/');
     revalidatePath('/submissions/my');
-    return { success: true, kyc };
+    return { success: true as const, kyc: createdKyc };
   } catch (error: any) {
     if (error?.name === 'ZodError') {
       const msg = error.issues.map((i: any) => i.message).join(', ');
-      return { success: false, error: msg };
+      return { success: false as const, error: msg };
+    }
+    if (error?.code === 'P2002') {
+      logInstitutionalError(error, 'DB_CREATE_SUBMISSION_DUPLICATE');
+      return { success: false as const, error: 'A KYC record with this ID already exists. Please try submitting again.' };
     }
     const { message } = logInstitutionalError(error, 'DB_CREATE_SUBMISSION');
-    return { success: false, error: message };
+    return { success: false as const, error: message };
   }
 }
 

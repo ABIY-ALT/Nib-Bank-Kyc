@@ -73,6 +73,19 @@ function applyJsonSecurityHeaders(res: NextResponse, cspHeader: string, hstsHead
   res.headers.delete('Server');
 }
 
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder assets (png, jpg, etc.)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|avif|ico)$).*)',
+  ],
+};
+
 /**
  * Institutional BFF Proxy.
  * Acts as the centralized security gateway for the web-based KYC system.

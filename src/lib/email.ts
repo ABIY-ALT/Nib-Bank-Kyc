@@ -29,7 +29,7 @@ interface EmailAuditContext {
   userId?: string | null;
   userEmail: string;
   userName?: string;
-  action: 'USER_WELCOME' | 'ADMIN_PASSWORD_RESET' | 'ACCOUNT_SETUP';
+  action: 'USER_WELCOME' | 'ADMIN_PASSWORD_RESET' | 'ACCOUNT_SETUP' | 'PASSWORD_RESET_REQUESTED';
   description: string;
 }
 
@@ -498,6 +498,42 @@ export function queueAdminPasswordResetEmail(params: {
     userName: params.userName,
     action: 'ADMIN_PASSWORD_RESET',
     description: 'Administrator password reset notification queued.',
+  });
+}
+
+export function sendPasswordResetEmail(userEmail: string, resetLink: string, userName: string) {
+  const config = getMailConfig();
+  const baseUrl = config.loginUrl.replace(/\/$/, '');
+  const subject = 'Reset Your NIB Bank KYC Portal Password';
+
+  const template = buildEmailTemplate({
+    logoUrl: `${baseUrl}/logo.png`,
+    subject,
+    heading: 'Password Reset Request',
+    greeting: `Hello ${userName},`,
+    bodyLines: [
+      'We received a request to reset the password for your NIB Bank KYC Portal account.',
+      'Click the button below to choose a new password.',
+    ],
+    validityLine: 'This link is valid for <strong>24 hours</strong> and can only be used once.',
+    callToActionLabel: 'Reset Your Password',
+    callToActionUrl: resetLink,
+    ignoreNote: 'If you did not request this, you can safely ignore this email or contact IT security.',
+  });
+
+  const mailOptions: SendMailOptions = {
+    from: getFromHeader(config),
+    to: userEmail,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  };
+
+  return queueMail(mailOptions, {
+    userEmail,
+    userName,
+    action: 'PASSWORD_RESET_REQUESTED',
+    description: 'Self-service password reset email queued.',
   });
 }
 

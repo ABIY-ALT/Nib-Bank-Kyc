@@ -102,7 +102,6 @@ export const CreateUserSchema = z.object({
 // --- KYC/Submission Validation Schemas ---
 
 export const SubmissionSchema = z.object({
-  id: z.string().min(5).max(50),
   customerName: z
     .string()
     .min(2, 'Customer name required')

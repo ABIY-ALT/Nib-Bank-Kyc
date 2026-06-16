@@ -545,19 +545,11 @@ export default function NewSubmission() {
 
     try {
       const branchName = user.branchName || "HEADQUARTERS";
-      const branchSlug = branchName.replace(/\s+/g, "_").toUpperCase();
-
-      const randomArray = new Uint32Array(1);
-      window.crypto.getRandomValues(randomArray);
-      const randomSuffix = 1000 + (randomArray[0] % 9000);
-
-      const submissionId = `${branchSlug}-KYC-${randomSuffix}`;
 
       // Combine three name fields into customerName
       const customerName = `${firstName.toUpperCase()} ${fatherName.toUpperCase()} ${grandfatherName.toUpperCase()}`.trim();
 
       const formData = new FormData();
-      formData.append("id", submissionId);
       formData.append("customerName", customerName);
       formData.append("entityType", entityType);
       formData.append("branchName", branchName);
@@ -572,7 +564,7 @@ export default function NewSubmission() {
       const result = await createSubmission(formData);
 
       if (result.success) {
-        toast({ title: "Successful", description: `Case ${submissionId} dispatched for review.` });
+        toast({ title: "Successful", description: `Case ${result.kyc.id} dispatched for review.` });
         router.push("/submissions/my");
       } else {
         throw new Error(result.error);
