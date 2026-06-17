@@ -85,6 +85,28 @@ export async function writeSecureUploadedFile(storageKey: string, buffer: Buffer
   await fs.writeFile(destination, buffer, { mode: FILE_MODE, flag: 'wx' });
 }
 
+/**
+ * Verifies that a stored file physically exists and is a readable, non-empty file.
+ *
+ * Returns `false` instead of throwing for any of the following conditions:
+ * - The storage key is malformed (fails strict validation).
+ * - The file is missing/deleted (ENOENT).
+ * - The path is not a regular file.
+ * - The file is zero bytes (was never successfully/completely stored).
+ *
+ * This lets preview/download/retrieval endpoints run an existence check up
+ * front and return a graceful 404 instead of crashing on an async stream error.
+ */
+export async function secureUploadedFileExists(storageKey: string, inQuarantine = false): Promise<boolean> {
+  try {
+    const target = resolveSecureUploadPath(storageKey, inQuarantine);
+    const stats = await fs.stat(target);
+    return stats.isFile() && stats.size > 0;
+  } catch {
+    return false;
+  }
+}
+
 export function createReadStream(storageKey: string): any {
   const source = resolveSecureUploadPath(storageKey);
   return fsCreateReadStream(source);

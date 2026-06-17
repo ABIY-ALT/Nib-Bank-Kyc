@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { checkAccessRateLimit } from '@/lib/rate-limiting';
-import { createReadStream } from '@/lib/secure-file-storage';
+import { createReadStream, secureUploadedFileExists } from '@/lib/secure-file-storage';
 import { createAuditLog } from '@/actions/audit';
 import { getServerSession } from '@/actions/auth-server';
 import { prisma } from '@/lib/prisma';
@@ -91,16 +91,49 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized access to this jurisdiction" }, { status: 403 });
     }
 
-    // 4. Streamed Read to prevent memory exhaustion
+    // 4. Verify the file physically exists before streaming.
+    // fs.createReadStream does NOT throw synchronously for a missing file —
+    // ENOENT surfaces as an async 'error' event mid-stream, which would crash
+    // the response. Check existence up front and fail gracefully with a 404.
+    const fileAvailable = await secureUploadedFileExists(memo.storageKey);
+    if (!fileAvailable) {
+      await createAuditLog({
+        userId: session.id,
+        userEmail: session.email,
+        action: 'FILE_MISSING',
+        details: `Stored file unavailable for memo ${memoId} (storageKey: ${memo.storageKey}, name: ${memo.originalName || memo.name})`,
+        kycId: memo.kycId,
+        severity: 'HIGH',
+      }).catch(() => {});
+      return NextResponse.json(
+        { error: "File not found. The requested file is no longer available or was not stored correctly." },
+        { status: 404 }
+      );
+    }
+
+    // 5. Streamed Read to prevent memory exhaustion
     let stream: any;
     try {
       stream = createReadStream(memo.storageKey);
     } catch (err: any) {
       if (err?.code === 'ENOENT' || err?.message?.includes('ENOENT')) {
-        return NextResponse.json({ error: "File not found on server" }, { status: 404 });
+        return NextResponse.json(
+          { error: "File not found. The requested file is no longer available or was not stored correctly." },
+          { status: 404 }
+        );
       }
       throw err;
     }
+
+    // Guard against async stream failures (e.g. the file is deleted after the
+    // existence check, or a mid-read I/O error) so they can't crash the server.
+    stream.on('error', () => {
+      try {
+        stream.destroy();
+      } catch {
+        // no-op
+      }
+    });
 
     await createAuditLog({
       userId: session.id,
