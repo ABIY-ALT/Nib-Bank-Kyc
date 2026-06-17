@@ -32,12 +32,12 @@ type RouteAccessDecision = {
   redirectTo?: string;
 };
 
-// Permissions that indicate an officer-level user who should see their own performance page.
-// Using permissions instead of role names so any custom role with these permissions works.
+// The "My Cases & Performance" page is KYC Officer only. Gate strictly on the
+// officer-specific processing permission. Supervisors (SUPERVISOR_FORWARD) and
+// Division Managers (DIVISION_MANAGER_REVIEW) also hold KYC_VIEW_QUEUE for Review
+// & Action, so KYC_VIEW_QUEUE must NOT grant access to this officer page.
 const MY_PERFORMANCE_PERMISSIONS = [
-  "KYC_VIEW_QUEUE",
   "KYC_OFFICER_PROCESS",
-  "SUPERVISOR_FORWARD",
 ];
 
 const SYSTEM_ACCESS_PERMISSIONS = [

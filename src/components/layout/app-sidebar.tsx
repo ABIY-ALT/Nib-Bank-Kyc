@@ -72,11 +72,10 @@ export function AppSidebar() {
 
   if (!user) return null;
 
-  // Permission-based check so any custom role with officer-level permissions also sees this menu item.
-  const canSeeMyPerformance = isSuperAdmin ||
-    hasPermission('KYC_VIEW_QUEUE') ||
-    hasPermission('KYC_OFFICER_PROCESS') ||
-    hasPermission('SUPERVISOR_FORWARD');
+  // KYC Officer only. Gate strictly on the officer-specific processing permission so
+  // Supervisors (SUPERVISOR_FORWARD) and Division Managers (DIVISION_MANAGER_REVIEW) —
+  // who also hold KYC_VIEW_QUEUE for Review & Action — do NOT see this officer page.
+  const canSeeMyPerformance = hasPermission('KYC_OFFICER_PROCESS');
 
   return (
     <Sidebar collapsible="icon" className="border-r-0 shadow-2xl">
