@@ -125,16 +125,6 @@ export async function GET(
       throw err;
     }
 
-    // Guard against async stream failures (e.g. the file is deleted after the
-    // existence check, or a mid-read I/O error) so they can't crash the server.
-    stream.on('error', () => {
-      try {
-        stream.destroy();
-      } catch {
-        // no-op
-      }
-    });
-
     await createAuditLog({
       userId: session.id,
       userEmail: session.email,
@@ -151,7 +141,54 @@ export async function GET(
     const safeFilename = (memo.originalName || memo.name || "document").replace(/"/g, "'");
     const disposition = forceDownload ? "attachment" : "inline";
 
-    return new Response(stream as any, {
+    // Bridge the Node file stream into a Web ReadableStream so we fully own the
+    // lifecycle. Browsers routinely abort preview/download requests (navigating
+    // away, cancelling a fetch, the PDF/img element disposing). Without owning
+    // the stream, the resulting ECONNRESET/"aborted" surfaces as an uncaught
+    // exception in Next's response pipe. We destroy the file handle on client
+    // abort, end, or read error, and swallow the benign disconnect error here.
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const onAbort = () => stream.destroy();
+        request.signal.addEventListener('abort', onAbort);
+
+        const cleanup = () => {
+          request.signal.removeEventListener('abort', onAbort);
+        };
+
+        stream.on('data', (chunk: Buffer) => {
+          controller.enqueue(new Uint8Array(chunk));
+          // Backpressure: stop reading from disk until the consumer pulls again.
+          if ((controller.desiredSize ?? 1) <= 0) {
+            stream.pause();
+          }
+        });
+        stream.on('end', () => {
+          cleanup();
+          try { controller.close(); } catch { /* already closed */ }
+        });
+        stream.on('error', (err: any) => {
+          cleanup();
+          // Client disconnects (aborted/ECONNRESET) are benign — close quietly.
+          if (err?.code === 'ECONNRESET' || err?.message === 'aborted' || request.signal.aborted) {
+            try { controller.close(); } catch { /* already closed */ }
+          } else {
+            try { controller.error(err); } catch { /* already errored */ }
+          }
+          stream.destroy();
+        });
+      },
+      pull() {
+        // Consumer is ready for more — resume disk reads (no-op if flowing).
+        stream.resume();
+      },
+      cancel() {
+        // Consumer (Next.js) stopped reading — tear down the file handle.
+        stream.destroy();
+      },
+    });
+
+    return new Response(body, {
       headers: {
         "Content-Type": contentType,
         "Content-Disposition": `${disposition}; filename="${safeFilename}"`,

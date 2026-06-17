@@ -134,7 +134,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.setHeader('Content-Disposition', `attachment; filename="${bundleName}"`);
 
+    // If the client cancels the download mid-stream the response socket emits
+    // an ECONNRESET/"aborted" error. Without a handler this bubbles up as an
+    // uncaught exception. Abort the archive cleanly so no further writes occur.
+    let aborted = false;
+    const abortArchive = () => {
+      if (aborted) return;
+      aborted = true;
+      try { archive.abort(); } catch { /* no-op */ }
+    };
+    res.on('close', () => {
+      // 'close' before the archive finished => client went away.
+      if (!res.writableFinished) abortArchive();
+    });
+    res.on('error', abortArchive);
+
     archive.on('error', (error) => {
+      abortArchive();
       if (!res.headersSent) {
         res.status(500).end();
       }
