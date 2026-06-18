@@ -16,10 +16,37 @@ const isAbortedConnectionError = (err: unknown): boolean => {
   return code === 'ECONNRESET' || message === 'aborted' || code === 'ECONNABORTED';
 };
 
+/**
+ * Request-level upload parsing faults that are NOT server bugs and must never
+ * crash the process. They are emitted when a multipart body is truncated or
+ * malformed — typically because the client aborted mid-upload, or the body
+ * exceeded a size limit so the stream ended early ("Unexpected end of form").
+ *
+ * The framework's form parser can surface these as uncaught exceptions outside
+ * any request try/catch. Killing the whole server over one bad request would
+ * take down every other user, so we log and continue; the offending request
+ * still fails on its own with an error response.
+ */
+const isUploadParseError = (err: unknown): boolean => {
+  if (!err || typeof err !== 'object') return false;
+  const message = (err as { message?: string }).message ?? '';
+  return (
+    /unexpected end of form/i.test(message) ||
+    /request body exceeded/i.test(message) ||
+    /maxfilesize exceeded|maxtotalfilesize/i.test(message) ||
+    /unexpected end of (multipart|stream)/i.test(message)
+  );
+};
+
 export function registerProcessGuards() {
   process.on('uncaughtException', (err) => {
     if (isAbortedConnectionError(err)) {
       // Benign: the client went away before the response finished. Ignore.
+      return;
+    }
+    if (isUploadParseError(err)) {
+      // Benign: a truncated/oversized/malformed upload. Log, but keep serving.
+      console.error('Ignored malformed or oversized upload (request-level, not fatal):', (err as { message?: string })?.message);
       return;
     }
     // Preserve Node's fail-fast default for real, unexpected errors: log and
@@ -30,6 +57,10 @@ export function registerProcessGuards() {
 
   process.on('unhandledRejection', (reason) => {
     if (isAbortedConnectionError(reason)) {
+      return;
+    }
+    if (isUploadParseError(reason)) {
+      console.error('Ignored malformed or oversized upload (request-level, not fatal):', (reason as { message?: string })?.message);
       return;
     }
     console.error('Unhandled promise rejection:', reason);

@@ -33,6 +33,11 @@ const nextConfig: NextConfig = {
     unoptimized: false,
   },
   experimental: {
+    // Allow larger multipart bodies through the proxy/middleware buffer (default
+    // cap ~10MB). Without this, KYC document uploads get truncated mid-stream,
+    // which corrupts the form and throws "Unexpected end of form". Kept in step
+    // with serverActions.bodySizeLimit so the two limits don't contradict.
+    middlewareClientMaxBodySize: '30mb',
     serverActions: {
       bodySizeLimit: '30mb',
     },
