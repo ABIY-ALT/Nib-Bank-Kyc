@@ -122,9 +122,10 @@ export async function deleteInstitutionalFile(memoId: string) {
       details: `Super Admin purged file: ${memoId} (storageKey: ${memo.storageKey})`,
     });
 
-    // 1. Delete from physical storage
+    // 1. Delete from physical storage (from whichever tier the file lives on)
     try {
-      await deleteSecureUploadedFile(memo.storageKey);
+      const tier = (memo as any).storageTier === 'ARCHIVE' ? 'ARCHIVE' : 'PRIMARY';
+      await deleteSecureUploadedFile(memo.storageKey, false, tier);
     } catch {}
 
     // 2. Delete from database

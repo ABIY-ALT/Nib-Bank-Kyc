@@ -19,6 +19,11 @@ enum MappingType {
   TEMPORARY
 }
 
+enum StorageTier {
+  PRIMARY
+  ARCHIVE
+}
+
 model User {
   id                  String     @id @default(cuid())
   email               String     @unique
@@ -182,6 +187,20 @@ model Memo {
   uploadedById String
   uploadedBy   User     @relation(fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())
+
+  // Storage tiering: physical bytes may live on the PRIMARY secure folder or be
+  // archived to a secondary volume (e.g. E:). The DB row never moves — only the
+  // file does — so this flag tells retrieval which root to read from.
+  storageTier  StorageTier @default(PRIMARY)
+  archivedAt   DateTime?
+  archivedById String?
+
+  // Soft delete from the archive: when set, the physical bytes have been freed
+  // from the archive volume (E:) but the record is KEPT and hidden from the
+  // Active/Archived lists, showing only in the Deleted bin. Re-placing the
+  // original file on E: under its storageKey and running Restore recovers it.
+  archiveDeletedAt   DateTime?
+  archiveDeletedById String?
 }
 
 model GlobalSetting {

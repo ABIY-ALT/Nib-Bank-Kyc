@@ -12,18 +12,43 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Folders, 
-  Filter, 
-  Building2, 
-  ShieldCheck, 
+import {
+  Folders,
+  Filter,
+  Building2,
+  ShieldCheck,
   Loader2,
   FileArchive,
   CheckCircle2,
   Clock,
   Search,
-  RotateCcw
+  RotateCcw,
+  Copy,
+  Scissors,
+  Undo2,
+  HardDriveDownload,
+  Trash2,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  copyCasesToArchive,
+  cutCasesToArchive,
+  restoreCasesFromArchive,
+  deleteCasesFromArchive,
+  type TierAction,
+  type TierActionResult,
+} from "@/actions/archive-tiering";
 import { 
   Select, 
   SelectContent, 
@@ -77,6 +102,18 @@ export default function MasterBundleDownloadPage() {
   const [progress, setProgress] = useState(0);
   const [currentActionLabel, setCurrentActionLabel] = useState("");
 
+  // --- Storage-tiering selection (copy / cut / restore to E:) ---
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingTierAction, setPendingTierAction] = useState<TierAction | null>(null);
+  const [isTiering, setIsTiering] = useState(false);
+  // Active = cases still on primary storage; Archived = cases moved to E:;
+  // Deleted = soft-deleted (bytes freed from E:, record kept, restorable).
+  const [viewMode, setViewMode] = useState<'active' | 'archived' | 'deleted'>('active');
+  // List search + pagination so the list stays fast/clear with large datasets.
+  const [listSearch, setListSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 50;
+
   useEffect(() => {
     loadInitialData();
   }, [dateRange]);
@@ -109,18 +146,46 @@ export default function MasterBundleDownloadPage() {
     if (!allSubmissions) return [];
     
     return allSubmissions.filter(sub => {
-      const matchesStatus = selectedStatuses.length === 0 || 
+      const matchesStatus = selectedStatuses.length === 0 ||
                            (selectedStatuses.includes(KYC_STATUS.SUBMITTED) ? [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
       const matchesDistrict = selectedDistrict === 'all' || getSubmissionDistrictName(sub) === selectedDistrict;
       const matchesBranch = selectedBranch === 'all' || getSubmissionBranchName(sub) === selectedBranch;
+      // Active view hides archived/deleted cases; Archived shows only archived
+      // (and not deleted); Deleted shows only soft-deleted cases.
+      const matchesView =
+        viewMode === 'deleted'
+          ? !!sub.isDeleted
+          : viewMode === 'archived'
+          ? !!sub.isArchived
+          : (!sub.isArchived && !sub.isDeleted);
+      const q = listSearch.trim().toLowerCase();
+      const matchesSearch = !q ||
+        (sub.customerName || "").toLowerCase().includes(q) ||
+        (sub.id || "").toLowerCase().includes(q) ||
+        (sub.branchName || "").toLowerCase().includes(q);
 
-      return matchesStatus && matchesDistrict && matchesBranch;
+      return matchesStatus && matchesDistrict && matchesBranch && matchesView && matchesSearch;
     });
-  }, [allSubmissions, selectedStatuses, selectedDistrict, selectedBranch]);
+  }, [allSubmissions, selectedStatuses, selectedDistrict, selectedBranch, viewMode, listSearch]);
 
   const orderedFilteredSubmissions = useMemo(() => {
     return sortSubmissionsOldestFirst(filteredSubmissions || []);
   }, [filteredSubmissions]);
+
+  // Pagination: only render the current page so the DOM stays light with thousands of records.
+  const totalRecords = orderedFilteredSubmissions.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pagedSubmissions = useMemo(
+    () => orderedFilteredSubmissions.slice(pageStart, pageStart + PAGE_SIZE),
+    [orderedFilteredSubmissions, pageStart]
+  );
+
+  // Reset to page 1 whenever the result set changes (filters, search, view).
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedStatuses, selectedDistrict, selectedBranch, viewMode, listSearch, dateRange]);
 
   const handleToggleStatus = (statusId: string) => {
     setSelectedStatuses(prev => 
@@ -336,6 +401,104 @@ Failed Documents:      ${failedDocs.length}
     setDateRange(undefined);
   };
 
+  // --- Selection helpers ---
+  const visibleIds = useMemo(
+    () => orderedFilteredSubmissions.map(s => s.id),
+    [orderedFilteredSubmissions]
+  );
+  const selectedVisibleCount = useMemo(
+    () => visibleIds.filter(id => selectedIds.has(id)).length,
+    [visibleIds, selectedIds]
+  );
+  const allVisibleSelected = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => setSelectedIds(new Set(visibleIds));
+  const deselectAll = () => setSelectedIds(new Set());
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) deselectAll(); else selectAllVisible();
+  };
+
+  // Drop selections that are no longer in the filtered view.
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const visible = new Set(visibleIds);
+      const next = new Set([...prev].filter(id => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visibleIds]);
+
+  const TIER_ACTION_FNS: Record<TierAction, (ids: string[]) => Promise<TierActionResult>> = {
+    COPY: copyCasesToArchive,
+    CUT: cutCasesToArchive,
+    RESTORE: restoreCasesFromArchive,
+    DELETE: deleteCasesFromArchive,
+  };
+
+  const executeTierAction = async (action: TierAction) => {
+    const ids = [...selectedIds];
+    setPendingTierAction(null);
+    if (ids.length === 0) return;
+
+    setIsTiering(true);
+    try {
+      const res = await TIER_ACTION_FNS[action](ids);
+      if (!res.success && res.error) {
+        toast({ variant: "destructive", title: "Operation failed", description: res.error });
+      } else {
+        const freed = res.bytesFreed > 0 ? ` Freed ${(res.bytesFreed / (1024 * 1024)).toFixed(1)} MB from primary storage.` : "";
+        const missing = res.filesMissing > 0 ? ` ${res.filesMissing} file(s) not found (skipped safely).` : "";
+        const otherFailed = res.filesFailed - res.filesMissing;
+        const failed = otherFailed > 0 ? ` ${otherFailed} file(s) failed.` : "";
+        const skipped = res.filesSkipped > 0 ? ` ${res.filesSkipped} already in place.` : "";
+        toast({
+          variant: res.filesFailed > 0 ? "destructive" : "default",
+          title: res.filesFailed > 0 ? "Completed with warnings" : "Operation successful",
+          description: `${res.action} done for ${res.processedCases} case(s): ${res.filesProcessed} file(s) processed.${skipped}${missing}${failed}${freed}`,
+        });
+        if (action !== "COPY") {
+          deselectAll();
+          await loadInitialData();
+        }
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Operation failed", description: "The storage operation could not be completed." });
+    } finally {
+      setIsTiering(false);
+    }
+  };
+
+  const TIER_ACTION_COPY: Record<TierAction, { title: string; body: string; confirm: string }> = {
+    COPY: {
+      title: "Copy selected cases to archive (E:)?",
+      body: "This duplicates the documents of the selected cases onto the archive volume. Originals stay in primary storage — nothing is removed.",
+      confirm: "Copy to E:",
+    },
+    CUT: {
+      title: "Move selected cases to archive (E:)?",
+      body: "This relocates the documents off primary storage to the archive volume to free space. Files remain viewable (served from E:). This removes the originals from the secure folder.",
+      confirm: "Move to E:",
+    },
+    RESTORE: {
+      title: "Restore selected cases to primary storage?",
+      body: "This copies archived documents back into the secure folder and removes the archive copy. Use this to bring cases back onto fast storage.",
+      confirm: "Restore",
+    },
+    DELETE: {
+      title: "Delete archived files from E: (records kept)?",
+      body: "This deletes the selected cases' documents from the archive volume to reclaim space, but KEEPS their records. The cases stay in the Archived list and can be restored later by re-placing the original file in the archive (under its storage key) and running Restore.",
+      confirm: "Delete files from E:",
+    },
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -441,13 +604,152 @@ Failed Documents:      ${failedDocs.length}
 
         <div className="lg:col-span-8 space-y-6">
           <Card className="shadow-2xl border-slate-200 overflow-hidden min-h-[500px] bg-white">
-            <CardHeader className="bg-slate-900 text-white border-b flex flex-row items-center justify-between">
+            <CardHeader className="bg-slate-900 text-white border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-4">
                 <div className="p-2 bg-white/10 rounded-lg"><FileArchive className="w-5 h-5 text-emerald-400" /></div>
-                <div><CardTitle className="text-xl">Export Discovery Queue</CardTitle></div>
+                <div><CardTitle className="text-xl">{viewMode === 'deleted' ? 'Deleted Bin (recoverable)' : viewMode === 'archived' ? 'Archived Vault (E:)' : 'Export Discovery Queue'}</CardTitle></div>
               </div>
-              <Badge className="bg-emerald-600 text-white font-black px-4 py-1">{orderedFilteredSubmissions.length} Records</Badge>
+              <div className="flex items-center gap-3">
+                {/* Active vs Archived view toggle */}
+                <div className="flex rounded-lg bg-white/10 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('active')}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-[11px] font-black uppercase tracking-widest transition-colors",
+                      viewMode === 'active' ? "bg-white text-slate-900" : "text-white/70 hover:text-white"
+                    )}
+                  >
+                    Active
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('archived')}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-[11px] font-black uppercase tracking-widest transition-colors",
+                      viewMode === 'archived' ? "bg-emerald-500 text-white" : "text-white/70 hover:text-white"
+                    )}
+                  >
+                    Archived
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('deleted')}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-[11px] font-black uppercase tracking-widest transition-colors",
+                      viewMode === 'deleted' ? "bg-red-500 text-white" : "text-white/70 hover:text-white"
+                    )}
+                  >
+                    Deleted
+                  </button>
+                </div>
+                <Badge className="bg-emerald-600 text-white font-black px-4 py-1">{orderedFilteredSubmissions.length} Records</Badge>
+              </div>
             </CardHeader>
+            {/* Search + result counter for large datasets */}
+            {!loading && (
+              <div className="flex flex-col gap-3 border-b bg-white px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="relative w-full sm:max-w-xs">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    placeholder="Search case ID, customer, branch…"
+                    className="pl-9 h-9 border-slate-200 font-bold"
+                    value={listSearch}
+                    onChange={(e) => setListSearch(e.target.value)}
+                  />
+                </div>
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  {totalRecords > 0
+                    ? `Showing ${pageStart + 1}–${Math.min(pageStart + PAGE_SIZE, totalRecords)} of ${totalRecords}`
+                    : "No matching records"}
+                </span>
+              </div>
+            )}
+
+            {/* Selection toolbar: select-all + tier actions (copy / cut / restore to E:) */}
+            {!loading && orderedFilteredSubmissions.length > 0 && (
+              <div className="flex flex-col gap-3 border-b bg-slate-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all visible cases"
+                  />
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    className="text-xs font-black uppercase tracking-widest text-slate-600 hover:text-primary"
+                  >
+                    {allVisibleSelected ? "Deselect all" : `Select all ${totalRecords}`}
+                  </button>
+                  <span className="text-[11px] font-bold text-slate-400">
+                    {selectedIds.size} selected
+                  </span>
+                  {selectedIds.size > 0 && (
+                    <Button variant="ghost" size="sm" onClick={deselectAll} className="h-7 px-2 text-[10px] font-bold text-slate-400 hover:text-primary">
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {viewMode === 'active' ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={selectedIds.size === 0 || isTiering}
+                        onClick={() => setPendingTierAction("COPY")}
+                        className="h-9 gap-1.5 font-bold border-slate-200"
+                        title="Copy selected to archive (E:) — keeps originals"
+                      >
+                        <Copy className="h-4 w-4" /> Copy to E:
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={selectedIds.size === 0 || isTiering}
+                        onClick={() => setPendingTierAction("CUT")}
+                        className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                        title="Move selected to archive (E:) — frees primary storage"
+                      >
+                        {isTiering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />} Cut to E:
+                      </Button>
+                    </>
+                  ) : viewMode === 'archived' ? (
+                    <>
+                      <Button
+                        size="sm"
+                        disabled={selectedIds.size === 0 || isTiering}
+                        onClick={() => setPendingTierAction("RESTORE")}
+                        className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                        title="Restore selected from archive back to primary storage"
+                      >
+                        {isTiering ? <Loader2 className="h-4 w-4 animate-spin" /> : <HardDriveDownload className="h-4 w-4" />} Restore to Primary
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={selectedIds.size === 0 || isTiering}
+                        onClick={() => setPendingTierAction("DELETE")}
+                        className="h-9 gap-1.5 font-bold border-red-200 text-red-600 hover:bg-red-50"
+                        title="Delete selected files from the archive (E:) to free space — record kept, restorable"
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete from E:
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={selectedIds.size === 0 || isTiering}
+                      onClick={() => setPendingTierAction("RESTORE")}
+                      className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                      title="Restore selected — re-place the original file on E: first, then restore"
+                    >
+                      {isTiering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} Restore
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
             <CardContent className="p-0">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-40 gap-4">
@@ -455,11 +757,18 @@ Failed Documents:      ${failedDocs.length}
                   <p className="font-black uppercase tracking-widest text-xs">Synchronizing Archive Registry...</p>
                 </div>
               ) : orderedFilteredSubmissions.length > 0 ? (
+                <>
                 <div className="divide-y divide-slate-100">
-                  {orderedFilteredSubmissions.map(sub => (
-                    <div key={sub.id} className="p-5 hover:bg-slate-50 transition-colors group">
+                  {pagedSubmissions.map(sub => (
+                    <div key={sub.id} className={cn("p-5 transition-colors group", selectedIds.has(sub.id) ? "bg-primary/5" : "hover:bg-slate-50")}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-start gap-4">
+                          <Checkbox
+                            checked={selectedIds.has(sub.id)}
+                            onCheckedChange={() => toggleSelect(sub.id)}
+                            aria-label={`Select case ${sub.id}`}
+                            className="mt-2"
+                          />
                           <div className={cn("p-2 rounded-lg", sub.status === KYC_STATUS.APPROVED ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/5 text-primary')}>
                             {sub.status === KYC_STATUS.APPROVED ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                           </div>
@@ -474,19 +783,64 @@ Failed Documents:      ${failedDocs.length}
                             </div>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="bg-white border font-bold text-[10px] uppercase text-slate-500">{sub.status}</Badge>
+                        <div className="flex items-center gap-2">
+                          {sub.isDeleted ? (
+                            <Badge className="bg-red-100 text-red-700 border-red-200 font-black text-[9px] uppercase gap-1">
+                              <Trash2 className="w-3 h-3" /> Deleted
+                            </Badge>
+                          ) : sub.isArchived && (
+                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 font-black text-[9px] uppercase gap-1">
+                              <FileArchive className="w-3 h-3" /> Archived
+                            </Badge>
+                          )}
+                          <Badge variant="secondary" className="bg-white border font-bold text-[10px] uppercase text-slate-500">{sub.status}</Badge>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-4 border-t bg-slate-50/80 px-5 py-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safePage <= 1}
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      className="h-9 gap-1 font-bold border-slate-200"
+                    >
+                      <ChevronLeft className="h-4 w-4" /> Prev
+                    </Button>
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                      Page {safePage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      className="h-9 gap-1 font-bold border-slate-200"
+                    >
+                      Next <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                </>
               ) : (
                 <div className="flex flex-col items-center justify-center py-48 text-center space-y-6">
                   <div className="p-8 bg-slate-50 rounded-full">
                     <Search className="w-16 h-16 text-slate-200" />
                   </div>
                   <div className="space-y-2">
-                    <p className="font-black text-slate-900 text-xl">Archive Discovery Standby</p>
-                    <p className="text-sm text-slate-400 font-medium">Adjust filters to populate the master export queue.</p>
+                    <p className="font-black text-slate-900 text-xl">
+                      {viewMode === 'deleted' ? 'Deleted Bin Empty' : viewMode === 'archived' ? 'No Archived Cases' : 'Archive Discovery Standby'}
+                    </p>
+                    <p className="text-sm text-slate-400 font-medium">
+                      {viewMode === 'deleted'
+                        ? 'No soft-deleted cases match these filters. Deleting from the archive (E:) frees space but keeps records here for restore.'
+                        : viewMode === 'archived'
+                        ? 'No cases matched these filters in the archive vault. Adjust the date, district, or branch filters.'
+                        : 'Adjust filters to populate the master export queue.'}
+                    </p>
                   </div>
                 </div>
               )}
@@ -494,6 +848,37 @@ Failed Documents:      ${failedDocs.length}
           </Card>
         </div>
       </div>
+
+      <AlertDialog open={pendingTierAction !== null} onOpenChange={(open) => { if (!open) setPendingTierAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingTierAction ? TIER_ACTION_COPY[pendingTierAction].title : ""}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingTierAction ? TIER_ACTION_COPY[pendingTierAction].body : ""}
+              {pendingTierAction === 'RESTORE' && viewMode === 'deleted' && (
+                <span className="mt-2 block font-semibold text-amber-700">
+                  This case was deleted from the archive. Put the original file back on the archive volume (E:) under its storage key first — it is verified against its recorded checksum before restoring.
+                </span>
+              )}
+              <span className="mt-2 block font-bold text-slate-700">{selectedIds.size} case(s) selected.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => pendingTierAction && executeTierAction(pendingTierAction)}
+              className={cn(
+                pendingTierAction === "CUT" && "bg-amber-600 hover:bg-amber-700",
+                pendingTierAction === "DELETE" && "bg-red-600 hover:bg-red-700"
+              )}
+            >
+              {pendingTierAction ? TIER_ACTION_COPY[pendingTierAction].confirm : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

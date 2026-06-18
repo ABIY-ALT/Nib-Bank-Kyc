@@ -1,6 +1,12 @@
 -- CreateEnum
 CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED');
 
+-- CreateEnum
+CREATE TYPE "MappingType" AS ENUM ('PERMANENT', 'TEMPORARY');
+
+-- CreateEnum
+CREATE TYPE "StorageTier" AS ENUM ('PRIMARY', 'ARCHIVE');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -14,6 +20,7 @@ CREATE TABLE "User" (
     "branchName" TEXT,
     "districtName" TEXT,
     "assignedBranches" TEXT,
+    "saturdayAllBranches" BOOLEAN NOT NULL DEFAULT false,
     "needsPasswordChange" BOOLEAN NOT NULL DEFAULT true,
     "sessionId" TEXT,
     "refreshToken" TEXT,
@@ -84,6 +91,31 @@ CREATE TABLE "Branch" (
 );
 
 -- CreateTable
+CREATE TABLE "BranchMapping" (
+    "id" TEXT NOT NULL,
+    "branchId" TEXT NOT NULL,
+    "type" "MappingType" NOT NULL DEFAULT 'PERMANENT',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "note" TEXT,
+    "startDate" TIMESTAMP(3),
+    "endDate" TIMESTAMP(3),
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "BranchMapping_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BranchMappingOfficer" (
+    "mappingId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "isPrimary" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "BranchMappingOfficer_pkey" PRIMARY KEY ("mappingId","userId")
+);
+
+-- CreateTable
 CREATE TABLE "KYC" (
     "id" TEXT NOT NULL,
     "customerName" TEXT NOT NULL,
@@ -101,6 +133,8 @@ CREATE TABLE "KYC" (
     "amendCycles" INTEGER NOT NULL DEFAULT 0,
     "checklistState" JSONB DEFAULT '{}',
     "commentHistory" JSONB DEFAULT '[]',
+    "isUrgent" BOOLEAN NOT NULL DEFAULT false,
+    "urgentFlaggedById" TEXT,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "submittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -121,6 +155,9 @@ CREATE TABLE "Memo" (
     "kycId" TEXT NOT NULL,
     "uploadedById" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "storageTier" "StorageTier" NOT NULL DEFAULT 'PRIMARY',
+    "archivedAt" TIMESTAMP(3),
+    "archivedById" TEXT,
 
     CONSTRAINT "Memo_pkey" PRIMARY KEY ("id")
 );
@@ -283,6 +320,12 @@ CREATE UNIQUE INDEX "Branch_name_key" ON "Branch"("name");
 CREATE UNIQUE INDEX "Branch_code_key" ON "Branch"("code");
 
 -- CreateIndex
+CREATE INDEX "BranchMapping_branchId_idx" ON "BranchMapping"("branchId");
+
+-- CreateIndex
+CREATE INDEX "BranchMappingOfficer_userId_idx" ON "BranchMappingOfficer"("userId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Memo_storageKey_key" ON "Memo"("storageKey");
 
 -- CreateIndex
@@ -325,6 +368,15 @@ ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_permissionId_fkey" F
 ALTER TABLE "Branch" ADD CONSTRAINT "Branch_districtId_fkey" FOREIGN KEY ("districtId") REFERENCES "District"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "BranchMapping" ADD CONSTRAINT "BranchMapping_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BranchMappingOfficer" ADD CONSTRAINT "BranchMappingOfficer_mappingId_fkey" FOREIGN KEY ("mappingId") REFERENCES "BranchMapping"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BranchMappingOfficer" ADD CONSTRAINT "BranchMappingOfficer_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "KYC" ADD CONSTRAINT "KYC_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -332,6 +384,9 @@ ALTER TABLE "KYC" ADD CONSTRAINT "KYC_createdById_fkey" FOREIGN KEY ("createdByI
 
 -- AddForeignKey
 ALTER TABLE "KYC" ADD CONSTRAINT "KYC_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KYC" ADD CONSTRAINT "KYC_urgentFlaggedById_fkey" FOREIGN KEY ("urgentFlaggedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Memo" ADD CONSTRAINT "Memo_kycId_fkey" FOREIGN KEY ("kycId") REFERENCES "KYC"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

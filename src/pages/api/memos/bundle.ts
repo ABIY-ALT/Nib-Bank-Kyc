@@ -178,7 +178,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const nameInZip = folderPath + '/' + safeFileName;
 
       try {
-        const fileBuffer = await readSecureUploadedFile(m.storageKey);
+        const tier = (m as any).storageTier === 'ARCHIVE' ? 'ARCHIVE' : 'PRIMARY';
+        const fileBuffer = await readSecureUploadedFile(m.storageKey, tier);
         archive.append(fileBuffer, { name: nameInZip });
       } catch {
         archive.append(`Missing file for memo ${m.id}\n`, {

@@ -8,6 +8,15 @@ const DIRECTORY_MODE = 0o700;
 const FILE_MODE = 0o600;
 
 export const QUARANTINE_DIR_NAME = 'quarantine_uploads';
+export const ARCHIVE_DIR_NAME = 'archive_uploads';
+
+/**
+ * Where a file's physical bytes live. Mirrors the Prisma `StorageTier` enum.
+ * PRIMARY = the hot secure upload folder. ARCHIVE = a secondary/cheaper volume
+ * (e.g. E:) used to free primary space. The DB row records which tier each file
+ * is on so retrieval reads from the correct root.
+ */
+export type StorageTier = 'PRIMARY' | 'ARCHIVE';
 
 export function getSecureUploadRoot(): string {
   // Store uploads outside app web root by default.
@@ -20,10 +29,25 @@ export function getQuarantineRoot(): string {
   return path.normalize(root);
 }
 
+/**
+ * Root of the archive (cold) tier. Configurable via ARCHIVE_DIR_PATH (e.g.
+ * "E:\\nib_kyc_archive"); defaults to a sibling of the primary root so the
+ * feature works out of the box and the path can be repointed without touching
+ * any data.
+ */
+export function getArchiveRoot(): string {
+  const root = process.env.ARCHIVE_DIR_PATH || path.resolve(getSecureUploadRoot(), '..', ARCHIVE_DIR_NAME);
+  return path.normalize(root);
+}
+
+function getRootForTier(tier: StorageTier): string {
+  return tier === 'ARCHIVE' ? getArchiveRoot() : getSecureUploadRoot();
+}
+
 export async function ensureSecureUploadRoot(): Promise<string> {
   const uploadRoot = getSecureUploadRoot();
   const quarantineRoot = getQuarantineRoot();
-  
+
   await fs.mkdir(uploadRoot, { recursive: true, mode: DIRECTORY_MODE });
   await fs.mkdir(quarantineRoot, { recursive: true, mode: DIRECTORY_MODE });
 
@@ -38,9 +62,28 @@ export async function ensureSecureUploadRoot(): Promise<string> {
   return uploadRoot;
 }
 
-export function resolveSecureUploadPath(storageKey: string, inQuarantine = false): string {
-  const root = inQuarantine ? getQuarantineRoot() : getSecureUploadRoot();
-  
+/**
+ * Ensures the archive tier root exists. Returns the resolved path so callers can
+ * verify the volume (e.g. E:) is reachable before starting a bulk move.
+ */
+export async function ensureArchiveRoot(): Promise<string> {
+  const archiveRoot = getArchiveRoot();
+  await fs.mkdir(archiveRoot, { recursive: true, mode: DIRECTORY_MODE });
+  try {
+    await fs.chmod(archiveRoot, DIRECTORY_MODE);
+  } catch {
+    // no-op
+  }
+  return archiveRoot;
+}
+
+export function resolveSecureUploadPath(
+  storageKey: string,
+  inQuarantine = false,
+  tier: StorageTier = 'PRIMARY',
+): string {
+  const root = inQuarantine ? getQuarantineRoot() : getRootForTier(tier);
+
   // Strict storage key validation: only allow UUID format or similar safe random strings
   if (!/^[a-zA-Z0-9-]{32,64}$/.test(storageKey)) {
     throw new Error('Blocked invalid storage key format');
@@ -97,9 +140,13 @@ export async function writeSecureUploadedFile(storageKey: string, buffer: Buffer
  * This lets preview/download/retrieval endpoints run an existence check up
  * front and return a graceful 404 instead of crashing on an async stream error.
  */
-export async function secureUploadedFileExists(storageKey: string, inQuarantine = false): Promise<boolean> {
+export async function secureUploadedFileExists(
+  storageKey: string,
+  inQuarantine = false,
+  tier: StorageTier = 'PRIMARY',
+): Promise<boolean> {
   try {
-    const target = resolveSecureUploadPath(storageKey, inQuarantine);
+    const target = resolveSecureUploadPath(storageKey, inQuarantine, tier);
     const stats = await fs.stat(target);
     return stats.isFile() && stats.size > 0;
   } catch {
@@ -107,17 +154,114 @@ export async function secureUploadedFileExists(storageKey: string, inQuarantine 
   }
 }
 
-export function createReadStream(storageKey: string): any {
-  const source = resolveSecureUploadPath(storageKey);
+export function createReadStream(storageKey: string, tier: StorageTier = 'PRIMARY'): any {
+  const source = resolveSecureUploadPath(storageKey, false, tier);
   return fsCreateReadStream(source);
 }
 
-export async function readSecureUploadedFile(storageKey: string): Promise<Buffer> {
-  const source = resolveSecureUploadPath(storageKey);
+export async function readSecureUploadedFile(storageKey: string, tier: StorageTier = 'PRIMARY'): Promise<Buffer> {
+  const source = resolveSecureUploadPath(storageKey, false, tier);
   return fs.readFile(source);
 }
 
-export async function deleteSecureUploadedFile(storageKey: string, inQuarantine = false): Promise<void> {
-  const target = resolveSecureUploadPath(storageKey, inQuarantine);
+export async function deleteSecureUploadedFile(
+  storageKey: string,
+  inQuarantine = false,
+  tier: StorageTier = 'PRIMARY',
+): Promise<void> {
+  const target = resolveSecureUploadPath(storageKey, inQuarantine, tier);
   await fs.unlink(target);
+}
+
+/** Computes the SHA-256 hex digest of a file already on disk. */
+async function computeFileHashAtPath(filePath: string): Promise<string> {
+  const buffer = await fs.readFile(filePath);
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+export type TierTransferResult = {
+  /** SHA-256 of the copied file. */
+  hash: string;
+  /** True when an expected hash was supplied and matched. */
+  verified: boolean;
+  /** True when the destination already held a valid copy (idempotent no-op). */
+  alreadyPresent: boolean;
+};
+
+/**
+ * Copies a file from one tier to another, writing to a temp name first and
+ * renaming into place (so a crash never leaves a partial file under the real
+ * key), then verifying the copy's hash against `expectedHash` when provided.
+ *
+ * This performs NO database changes and NEVER deletes the source — the caller
+ * orchestrates the safe sequence (copy -> verify -> update DB -> delete source).
+ */
+async function copyBetweenTiers(
+  storageKey: string,
+  from: StorageTier,
+  to: StorageTier,
+  expectedHash?: string | null,
+): Promise<TierTransferResult> {
+  if (from === to) throw new Error('Source and destination tier are identical');
+
+  // Make sure the destination root exists (verifies the archive volume is reachable).
+  if (to === 'ARCHIVE') {
+    await ensureArchiveRoot();
+  } else {
+    await ensureSecureUploadRoot();
+  }
+
+  const source = resolveSecureUploadPath(storageKey, false, from);
+  const destination = resolveSecureUploadPath(storageKey, false, to);
+
+  // Idempotency: if a valid copy already exists at the destination, don't redo it.
+  try {
+    const destStats = await fs.stat(destination);
+    if (destStats.isFile() && destStats.size > 0) {
+      const existingHash = await computeFileHashAtPath(destination);
+      if (!expectedHash || existingHash === expectedHash) {
+        return { hash: existingHash, verified: !!expectedHash, alreadyPresent: true };
+      }
+      // A corrupt/mismatched leftover — remove it and re-copy cleanly.
+      await fs.unlink(destination).catch(() => {});
+    }
+  } catch {
+    // Destination absent — normal path, continue.
+  }
+
+  const tempDestination = `${destination}.tmp-${crypto.randomUUID()}`;
+  await fs.copyFile(source, tempDestination);
+
+  const hash = await computeFileHashAtPath(tempDestination);
+  if (expectedHash && hash !== expectedHash) {
+    await fs.unlink(tempDestination).catch(() => {});
+    throw new Error('Integrity check failed: copied file hash does not match the recorded hash');
+  }
+
+  try {
+    await fs.chmod(tempDestination, FILE_MODE);
+  } catch {
+    // no-op (Windows)
+  }
+
+  // Atomic within the destination volume.
+  await fs.rename(tempDestination, destination);
+
+  return { hash, verified: !!expectedHash, alreadyPresent: false };
+}
+
+/**
+ * Copies a PRIMARY file to the ARCHIVE tier (used by both "copy" and the first
+ * step of "cut"). Does not touch the DB or delete the original.
+ */
+export function copyToArchive(storageKey: string, expectedHash?: string | null): Promise<TierTransferResult> {
+  return copyBetweenTiers(storageKey, 'PRIMARY', 'ARCHIVE', expectedHash);
+}
+
+/**
+ * Copies an ARCHIVE file back to the PRIMARY tier (first step of "restore").
+ * Does not touch the DB or delete the archived copy.
+ */
+export function copyToPrimary(storageKey: string, expectedHash?: string | null): Promise<TierTransferResult> {
+  return copyBetweenTiers(storageKey, 'ARCHIVE', 'PRIMARY', expectedHash);
 }

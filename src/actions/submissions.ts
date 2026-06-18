@@ -40,6 +40,29 @@ import {
 // being worked on by a permissioned reviewer, not orphaned IN_REVIEW records.
 const REVIEW_ACTION_PERMISSIONS = ['KYC_VIEW_QUEUE', 'KYC_OFFICER_PROCESS', 'SUPERVISOR_FORWARD'];
 
+// A case only counts as actively "In Review" when it is assigned to a user who
+// holds the "Access Review & Action" permission (KYC_VIEW_QUEUE) — and ONLY that.
+// Super Admins are explicitly excluded by role name, because the SUPER_ADMIN role
+// carries every permission slug (so a permission-only check would wrongly match
+// them). Reuse this everywhere the In Review figure is shown so the dashboard,
+// reports and metrics stay consistent.
+const REVIEW_AND_ACTION_PERMISSION = 'KYC_VIEW_QUEUE';
+
+const ACTIVE_REVIEW_ASSIGNEE_FILTER: any = {
+  assignedToId: { not: null },
+  assignedTo: {
+    roles: {
+      some: {
+        role: {
+          active: true,
+          permissions: { some: { permission: { slug: REVIEW_AND_ACTION_PERMISSION } } },
+        },
+      },
+      none: { role: { name: 'SUPER_ADMIN' } },
+    },
+  },
+};
+
 /**
  * Converts raw file-validation error strings into user-friendly messages.
  * Keeps all technical detail server-side (audit logs); only safe descriptions reach the client.
@@ -138,8 +161,24 @@ async function hasFollowUpCaseAccess(user: any, submissionId: string) {
 
 
 function formatKYC(kyc: any) {
+  const memoList = Array.isArray(kyc.memos) ? kyc.memos : [];
+  const archivedDocCount = memoList.filter((m: any) => m.storageTier === 'ARCHIVE').length;
+  const deletedDocCount = memoList.filter((m: any) => !!m.archiveDeletedAt).length;
+  // A case is "deleted" (soft) when it has documents and ALL of them have had
+  // their archive bytes freed — it lives only in the Deleted bin until restored.
+  const isDeleted = memoList.length > 0 && deletedDocCount === memoList.length;
+  // A case counts as archived only when it has documents and ALL of them are on
+  // the archive tier (a cut moves every document of a case together) AND it has
+  // not been soft-deleted (deleted cases show only in the Deleted bin).
+  const isArchived = memoList.length > 0 && archivedDocCount === memoList.length && !isDeleted;
+
   return {
     ...kyc,
+    isArchived,
+    isDeleted,
+    archivedDocCount,
+    deletedDocCount,
+    totalDocCount: memoList.length,
     checklistState: kyc.checklistState || {},
     commentHistory: Array.isArray(kyc.commentHistory) ? kyc.commentHistory : [],
     documents:
@@ -513,20 +552,7 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
           ...where,
           status: KYC_STATUS.IN_REVIEW,
           isExceptional: false,
-          assignedToId: { not: null },
-          assignedTo: {
-            roles: {
-              some: {
-                role: {
-                  active: true,
-                  OR: [
-                    { name: 'SUPER_ADMIN' },
-                    { permissions: { some: { permission: { slug: { in: REVIEW_ACTION_PERMISSIONS } } } } },
-                  ],
-                },
-              },
-            },
-          },
+          ...ACTIVE_REVIEW_ASSIGNEE_FILTER,
         },
       }),
       prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED] }, isExceptional: false } }),
@@ -1347,7 +1373,7 @@ export async function getWorkflowCounts() {
       return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, unseenCases: 0, branchNode: 0 };
     }
 
-    const [myCount, actionRequired, queueCounts, unseenCases, exceptionalCount, escalatedCount, resubmittedCount] = await Promise.all([
+    const [myCount, actionRequired, queueCounts, unseenCases, exceptionalCount, escalatedCount, resubmittedCount, activeInReview] = await Promise.all([
       prisma.kYC.count({ where: { createdById: session.id, active: true, isExceptional: false } }),
       prisma.kYC.count({
         where: {
@@ -1397,6 +1423,19 @@ export async function getWorkflowCounts() {
           isExceptional: false,
           active: true
         }
+      }),
+      // In Review count restricted to cases actively assigned to a front-line
+      // reviewer (KYC Officer / Review & Action permission) — excludes Super Admin
+      // and other viewers, and drops to 0 once the case is actioned (status leaves
+      // IN_REVIEW on amendment / authorize / escalate).
+      prisma.kYC.count({
+        where: {
+          ...jurisdictionalFilter,
+          status: KYC_STATUS.IN_REVIEW,
+          isExceptional: false,
+          active: true,
+          ...ACTIVE_REVIEW_ASSIGNEE_FILTER,
+        }
       })
     ]);
 
@@ -1413,7 +1452,7 @@ export async function getWorkflowCounts() {
       escalated: escalatedCount,
       exceptional: exceptionalCount,
       unseenCases: unseenCases,
-      branchNode: statsMap[KYC_STATUS.IN_REVIEW] || 0
+      branchNode: activeInReview
     };
   } catch (error) {
     logInstitutionalError(error, 'DB_WORKFLOW_COUNTS');

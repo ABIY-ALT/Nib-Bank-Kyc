@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { checkAccessRateLimit } from '@/lib/rate-limiting';
-import { createReadStream, secureUploadedFileExists } from '@/lib/secure-file-storage';
+import { createReadStream, secureUploadedFileExists, type StorageTier } from '@/lib/secure-file-storage';
 import { createAuditLog } from '@/actions/audit';
 import { getServerSession } from '@/actions/auth-server';
 import { prisma } from '@/lib/prisma';
@@ -91,11 +91,15 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized access to this jurisdiction" }, { status: 403 });
     }
 
+    // Resolve which storage tier this file lives on. Archived files are read
+    // straight from the archive volume (e.g. E:) — the DB row records the tier.
+    const tier: StorageTier = (memo as any).storageTier === 'ARCHIVE' ? 'ARCHIVE' : 'PRIMARY';
+
     // 4. Verify the file physically exists before streaming.
     // fs.createReadStream does NOT throw synchronously for a missing file —
     // ENOENT surfaces as an async 'error' event mid-stream, which would crash
     // the response. Check existence up front and fail gracefully with a 404.
-    const fileAvailable = await secureUploadedFileExists(memo.storageKey);
+    const fileAvailable = await secureUploadedFileExists(memo.storageKey, false, tier);
     if (!fileAvailable) {
       await createAuditLog({
         userId: session.id,
@@ -114,7 +118,7 @@ export async function GET(
     // 5. Streamed Read to prevent memory exhaustion
     let stream: any;
     try {
-      stream = createReadStream(memo.storageKey);
+      stream = createReadStream(memo.storageKey, tier);
     } catch (err: any) {
       if (err?.code === 'ENOENT' || err?.message?.includes('ENOENT')) {
         return NextResponse.json(
