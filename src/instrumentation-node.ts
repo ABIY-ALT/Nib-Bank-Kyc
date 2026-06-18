@@ -49,10 +49,12 @@ export function registerProcessGuards() {
       console.error('Ignored malformed or oversized upload (request-level, not fatal):', (err as { message?: string })?.message);
       return;
     }
-    // Preserve Node's fail-fast default for real, unexpected errors: log and
-    // exit so a process supervisor can restart a known-good instance.
-    console.error('Uncaught exception:', err);
-    process.exit(1);
+    // Resilience policy: the server MUST stay up. Node's default would exit the
+    // process here — we deliberately do not. One unexpected error inside a single
+    // request must never take the whole service down for every other user. The
+    // error is logged in full for diagnosis; the offending request still fails on
+    // its own, but the server keeps serving everyone else.
+    console.error('Uncaught exception (logged, server kept alive):', err);
   });
 
   process.on('unhandledRejection', (reason) => {
