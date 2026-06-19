@@ -145,11 +145,16 @@ export default function MasterBundleDownloadPage() {
   const filteredSubmissions = useMemo(() => {
     if (!allSubmissions) return [];
     
+    // Normalize for resilient name matching — district/branch names are
+    // denormalized onto cases and can drift in casing/whitespace from the
+    // dropdown values, so compare trimmed + lower-cased rather than exact.
+    const norm = (v: string | null | undefined) => (v || '').trim().toLowerCase();
+
     return allSubmissions.filter(sub => {
       const matchesStatus = selectedStatuses.length === 0 ||
                            (selectedStatuses.includes(KYC_STATUS.SUBMITTED) ? [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status) : selectedStatuses.includes(sub.status));
-      const matchesDistrict = selectedDistrict === 'all' || getSubmissionDistrictName(sub) === selectedDistrict;
-      const matchesBranch = selectedBranch === 'all' || getSubmissionBranchName(sub) === selectedBranch;
+      const matchesDistrict = selectedDistrict === 'all' || norm(getSubmissionDistrictName(sub)) === norm(selectedDistrict);
+      const matchesBranch = selectedBranch === 'all' || norm(getSubmissionBranchName(sub)) === norm(selectedBranch);
       // Active view hides archived/deleted cases; Archived shows only archived
       // (and not deleted); Deleted shows only soft-deleted cases.
       const matchesView =
@@ -162,7 +167,8 @@ export default function MasterBundleDownloadPage() {
       const matchesSearch = !q ||
         (sub.customerName || "").toLowerCase().includes(q) ||
         (sub.id || "").toLowerCase().includes(q) ||
-        (sub.branchName || "").toLowerCase().includes(q);
+        norm(getSubmissionBranchName(sub)).includes(q) ||
+        norm(getSubmissionDistrictName(sub)).includes(q);
 
       return matchesStatus && matchesDistrict && matchesBranch && matchesView && matchesSearch;
     });
@@ -519,91 +525,101 @@ Failed Documents:      ${failedDocs.length}
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-12">
-        <Card className="lg:col-span-4 shadow-xl border-slate-200 h-fit sticky top-20">
-          <CardHeader className="bg-slate-50/50 border-b">
-            <CardTitle className="text-xl flex items-center gap-2">
+      <div className="space-y-6">
+        {/* Fixed filter region: Export Control AND the Discovery Queue header both
+            stay pinned at the top of the scroll area while the list scrolls. The
+            page scrolls inside <main> (dashboard-shell), so top-0 pins them right
+            under the global nav. */}
+        <div className="sticky top-0 z-30 space-y-4 bg-[#FCFAF7] pt-2">
+        {/* Export Control: full-width horizontal bar. */}
+        <Card className="shadow-xl border-slate-200">
+          <CardHeader className="bg-slate-50/50 border-b py-3">
+            <CardTitle className="text-lg flex items-center gap-2">
               <Filter className="w-5 h-5 text-primary" />
               Export Control
             </CardTitle>
             <CardDescription>Organize bulk archiving by region or status.</CardDescription>
           </CardHeader>
-          <CardContent className="pt-6 space-y-8">
-            <div className="space-y-4">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target Queues</Label>
-              <div className="grid gap-3">
-                {STATUS_OPTIONS.map(status => (
-                  <div key={status.id} className="flex items-center space-x-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
-                    <Checkbox 
-                      id={`status-${status.id}`} 
-                      checked={selectedStatuses.includes(status.id)}
-                      onCheckedChange={() => handleToggleStatus(status.id)}
-                    />
-                    <label htmlFor={`status-${status.id}`} className="text-sm font-bold text-slate-700 cursor-pointer flex-1">
-                      {status.label}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4 pt-4 border-t">
+          <CardContent className="py-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              {/* Status queues as toggle chips */}
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Regional District</Label>
-                <Select value={selectedDistrict} onValueChange={(val) => { setSelectedDistrict(val); setSelectedBranch("all"); }}>
-                  <SelectTrigger className="h-11 bg-white">
-                    <SelectValue placeholder="All Regions" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl shadow-2xl border-none">
-                    <SelectItem value="all">Overall (All Regions)</SelectItem>
-                    {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Branch Office</Label>
-                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={selectedDistrict === 'all'}>
-                  <SelectTrigger className="h-11 bg-white">
-                    <SelectValue placeholder="All Branches" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl shadow-2xl border-none">
-                    <SelectItem value="all">All Branches in {selectedDistrict}</SelectItem>
-                    {branches?.filter(b => selectedDistrict === 'all' || b.district?.name === selectedDistrict).map(b => (
-                      <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <Button variant="ghost" onClick={resetFilters} className="w-full gap-2 font-bold text-slate-400 hover:text-primary">
-              <RotateCcw className="w-4 h-4" /> Reset Workspace
-            </Button>
-          </CardContent>
-          <CardFooter className="bg-slate-50 border-t p-6">
-            <Button 
-              className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg shadow-xl gap-3"
-              onClick={handleDownloadMasterBundle}
-              disabled={isProcessing || orderedFilteredSubmissions.length === 0}
-            >
-              {isProcessing ? (
-                <div className="flex flex-col items-center">
-                  <div className="flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>{progress}% Complete</span>
-                  </div>
-                  <span className="text-[9px] font-bold uppercase mt-1 opacity-70 truncate max-w-[200px]">{currentActionLabel}</span>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target Queues</Label>
+                <div className="flex flex-wrap gap-2">
+                  {STATUS_OPTIONS.map(status => {
+                    const active = selectedStatuses.includes(status.id);
+                    return (
+                      <button
+                        key={status.id}
+                        type="button"
+                        onClick={() => handleToggleStatus(status.id)}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
+                          active
+                            ? "bg-primary text-white border-primary"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                        )}
+                      >
+                        {status.label}
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : (
-                <><FileArchive className="w-6 h-6" /> Export {orderedFilteredSubmissions.length} Cases</>
-              )}
-            </Button>
-          </CardFooter>
+              </div>
+
+              {/* Region, branch and actions */}
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1 min-w-[180px]">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Regional District</Label>
+                  <Select value={selectedDistrict} onValueChange={(val) => { setSelectedDistrict(val); setSelectedBranch("all"); }}>
+                    <SelectTrigger className="h-10 bg-white">
+                      <SelectValue placeholder="All Regions" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl shadow-2xl border-none">
+                      <SelectItem value="all">Overall (All Regions)</SelectItem>
+                      {districts?.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1 min-w-[180px]">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Branch Office</Label>
+                  <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                    <SelectTrigger className="h-10 bg-white">
+                      <SelectValue placeholder="All Branches" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl shadow-2xl border-none max-h-72">
+                      <SelectItem value="all">{selectedDistrict === 'all' ? 'All Branches' : `All Branches in ${selectedDistrict}`}</SelectItem>
+                      {branches?.filter(b => selectedDistrict === 'all' || b.district?.name === selectedDistrict).map(b => (
+                        <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button variant="ghost" onClick={resetFilters} className="h-10 gap-2 font-bold text-slate-400 hover:text-primary">
+                  <RotateCcw className="w-4 h-4" /> Reset
+                </Button>
+
+                <Button
+                  className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-black gap-2 px-5 shadow-lg"
+                  onClick={handleDownloadMasterBundle}
+                  disabled={isProcessing || orderedFilteredSubmissions.length === 0}
+                >
+                  {isProcessing ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {progress}% — {currentActionLabel || 'Working'}</>
+                  ) : (
+                    <><FileArchive className="w-5 h-5" /> Export {orderedFilteredSubmissions.length} Cases</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
         </Card>
 
-        <div className="lg:col-span-8 space-y-6">
-          <Card className="shadow-2xl border-slate-200 overflow-hidden min-h-[500px] bg-white">
+        {/* Discovery Queue header strip (header, view toggle, search, bulk actions)
+            — sits in the fixed region, above the scrolling list. */}
+        <Card className="shadow-2xl border-slate-200 overflow-hidden bg-white">
             <CardHeader className="bg-slate-900 text-white border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-4">
                 <div className="p-2 bg-white/10 rounded-lg"><FileArchive className="w-5 h-5 text-emerald-400" /></div>
@@ -750,6 +766,11 @@ Failed Documents:      ${failedDocs.length}
                 </div>
               </div>
             )}
+          </Card>
+        </div>
+
+        {/* Scrolling list (separate card, below the fixed region) */}
+        <Card className="shadow-2xl border-slate-200 overflow-hidden min-h-[500px] bg-white">
             <CardContent className="p-0">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-40 gap-4">
@@ -846,7 +867,6 @@ Failed Documents:      ${failedDocs.length}
               )}
             </CardContent>
           </Card>
-        </div>
       </div>
 
       <AlertDialog open={pendingTierAction !== null} onOpenChange={(open) => { if (!open) setPendingTierAction(null); }}>

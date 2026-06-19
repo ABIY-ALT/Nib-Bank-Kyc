@@ -14,12 +14,15 @@ const MAPPING_PERMISSION = 'MAP_USERS_TO_BRANCH';
  * Resolves the acting user for guards + audit attribution.
  * Throws when there is no session, or (for mutations) when the permission is missing.
  */
-async function requireMappingActor(mutate: boolean) {
+type MappingActor = { id: string; email: string; name: string };
+type ActorResult = { actor: MappingActor } | { error: string };
+
+async function requireMappingActor(mutate: boolean): Promise<ActorResult> {
   const session = await getServerSession();
-  if (!session) throw new Error('Unauthorized');
+  if (!session) return { error: 'Your session has expired. Please sign in again.' };
 
   if (mutate && !(await verifyPermission(MAPPING_PERMISSION))) {
-    throw new Error('Unauthorized: Branch Mapping Management permission required.');
+    return { error: 'You do not have permission to manage branch mappings.' };
   }
 
   const profile = await prisma.user.findUnique({
@@ -28,9 +31,11 @@ async function requireMappingActor(mutate: boolean) {
   });
 
   return {
-    id: session.id,
-    email: session.email,
-    name: profile ? `${profile.firstName} ${profile.lastName}`.trim() : session.email,
+    actor: {
+      id: session.id,
+      email: session.email,
+      name: profile ? `${profile.firstName} ${profile.lastName}`.trim() : session.email,
+    },
   };
 }
 
@@ -178,12 +183,14 @@ export async function createMapping(input: {
   additionalOfficerIds?: string[];
   note?: string;
 }) {
-  const actor = await requireMappingActor(true);
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
   const type = input.type ?? 'PERMANENT';
 
   const branchIds = Array.from(new Set((input.branchIds ?? []).filter(Boolean)));
-  if (branchIds.length === 0) throw new Error('At least one branch is required.');
-  if (!input.primaryOfficerId) throw new Error('An assigned KYC officer is required.');
+  if (branchIds.length === 0) return { error: 'Please select at least one branch.' };
+  if (!input.primaryOfficerId) return { error: 'Please select an assigned KYC officer.' };
 
   try {
     const branches = await prisma.branch.findMany({
@@ -251,9 +258,9 @@ export async function createMapping(input: {
     }
 
     if (created.length === 0) {
-      throw new Error(
-        `All selected branches already have a ${type.toLowerCase()} mapping or are already assigned to this officer. Edit the existing mapping instead.`,
-      );
+      return {
+        error: `All selected branches already have a ${type.toLowerCase()} mapping, or are already assigned to this officer. Edit the existing mapping instead.`,
+      };
     }
 
     await recomputeAssignedBranches(officerIds);
@@ -268,9 +275,8 @@ export async function createMapping(input: {
     revalidatePath('/admin/assignments');
     return { created, skipped };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_CREATE_MAPPING');
-    throw new Error('Institutional database fault during mapping creation.');
+    return { error: 'Something went wrong while creating the mapping. Please try again.' };
   }
 }
 
@@ -278,14 +284,16 @@ export async function updateMapping(
   id: string,
   input: { type?: MappingType; note?: string | null },
 ) {
-  const actor = await requireMappingActor(true);
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
 
   try {
     const current = await prisma.branchMapping.findUnique({
       where: { id },
       include: { branch: { select: { name: true } } },
     });
-    if (!current) throw new Error('Mapping not found.');
+    if (!current) return { error: 'That mapping no longer exists. It may have been deleted.' };
 
     // Prevent creating a second mapping of the same type on a branch via type change.
     if (input.type && input.type !== current.type) {
@@ -294,7 +302,7 @@ export async function updateMapping(
         select: { id: true },
       });
       if (existing) {
-        throw new Error(`"${current.branch?.name}" already has a ${input.type.toLowerCase()} mapping.`);
+        return { error: `"${current.branch?.name}" already has a ${input.type.toLowerCase()} mapping.` };
       }
     }
 
@@ -315,15 +323,17 @@ export async function updateMapping(
     });
 
     revalidatePath('/admin/assignments');
+    return { ok: true };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_UPDATE_MAPPING');
-    throw new Error('Institutional database fault during mapping update.');
+    return { error: 'Something went wrong while updating the mapping. Please try again.' };
   }
 }
 
 export async function setMappingActive(id: string, active: boolean) {
-  const actor = await requireMappingActor(true);
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
 
   try {
     const mapping = await prisma.branchMapping.update({
@@ -342,18 +352,20 @@ export async function setMappingActive(id: string, active: boolean) {
     });
 
     revalidatePath('/admin/assignments');
+    return { ok: true };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_TOGGLE_MAPPING');
-    throw new Error('Institutional database fault during mapping status change.');
+    return { error: 'Something went wrong while changing the mapping status. Please try again.' };
   }
 }
 
 /** Bulk activate/deactivate several mappings at once (used by the officer-level toggle). */
 export async function setMappingsActive(ids: string[], active: boolean) {
-  const actor = await requireMappingActor(true);
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
   const mappingIds = Array.from(new Set((ids ?? []).filter(Boolean)));
-  if (mappingIds.length === 0) return;
+  if (mappingIds.length === 0) return { ok: true };
 
   try {
     const mappings = await prisma.branchMapping.findMany({
@@ -378,10 +390,10 @@ export async function setMappingsActive(ids: string[], active: boolean) {
     });
 
     revalidatePath('/admin/assignments');
+    return { ok: true };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_BULK_TOGGLE_MAPPING');
-    throw new Error('Institutional database fault during bulk status change.');
+    return { error: 'Something went wrong while changing mappings in bulk. Please try again.' };
   }
 }
 
@@ -390,8 +402,10 @@ export async function setMappingsActive(ids: string[], active: boolean) {
  * on Saturdays. Independent of their normal branch mappings (does not change them).
  */
 export async function setSaturdayVisibility(userId: string, enabled: boolean) {
-  const actor = await requireMappingActor(true);
-  if (!userId) throw new Error('An officer is required.');
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
+  if (!userId) return { error: 'Please select an officer.' };
 
   try {
     const target = await prisma.user.update({
@@ -410,16 +424,18 @@ export async function setSaturdayVisibility(userId: string, enabled: boolean) {
     });
 
     revalidatePath('/admin/assignments');
+    return { ok: true };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_SET_SATURDAY_VISIBILITY');
-    throw new Error('Institutional database fault during Saturday configuration.');
+    return { error: 'Something went wrong while updating Saturday visibility. Please try again.' };
   }
 }
 
 export async function setAllSaturdayVisibility(userIds: string[], enabled: boolean) {
-  const actor = await requireMappingActor(true);
-  if (!userIds || userIds.length === 0) throw new Error('At least one officer is required.');
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
+  if (!userIds || userIds.length === 0) return { error: 'Please select at least one officer.' };
 
   try {
     await prisma.user.updateMany({
@@ -437,22 +453,24 @@ export async function setAllSaturdayVisibility(userIds: string[], enabled: boole
     });
 
     revalidatePath('/admin/assignments');
+    return { ok: true };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_SET_ALL_SATURDAY_VISIBILITY');
-    throw new Error('Institutional database fault during bulk Saturday configuration.');
+    return { error: 'Something went wrong while updating Saturday visibility for all officers. Please try again.' };
   }
 }
 
 export async function deleteMapping(id: string) {
-  const actor = await requireMappingActor(true);
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
 
   try {
     const mapping = await prisma.branchMapping.findUnique({
       where: { id },
       include: { branch: { select: { name: true } }, officers: { select: { userId: true } } },
     });
-    if (!mapping) throw new Error('Mapping not found.');
+    if (!mapping) return { error: 'That mapping no longer exists. It may have already been deleted.' };
 
     const affected = mapping.officers.map((o) => o.userId);
     await prisma.branchMapping.delete({ where: { id } });
@@ -467,28 +485,30 @@ export async function deleteMapping(id: string) {
     });
 
     revalidatePath('/admin/assignments');
+    return { ok: true };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_DELETE_MAPPING');
-    throw new Error('Institutional database fault during mapping deletion.');
+    return { error: 'Something went wrong while deleting the mapping. Please try again.' };
   }
 }
 
 export async function setPrimaryOfficer(mappingId: string, userId: string) {
-  const actor = await requireMappingActor(true);
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
 
   try {
     const mapping = await prisma.branchMapping.findUnique({
       where: { id: mappingId },
       include: { branch: { select: { name: true } }, officers: true },
     });
-    if (!mapping) throw new Error('Mapping not found.');
+    if (!mapping) return { error: 'That mapping no longer exists. It may have been deleted.' };
 
     const target = await prisma.user.findUnique({
       where: { id: userId },
       select: { firstName: true, lastName: true },
     });
-    if (!target) throw new Error('Officer not found.');
+    if (!target) return { error: 'That officer could not be found.' };
 
     const alreadyOfficer = mapping.officers.some((o) => o.userId === userId);
 
@@ -518,24 +538,26 @@ export async function setPrimaryOfficer(mappingId: string, userId: string) {
     });
 
     revalidatePath('/admin/assignments');
+    return { ok: true };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_REASSIGN_MAPPING');
-    throw new Error('Institutional database fault during officer reassignment.');
+    return { error: 'Something went wrong while changing the assigned officer. Please try again.' };
   }
 }
 
 export async function addOfficers(mappingId: string, userIds: string[]) {
-  const actor = await requireMappingActor(true);
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
   const ids = Array.from(new Set((userIds ?? []).filter(Boolean)));
-  if (ids.length === 0) throw new Error('No officers selected.');
+  if (ids.length === 0) return { error: 'Please select at least one officer to add.' };
 
   try {
     const mapping = await prisma.branchMapping.findUnique({
       where: { id: mappingId },
       include: { branch: { select: { name: true } } },
     });
-    if (!mapping) throw new Error('Mapping not found.');
+    if (!mapping) return { error: 'That mapping no longer exists. It may have been deleted.' };
 
     await prisma.$transaction(
       ids.map((userId) =>
@@ -557,27 +579,29 @@ export async function addOfficers(mappingId: string, userIds: string[]) {
     });
 
     revalidatePath('/admin/assignments');
+    return { ok: true };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_ADD_MAPPING_OFFICERS');
-    throw new Error('Institutional database fault while adding officers.');
+    return { error: 'Something went wrong while adding officers. Please try again.' };
   }
 }
 
 export async function removeOfficer(mappingId: string, userId: string) {
-  const actor = await requireMappingActor(true);
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
 
   try {
     const mapping = await prisma.branchMapping.findUnique({
       where: { id: mappingId },
       include: { branch: { select: { name: true } }, officers: true },
     });
-    if (!mapping) throw new Error('Mapping not found.');
+    if (!mapping) return { error: 'That mapping no longer exists. It may have been deleted.' };
 
     const target = mapping.officers.find((o) => o.userId === userId);
-    if (!target) throw new Error('Officer is not part of this mapping.');
+    if (!target) return { error: 'That officer is not part of this mapping.' };
     if (target.isPrimary) {
-      throw new Error('Cannot remove the assigned KYC officer. Reassign the primary officer first.');
+      return { error: 'You can’t remove the assigned KYC officer. Reassign the primary officer first.' };
     }
 
     await prisma.branchMappingOfficer.delete({
@@ -594,21 +618,23 @@ export async function removeOfficer(mappingId: string, userId: string) {
     });
 
     revalidatePath('/admin/assignments');
+    return { ok: true };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_REMOVE_MAPPING_OFFICER');
-    throw new Error('Institutional database fault while removing officer.');
+    return { error: 'Something went wrong while removing the officer. Please try again.' };
   }
 }
 
 export async function reassignAllOfficerBranches(oldOfficerId: string, newOfficerId: string) {
-  const actor = await requireMappingActor(true);
-  if (oldOfficerId === newOfficerId) throw new Error('Source and target officers must be different.');
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
+  if (oldOfficerId === newOfficerId) return { error: 'The source and target officers must be different.' };
 
   try {
     const oldUser = await prisma.user.findUnique({ where: { id: oldOfficerId } });
     const newUser = await prisma.user.findUnique({ where: { id: newOfficerId } });
-    if (!oldUser || !newUser) throw new Error('Officer not found.');
+    if (!oldUser || !newUser) return { error: 'One of the selected officers could not be found.' };
 
     // Find all mappings where oldOfficer is present
     const mappings = await prisma.branchMapping.findMany({
@@ -666,8 +692,7 @@ export async function reassignAllOfficerBranches(oldOfficerId: string, newOffice
     revalidatePath('/admin/assignments');
     return { count: mappings.length };
   } catch (error: any) {
-    if (error?.message && !error.message.startsWith('Institutional')) throw error;
     logInstitutionalError(error, 'DB_MASS_REASSIGN_MAPPINGS');
-    throw new Error('Institutional database fault during mass reassignment.');
+    return { error: 'Something went wrong during the mass reassignment. Please try again.' };
   }
 }

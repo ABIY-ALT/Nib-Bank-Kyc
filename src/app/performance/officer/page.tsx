@@ -385,6 +385,17 @@ Document Count:    ${fullSub?.documents?.length || 0}
   }, [allMappings]);
 
   const processedOfficers = useMemo(() => {
+    // Normalize names for resilient matching (trim + lower-case). Branch/district
+    // names drift in casing/whitespace between user records and the dropdowns.
+    const norm = (v?: string | null) => (v || '').trim().toLowerCase();
+    // Branch name -> district name, so we can tell which district an officer's
+    // mapped branches belong to. Officers link to branches through
+    // `assignedBranches`/mappings, not a single `branch` FK, so we can't rely on
+    // the `branch.district` relation alone.
+    const branchDistrict = new Map<string, string>(
+      branches.map((b: any) => [norm(b.name), norm(b.district?.name)])
+    );
+
     const data = officers.map(off => {
       const offBranchNames = (off.assignedBranches?.length > 0
         ? off.assignedBranches
@@ -455,9 +466,27 @@ Document Count:    ${fullSub?.documents?.length || 0}
         },
       };
     }).filter(off => {
+      // The officer's full set of branches (mapped branches, falling back to the
+      // single home branch), normalized for comparison.
+      const offBranchNamesNorm = (off.assignedBranches?.length > 0
+        ? off.assignedBranches
+        : (off.branchName ? [off.branchName] : [])).map((b: string) => norm(b));
+
       const matchesSelection = selectedOfficerFilter === 'all' || off.id === selectedOfficerFilter;
-      const matchesDistrict = selectedDistrict === 'all' || off.branch?.district?.name === selectedDistrict;
-      const matchesBranch = selectedBranchFilter === 'all' || off.branchName === selectedBranchFilter;
+
+      // District: matches if the officer's home district matches, the home
+      // branch's district relation matches, OR any mapped branch belongs to the
+      // selected district.
+      const matchesDistrict = selectedDistrict === 'all' ||
+        norm(off.districtName) === norm(selectedDistrict) ||
+        norm(off.branch?.district?.name) === norm(selectedDistrict) ||
+        offBranchNamesNorm.some((bn: string) => branchDistrict.get(bn) === norm(selectedDistrict));
+
+      // Branch: matches against ALL of the officer's mapped branches, not just
+      // the single home branchName.
+      const matchesBranch = selectedBranchFilter === 'all' ||
+        offBranchNamesNorm.includes(norm(selectedBranchFilter));
+
       return matchesSelection && matchesDistrict && matchesBranch;
     });
 
@@ -496,7 +525,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });
-  }, [officers, submissions, selectedOfficerFilter, selectedDistrict, selectedBranchFilter, sortField, sortOrder]);
+  }, [officers, submissions, branches, selectedOfficerFilter, selectedDistrict, selectedBranchFilter, sortField, sortOrder]);
 
   const currentBranches = useMemo(() => {
     if (!selectedOfficer) return [];

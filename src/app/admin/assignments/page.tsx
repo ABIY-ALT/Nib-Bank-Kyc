@@ -50,6 +50,19 @@ const isKycEligible = (user: any) =>
 
 const formatName = (u: any) => `${u.firstName} ${u.lastName}`.trim();
 
+/**
+ * Server actions return a user-friendly `{ error }` on failure (instead of
+ * throwing, which Next.js strips to a generic message in production). This
+ * re-throws that message client-side so the surrounding try/catch surfaces the
+ * real, readable reason in a toast. Returns the success payload otherwise.
+ */
+function unwrapAction<T>(res: T): Exclude<T, { error: string }> {
+  if (res && typeof res === 'object' && 'error' in res && (res as any).error) {
+    throw new Error(String((res as any).error));
+  }
+  return res as Exclude<T, { error: string }>;
+}
+
 const TYPE_COLORS: Record<string, string> = {
   PERMANENT: 'bg-blue-50 text-blue-700 border-blue-200',
   TEMPORARY: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -789,13 +802,13 @@ export default function BranchMappingPage() {
     setCreating(true);
     try {
       const [primaryOfficerId, ...additionalOfficerIds] = createForm.officerIds;
-      const res = await createMapping({
+      const res = unwrapAction(await createMapping({
         branchIds: createForm.branchIds,
         type: createForm.type,
         primaryOfficerId,
         additionalOfficerIds,
         note: createForm.note || undefined,
-      });
+      }));
       toast({ title: `Created ${res.created.length} mapping(s)${res.skipped.length ? `, skipped ${res.skipped.length}` : ''}.` });
       setCreateOpen(false);
       resetCreate();
@@ -813,7 +826,7 @@ export default function BranchMappingPage() {
     if (!editTarget) return;
     setSaving(true);
     try {
-      await updateMapping(editTarget.id, { type: editForm.type, note: editForm.note || null });
+      unwrapAction(await updateMapping(editTarget.id, { type: editForm.type, note: editForm.note || null }));
       toast({ title: 'Mapping updated.' });
       setEditTarget(null);
       await load();
@@ -826,7 +839,7 @@ export default function BranchMappingPage() {
 
   const handleToggleActive = async (m: any) => {
     try {
-      await setMappingActive(m.id, !m.active);
+      unwrapAction(await setMappingActive(m.id, !m.active));
       toast({ title: `Mapping ${m.active ? 'deactivated' : 'activated'}.` });
       await load();
     } catch (e: any) {
@@ -836,7 +849,7 @@ export default function BranchMappingPage() {
 
   const handleToggleMappings = async (officer: any, officerMappings: any[], activate: boolean) => {
     try {
-      await setMappingsActive(officerMappings.map((m) => m.id), activate);
+      unwrapAction(await setMappingsActive(officerMappings.map((m) => m.id), activate));
       toast({ title: `All mappings for ${formatName(officer)} ${activate ? 'activated' : 'deactivated'}.` });
       await load();
     } catch (e: any) {
@@ -847,7 +860,7 @@ export default function BranchMappingPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteMapping(deleteTarget.id);
+      unwrapAction(await deleteMapping(deleteTarget.id));
       toast({ title: 'Mapping deleted.' });
       setDeleteTarget(null);
       await load();
@@ -862,7 +875,7 @@ export default function BranchMappingPage() {
     if (!officersTarget) return;
     setOfficersBusy(true);
     try {
-      await setPrimaryOfficer(officersTarget.id, officerId);
+      unwrapAction(await setPrimaryOfficer(officersTarget.id, officerId));
       toast({ title: 'Primary officer changed.' });
       const fresh = await getBranchMappings();
       setMappings(fresh);
@@ -878,7 +891,7 @@ export default function BranchMappingPage() {
     if (!officersTarget || addOfficerIds.length === 0) return;
     setOfficersBusy(true);
     try {
-      await addOfficers(officersTarget.id, addOfficerIds);
+      unwrapAction(await addOfficers(officersTarget.id, addOfficerIds));
       toast({ title: `${addOfficerIds.length} officer(s) added.` });
       setAddOfficerIds([]);
       const fresh = await getBranchMappings();
@@ -895,7 +908,7 @@ export default function BranchMappingPage() {
     if (!officersTarget) return;
     setOfficersBusy(true);
     try {
-      await removeOfficer(officersTarget.id, officerId);
+      unwrapAction(await removeOfficer(officersTarget.id, officerId));
       toast({ title: 'Officer removed.' });
       const fresh = await getBranchMappings();
       setMappings(fresh);
@@ -910,7 +923,7 @@ export default function BranchMappingPage() {
   const handleSaturdayToggle = async (userId: string, enabled: boolean) => {
     setSaturdayBusy(userId);
     try {
-      await setSaturdayVisibility(userId, enabled);
+      unwrapAction(await setSaturdayVisibility(userId, enabled));
       const officerName = formatName(allUsers.find((u: any) => u.id === userId) || {});
       toast({ title: `Saturday all-branch visibility ${enabled ? 'enabled' : 'disabled'} for ${officerName}.` });
       await load();
@@ -930,7 +943,7 @@ export default function BranchMappingPage() {
     setSaturdayBusy('ALL');
     try {
       const ids = officers.map((o) => o.id);
-      await setAllSaturdayVisibility(ids, enabled);
+      unwrapAction(await setAllSaturdayVisibility(ids, enabled));
       toast({ title: `All officers Saturday visibility ${enabled ? 'enabled' : 'disabled'}.` });
       await load();
     } catch (e: any) {
@@ -944,7 +957,7 @@ export default function BranchMappingPage() {
     if (!massReassignTarget || !massReassignNewId) return;
     setMassReassigning(true);
     try {
-      const res = await reassignAllOfficerBranches(massReassignTarget.id, massReassignNewId);
+      const res = unwrapAction(await reassignAllOfficerBranches(massReassignTarget.id, massReassignNewId));
       toast({ title: `Successfully reassigned ${res.count} branch mapping(s).` });
       setMassReassignTarget(null);
       setMassReassignNewId('');
