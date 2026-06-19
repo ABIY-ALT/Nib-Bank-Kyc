@@ -37,7 +37,8 @@ const nextConfig: NextConfig = {
     // cap ~10MB). Without this, KYC document uploads get truncated mid-stream,
     // which corrupts the form and throws "Unexpected end of form". Kept in step
     // with serverActions.bodySizeLimit so the two limits don't contradict.
-    middlewareClientMaxBodySize: '30mb',
+    // (Renamed from the deprecated `middlewareClientMaxBodySize`.)
+    proxyClientMaxBodySize: '30mb',
     serverActions: {
       bodySizeLimit: '30mb',
     },
