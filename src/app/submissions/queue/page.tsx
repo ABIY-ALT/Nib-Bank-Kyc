@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useMemo, useState } from "react";
@@ -11,14 +10,19 @@ import { getSubmissions } from "@/actions/submissions";
 import { getBranchMappings } from "@/actions/branch-mappings";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
+import { Pagination } from "@/components/ui/pagination";
+
+const ITEMS_PER_PAGE = 10;
 
 export default function ReviewActionPage() {
   const { user } = useAuth();
   const { isSuperAdmin } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [tempBranchNames, setTempBranchNames] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     async function loadData() {
@@ -27,7 +31,7 @@ export default function ReviewActionPage() {
       
       const assignedBranches = user.assignedBranches || [];
 
-      const [data, mappings] = await Promise.all([
+      const [result, mappings] = await Promise.all([
         getSubmissions({
           status: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW],
           isExceptional: false,
@@ -36,7 +40,9 @@ export default function ReviewActionPage() {
             assignedBranches.length > 0
               ? assignedBranches
               : [user.branchName || "RESTRICTED_NODE_UNASSIGNED"]
-          )
+          ),
+          limit: ITEMS_PER_PAGE,
+          offset: (currentPage - 1) * ITEMS_PER_PAGE
         }),
         getBranchMappings(),
       ]);
@@ -51,11 +57,12 @@ export default function ReviewActionPage() {
           .map((m: any) => (m.branchName || '').toLowerCase())
       );
       setTempBranchNames(tempNames);
-      setSubmissions(data);
+      setSubmissions(result.submissions || []);
+      setTotalCount(result.total || 0);
       setLoading(false);
     }
     loadData();
-  }, [user, isSuperAdmin]);
+  }, [user, isSuperAdmin, currentPage]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -107,7 +114,19 @@ export default function ReviewActionPage() {
           <p className="font-medium">Synchronizing review queue...</p>
         </div>
       ) : (
-        <SubmissionsPageContent submissions={filteredSubmissions || []} />
+        <>
+          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          
+          {totalCount > ITEMS_PER_PAGE && (
+            <div className="mt-6">
+              <Pagination 
+                currentPage={currentPage}
+                totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

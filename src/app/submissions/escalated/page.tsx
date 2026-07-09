@@ -1,5 +1,4 @@
-
-"use client"
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
@@ -10,13 +9,18 @@ import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
+import { Pagination } from "@/components/ui/pagination";
+
+const ITEMS_PER_PAGE = 10;
 
 export default function EscalatedCasesPage() {
   const { user } = useAuth();
   const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const isAdmin = isSuperAdmin;
 
@@ -25,17 +29,20 @@ export default function EscalatedCasesPage() {
       if (!user) return;
       setLoading(true);
       const assignedBranches = user.assignedBranches || [];
-      const data = await getSubmissions({
+      const result = await getSubmissions({
         status: [KYC_STATUS.ESCALATED],
         isExceptional: false, // Strictly filter out exceptional cases
         branches: !isAdmin && assignedBranches.length > 0 ? assignedBranches :
-          (!isAdmin && assignedBranches.length === 0 && user.branchName ? [user.branchName] : undefined)
+          (!isAdmin && assignedBranches.length === 0 && user.branchName ? [user.branchName] : undefined),
+        limit: ITEMS_PER_PAGE,
+        offset: (currentPage - 1) * ITEMS_PER_PAGE
       });
-      setSubmissions(data);
+      setSubmissions(result.submissions || []);
+      setTotalCount(result.total || 0);
       setLoading(false);
     }
     loadData();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, currentPage]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -92,7 +99,19 @@ export default function EscalatedCasesPage() {
           <p className="font-medium">Retrieving escalation queue...</p>
         </div>
       ) : (
-        <SubmissionsPageContent submissions={filteredSubmissions || []} />
+        <>
+          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          
+          {totalCount > ITEMS_PER_PAGE && (
+            <div className="mt-6">
+              <Pagination 
+                currentPage={currentPage}
+                totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

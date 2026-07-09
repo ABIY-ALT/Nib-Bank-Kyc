@@ -81,8 +81,8 @@ export default function OfficerReportsPage() {
           filters.branch = user.branchName;
         }
       }
-      const data = await getSubmissions(filters);
-      setSubmissions(data);
+      const result = await getSubmissions(filters);
+      setSubmissions(result.submissions);
       setReportDataActive(true);
       toast({
         title: "Officer Audit Complete",

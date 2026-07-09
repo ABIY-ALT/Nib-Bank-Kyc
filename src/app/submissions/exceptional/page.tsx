@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
@@ -30,18 +30,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import Link from "next/link";
 import { KYC_STATUS } from "@/lib/kyc-data";
+import { Pagination } from "@/components/ui/pagination";
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
+const ITEMS_PER_PAGE = 10;
 
 export default function ExceptionalCasesPage() {
   const { user } = useAuth();
   const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [availableCases, setAvailableCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState("");
@@ -73,6 +77,8 @@ export default function ExceptionalCasesPage() {
         isExceptional: true,
         branches: (!isDistrictDirector && !isGlobalGovernanceReviewer) ? branchesContext : undefined,
         district: districtContext,
+        limit: ITEMS_PER_PAGE,
+        offset: (currentPage - 1) * ITEMS_PER_PAGE
       });
 
       const availablePromise = getSubmissions({
@@ -81,14 +87,15 @@ export default function ExceptionalCasesPage() {
         district: districtContext,
       });
 
-      const [exceptional, all] = await Promise.all([exceptionalPromise, availablePromise]);
-      const activeExceptional = exceptional || [];
+      const [exceptionalResult, allResult] = await Promise.all([exceptionalPromise, availablePromise]);
+      const activeExceptional = exceptionalResult.submissions || [];
       // SECURITY: Exclude cases that are already authorized or already in the exceptional workflow
-      const available = (all || []).filter((candidate: any) =>
+      const available = (allResult.submissions || []).filter((candidate: any) =>
         candidate.status !== KYC_STATUS.APPROVED &&
         !activeExceptional.some((existing: any) => existing.id === candidate.id)
       );
       setSubmissions(activeExceptional);
+      setTotalCount(exceptionalResult.total || 0);
       setAvailableCases(available);
     } catch (error) {
     } finally {
@@ -98,7 +105,7 @@ export default function ExceptionalCasesPage() {
 
   useEffect(() => {
     loadData();
-  }, [user, isAdmin, isDistrictDirector, isGlobalGovernanceReviewer]);
+  }, [user, isAdmin, isDistrictDirector, isGlobalGovernanceReviewer, currentPage]);
 
   const selectedCase = useMemo(() => 
     availableCases.find(c => c.id === selectedCaseId), 
@@ -223,7 +230,19 @@ export default function ExceptionalCasesPage() {
           </div>
         </div>
       ) : (
-        <SubmissionsPageContent submissions={filteredSubmissions || []} />
+        <>
+          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          
+          {totalCount > ITEMS_PER_PAGE && (
+            <div className="mt-6">
+              <Pagination 
+                currentPage={currentPage}
+                totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
+        </>
       )}
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -7,23 +7,33 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Inbox, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
+import { Pagination } from "@/components/ui/pagination";
+
+const ITEMS_PER_PAGE = 10;
 
 export default function MySubmissionsPage() {
   const { user } = useAuth();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     async function loadData() {
       if (!user) return;
       setLoading(true);
-      const data = await getSubmissions({ submittedBy: user.id });
-      setSubmissions(data);
+      const result = await getSubmissions({ 
+        submittedBy: user.id,
+        limit: ITEMS_PER_PAGE,
+        offset: (currentPage - 1) * ITEMS_PER_PAGE 
+      });
+      setSubmissions(result.submissions || []);
+      setTotalCount(result.total || 0);
       setLoading(false);
     }
     loadData();
-  }, [user]);
+  }, [user, currentPage]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -65,7 +75,19 @@ export default function MySubmissionsPage() {
           <p className="font-bold text-muted-foreground">Retrieving personal vault...</p>
         </div>
       ) : (
-        <SubmissionsPageContent submissions={filteredSubmissions || []} />
+        <>
+          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          
+          {totalCount > ITEMS_PER_PAGE && (
+            <div className="mt-6">
+              <Pagination 
+                currentPage={currentPage}
+                totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

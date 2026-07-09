@@ -38,7 +38,7 @@ export default function SystemWideReportsPage() {
   const { isSuperAdmin } = usePermissions();
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<any[]>([]);
-  const [stats, setStats] = useState<{ total: number; approved: number; pending: number; unseen: number; accuracy: string; branches: { name: string; count: number }[] } | null>(null);
+  const [stats, setStats] = useState<{ total: number; approved: number; pending: number; unseen: number; resubmitted: number; accuracy: string; branches: { name: string; count: number }[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [reportDataActive, setReportDataActive] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -51,43 +51,47 @@ export default function SystemWideReportsPage() {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
-      const data = await getSubmissions(filters);
+      const result = await getSubmissions(filters);
       setReportDataActive(true);
 
-      if (!data || data.length === 0) {
+      if (!result.submissions || result.submissions.length === 0) {
         setSubmissions([]);
         setStats(null);
         return;
       }
 
-      setSubmissions(data);
+      setSubmissions(result.submissions);
 
       // All figures derive from the same record set so the cards, the accuracy
       // index, and the Branch Network throughput always reconcile exactly.
-      const approved = data.filter((s: any) => s.status === KYC_STATUS.APPROVED).length;
-      const actionRequired = data.filter((s: any) => s.status === KYC_STATUS.ACTION_REQUIRED).length;
-      const unseen = data.filter((s: any) => s.status === KYC_STATUS.SUBMITTED).length;
-      const pending = data.filter((s: any) => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length;
+      const approved = result.submissions.filter((s: any) => s.status === KYC_STATUS.APPROVED).length;
+      const actionRequired = result.submissions.filter((s: any) => s.status === KYC_STATUS.ACTION_REQUIRED).length;
+      // Fresh submissions only — a resubmitted case re-entering SUBMITTED isn't
+      // a never-seen case.
+      const unseen = result.submissions.filter((s: any) => s.status === KYC_STATUS.SUBMITTED && !s.isResubmitted).length;
+      const pending = result.submissions.filter((s: any) => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length;
+      const resubmitted = result.submissions.filter((s: any) => s.isResubmitted).length;
       const decided = approved + actionRequired;
 
-      const branches = data.reduce((acc: Record<string, number>, sub: any) => {
+      const branches = result.submissions.reduce((acc: Record<string, number>, sub: any) => {
         const name = sub.branchName || 'Unknown Branch';
         acc[name] = (acc[name] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
 
       setStats({
-        total: data.length,
+        total: result.submissions.length,
         approved,
         pending,
         unseen,
+        resubmitted,
         // Accuracy = authorized share of all decided cases (authorized + amendments).
         accuracy: decided > 0 ? ((approved / decided) * 100).toFixed(1) : '0.0',
         branches: Object.entries(branches).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
       });
       toast({
         title: "Compliance Report Ready",
-        description: `Analyzed ${data.length} system-wide records.`,
+        description: `Analyzed ${result.submissions.length} system-wide records.`,
       });
     } catch (e) {
       toast({ variant: "destructive", title: "Report Generation Failed" });
@@ -104,7 +108,7 @@ export default function SystemWideReportsPage() {
   const handleExportCSV = () => {
     if (!stats) return;
     const headers = ['Category', 'Value'];
-    const dataRows = [['Total Volume', stats.total], ['Approvals', stats.approved], ['Unseen', stats.unseen], ['Accuracy (%)', stats.accuracy]];
+    const dataRows = [['Total Volume', stats.total], ['Approvals', stats.approved], ['Unseen', stats.unseen], ['Resubmitted', stats.resubmitted], ['Accuracy (%)', stats.accuracy]];
     stats.branches.forEach(b => dataRows.push([`Branch: ${b.name}`, b.count]));
     const csvContent = [headers.join(','), ...dataRows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -165,11 +169,12 @@ export default function SystemWideReportsPage() {
         </Card>
       ) : (
         <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
              <Card className="bg-primary text-white shadow-2xl rounded-2xl overflow-hidden border-none"><CardHeader className="pb-2 bg-white/10"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-white/80">Total Volume</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-white tracking-tighter">{stats.total}</span></CardContent></Card>
              <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Total Approvals</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-emerald-600 tracking-tighter">{computedStats?.approved ?? 0}</span></CardContent></Card>
              <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Unseen Review</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-orange-600 tracking-tighter">{computedStats?.unseen ?? 0}</span></CardContent></Card>
              <Card className="shadow-lg border-slate-200 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Accuracy Index</CardTitle></CardHeader><CardContent className="pt-4"><span className="text-5xl font-black text-primary tracking-tighter">{computedStats?.accuracy ?? '0.0'}%</span></CardContent></Card>
+             <Card className="shadow-lg border-slate-200 border-l-4 border-l-purple-500 rounded-2xl bg-white overflow-hidden"><CardHeader className="pb-2 bg-slate-50"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-purple-600">Resubmitted</CardTitle></CardHeader><CardContent className="pt-4 flex items-center justify-between"><span className="text-5xl font-black text-purple-600 tracking-tighter">{computedStats?.resubmitted ?? 0}</span><div className="p-3 bg-purple-50 rounded-2xl text-purple-600"><RotateCcw className="w-6 h-6" /></div></CardContent></Card>
           </div>
           <Card className="shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
             <CardHeader className="bg-primary text-white border-b p-6 flex flex-row items-center justify-between">

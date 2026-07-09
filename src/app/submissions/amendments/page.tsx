@@ -8,13 +8,18 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
 import { usePermissions } from "@/hooks/use-permissions";
+import { Pagination } from "@/components/ui/pagination";
+
+const ITEMS_PER_PAGE = 10;
 
 export default function AmendmentReviewPage() {
   const { user } = useAuth();
-  const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
+  const { isSuperAdmin } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const isAdmin = isSuperAdmin;
 
@@ -23,16 +28,19 @@ export default function AmendmentReviewPage() {
       if (!user) return;
       setLoading(true);
       const assignedBranches = user.assignedBranches || [];
-      const data = await getSubmissions({
+      const result = await getSubmissions({
         isResubmitted: true,
         branches: !isAdmin && assignedBranches.length > 0 ? assignedBranches :
-          (!isAdmin && assignedBranches.length === 0 && user.branchName ? [user.branchName] : undefined)
+          (!isAdmin && assignedBranches.length === 0 && user.branchName ? [user.branchName] : undefined),
+        limit: ITEMS_PER_PAGE,
+        offset: (currentPage - 1) * ITEMS_PER_PAGE
       });
-      setSubmissions(data);
+      setSubmissions(result.submissions);
+      setTotalCount(result.total);
       setLoading(false);
     }
     loadData();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, currentPage]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -42,17 +50,22 @@ export default function AmendmentReviewPage() {
     );
   }, [submissions, searchTerm]);
 
-  if (permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-40 gap-4">
+      <Loader2 className="w-10 h-10 animate-spin text-primary" />
+      <p className="font-black text-muted-foreground uppercase tracking-widest text-[10px]">Loading amendment queue...</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <History className="w-8 h-8 text-primary" />
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Amendment Review</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground text-lg">Prioritized queue for resubmitted cases.</p>
             {isAdmin ? (
               <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
@@ -89,7 +102,19 @@ export default function AmendmentReviewPage() {
           <p className="font-medium">Synchronizing amendment queue...</p>
         </div>
       ) : (
-        <SubmissionsPageContent submissions={filteredSubmissions || []} />
+        <>
+          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          
+          {totalCount > ITEMS_PER_PAGE && (
+            <div className="mt-6">
+              <Pagination 
+                currentPage={currentPage}
+                totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

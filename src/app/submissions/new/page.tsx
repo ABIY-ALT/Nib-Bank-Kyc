@@ -287,6 +287,8 @@ export default function NewSubmission() {
   const [remarks, setRemarks] = useState("");
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [showDuplicateConfirmation, setShowDuplicateConfirmation] = useState(false);
+  const [existingCaseId, setExistingCaseId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadedFilesRef = useRef<UploadedFile[]>([]);
 
@@ -483,7 +485,7 @@ export default function NewSubmission() {
     uploadedFiles.length,
   ]);
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent, bypassDuplicate: boolean = false) => {
     event.preventDefault();
     if (!user || isSubmitting) return;
 
@@ -555,6 +557,9 @@ export default function NewSubmission() {
       formData.append("branchName", branchName);
       formData.append("districtName", user.districtName || "Central");
       formData.append("remarks", remarks);
+      if (bypassDuplicate) {
+        formData.append("bypassDuplicateCheck", "true");
+      }
 
       uploadedFiles.forEach((file) => {
         formData.append("files", file.file);
@@ -567,7 +572,12 @@ export default function NewSubmission() {
         toast({ title: "Successful", description: `Case ${result.kyc.id} dispatched for review.` });
         router.push("/submissions/my");
       } else {
-        throw new Error(result.error);
+        if ((result as any).duplicateFound) {
+          setExistingCaseId((result as any).existingCaseId);
+          setShowDuplicateConfirmation(true);
+        } else {
+          throw new Error(result.error);
+        }
       }
     } catch (error: any) {
       toast({
@@ -625,7 +635,7 @@ export default function NewSubmission() {
         <Shield className="h-8 w-8 text-primary" />
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6 pb-12">
+      <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6 pb-12">
         <Card className="overflow-hidden border-slate-200 shadow-sm">
           <CardHeader className="border-b bg-primary text-white">
             <CardTitle className="flex items-center gap-2 text-xl text-white">
@@ -813,6 +823,36 @@ export default function NewSubmission() {
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Dispatch for Review
             </Button>
+
+            {/* Duplicate Submission Confirmation Dialog */}
+            <Dialog open={showDuplicateConfirmation} onOpenChange={setShowDuplicateConfirmation}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Duplicate Case Found</DialogTitle>
+                  <DialogDescription>
+                    A KYC case already exists for this customer with the same account classification.
+                    Case ID: <span className="font-bold">{existingCaseId}</span>
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-4 mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDuplicateConfirmation(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={async (e) => {
+                      await handleSubmit(e as any, true);
+                      setShowDuplicateConfirmation(false);
+                    }}
+                    className="bg-primary"
+                  >
+                    Continue Submission
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </CardFooter>
         </Card>
       </form>

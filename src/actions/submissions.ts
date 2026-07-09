@@ -28,6 +28,8 @@ import {
   getNormalizedRole,
   hasJurisdictionalAccess,
   isSaturdayNow,
+  isLateHourNow,
+  isLunchBreakNow,
   DISTRICT_DIRECTOR_ROLE,
   GLOBAL_SCOPE_PERMISSIONS,
   PORTFOLIO_SCOPE_PERMISSIONS,
@@ -205,10 +207,14 @@ function formatKYC(kyc: any) {
 async function buildJurisdictionalFilter(session: any, requestedDistrict?: string, requestedBranches: string[] = []) {
   if (session.role === 'SUPER_ADMIN') {
     let filter: any = {};
-    if (requestedDistrict) filter.districtName = requestedDistrict;
+    // Case-insensitive on both branches, matching the non-admin path below —
+    // otherwise a dashboard card (case-insensitive count) and the Case Archive
+    // it links to (also case-insensitive) could silently disagree with a
+    // third caller that happened to pass slightly different casing.
+    if (requestedDistrict) filter.districtName = { equals: requestedDistrict, mode: 'insensitive' };
     if (requestedBranches.length > 0) {
       filter.branchName = requestedBranches.length === 1
-        ? normalizeBranchName(requestedBranches[0])
+        ? { equals: normalizeBranchName(requestedBranches[0]), mode: 'insensitive' }
         : { in: requestedBranches.map((branch) => normalizeBranchName(branch)), mode: 'insensitive' };
     }
     return filter;
@@ -253,11 +259,11 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
   const isBranchScopeStaff = userPermissions.some(p => BRANCH_SCOPE_PERMISSIONS.has(p));
   const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch)).filter(Boolean);
 
-  // Saturday Configuration: this officer sees cases from all branches on Saturdays,
+  // Time-based Configuration: this officer sees cases from all branches based on schedule,
   // independent of their normal branch mappings.
-  if ((user as any).saturdayAllBranches && isSaturdayNow()) {
-    return {};
-  }
+  if ((user as any).saturdayAllBranches && isSaturdayNow()) return {};
+  if ((user as any).lateHourAllBranches && isLateHourNow()) return {};
+  if ((user as any).lunchBreakAllBranches && isLunchBreakNow()) return {};
 
   const isBranchLevelStaff = branchName && 
     isBranchScopeStaff && 
@@ -305,6 +311,7 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
 export async function getSubmissions(filters?: {
   status?: string[],
   district?: string,
+  branch?: string,
   branches?: string[],
   branchId?: string,
   submittedBy?: string,
@@ -319,19 +326,29 @@ export async function getSubmissions(filters?: {
   offset?: number
 }) {
   const session = await getServerSession();
-  if (!session) return [];
+  if (!session) return { submissions: [], total: 0 };
 
   try {
     const requestedDistrict = filters?.district;
-    const requestedBranches = filters?.branches || [];
+    // Accept a single `branch` alongside `branches` (mirrors getCaseMetrics) — several
+    // callers only set the singular field, which this function used to silently ignore.
+    const requestedBranches = filters?.branches || (filters?.branch ? [filters.branch] : []);
     
-    const dateFilter = filters?.startDate ? {
-      gte: new Date(filters.startDate),
-      lte: filters.endDate ? new Date(filters.endDate) : undefined
-    } : undefined;
+    const dateFilter = filters?.startDate || filters?.endDate ? (() => {
+        const filter: any = {};
+        if (filters.startDate) {
+          filter.gte = new Date(filters.startDate);
+        }
+        if (filters.endDate) {
+          const endDate = new Date(filters.endDate);
+          endDate.setHours(23, 59, 59, 999);
+          filter.lte = endDate;
+        }
+        return filter;
+      })() : undefined;
 
     const jurisdictionalFilter = await buildJurisdictionalFilter(session, requestedDistrict, requestedBranches);
-    if (jurisdictionalFilter === null) return [];
+    if (jurisdictionalFilter === null) return { submissions: [], total: 0 };
 
     const user = await prisma.user.findUnique({
       where: { id: session.id },
@@ -396,18 +413,21 @@ export async function getSubmissions(filters?: {
       );
     }
 
-    const data = await prisma.kYC.findMany({
-      where,
-      include: {
-        createdBy: true,
-        assignedTo: true,
-        branch: { include: { district: true } },
-        memos: true
-      },
-      orderBy: { submittedAt: 'desc' },
-      take: filters?.limit || 5000,
-      skip: filters?.offset || 0,
-    });
+    const [data, total] = await Promise.all([
+      prisma.kYC.findMany({
+        where,
+        include: {
+          createdBy: true,
+          assignedTo: true,
+          branch: { include: { district: true } },
+          memos: true
+        },
+        orderBy: { submittedAt: 'desc' },
+        take: filters?.limit || 5000,
+        skip: filters?.offset || 0,
+      }),
+      prisma.kYC.count({ where })
+    ]);
 
     // Defense-in-depth branch validation (skipped for officers: their OR clause already
     // guarantees they only see assigned cases or portfolio-branch cases).
@@ -434,13 +454,19 @@ export async function getSubmissions(filters?: {
         return true;
       });
 
-      return filtered.map((item: any) => formatKYC(item));
+      return {
+        submissions: filtered.map((item: any) => formatKYC(item)),
+        total
+      };
     }
 
-    return data.map((item: any) => formatKYC(item));
+    return {
+      submissions: data.map((item: any) => formatKYC(item)),
+      total
+    };
   } catch (error) {
     logInstitutionalError(error, 'DB_QUERY_SUBMISSIONS');
-    return [];
+    return { submissions: [], total: 0 };
   }
 }
 
@@ -489,10 +515,18 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
     return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0, performanceIndex: 100 };
   }
 
-  const dateFilter = filters?.startDate ? {
-    gte: new Date(filters.startDate),
-    lte: filters?.endDate ? new Date(filters.endDate) : undefined
-  } : undefined;
+  const dateFilter = filters?.startDate || filters?.endDate ? (() => {
+    const filter: any = {};
+    if (filters.startDate) {
+      filter.gte = new Date(filters.startDate);
+    }
+    if (filters.endDate) {
+      const endDate = new Date(filters.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      filter.lte = endDate;
+    }
+    return filter;
+  })() : undefined;
 
   const statusFilter = filters?.status
     ? Array.isArray(filters.status)
@@ -543,15 +577,23 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
     // mapped KYC Officer opens it, which transitions it to IN_REVIEW. This keeps
     // counts identical for every viewer and ensures stats only move when the
     // mapped officer acts on a case.
+    // Total must match what getSubmissions() (and the Case Archive it feeds) would
+    // return for the same filters — same isExceptional default (false unless the
+    // caller explicitly asked for exceptional cases) and no status restriction.
+    const totalWhere = filters?.isExceptional !== undefined ? where : { ...where, isExceptional: false };
     const [rawTotal, authorized, needAmendment, running, viewed, resubmitted, escalated, exceptional, pending, unseen] = await Promise.all([
-      prisma.kYC.count({ where }),
+      prisma.kYC.count({ where: totalWhere }),
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.APPROVED, isExceptional: false } }),
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ACTION_REQUIRED, isExceptional: false } }),
+      // Resubmitted cases must not inflate "In Review" — a case that was returned
+      // for amendment and came back is a distinct workflow from a fresh case being
+      // reviewed for the first time.
       prisma.kYC.count({
         where: {
           ...where,
           status: KYC_STATUS.IN_REVIEW,
           isExceptional: false,
+          isResubmitted: false,
           ...ACTIVE_REVIEW_ASSIGNEE_FILTER,
         },
       }),
@@ -560,18 +602,20 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ESCALATED, isExceptional: false } }),
       prisma.kYC.count({ where: { ...where, isExceptional: true } }),
       prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isExceptional: false } }),
-      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.SUBMITTED, isExceptional: false } })
+      // "Unseen" must only reflect fresh submissions — a resubmitted case re-enters
+      // at SUBMITTED but is not a brand-new, never-seen case.
+      prisma.kYC.count({ where: { ...where, status: KYC_STATUS.SUBMITTED, isExceptional: false, isResubmitted: false } })
     ]);
 
     // NEW: Refined Performance Calculation Rule
     // Formula: (Authorized + Amendment) / (Authorized + Amendment + Unseen) * 100
-    // Total shown also only considers these three.
-    
+    // This index intentionally only weighs these three buckets — it is a quality
+    // score, not a case count, so it stays separate from `total` below.
     const unseenTotal = pending - running; // pending includes SUBMITTED and IN_REVIEW
     const denominator = authorized + needAmendment + unseenTotal;
     const numerator = authorized + needAmendment;
     const performanceIndex = denominator > 0 ? Math.round((numerator / denominator) * 100) : 100;
-    const total = denominator;
+    const total = rawTotal;
 
     return { total, authorized, needAmendment, unseen, running, viewed, resubmitted, escalated, exceptional, pending, performanceIndex };
   } catch (error) {
@@ -681,10 +725,29 @@ export async function createSubmission(formData: FormData) {
 
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
+    const bypassDuplicateCheck = formData.get('bypassDuplicateCheck') === 'true';
+
+    // Check for duplicate submission with same customer name and account classification
+    const existingCase = await prisma.kYC.findFirst({
+      where: {
+        customerName: validated.customerName,
+        entityType: validated.entityType,
+        active: true
+      }
+    });
+
+    if (existingCase && !bypassDuplicateCheck) {
+      return {
+        success: false as const,
+        error: `A KYC case already exists for ${validated.customerName} with the same account classification (Case ID: ${existingCase.id}).`,
+        duplicateFound: true,
+        existingCaseId: existingCase.id
+      };
+    }
 
     // SECURITY: File upload validation (A05:2021 - Security Misconfiguration)
-    // 1. Validate file count
-    const fileCountValidation = validateFileCount(files.length);
+    // 1. Validate file count (require minimum for initial submission)
+    const fileCountValidation = validateFileCount(files.length, true);
     if (!fileCountValidation.valid) {
       return { success: false as const, error: fileCountValidation.error };
     }
@@ -1099,7 +1162,11 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
         assignedToId: isMappedOfficer ? session.id : current.assignedToId,
         updatedAt: new Date(),
         commentHistory: updatedHistory,
-        isResubmitted: status === KYC_STATUS.SUBMITTED && current.status === KYC_STATUS.ACTION_REQUIRED,
+        // Preserve whatever resubmitSubmission() set — this function used to
+        // recompute isResubmitted from the transition being made here, which wiped
+        // it back to false the instant a resubmitted case was opened for review
+        // (SUBMITTED -> IN_REVIEW), silently losing the distinction downstream.
+        isResubmitted: current.isResubmitted,
         amendCycles: status === KYC_STATUS.ACTION_REQUIRED ? { increment: 1 } : undefined
       }
     });
@@ -1385,17 +1452,21 @@ export async function getWorkflowCounts() {
       }),
       prisma.kYC.groupBy({
         by: ['status'],
-        where: { ...jurisdictionalFilter, active: true, isExceptional: false },
+        // Excludes resubmitted cases so the SUBMITTED bucket (consumed below as
+        // `reviewQueue`) only reflects fresh, never-seen submissions.
+        where: { ...jurisdictionalFilter, active: true, isExceptional: false, isResubmitted: false },
         _count: true
       }),
       // Status-driven: a case is "unseen" until the mapped officer opens it
       // (open transitions SUBMITTED -> IN_REVIEW), regardless of who is viewing.
+      // Resubmitted cases re-enter at SUBMITTED but are not fresh/never-seen.
       prisma.kYC.count({
         where: {
           ...jurisdictionalFilter,
           status: KYC_STATUS.SUBMITTED,
           active: true,
-          isExceptional: false
+          isExceptional: false,
+          isResubmitted: false
         }
       }),
       prisma.kYC.count({
@@ -1427,12 +1498,14 @@ export async function getWorkflowCounts() {
       // In Review count restricted to cases actively assigned to a front-line
       // reviewer (KYC Officer / Review & Action permission) — excludes Super Admin
       // and other viewers, and drops to 0 once the case is actioned (status leaves
-      // IN_REVIEW on amendment / authorize / escalate).
+      // IN_REVIEW on amendment / authorize / escalate). Also excludes resubmitted
+      // cases, which are a distinct workflow from a fresh case under first review.
       prisma.kYC.count({
         where: {
           ...jurisdictionalFilter,
           status: KYC_STATUS.IN_REVIEW,
           isExceptional: false,
+          isResubmitted: false,
           active: true,
           ...ACTIVE_REVIEW_ASSIGNEE_FILTER,
         }

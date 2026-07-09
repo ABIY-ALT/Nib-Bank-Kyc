@@ -21,9 +21,9 @@ async function getFollowUpAccess() {
 }
 
 /**
- * Retrieves follow-up verifications with optional date filtering.
+ * Retrieves follow-up verifications with optional date filtering and pagination.
  */
-export async function getFollowUpVerifications(filters?: { startDate?: string; endDate?: string }) {
+export async function getFollowUpVerifications(filters?: { startDate?: string; endDate?: string; limit?: number; offset?: number }) {
   try {
     const { canWorkPool, canViewLogs } = await getFollowUpAccess();
     if (!canWorkPool && !canViewLogs) {
@@ -38,21 +38,35 @@ export async function getFollowUpVerifications(filters?: { startDate?: string; e
       dateFilter = { gte: start, lte: end };
     }
 
-    return await prisma.followUpVerification.findMany({
-      where: {
-        verifiedAt: dateFilter
-      },
-      orderBy: { verifiedAt: 'desc' }
-    });
+    const where = { verifiedAt: dateFilter };
+
+    const [verifications, total] = await Promise.all([
+      prisma.followUpVerification.findMany({
+        where,
+        include: {
+          kyc: {
+            include: {
+              assignedTo: true
+            }
+          }
+        },
+        orderBy: { verifiedAt: 'desc' },
+        take: filters?.limit || 100,
+        skip: filters?.offset || 0
+      }),
+      prisma.followUpVerification.count({ where })
+    ]);
+
+    return { verifications, total };
   } catch (error) {
-    return [];
+    return { verifications: [], total: 0 };
   }
 }
 
 export async function getFollowUpById(id: string) {
   try {
-    const { canWorkPool } = await getFollowUpAccess();
-    if (!canWorkPool) {
+    const { canWorkPool, canViewLogs } = await getFollowUpAccess();
+    if (!canWorkPool && !canViewLogs) {
       throw new Error('Unauthorized');
     }
 

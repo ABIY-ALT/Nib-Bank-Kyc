@@ -460,6 +460,124 @@ export async function setAllSaturdayVisibility(userIds: string[], enabled: boole
   }
 }
 
+export async function setLateHourVisibility(userId: string, enabled: boolean) {
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
+  if (!userId) return { error: 'Please select an officer.' };
+
+  try {
+    const target = await prisma.user.update({
+      where: { id: userId },
+      data: { lateHourAllBranches: enabled },
+      select: { firstName: true, lastName: true },
+    });
+
+    await createAuditLog({
+      userId: actor.id,
+      userEmail: actor.email,
+      userName: actor.name,
+      action: enabled ? 'LATE_HOUR_VISIBILITY_ENABLE' : 'LATE_HOUR_VISIBILITY_DISABLE',
+      details: `${enabled ? 'Enabled' : 'Disabled'} Late Hour all-branch visibility for ${target.firstName} ${target.lastName}.`,
+      severity: 'MEDIUM',
+    });
+
+    revalidatePath('/admin/assignments');
+    return { ok: true };
+  } catch (error: any) {
+    logInstitutionalError(error, 'DB_SET_LATE_HOUR_VISIBILITY');
+    return { error: 'Something went wrong while updating Late Hour visibility. Please try again.' };
+  }
+}
+
+export async function setAllLateHourVisibility(userIds: string[], enabled: boolean) {
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
+  if (!userIds || userIds.length === 0) return { error: 'Please select at least one officer.' };
+
+  try {
+    await prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { lateHourAllBranches: enabled },
+    });
+
+    await createAuditLog({
+      userId: actor.id,
+      userEmail: actor.email,
+      userName: actor.name,
+      action: enabled ? 'LATE_HOUR_VISIBILITY_ENABLE_ALL' : 'LATE_HOUR_VISIBILITY_DISABLE_ALL',
+      details: `${enabled ? 'Enabled' : 'Disabled'} Late Hour all-branch visibility for ${userIds.length} officer(s).`,
+      severity: 'HIGH',
+    });
+
+    revalidatePath('/admin/assignments');
+    return { ok: true };
+  } catch (error: any) {
+    logInstitutionalError(error, 'DB_SET_ALL_LATE_HOUR_VISIBILITY');
+    return { error: 'Something went wrong while updating Late Hour visibility for all officers. Please try again.' };
+  }
+}
+
+export async function setLunchBreakVisibility(userId: string, enabled: boolean) {
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
+  if (!userId) return { error: 'Please select an officer.' };
+
+  try {
+    const target = await prisma.user.update({
+      where: { id: userId },
+      data: { lunchBreakAllBranches: enabled },
+      select: { firstName: true, lastName: true },
+    });
+
+    await createAuditLog({
+      userId: actor.id,
+      userEmail: actor.email,
+      userName: actor.name,
+      action: enabled ? 'LUNCH_BREAK_VISIBILITY_ENABLE' : 'LUNCH_BREAK_VISIBILITY_DISABLE',
+      details: `${enabled ? 'Enabled' : 'Disabled'} Lunch Break all-branch visibility for ${target.firstName} ${target.lastName}.`,
+      severity: 'MEDIUM',
+    });
+
+    revalidatePath('/admin/assignments');
+    return { ok: true };
+  } catch (error: any) {
+    logInstitutionalError(error, 'DB_SET_LUNCH_BREAK_VISIBILITY');
+    return { error: 'Something went wrong while updating Lunch Break visibility. Please try again.' };
+  }
+}
+
+export async function setAllLunchBreakVisibility(userIds: string[], enabled: boolean) {
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
+  if (!userIds || userIds.length === 0) return { error: 'Please select at least one officer.' };
+
+  try {
+    await prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { lunchBreakAllBranches: enabled },
+    });
+
+    await createAuditLog({
+      userId: actor.id,
+      userEmail: actor.email,
+      userName: actor.name,
+      action: enabled ? 'LUNCH_BREAK_VISIBILITY_ENABLE_ALL' : 'LUNCH_BREAK_VISIBILITY_DISABLE_ALL',
+      details: `${enabled ? 'Enabled' : 'Disabled'} Lunch Break all-branch visibility for ${userIds.length} officer(s).`,
+      severity: 'HIGH',
+    });
+
+    revalidatePath('/admin/assignments');
+    return { ok: true };
+  } catch (error: any) {
+    logInstitutionalError(error, 'DB_SET_ALL_LUNCH_BREAK_VISIBILITY');
+    return { error: 'Something went wrong while updating Lunch Break visibility for all officers. Please try again.' };
+  }
+}
+
 export async function deleteMapping(id: string) {
   const auth = await requireMappingActor(true);
   if ('error' in auth) return auth;
@@ -489,6 +607,39 @@ export async function deleteMapping(id: string) {
   } catch (error: any) {
     logInstitutionalError(error, 'DB_DELETE_MAPPING');
     return { error: 'Something went wrong while deleting the mapping. Please try again.' };
+  }
+}
+
+export async function bulkDeleteMappings(ids: string[]) {
+  const auth = await requireMappingActor(true);
+  if ('error' in auth) return auth;
+  const actor = auth.actor;
+  const mappingIds = Array.from(new Set((ids ?? []).filter(Boolean)));
+  if (mappingIds.length === 0) return { count: 0 };
+
+  try {
+    const mappings = await prisma.branchMapping.findMany({
+      where: { id: { in: mappingIds } },
+      include: { branch: { select: { name: true } }, officers: { select: { userId: true } } },
+    });
+
+    const affected = Array.from(new Set(mappings.flatMap((m) => m.officers.map((o) => o.userId))));
+    await prisma.branchMapping.deleteMany({ where: { id: { in: mappingIds } } });
+    await recomputeAssignedBranches(affected);
+
+    await createAuditLog({
+      userId: actor.id,
+      userEmail: actor.email,
+      userName: actor.name,
+      action: 'BRANCH_MAPPING_BULK_DELETE',
+      details: `Deleted ${mappings.length} mappings for branches: ${mappings.map((m) => m.branch?.name).join(', ')}.`,
+    });
+
+    revalidatePath('/admin/assignments');
+    return { count: mappings.length };
+  } catch (error: any) {
+    logInstitutionalError(error, 'DB_BULK_DELETE_MAPPINGS');
+    return { error: 'Something went wrong while deleting mappings. Please try again.' };
   }
 }
 

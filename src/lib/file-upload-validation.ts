@@ -253,19 +253,8 @@ export function validateFile(
     };
   }
 
-  // 3. Validate file size (must match extension's max size)
-  const ext = filename.split('.').pop()?.toLowerCase();
-  const fileType = Object.values(ALLOWED_FILE_TYPES).find(ft =>
-    ft.extensions.includes(ext || '')
-  );
-
-  if (fileType && buffer.length > fileType.maxSizeBytes) {
-    const maxSizeMB = (fileType.maxSizeBytes / (1024 * 1024)).toFixed(2);
-    return {
-      valid: false,
-      error: `File size exceeds maximum of ${maxSizeMB} MB`,
-    };
-  }
+  // 3. File size validation is now handled at the submission level (total combined size).
+  // Individual file size limits are no longer enforced.
 
   // 4. CRITICAL: Validate magic bytes (actual file content signature)
   const magicByteResult = validateFileMagicBytes(buffer);
@@ -395,10 +384,19 @@ export function validateTotalUploadSize(files: File[]): FileValidationResult {
 /**
  * Validates maximum number of files per submission
  * @param fileCount - Number of files
+ * @param isFirstSubmission - True if this is the initial submission
  * @returns Validation result
  */
-export function validateFileCount(fileCount: number): FileValidationResult {
+export function validateFileCount(fileCount: number, isFirstSubmission: boolean = false): FileValidationResult {
   const MAX_FILES = 20;
+  const MIN_FILES = 3;
+
+  if (isFirstSubmission && fileCount < MIN_FILES) {
+    return {
+      valid: false,
+      error: `Too few files. A minimum of ${MIN_FILES} files is required for the initial submission.`,
+    };
+  }
 
   if (fileCount > MAX_FILES) {
     return {

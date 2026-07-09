@@ -132,7 +132,7 @@ export default function MasterBundleDownloadPage() {
         getBranches(),
         getDistricts()
       ]);
-      setAllSubmissions(subs);
+      setAllSubmissions(subs.submissions);
       setBranches(b);
       setDistricts(d);
     } catch (e) {

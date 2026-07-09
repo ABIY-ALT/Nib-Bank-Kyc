@@ -77,6 +77,50 @@ export function isSaturdayNow(date: Date = new Date()): boolean {
 }
 
 /**
+ * Whether "now" is during late hours (e.g., after 5 PM or before 8 AM)
+ * Used by the per-officer Late Hour all-branch visibility configuration.
+ */
+export function isLateHourNow(date: Date = new Date()): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: 'Africa/Addis_Ababa',
+    }).formatToParts(date);
+    const hourStr = parts.find(p => p.type === 'hour')?.value;
+    if (!hourStr) return false;
+    const hour = parseInt(hourStr, 10);
+    // Late hours: before 8:00 AM or 5:00 PM (17:00) and after
+    return hour < 8 || hour >= 17;
+  } catch {
+    const hour = date.getHours();
+    return hour < 8 || hour >= 17;
+  }
+}
+
+/**
+ * Whether "now" is during lunch break (e.g., 12 PM - 2 PM)
+ * Used by the per-officer Lunch Break all-branch visibility configuration.
+ */
+export function isLunchBreakNow(date: Date = new Date()): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: 'Africa/Addis_Ababa',
+    }).formatToParts(date);
+    const hourStr = parts.find(p => p.type === 'hour')?.value;
+    if (!hourStr) return false;
+    const hour = parseInt(hourStr, 10);
+    // Lunch break: 12:00 PM to 2:00 PM (12:00 - 13:59)
+    return hour === 12 || hour === 13;
+  } catch {
+    const hour = date.getHours();
+    return hour === 12 || hour === 13;
+  }
+}
+
+/**
  * Checks if a user has jurisdictional access to a specific KYC case based on their permissions.
  */
 export function hasJurisdictionalAccess(user: any, userPermissions: string[], sessionId: string, kyc: any) {
@@ -90,10 +134,10 @@ export function hasJurisdictionalAccess(user: any, userPermissions: string[], se
     return true;
   }
 
-  // 1b. Saturday Configuration: officer can see every branch on Saturdays.
-  if (user?.saturdayAllBranches && isSaturdayNow()) {
-    return true;
-  }
+  // 1b. Time-based Configuration: officer can see every branch based on schedule.
+  if (user?.saturdayAllBranches && isSaturdayNow()) return true;
+  if (user?.lateHourAllBranches && isLateHourNow()) return true;
+  if (user?.lunchBreakAllBranches && isLunchBreakNow()) return true;
 
   // 2. Resolve Role Scopes
   const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');

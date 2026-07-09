@@ -274,9 +274,6 @@ Document Count:    ${fullSub?.documents?.length || 0}
             <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'branch' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('branch')}>
               Authorized Branch<SortIndicator field="branch" />
             </TableHead>
-            <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'status' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('status')}>
-              Workflow Status<SortIndicator field="status" />
-            </TableHead>
             <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'submittedAt' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('submittedAt')}>
               Dispatch Date<SortIndicator field="submittedAt" />
             </TableHead>
@@ -285,7 +282,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
         </TableHeader>
         <TableBody>
           {sortedSubmissions.length === 0 ? (
-            <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No cases found.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={5} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No cases found.</TableCell></TableRow>
           ) : sortedSubmissions.map((sub) => (
             <TableRow
               key={sub.id}
@@ -339,9 +336,8 @@ Document Count:    ${fullSub?.documents?.length || 0}
                   )}
                 </div>
               </TableCell>
-              <TableCell>{getStatusBadge(sub)}</TableCell>
               <TableCell className="text-slate-400 tabular-nums font-bold text-[10px] uppercase">
-                {format(new Date(sub.submittedAt), 'MMM dd, yyyy')}
+                {format(new Date(sub.submittedAt), 'MMM dd, yyyy HH:mm:ss')}
               </TableCell>
               <TableCell className="text-right pr-8">
                 <DropdownMenu>

@@ -114,9 +114,9 @@ export default function BranchReportsPage() {
           filters.district = undefined;
         }
       }
-      const data = await getSubmissions(filters);
-      setReportData(data || []);
-      toast({ title: "Report Generated", description: `Retrieved ${data.length} records.` });
+      const result = await getSubmissions(filters);
+      setReportData(result.submissions || []);
+      toast({ title: "Report Generated", description: `Retrieved ${result.submissions.length} records.` });
     } catch (e) {
       toast({ variant: "destructive", title: "Query Failed" });
     } finally {

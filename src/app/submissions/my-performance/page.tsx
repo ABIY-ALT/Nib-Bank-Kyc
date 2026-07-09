@@ -118,8 +118,8 @@ export default function MyCasesPerformancePage() {
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
 
-      const data = await getSubmissions(filters);
-      setSubmissions(data || []);
+      const result = await getSubmissions(filters);
+      setSubmissions(result.submissions || []);
     } catch (error) {
       toast({ variant: "destructive", title: "Unable to load data", description: "We couldn't load your cases right now. Please try again." });
     } finally {
@@ -169,10 +169,13 @@ export default function MyCasesPerformancePage() {
   }, [submissions, searchTerm, selectedBranch, selectedStatus, selectedType, user?.id]);
 
   const stats = useMemo(() => {
-    const running = filteredSubmissions.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;
+    // Resubmitted cases are a distinct workflow from a fresh case under first
+    // review, so they're excluded from both In Review and Unseen (Pending).
+    const running = filteredSubmissions.filter(s => s.status === KYC_STATUS.IN_REVIEW && !s.isResubmitted).length;
     const completed = filteredSubmissions.filter(s => s.status === KYC_STATUS.APPROVED).length;
     const amendment = filteredSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length;
-    const pending = filteredSubmissions.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
+    const pending = filteredSubmissions.filter(s => s.status === KYC_STATUS.SUBMITTED && !s.isResubmitted).length;
+    const resubmitted = filteredSubmissions.filter(s => s.isResubmitted).length;
 
     // REFINED: Only consider Authorize, Amendment, and Unseen (Pending) in total and performance
     const total = completed + amendment + pending;
@@ -186,7 +189,7 @@ export default function MyCasesPerformancePage() {
       branchBreakdown[s.branchName] = (branchBreakdown[s.branchName] || 0) + 1;
     });
 
-    return { total, running, completed, pending, amendment, performanceIndex, branchBreakdown };
+    return { total, running, completed, pending, amendment, resubmitted, performanceIndex, branchBreakdown };
   }, [filteredSubmissions]);
 
   const resetFilters = () => {
@@ -240,7 +243,7 @@ export default function MyCasesPerformancePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4">
         <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all rounded-2xl bg-white overflow-hidden">
           <CardHeader className="p-3 bg-slate-50/50 border-b flex flex-row items-center justify-between">
             <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Portfolio Active</span>
@@ -288,6 +291,16 @@ export default function MyCasesPerformancePage() {
           </CardHeader>
           <CardContent className="pt-4 pb-6">
             <div className="text-4xl font-black text-orange-600 tracking-tighter">{stats.amendment}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg border-slate-200 border-l-4 border-l-purple-500 rounded-2xl bg-white overflow-hidden">
+          <CardHeader className="p-3 bg-slate-50/50 border-b flex flex-row items-center justify-between">
+            <span className="text-[9px] font-black uppercase text-purple-600 tracking-widest">Resubmitted</span>
+            <RotateCcw className="w-3 h-3 text-purple-600" />
+          </CardHeader>
+          <CardContent className="pt-4 pb-6">
+            <div className="text-4xl font-black text-purple-600 tracking-tighter">{stats.resubmitted}</div>
           </CardContent>
         </Card>
 

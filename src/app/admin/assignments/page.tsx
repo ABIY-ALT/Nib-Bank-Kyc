@@ -35,7 +35,8 @@ import { SYSTEM_SECTION_COPY } from '@/lib/access-ui';
 import {
   getBranchMappings, createMapping, updateMapping, setMappingActive, setMappingsActive,
   deleteMapping, setPrimaryOfficer, addOfficers, removeOfficer, setSaturdayVisibility,
-  reassignAllOfficerBranches, setAllSaturdayVisibility,
+  reassignAllOfficerBranches, setAllSaturdayVisibility, setLateHourVisibility, setAllLateHourVisibility,
+  setLunchBreakVisibility, setAllLunchBreakVisibility, bulkDeleteMappings,
 } from '@/actions/branch-mappings';
 import { getAllUsers } from '@/actions/users';
 import { getBranches } from '@/actions/hierarchy';
@@ -397,19 +398,24 @@ function SingleOfficerPicker({
 
 function OfficerAccordionRow({
   officerEntry, canManage,
-  onAddBranch, onToggleMappings, onToggleSaturday,
+  onAddBranch, onToggleMappings, onToggleSaturday, onToggleLateHour, onToggleLunchBreak,
   onEdit, onToggleActive, onManageOfficers, onDelete, onMassReassign,
+  selectedMappingIds, onSelectMapping,
 }: {
   officerEntry: { officer: any; mappings: any[] };
   canManage: boolean;
   onAddBranch: (officerId: string) => void;
   onToggleMappings: (officer: any, mappings: any[], activate: boolean) => void;
   onToggleSaturday: (userId: string, enabled: boolean) => void;
+  onToggleLateHour: (userId: string, enabled: boolean) => void;
+  onToggleLunchBreak: (userId: string, enabled: boolean) => void;
   onEdit: (m: any) => void;
   onToggleActive: (m: any) => void;
   onManageOfficers: (m: any) => void;
   onDelete: (m: any) => void;
   onMassReassign: (officer: any) => void;
+  selectedMappingIds: string[];
+  onSelectMapping: (mappingId: string, selected: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [sortField, setSortField] = useState<'branch' | 'district' | 'type' | 'role' | 'status'>('branch');
@@ -420,6 +426,8 @@ function OfficerAccordionRow({
   const allActive = activeMappings.length === mappings.length;
   const noneActive = activeMappings.length === 0;
   const satOn = officer.saturdayAllBranches;
+  const lateOn = officer.lateHourAllBranches;
+  const lunchOn = officer.lunchBreakAllBranches;
 
   const sortedMappings = useMemo(() => {
     return [...mappings].sort((a, b) => {
@@ -488,6 +496,16 @@ function OfficerAccordionRow({
               <Sun className="w-2.5 h-2.5" /> Sat
             </Badge>
           )}
+          {lateOn && (
+            <Badge className="bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-black uppercase gap-1">
+              Late
+            </Badge>
+          )}
+          {lunchOn && (
+            <Badge className="bg-orange-50 text-orange-700 border border-orange-200 text-[9px] font-black uppercase gap-1">
+              Lunch
+            </Badge>
+          )}
           {noneActive ? (
             <Badge className="bg-slate-100 text-slate-500 border border-slate-200 text-[9px] font-black uppercase">Inactive</Badge>
           ) : allActive ? (
@@ -516,15 +534,28 @@ function OfficerAccordionRow({
               </div>
               <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
                 <Sun className="w-3.5 h-3.5 text-amber-500" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Saturday All-Branch</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Saturday</span>
                 <Switch
                   checked={satOn}
                   onCheckedChange={(checked) => onToggleSaturday(officer.id, checked)}
                   className="data-[state=checked]:bg-amber-500"
                 />
-                <span className={cn('text-xs font-bold', satOn ? 'text-amber-600' : 'text-slate-400')}>
-                  {satOn ? 'On' : 'Off'}
-                </span>
+              </div>
+              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Late Hour</span>
+                <Switch
+                  checked={lateOn}
+                  onCheckedChange={(checked) => onToggleLateHour(officer.id, checked)}
+                  className="data-[state=checked]:bg-purple-500"
+                />
+              </div>
+              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Lunch Break</span>
+                <Switch
+                  checked={lunchOn}
+                  onCheckedChange={(checked) => onToggleLunchBreak(officer.id, checked)}
+                  className="data-[state=checked]:bg-orange-500"
+                />
               </div>
               <Button
                 variant="outline" size="sm"
@@ -550,6 +581,16 @@ function OfficerAccordionRow({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
+                    {canManage && <th className="px-4 py-2.5 w-12">
+                      <input
+                        type="checkbox"
+                        checked={mappings.every(m => selectedMappingIds.includes(m.id))}
+                        onChange={(e) => {
+                          mappings.forEach(m => onSelectMapping(m.id, e.target.checked));
+                        }}
+                        className="rounded border-slate-300 text-primary focus:ring-primary"
+                      />
+                    </th>}
                     <th
                       className={cn(
                         "text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors group",
@@ -603,6 +644,15 @@ function OfficerAccordionRow({
                     const role = m.officers.find((o: any) => o.id === officer.id);
                     return (
                       <tr key={m.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+                        {canManage && <td className="px-4 py-3 w-12">
+                          <input
+                            type="checkbox"
+                            checked={selectedMappingIds.includes(m.id)}
+                            onChange={(e) => onSelectMapping(m.id, e.target.checked)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="rounded border-slate-300 text-primary focus:ring-primary"
+                          />
+                        </td>}
                         <td className="px-4 py-3 font-bold text-slate-900">{m.branchName}</td>
                         <td className="px-4 py-3 text-slate-500 font-medium text-xs">{m.districtName || '—'}</td>
                         <td className="px-4 py-3">
@@ -693,6 +743,9 @@ export default function BranchMappingPage() {
   const [massReassignTarget, setMassReassignTarget] = useState<any | null>(null);
   const [massReassignNewId, setMassReassignNewId] = useState('');
   const [massReassigning, setMassReassigning] = useState(false);
+  const [selectedMappingIds, setSelectedMappingIds] = useState<string[]>([]);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // create form — officerIds[0] = primary, rest = additional
   const [createForm, setCreateForm] = useState({
@@ -714,6 +767,14 @@ export default function BranchMappingPage() {
   // saturday
   const [saturdayPickerId, setSaturdayPickerId] = useState('');
   const [saturdayBusy, setSaturdayBusy] = useState<string | null>(null);
+
+  // late hour
+  const [lateHourPickerId, setLateHourPickerId] = useState('');
+  const [lateHourBusy, setLateHourBusy] = useState<string | null>(null);
+
+  // lunch break
+  const [lunchBreakPickerId, setLunchBreakPickerId] = useState('');
+  const [lunchBreakBusy, setLunchBreakBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -775,6 +836,14 @@ export default function BranchMappingPage() {
 
   const saturdayEnabledOfficers = useMemo(() =>
     officers.filter((o: any) => (allUsers.find((u: any) => u.id === o.id) as any)?.saturdayAllBranches),
+  [officers, allUsers]);
+
+  const lateHourEnabledOfficers = useMemo(() =>
+    officers.filter((o: any) => (allUsers.find((u: any) => u.id === o.id) as any)?.lateHourAllBranches),
+  [officers, allUsers]);
+
+  const lunchBreakEnabledOfficers = useMemo(() =>
+    officers.filter((o: any) => (allUsers.find((u: any) => u.id === o.id) as any)?.lunchBreakAllBranches),
   [officers, allUsers]);
 
   // ── InlineSelect option lists ──
@@ -953,6 +1022,62 @@ export default function BranchMappingPage() {
     }
   };
 
+  const handleLateHourToggle = async (userId: string, enabled: boolean) => {
+    setLateHourBusy(userId);
+    try {
+      unwrapAction(await setLateHourVisibility(userId, enabled));
+      const officerName = formatName(allUsers.find((u: any) => u.id === userId) || {});
+      toast({ title: `Late Hour all-branch visibility ${enabled ? 'enabled' : 'disabled'} for ${officerName}.` });
+      await load();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Action failed', description: e.message });
+    } finally {
+      setLateHourBusy(null);
+    }
+  };
+
+  const handleBulkLateHour = async (enabled: boolean) => {
+    setLateHourBusy('ALL');
+    try {
+      const ids = officers.map((o) => o.id);
+      unwrapAction(await setAllLateHourVisibility(ids, enabled));
+      toast({ title: `All officers Late Hour visibility ${enabled ? 'enabled' : 'disabled'}.` });
+      await load();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Action failed', description: e.message });
+    } finally {
+      setLateHourBusy(null);
+    }
+  };
+
+  const handleLunchBreakToggle = async (userId: string, enabled: boolean) => {
+    setLunchBreakBusy(userId);
+    try {
+      unwrapAction(await setLunchBreakVisibility(userId, enabled));
+      const officerName = formatName(allUsers.find((u: any) => u.id === userId) || {});
+      toast({ title: `Lunch Break all-branch visibility ${enabled ? 'enabled' : 'disabled'} for ${officerName}.` });
+      await load();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Action failed', description: e.message });
+    } finally {
+      setLunchBreakBusy(null);
+    }
+  };
+
+  const handleBulkLunchBreak = async (enabled: boolean) => {
+    setLunchBreakBusy('ALL');
+    try {
+      const ids = officers.map((o) => o.id);
+      unwrapAction(await setAllLunchBreakVisibility(ids, enabled));
+      toast({ title: `All officers Lunch Break visibility ${enabled ? 'enabled' : 'disabled'}.` });
+      await load();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Action failed', description: e.message });
+    } finally {
+      setLunchBreakBusy(null);
+    }
+  };
+
   const handleMassReassign = async () => {
     if (!massReassignTarget || !massReassignNewId) return;
     setMassReassigning(true);
@@ -1096,6 +1221,16 @@ export default function BranchMappingPage() {
                 onChange={(e) => setBranchSearchQ(e.target.value)}
               />
             </div>
+            {canManage && selectedMappingIds.length > 0 && (
+              <Button
+                variant="outline"
+                className="h-10 px-4 rounded-xl font-black border-red-300 text-red-600 hover:bg-red-50 gap-2"
+                onClick={() => setBulkDeleteDialogOpen(true)}
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete {selectedMappingIds.length} Mapping{selectedMappingIds.length !== 1 ? 's' : ''}
+              </Button>
+            )}
           </div>
         </div>
         <div className="border rounded-2xl bg-white shadow-xl overflow-hidden border-slate-200">
@@ -1118,11 +1253,21 @@ export default function BranchMappingPage() {
                 onAddBranch={handleAddBranchForOfficer}
                 onToggleMappings={handleToggleMappings}
                 onToggleSaturday={handleSaturdayToggle}
+                onToggleLateHour={handleLateHourToggle}
+                onToggleLunchBreak={handleLunchBreakToggle}
                 onEdit={openEdit}
                 onToggleActive={handleToggleActive}
                 onManageOfficers={openOfficers}
                 onDelete={setDeleteTarget}
                 onMassReassign={setMassReassignTarget}
+                selectedMappingIds={selectedMappingIds}
+                onSelectMapping={(mappingId, selected) => {
+                  setSelectedMappingIds(prev => 
+                    selected 
+                      ? [...new Set([...prev, mappingId])] 
+                      : prev.filter(id => id !== mappingId)
+                  );
+                }}
               />
             ))
           )}
@@ -1263,6 +1408,286 @@ export default function BranchMappingPage() {
                           title="Disable Saturday access"
                         >
                           {saturdayBusy === o.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <PowerOff className="w-3 h-3" />}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          LATE HOUR CONFIGURATION
+      ══════════════════════════════════════════════════════════════════ */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays className="w-5 h-5 text-purple-500" />
+          <h2 className="text-xl font-black text-slate-900 tracking-tight">Late Hour Configuration</h2>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {canManage && (
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <div className="space-y-1">
+                  <CardTitle className="text-sm font-black text-slate-700 flex items-center gap-2">
+                    <Sun className="w-4 h-4 text-purple-500" />
+                    Grant All-Branch Access during Late Hours
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Selected officer will see cases from all branches after normal working hours.
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={lateHourBusy === 'ALL'}
+                    onClick={() => handleBulkLateHour(true)}
+                    className="h-8 px-3 rounded-lg font-black text-[10px] uppercase tracking-wider border-purple-200 text-purple-600 hover:bg-purple-50"
+                  >
+                    {lateHourBusy === 'ALL' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                    Enable All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={lateHourBusy === 'ALL'}
+                    onClick={() => handleBulkLateHour(false)}
+                    className="h-8 px-3 rounded-lg font-black text-[10px] uppercase tracking-wider border-slate-200 text-slate-500 hover:bg-slate-50"
+                  >
+                    {lateHourBusy === 'ALL' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <PowerOff className="w-3 h-3 mr-1" />}
+                    Disable All
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <SingleOfficerPicker
+                  officers={officers}
+                  value={lateHourPickerId}
+                  onChange={setLateHourPickerId}
+                  placeholder="Select KYC officer…"
+                />
+                {lateHourPickerId && (
+                  <div className="flex items-center justify-between bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
+                    <div>
+                      <p className="text-sm font-black text-purple-900">
+                        {formatName(officers.find((o) => o.id === lateHourPickerId) || {})}
+                      </p>
+                      <p className="text-[10px] font-bold text-purple-600 uppercase mt-0.5">
+                        Late Hour visibility: {(allUsers.find((u: any) => u.id === lateHourPickerId) as any)?.lateHourAllBranches ? 'Enabled' : 'Disabled'}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={lateHourBusy === lateHourPickerId}
+                        onClick={() => handleLateHourToggle(lateHourPickerId, true)}
+                        className={cn('h-8 px-4 rounded-lg font-black text-xs',
+                          (allUsers.find((u: any) => u.id === lateHourPickerId) as any)?.lateHourAllBranches
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-white border border-purple-300 text-purple-700 hover:bg-purple-50',
+                        )}
+                      >
+                        {lateHourBusy === lateHourPickerId ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Enable'}
+                      </Button>
+                      <Button
+                        size="sm" variant="outline"
+                        disabled={lateHourBusy === lateHourPickerId}
+                        onClick={() => handleLateHourToggle(lateHourPickerId, false)}
+                        className="h-8 px-4 rounded-lg font-black text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+                      >
+                        Disable
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-black text-slate-700 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-purple-500" />
+                Officers with Late Hour Access
+                {lateHourEnabledOfficers.length > 0 && (
+                  <Badge className="bg-purple-100 text-purple-700 border border-purple-200 font-black text-[9px] ml-1">
+                    {lateHourEnabledOfficers.length}
+                  </Badge>
+                )}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground font-medium">
+                These officers can see all branch cases after normal working hours.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {lateHourEnabledOfficers.length === 0 ? (
+                <div className="py-6 text-center">
+                  <Sun className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-muted-foreground">No Late Hour configuration active</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {lateHourEnabledOfficers.map((o: any) => (
+                    <div key={o.id} className="flex items-center gap-3 p-3 bg-purple-50 border border-purple-100 rounded-xl">
+                      <div className="w-8 h-8 rounded-full bg-purple-200 text-purple-800 flex items-center justify-center font-black text-sm flex-shrink-0">
+                        {o.firstName.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-sm text-purple-900 truncate">{formatName(o)}</p>
+                        <p className="text-[10px] font-bold text-purple-600 truncate">{o.email}</p>
+                      </div>
+                      {canManage && (
+                        <Button
+                          variant="ghost" size="sm"
+                          disabled={lateHourBusy === o.id}
+                          onClick={() => handleLateHourToggle(o.id, false)}
+                          className="h-7 w-7 rounded-full p-0 text-purple-500 hover:bg-purple-100 flex-shrink-0"
+                          title="Disable Late Hour access"
+                        >
+                          {lateHourBusy === o.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <PowerOff className="w-3 h-3" />}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          LUNCH BREAK CONFIGURATION
+      ══════════════════════════════════════════════════════════════════ */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays className="w-5 h-5 text-orange-500" />
+          <h2 className="text-xl font-black text-slate-900 tracking-tight">Lunch Break Configuration</h2>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {canManage && (
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <div className="space-y-1">
+                  <CardTitle className="text-sm font-black text-slate-700 flex items-center gap-2">
+                    <Sun className="w-4 h-4 text-orange-500" />
+                    Grant All-Branch Access during Lunch Breaks
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Selected officer will see cases from all branches during lunch break hours.
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={lunchBreakBusy === 'ALL'}
+                    onClick={() => handleBulkLunchBreak(true)}
+                    className="h-8 px-3 rounded-lg font-black text-[10px] uppercase tracking-wider border-orange-200 text-orange-600 hover:bg-orange-50"
+                  >
+                    {lunchBreakBusy === 'ALL' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                    Enable All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={lunchBreakBusy === 'ALL'}
+                    onClick={() => handleBulkLunchBreak(false)}
+                    className="h-8 px-3 rounded-lg font-black text-[10px] uppercase tracking-wider border-slate-200 text-slate-500 hover:bg-slate-50"
+                  >
+                    {lunchBreakBusy === 'ALL' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <PowerOff className="w-3 h-3 mr-1" />}
+                    Disable All
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <SingleOfficerPicker
+                  officers={officers}
+                  value={lunchBreakPickerId}
+                  onChange={setLunchBreakPickerId}
+                  placeholder="Select KYC officer…"
+                />
+                {lunchBreakPickerId && (
+                  <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+                    <div>
+                      <p className="text-sm font-black text-orange-900">
+                        {formatName(officers.find((o) => o.id === lunchBreakPickerId) || {})}
+                      </p>
+                      <p className="text-[10px] font-bold text-orange-600 uppercase mt-0.5">
+                        Lunch Break visibility: {(allUsers.find((u: any) => u.id === lunchBreakPickerId) as any)?.lunchBreakAllBranches ? 'Enabled' : 'Disabled'}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={lunchBreakBusy === lunchBreakPickerId}
+                        onClick={() => handleLunchBreakToggle(lunchBreakPickerId, true)}
+                        className={cn('h-8 px-4 rounded-lg font-black text-xs',
+                          (allUsers.find((u: any) => u.id === lunchBreakPickerId) as any)?.lunchBreakAllBranches
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-white border border-orange-300 text-orange-700 hover:bg-orange-50',
+                        )}
+                      >
+                        {lunchBreakBusy === lunchBreakPickerId ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Enable'}
+                      </Button>
+                      <Button
+                        size="sm" variant="outline"
+                        disabled={lunchBreakBusy === lunchBreakPickerId}
+                        onClick={() => handleLunchBreakToggle(lunchBreakPickerId, false)}
+                        className="h-8 px-4 rounded-lg font-black text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+                      >
+                        Disable
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-black text-slate-700 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-orange-500" />
+                Officers with Lunch Break Access
+                {lunchBreakEnabledOfficers.length > 0 && (
+                  <Badge className="bg-orange-100 text-orange-700 border border-orange-200 font-black text-[9px] ml-1">
+                    {lunchBreakEnabledOfficers.length}
+                  </Badge>
+                )}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground font-medium">
+                These officers can see all branch cases during lunch break hours.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {lunchBreakEnabledOfficers.length === 0 ? (
+                <div className="py-6 text-center">
+                  <Sun className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-muted-foreground">No Lunch Break configuration active</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {lunchBreakEnabledOfficers.map((o: any) => (
+                    <div key={o.id} className="flex items-center gap-3 p-3 bg-orange-50 border border-orange-100 rounded-xl">
+                      <div className="w-8 h-8 rounded-full bg-orange-200 text-orange-800 flex items-center justify-center font-black text-sm flex-shrink-0">
+                        {o.firstName.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-sm text-orange-900 truncate">{formatName(o)}</p>
+                        <p className="text-[10px] font-bold text-orange-600 truncate">{o.email}</p>
+                      </div>
+                      {canManage && (
+                        <Button
+                          variant="ghost" size="sm"
+                          disabled={lunchBreakBusy === o.id}
+                          onClick={() => handleLunchBreakToggle(o.id, false)}
+                          className="h-7 w-7 rounded-full p-0 text-orange-500 hover:bg-orange-100 flex-shrink-0"
+                          title="Disable Lunch Break access"
+                        >
+                          {lunchBreakBusy === o.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <PowerOff className="w-3 h-3" />}
                         </Button>
                       )}
                     </div>
@@ -1530,6 +1955,52 @@ export default function BranchMappingPage() {
                 <Button onClick={(e) => { e.preventDefault(); handleDelete(); }}
                   className="h-12 px-8 bg-destructive hover:bg-destructive/90 text-white font-black rounded-lg shadow-xl">
                   Delete
+                </Button>
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          BULK DELETE CONFIRMATION
+      ══════════════════════════════════════════════════════════════════ */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent className="max-w-[440px] rounded-xl p-0 overflow-hidden border-none shadow-2xl bg-[#FCFAF7]">
+          <div className="p-8 space-y-6">
+            <AlertDialogHeader className="space-y-3">
+              <AlertDialogTitle className="text-[26px] font-black text-slate-900 leading-tight">Delete {selectedMappingIds.length} mappings?</AlertDialogTitle>
+              <AlertDialogDescription className="text-base text-slate-600 leading-relaxed font-medium">
+                This will permanently remove {selectedMappingIds.length} selected mappings and unlink all assigned officers. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex flex-row items-center justify-end gap-3 pt-2">
+              <AlertDialogCancel asChild>
+                <Button variant="ghost" className="h-12 px-8 font-bold text-slate-500 hover:bg-black/5 rounded-lg">Cancel</Button>
+              </AlertDialogCancel>
+              <AlertDialogAction asChild>
+                <Button onClick={(e) => {
+                  e.preventDefault();
+                  const handleBulkDelete = async () => {
+                    setBulkDeleting(true);
+                    try {
+                      unwrapAction(await bulkDeleteMappings(selectedMappingIds));
+                      toast({ title: `Successfully deleted ${selectedMappingIds.length} mapping${selectedMappingIds.length !== 1 ? 's' : ''}!` });
+                      setSelectedMappingIds([]);
+                      setBulkDeleteDialogOpen(false);
+                      await load();
+                    } catch (err) {
+                      toast({ variant: 'destructive', title: 'Bulk delete failed', description: (err as Error).message });
+                    } finally {
+                      setBulkDeleting(false);
+                    }
+                  };
+                  handleBulkDelete();
+                }}
+                  disabled={bulkDeleting}
+                  className="h-12 px-8 bg-destructive hover:bg-destructive/90 text-white font-black rounded-lg shadow-xl">
+                  {bulkDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Delete {selectedMappingIds.length}
                 </Button>
               </AlertDialogAction>
             </AlertDialogFooter>

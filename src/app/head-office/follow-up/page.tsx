@@ -47,8 +47,8 @@ export default function FollowUpDashboard() {
       if (dateRange.to) filters.endDate = dateRange.to.toISOString();
     }
 
-    const data = await getFollowUpVerifications(filters);
-    setVerifications(data);
+    const result = await getFollowUpVerifications(filters);
+    setVerifications(result.verifications);
     setLoading(false);
   };
 

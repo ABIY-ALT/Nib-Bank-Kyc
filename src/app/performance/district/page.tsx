@@ -88,7 +88,7 @@ export default function DistrictPerformancePage() {
       await loadData();
     }
     loadInitial();
-  }, [user, isAdmin, isDistDir, selectedDistrict, dateRange]);
+  }, [user, isAdmin, isDistDir, selectedDistrict, selectedBranchFilter, dateRange]);
 
   const loadData = async () => {
     setLoading(true);
@@ -101,12 +101,19 @@ export default function DistrictPerformancePage() {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
+      // Summary cards must reflect the selected branch too, matching Management
+      // Reporting's behavior. The submissions fetch stays district-wide (no
+      // branch filter) so the Branch Matrix table and the branch dropdown
+      // options keep listing every branch in the district.
+      const metricsFilters = selectedBranchFilter !== 'all'
+        ? { ...filters, branch: selectedBranchFilter }
+        : filters;
       const [subs, dists, metrics] = await Promise.all([
         getSubmissions(filters),
         isAdmin ? getDistricts() : Promise.resolve([]),
-        getCaseMetrics(filters)
+        getCaseMetrics(metricsFilters)
       ]);
-      setSubmissions(subs || []);
+      setSubmissions(subs.submissions || []);
       setDistricts(dists || []);
       setSummaryStats(metrics);
     } catch (e) {
@@ -118,16 +125,18 @@ export default function DistrictPerformancePage() {
 
   const analytics = useMemo(() => {
     const stats = {
-      total: 0,
+      // True case count (getSubmissions already excludes exceptional cases by
+      // default) — matches getCaseMetrics().total and the Case Archive count for
+      // the same filters, instead of only summing three of the workflow statuses.
+      total: submissions.length,
       authorized: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
       amended: submissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
-      unseen: submissions.filter(s => s.status === KYC_STATUS.SUBMITTED).length,
+      // Fresh submissions only — a resubmitted case re-enters at SUBMITTED but
+      // isn't a never-seen case.
+      unseen: submissions.filter(s => s.status === KYC_STATUS.SUBMITTED && !s.isResubmitted).length,
       resubmitted: submissions.filter(s => s.isResubmitted).length,
       byBranch: {} as Record<string, any>
     };
-
-    // REFINED: Total only considers Authorized, Amended, and Unseen
-    stats.total = stats.authorized + stats.amended + stats.unseen;
 
     submissions.forEach(sub => {
       const bName = sub.branchName || 'Unmapped Branch';
@@ -135,19 +144,18 @@ export default function DistrictPerformancePage() {
         stats.byBranch[bName] = { total: 0, unseen: 0, authorized: 0, amended: 0, resubmitted: 0 };
       }
 
+      stats.byBranch[bName].total++;
+
       if (sub.status === KYC_STATUS.APPROVED) {
         stats.byBranch[bName].authorized++;
-        stats.byBranch[bName].total++;
       }
 
       if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
         stats.byBranch[bName].amended++;
-        stats.byBranch[bName].total++;
       }
 
-      if (sub.status === KYC_STATUS.SUBMITTED) {
+      if (sub.status === KYC_STATUS.SUBMITTED && !sub.isResubmitted) {
         stats.byBranch[bName].unseen++;
-        stats.byBranch[bName].total++;
       }
 
       if (sub.isResubmitted) {

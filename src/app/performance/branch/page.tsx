@@ -80,8 +80,8 @@ export default function BranchPerformancePage() {
       filters.startDate = dateRange.from.toISOString();
       if (dateRange.to) filters.endDate = dateRange.to.toISOString();
     }
-    const data = await getSubmissions(filters);
-    setSubmissions(data || []);
+    const result = await getSubmissions(filters);
+    setSubmissions(result.submissions || []);
     setLoading(false);
   };
 
@@ -167,7 +167,9 @@ export default function BranchPerformancePage() {
       }
 
       if (sub.status === KYC_STATUS.SUBMITTED) {
-        stats[bName].unseen++;
+        // Resubmitted cases still count toward branch volume, just not "unseen"
+        // (a resubmitted case re-entering SUBMITTED isn't a never-seen case).
+        if (!sub.isResubmitted) stats[bName].unseen++;
         stats[bName].volume++;
       }
 

@@ -36,9 +36,11 @@ model User {
   branchName          String?
   districtName        String?
   assignedBranches    String?    // CSV of branch names
-  saturdayAllBranches Boolean    @default(false) // Saturday config: see all branches on Saturdays
-  needsPasswordChange Boolean    @default(true)
-  sessionId           String?
+  saturdayAllBranches   Boolean    @default(false) // Saturday config: see all branches on Saturdays
+  lateHourAllBranches   Boolean    @default(false) // Late hour config: see all branches after hours
+  lunchBreakAllBranches Boolean    @default(false) // Lunch break config: see all branches during lunch break
+  needsPasswordChange   Boolean    @default(true)
+  sessionId             String?
   
   // Token & Activity Tracking
   refreshToken        String?    // Hashed refresh token for rotation
@@ -171,6 +173,7 @@ model KYC {
   submittedAt       DateTime @default(now())
   updatedAt         DateTime @updatedAt
   memos             Memo[]
+  followUps         FollowUpVerification[]
 }
 
 model Memo {
@@ -241,6 +244,7 @@ model Finding {
 model FollowUpVerification {
   id           String   @id @default(cuid())
   submissionId String
+  kyc          KYC      @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   customerName String
   branch       String
   officer      String
@@ -250,6 +254,8 @@ model FollowUpVerification {
   result       String?
   remarks      String?
   status       String   @default("PENDING")
+
+  @@index([submissionId])
 }
 
 model PasswordResetToken {

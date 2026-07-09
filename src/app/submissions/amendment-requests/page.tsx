@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,13 +9,18 @@ import { Badge } from "@/components/ui/badge";
 import { getSubmissions } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
+import { Pagination } from "@/components/ui/pagination";
+
+const ITEMS_PER_PAGE = 10;
 
 export default function ReturnedCasesPage() {
   const { user } = useAuth();
   const { isSuperAdmin, loading: permissionsLoading } = usePermissions();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const isAdmin = isSuperAdmin;
 
@@ -24,27 +28,33 @@ export default function ReturnedCasesPage() {
     async function loadData() {
       if (!user) return;
       setLoading(true);
-      const data = await getSubmissions({
+      const result = await getSubmissions({
         status: [KYC_STATUS.ACTION_REQUIRED],
-        createdById: isAdmin ? undefined : user.id
+        createdById: isAdmin ? undefined : user.id,
+        limit: ITEMS_PER_PAGE,
+        offset: (currentPage - 1) * ITEMS_PER_PAGE
       });
-      setSubmissions(data);
+      setSubmissions(result.submissions);
+      setTotalCount(result.total);
       setLoading(false);
     }
     loadData();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, currentPage]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
-    return submissions
-      .filter(sub => 
-        sub.customerName.toLowerCase().includes(term) || 
-        sub.id.toLowerCase().includes(term)
-      );
+    return submissions.filter(sub => 
+      sub.customerName.toLowerCase().includes(term) || 
+      sub.id.toLowerCase().includes(term)
+    );
   }, [submissions, searchTerm]);
 
-  if (permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
+  if (permissionsLoading) return (
+    <div className="py-32 text-center">
+      <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+    </div>
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -54,9 +64,9 @@ export default function ReturnedCasesPage() {
             <AlertCircle className="w-8 h-8 text-orange-600" />
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">Returned Cases</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground text-lg">
-              {isAdmin ? 'Monitoring all network cases requiring correction.' : 'Submissions requiring your attention and requested corrections.'}
+              {isAdmin ? "Monitoring all network cases requiring correction." : "Submissions requiring your attention and requested corrections."}
             </p>
             {isAdmin && (
               <Badge variant="outline" className="bg-slate-50 text-slate-600 flex items-center gap-1 px-3 font-bold border-slate-200">
@@ -85,7 +95,19 @@ export default function ReturnedCasesPage() {
           <p className="font-medium">Synchronizing returned queue...</p>
         </div>
       ) : (
-        <SubmissionsPageContent submissions={filteredSubmissions || []} />
+        <>
+          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          
+          {totalCount > ITEMS_PER_PAGE && (
+            <div className="mt-6">
+              <Pagination 
+                currentPage={currentPage}
+                totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

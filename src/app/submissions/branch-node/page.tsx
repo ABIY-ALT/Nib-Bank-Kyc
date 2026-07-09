@@ -19,7 +19,10 @@ import {
   Activity,
   Building2,
   RefreshCw,
-  UserCheck
+  RotateCcw,
+  UserCheck,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -68,6 +71,7 @@ const chartConfig = {
   SUBMITTED: { label: "Unseen", color: STATUS_COLORS.SUBMITTED },
   ACTION_REQUIRED: { label: "Need Amendment", color: STATUS_COLORS.ACTION_REQUIRED },
   REJECTED: { label: "Rejected", color: STATUS_COLORS.REJECTED },
+  RESUBMITTED: { label: "Resubmitted", color: "#a855f7" },
 } satisfies ChartConfig;
 
 const volumeConfig = {
@@ -87,6 +91,12 @@ export default function BranchMonitoringPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [staffSortField, setStaffSortField] = useState<string>("name");
   const [staffSortOrder, setStaffSortOrder] = useState<'asc' | 'desc'>("asc");
+  const [staffPage, setStaffPage] = useState(1);
+  const STAFF_PAGE_SIZE = 10;
+
+  useEffect(() => {
+    setStaffPage(1);
+  }, [searchTerm, staffMatrixFilter, dateRange, staffSortField, staffSortOrder]);
 
   const toggleStaffSort = (field: string) => {
     if (staffSortField === field) {
@@ -122,11 +132,11 @@ export default function BranchMonitoringPage() {
           if (dateRange.to) filters.endDate = dateRange.to.toISOString();
         }
 
-        const [data, officers] = await Promise.all([
+        const [result, officers] = await Promise.all([
           getSubmissions(filters),
           !isAdmin && user.branchId ? getBranchOfficers(user.branchId) : Promise.resolve([]),
         ]);
-        setSubmissions(data);
+        setSubmissions(result.submissions);
         setBranchOfficers(officers);
       } catch (error) {
         console.error("Failed to load monitoring data:", error);
@@ -149,15 +159,17 @@ export default function BranchMonitoringPage() {
     const stats = {
       total: submissions.length,
       approved: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
-      pending: submissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
+      pending: submissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status) && !s.isResubmitted).length,
       rejected: submissions.filter(s => s.status === KYC_STATUS.REJECTED).length,
       amended: submissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
+      resubmitted: submissions.filter(s => s.isResubmitted).length,
       officers: {} as Record<string, { name: string, total: number, approved: number, amended: number, pending: number, cycles: number }>,
       byStatus: [
         { name: 'APPROVED', value: 0, fill: STATUS_COLORS.APPROVED },
         { name: 'SUBMITTED', value: 0, fill: STATUS_COLORS.SUBMITTED },
         { name: 'ACTION_REQUIRED', value: 0, fill: STATUS_COLORS.ACTION_REQUIRED },
         { name: 'REJECTED', value: 0, fill: STATUS_COLORS.REJECTED },
+        { name: 'RESUBMITTED', value: 0, fill: '#a855f7' },
       ],
       volumeHistory: [] as { date: string, count: number }[]
     };
@@ -182,8 +194,12 @@ export default function BranchMonitoringPage() {
         stats.officers[officerKey].amended++;
         stats.byStatus[2].value++;
       } else if ([KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status)) {
-        stats.officers[officerKey].pending++;
-        stats.byStatus[1].value++;
+        if (!sub.isResubmitted) {
+          stats.officers[officerKey].pending++;
+          stats.byStatus[1].value++;
+        } else {
+          stats.byStatus[4].value++;
+        }
       } else if (sub.status === KYC_STATUS.REJECTED) {
         stats.byStatus[3].value++;
       }
@@ -231,6 +247,16 @@ export default function BranchMonitoringPage() {
     });
   }, [submissions, searchTerm, isAdmin, user?.branchName, user?.branchId]);
 
+  // Card stats are derived from the SAME filteredSubmissions source used for
+  // the table and export, so the numbers always reconcile exactly.
+  const filteredCardStats = useMemo(() => ({
+    total: filteredSubmissions.length,
+    approved: filteredSubmissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
+    amended: filteredSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
+    pending: filteredSubmissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status) && !s.isResubmitted).length,
+    resubmitted: filteredSubmissions.filter(s => s.isResubmitted).length,
+  }), [filteredSubmissions]);
+
   const staffMatrixOptions = useMemo(() => {
     const officers = Object.values(analytics?.officers || {}) as Array<{ name: string }>;
     return officers.map((officer) => officer.name).sort((a, b) => a.localeCompare(b));
@@ -264,15 +290,25 @@ export default function BranchMonitoringPage() {
     });
   }, [analytics?.officers, staffMatrixFilter, staffSortField, staffSortOrder]);
 
+  const pagedStaffRows = useMemo(() => {
+    const start = (staffPage - 1) * STAFF_PAGE_SIZE;
+    const end = start + STAFF_PAGE_SIZE;
+    return staffRows.slice(start, end);
+  }, [staffRows, staffPage]);
+
+  const totalStaffPages = Math.ceil(staffRows.length / STAFF_PAGE_SIZE);
+  const safeStaffPage = Math.min(Math.max(1, staffPage), totalStaffPages || 1);
+
   const handleExportCSV = () => {
     if (!filteredSubmissions || filteredSubmissions.length === 0) return;
-    const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Amendments', 'Submitted At', 'Updated At'];
+    const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Is Resubmitted', 'Amendments', 'Submitted At', 'Updated At'];
     const rows = filteredSubmissions.map((s: any) => [
       s.id,
       s.customerName,
       s.branch?.name || s.branchName || '',
       s.branch?.district?.name || s.districtName || '',
       s.status,
+      s.isResubmitted ? 'Yes' : 'No',
       s.amendCycles || 0,
       s.submittedAt ? format(new Date(s.submittedAt), 'yyyy-MM-dd HH:mm') : '',
       s.updatedAt ? format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm') : '',
@@ -356,22 +392,26 @@ export default function BranchMonitoringPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
             <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all duration-300">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Volume</CardTitle></CardHeader>
-              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-slate-900 tracking-tighter">{analytics?.total || 0}</span><div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/5 group-hover:text-primary transition-colors"><Inbox className="w-6 h-6" /></div></CardContent>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-slate-900 tracking-tighter">{filteredCardStats.total}</span><div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/5 group-hover:text-primary transition-colors"><Inbox className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Successfully Authorized</CardTitle></CardHeader>
-              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-emerald-600 tracking-tighter">{analytics?.approved || 0}</span><div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-6 h-6" /></div></CardContent>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-emerald-600 tracking-tighter">{filteredCardStats.approved}</span><div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Amendments</CardTitle></CardHeader>
-              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-orange-600 tracking-tighter">{analytics?.amended || 0}</span><div className="p-3 bg-orange-50 rounded-2xl text-orange-600"><AlertCircle className="w-6 h-6" /></div></CardContent>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-orange-600 tracking-tighter">{filteredCardStats.amended}</span><div className="p-3 bg-orange-50 rounded-2xl text-orange-600"><AlertCircle className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Unseen Analysis</CardTitle></CardHeader>
-              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{analytics?.pending || 0}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{filteredCardStats.pending}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
+            </Card>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-purple-500">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-purple-600">Resubmitted</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-purple-600 tracking-tighter">{filteredCardStats.resubmitted}</span><div className="p-3 bg-purple-50 rounded-2xl text-purple-600"><RotateCcw className="w-6 h-6" /></div></CardContent>
             </Card>
           </div>
 
@@ -501,7 +541,7 @@ export default function BranchMonitoringPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {staffRows.map((officer) => {
+                      {pagedStaffRows.map((officer) => {
                         const efficiency = officer.efficiency;
                         return (
                           <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
@@ -529,6 +569,31 @@ export default function BranchMonitoringPage() {
                     </TableBody>
                   </Table>
                 </CardContent>
+                {totalStaffPages > 1 && (
+                  <div className="flex items-center justify-between gap-4 border-t bg-slate-50/80 px-6 py-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safeStaffPage <= 1}
+                      onClick={() => setStaffPage(p => Math.max(1, p - 1))}
+                      className="h-9 gap-1 font-bold border-slate-200"
+                    >
+                      <ChevronLeft className="h-4 w-4" /> Prev
+                    </Button>
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                      Page {safeStaffPage} of {totalStaffPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safeStaffPage >= totalStaffPages}
+                      onClick={() => setStaffPage(p => Math.min(totalStaffPages, p + 1))}
+                      className="h-9 gap-1 font-bold border-slate-200"
+                    >
+                      Next <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </Card>
             </TabsContent>
           </Tabs>

@@ -88,7 +88,7 @@ export default function Dashboard() {
           targetBranchId ? getBranchOfficers(targetBranchId) : Promise.resolve([]),
         ]);
 
-        setRecentSubmissions(subs);
+        setRecentSubmissions(subs.submissions);
         setSettings(globalSettings);
         setSummaryStats(stats);
         const primary = officers.find((o: any) => o.isPrimary) || officers[0] || null;
@@ -196,6 +196,7 @@ export default function Dashboard() {
               <UserCheck className="w-4 h-4 text-primary" /> Current KYC Officer: {assignedOfficer.name}
             </Badge>
           )}
+
           {isBranchOfficer && (
             <Button asChild className="bg-primary hover:bg-primary/90 shadow-xl h-12 px-8 font-black text-lg rounded-xl transition-all active:scale-[0.98]">
               <Link href="/submissions/new">Create Submission</Link>

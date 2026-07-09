@@ -25,8 +25,9 @@ export const config = {
   },
 };
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const MAX_TOTAL_FILE_SIZE = 20 * MAX_FILE_SIZE;
+// Individual file size is not limited — only the cumulative total is enforced.
+// 100 MB total matches getMaxTotalUploadSize() in file-upload-validation.ts.
+const MAX_TOTAL_FILE_SIZE = 100 * 1024 * 1024;
 
 function parseMultipartForm(
   req: NextApiRequest,
@@ -34,8 +35,7 @@ function parseMultipartForm(
 ): Promise<{ fields: Fields; files: Files }> {
   const form = formidable({
     multiples: true,
-    maxFileSize: MAX_FILE_SIZE,
-    maxTotalFileSize: MAX_TOTAL_FILE_SIZE,
+    maxTotalFileSize: MAX_TOTAL_FILE_SIZE, // cumulative limit only — no per-file cap
     uploadDir,
     keepExtensions: false,
     filter: ({ mimetype, originalFilename }) => Boolean(mimetype && originalFilename),

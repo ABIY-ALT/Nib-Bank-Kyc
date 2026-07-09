@@ -69,8 +69,8 @@ export default function ReportsPage() {
         }
       }
       
-      const data = await getSubmissions(filters);
-      setSubmissions(data);
+      const result = await getSubmissions(filters);
+      setSubmissions(result.submissions);
       setLoading(false);
     }
     loadData();

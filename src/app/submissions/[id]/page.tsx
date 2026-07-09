@@ -46,15 +46,15 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  getSubmissionById, 
-  updateSubmissionStatus, 
-  updateSubmissionChecklist, 
-  processExceptionalStep, 
-  resubmitSubmission, 
+import {
+  getSubmissionById,
+  updateSubmissionStatus,
+  updateSubmissionChecklist,
+  processExceptionalStep,
+  resubmitSubmission,
   toggleSubmissionUrgentFlag,
-   returnEscalatedCaseToOfficer
- } from "@/actions/submissions";
+  returnEscalatedCaseToOfficer
+} from "@/actions/submissions";
 import { deleteInstitutionalFile } from "@/actions/storage";
 import { getGlobalSettings } from "@/actions/settings";
 import { getBranchOfficers } from "@/actions/branch-mappings";
@@ -426,7 +426,7 @@ export default function SubmissionDetails() {
     try {
       const zip = new JSZip();
       const now = new Date();
-      
+
       const timestamp = format(now, 'yyyyMMdd_HHmmss');
       const districtName = getSubmissionDistrictName(submission);
       const branchName = getSubmissionBranchName(submission);
@@ -435,35 +435,35 @@ export default function SubmissionDetails() {
       const caseFolderName = `${sanitizeBundleSegment(submission.id, 'CASE')}_${sanitizeBundleSegment(submission.customerName, 'CUSTOMER')}`;
 
       const manifest = `NIB BANK INSTITUTIONAL ARCHIVE\n` +
-                       `--------------------------------------------------\n` +
-                       `CASE IDENTIFIER: ${submission.id}\n` +
-                       `CUSTOMER ENTITY: ${submission.customerName}\n` +
-                       `DISPATCH BRANCH: ${branchName}\n` +
-                       `REGIONAL DIST:   ${districtName}\n` +
-                       `EXPORTED BY:     ${user.name}\n` +
-                       `TIMESTAMP:       ${now.toLocaleString()}\n` +
-                       `ARCHIVE ROOT:    ${bundleName}\n` +
-                       `--------------------------------------------------\n\n` +
-                       `INVENTORY:\n`;
-      
+        `--------------------------------------------------\n` +
+        `CASE IDENTIFIER: ${submission.id}\n` +
+        `CUSTOMER ENTITY: ${submission.customerName}\n` +
+        `DISPATCH BRANCH: ${branchName}\n` +
+        `REGIONAL DIST:   ${districtName}\n` +
+        `EXPORTED BY:     ${user.name}\n` +
+        `TIMESTAMP:       ${now.toLocaleString()}\n` +
+        `ARCHIVE ROOT:    ${bundleName}\n` +
+        `--------------------------------------------------\n\n` +
+        `INVENTORY:\n`;
+
       let manifestBody = "";
 
       const docFolder = rootFolder?.folder(`${caseFolderName}/Documents`);
-      
+
       for (const doc of previewableDocuments) {
         try {
           const downloadUrl = doc.downloadUrl || (doc.previewUrl ? `${doc.previewUrl}?download=1` : "");
-          const response = await fetch(downloadUrl, { 
+          const response = await fetch(downloadUrl, {
             method: 'GET',
             credentials: 'include',
             headers: { 'Accept': '*/*' }
           });
 
           if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-          
+
           const arrayBuffer = await response.arrayBuffer();
           if (arrayBuffer.byteLength === 0) throw new Error("Received empty file buffer");
-          
+
           const safeFileName = resolveDownloadFileName(doc.name, doc.originalName, doc.mimeType);
           docFolder?.file(safeFileName, arrayBuffer, { binary: true });
           manifestBody += `- [FILE] ${safeFileName} (${doc.documentType || 'Unclassified'})\n`;
@@ -646,12 +646,12 @@ Document Count:    ${previewableDocuments.length}
 
     // AMENDMENT REASON LOGIC: Combine selected reasons + manual input
     let finalRemarks = remarks.trim();
-    
+
     // If we have selected predefined scenarios, ensure they are included
     if (selectedScenario.length > 0) {
       const predefined = selectedScenario.filter(s => !/\bother\b/i.test(s)).join('; ');
       const hasOther = selectedScenario.some(s => /\bother\b/i.test(s));
-      
+
       if (predefined && hasOther && remarks.trim()) {
         finalRemarks = `${predefined}; Other: ${remarks.trim()}`;
       } else if (predefined && !hasOther) {
@@ -780,10 +780,10 @@ Document Count:    ${previewableDocuments.length}
     if (!submission || !user || isActioning) return;
 
     if (actionDetails?.requiresRemarks && !remarks.trim()) {
-      toast({ 
-        variant: "destructive", 
-        title: "Remarks Required", 
-        description: "Please provide a rationale for this governance decision." 
+      toast({
+        variant: "destructive",
+        title: "Remarks Required",
+        description: "Please provide a rationale for this governance decision."
       });
       return;
     }
@@ -926,21 +926,21 @@ Document Count:    ${previewableDocuments.length}
     setSelectedScenario((prev) => {
       const exists = prev.includes(scenario);
       const next = exists ? prev.filter((s) => s !== scenario) : [...prev, scenario];
-      
+
       const hasOther = next.some((v) => /\bother\b/i.test(v));
       const wasOtherSelected = prev.some((v) => /\bother\b/i.test(v));
-      
+
       setIsCustomRemark(hasOther);
-      
+
       // If we just toggled "Other" on, clear remarks for manual input
       if (hasOther && !wasOtherSelected) {
         setRemarks("");
-      } 
+      }
       // If "Other" is NOT selected, keep remarks in sync with checkboxes
       else if (!hasOther) {
         setRemarks(next.join('; '));
       }
-      
+
       return next;
     });
   }, []);
@@ -968,9 +968,9 @@ Document Count:    ${previewableDocuments.length}
     try {
       const res = await toggleSubmissionUrgentFlag(submission.id, trimmedRemark);
       if (res.success) {
-        toast({ 
-          title: "Successful", 
-          description: res.isUrgent ? "Case flagged as urgent." : "Urgent flag removed." 
+        toast({
+          title: "Successful",
+          description: res.isUrgent ? "Case flagged as urgent." : "Urgent flag removed."
         });
         setIsUrgentDialogOpen(false);
         setUrgentRemark("");
@@ -1055,7 +1055,7 @@ Document Count:    ${previewableDocuments.length}
 
   const sortedHistory = useMemo(() => {
     if (!submission?.commentHistory || !Array.isArray(submission.commentHistory)) return [];
-    
+
     // REDUCE DUPLICATE ENTRIES: Filter out consecutive identical status updates from the same person
     const history = [...submission.commentHistory]
       .filter((entry: any) => !String(entry?.action || '').startsWith('URGENT_FLAG_'))
@@ -1064,11 +1064,11 @@ Document Count:    ${previewableDocuments.length}
     const deduplicated: any[] = [];
     history.forEach((entry, i) => {
       const prev = deduplicated[deduplicated.length - 1];
-      
+
       // If it's a status update without unique comments, check for duplication
       const isAutoComment = entry.comment === `Status updated to ${entry.action}`;
-      const isDuplicate = prev && 
-        prev.action === entry.action && 
+      const isDuplicate = prev &&
+        prev.action === entry.action &&
         prev.performedBy === entry.performedBy &&
         isAutoComment;
 
@@ -1228,6 +1228,64 @@ Document Count:    ${previewableDocuments.length}
                 </div>
               );
             })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 shadow-lg overflow-hidden rounded-3xl bg-white">
+        <CardHeader className="bg-primary p-6 border-b">
+          <div className="flex items-center gap-3">
+            <FileText className="w-5 h-5 text-white" />
+            <CardTitle className="text-xl font-black text-white">Case Overview</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Customer Name</p>
+              <p className="font-bold text-slate-800">{submission.customerName}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Entity Type</p>
+              <p className="font-bold text-slate-800">{submission.entityType || "Individual"}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Branch</p>
+              <p className="font-bold text-slate-800">{submission.branchName}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">District</p>
+              <p className="font-bold text-slate-800">{submission.districtName || "Central"}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Submitted By</p>
+              <p className="font-bold text-slate-800">
+                {submission.createdBy ? `${submission.createdBy.firstName || ""} ${submission.createdBy.lastName || ""}`.trim() || submission.createdBy.email : "Unknown"}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Assigned KYC Officer</p>
+              <p className="font-bold text-slate-800">
+                {submission.assignedTo ? `${submission.assignedTo.firstName || ""} ${submission.assignedTo.lastName || ""}`.trim() || submission.assignedTo.email : "Not Assigned"}
+              </p>
+            </div>
+            {(() => {
+              const approvalEntry = sortedHistory.find((entry: any) => entry.action === KYC_STATUS.APPROVED);
+              if (approvalEntry) {
+                return (
+                  <div className="space-y-1 md:col-span-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Authorized By</p>
+                    <div className="flex flex-col gap-1">
+                      <p className="font-bold text-emerald-700">{approvalEntry.performedBy}</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                        {new Date(approvalEntry.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
         </CardContent>
       </Card>
@@ -1590,15 +1648,15 @@ Document Count:    ${previewableDocuments.length}
                 </div>
                 <div className="space-y-2"><Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isEscalated ? 'Senior Assessment Remarks' : 'Final Determination Remarks'}</Label><Textarea placeholder={isCustomRemark ? "Write a new comment..." : "Selected finding will appear here..."} value={remarks} onChange={(e) => setRemarks(e.target.value)} readOnly={!isCustomRemark} className="min-h-[140px] rounded-2xl bg-slate-50/50 font-medium" /></div>
                 <div className={cn("grid grid-cols-1 gap-3", isEscalated ? "md:grid-cols-2" : "md:grid-cols-3")}>
-                  <Button onClick={() => handleAction(KYC_STATUS.APPROVED)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Authorize</Button>
+                  <Button onClick={() => handleAction(KYC_STATUS.APPROVED)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning || selectedScenario.length > 0}>Authorize</Button>
                   <Button onClick={() => handleAction(KYC_STATUS.ACTION_REQUIRED)} variant="outline" className="border-orange-600 text-orange-600 font-black h-12 rounded-xl hover:bg-orange-50" disabled={!!isActioning}>Amend</Button>
                   {!isEscalated && (
                     <Button onClick={() => handleAction(KYC_STATUS.ESCALATED)} className="bg-slate-900 hover:bg-black text-white font-black h-12 rounded-xl shadow-lg" disabled={!!isActioning}>Escalate</Button>
                   )}
                   {isEscalated && hasPermission('MANAGE_ESCALATIONS') && (
-                    <Button 
-                      onClick={handleReturnFromEscalation} 
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-black h-12 rounded-xl shadow-lg col-span-full" 
+                    <Button
+                      onClick={handleReturnFromEscalation}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-black h-12 rounded-xl shadow-lg col-span-full"
                       disabled={!!isActioning}
                     >
                       {isActioning === "RETURN_ESCALATION" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Undo2 className="w-4 h-4 mr-2" />}
@@ -1692,16 +1750,16 @@ Document Count:    ${previewableDocuments.length}
                             {actions.some(a => a.requiresMemo) ? 'Supporting Memo (PDF)' : 'Optional Memo (PDF)'}
                           </Label>
                           <div className="flex items-center gap-3">
-                            <input 
-                              type="file" 
-                              id="govMemo" 
-                              className="hidden" 
+                            <input
+                              type="file"
+                              id="govMemo"
+                              className="hidden"
                               accept=".pdf"
                               onChange={(e) => setGovMemo(e.target.files?.[0] || null)}
                             />
-                            <Button 
-                              type="button" 
-                              variant="outline" 
+                            <Button
+                              type="button"
+                              variant="outline"
                               className={cn(
                                 "flex-1 h-12 rounded-xl border-dashed border-2 font-bold",
                                 govMemo ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200"
@@ -1712,10 +1770,10 @@ Document Count:    ${previewableDocuments.length}
                               {govMemo ? govMemo.name : (actions.some(a => a.requiresMemo) ? "Attach Authorization Memo" : "Attach Decision Memo (Optional)")}
                             </Button>
                             {govMemo && (
-                              <Button 
-                                type="button" 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
                                 className="h-12 w-12 rounded-xl text-red-500 hover:bg-red-50"
                                 onClick={() => setGovMemo(null)}
                               >
@@ -1724,8 +1782,8 @@ Document Count:    ${previewableDocuments.length}
                             )}
                           </div>
                           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                            {actions.some(a => a.requiresMemo) 
-                              ? "Mandatory for Approvals and Higher-Level Escalations" 
+                            {actions.some(a => a.requiresMemo)
+                              ? "Mandatory for Approvals and Higher-Level Escalations"
                               : "Optional documentation for this decision stage"}
                           </p>
                         </div>

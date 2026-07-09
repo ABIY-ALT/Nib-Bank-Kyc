@@ -55,12 +55,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getSubmissions, updateSubmissionStatus, logBundleDownload, getSubmissionById } from "@/actions/submissions";
 import { getAllUsers } from "@/actions/users";
 import { getBranchMappings } from "@/actions/branch-mappings";
 import { getDistricts, getBranches } from "@/actions/hierarchy";
 import { getGlobalSettings } from "@/actions/settings";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
@@ -83,7 +83,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-type ViewMode = 'officers' | 'branches' | 'cases';
+type ViewMode = 'officers' | 'branches' | 'cases' | 'branch-matrix';
 
 const MINUTES_IN_DAY = 1440;
 const MINUTES_IN_HOUR = 60;
@@ -134,6 +134,15 @@ export default function KYCOperationsMonitoringPage() {
   const [branchSortField, setBranchSortField] = useState<string>("branch");
   const [branchSortOrder, setBranchSortOrder] = useState<'asc' | 'desc'>("asc");
 
+  // Branch Matrix state
+  const [matrixBranchFilter, setMatrixBranchFilter] = useState<string>("all");
+  const [matrixBranchSearch, setMatrixBranchSearch] = useState("");
+  const [matrixBranchOpen, setMatrixBranchOpen] = useState(false);
+  const [matrixSortField, setMatrixSortField] = useState<string>("name");
+  const [matrixSortOrder, setMatrixSortOrder] = useState<'asc' | 'desc'>("asc");
+  const [branchMatrixPage, setBranchMatrixPage] = useState(1);
+  const BRANCH_MATRIX_PAGE_SIZE = 10;
+
   const [caseSortField, setCaseSortField] = useState<string>("submittedAt");
   const [caseSortOrder, setCaseSortOrder] = useState<'asc' | 'desc'>("desc");
 
@@ -147,6 +156,14 @@ export default function KYCOperationsMonitoringPage() {
   const [distOpen, setDistOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [officerOpen, setOfficerOpen] = useState(false);
+  
+  // Pagination State
+  const [officerPage, setOfficerPage] = useState(1);
+  const OFFICER_PAGE_SIZE = 10;
+  
+  useEffect(() => {
+    setOfficerPage(1);
+  }, [selectedOfficerFilter, selectedDistrict, selectedBranchFilter, sortField, sortOrder, dateRange]);
 
   const toggleSort = (field: string) => {
     if (sortField === field) {
@@ -172,6 +189,15 @@ export default function KYCOperationsMonitoringPage() {
     } else {
       setCaseSortField(field);
       setCaseSortOrder('asc');
+    }
+  };
+
+  const toggleMatrixSort = (field: string) => {
+    if (matrixSortField === field) {
+      setMatrixSortOrder(matrixSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setMatrixSortField(field);
+      setMatrixSortOrder('asc');
     }
   };
 
@@ -256,8 +282,8 @@ export default function KYCOperationsMonitoringPage() {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
-      const data = await getSubmissions(filters);
-      setSubmissions(data || []);
+      const result = await getSubmissions(filters);
+      setSubmissions(result.submissions || []);
     } catch (e) {
       toast({ variant: "destructive", title: "Archive Sync Failed" });
     } finally {
@@ -423,8 +449,9 @@ Document Count:    ${fullSub?.documents?.length || 0}
       const viewed = offSubs.filter(s => [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED].includes(s.status as any)).length;
       const amended = offSubs.filter(s => officerActed(s, KYC_STATUS.ACTION_REQUIRED)).length;
       const escalated = offSubs.filter(s => s.status === KYC_STATUS.ESCALATED).length;
-      const unseen = offSubs.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
-      const running = offSubs.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;
+      // Fresh cases only — resubmitted cases are tracked separately below.
+      const unseen = offSubs.filter(s => s.status === KYC_STATUS.SUBMITTED && !s.isResubmitted).length;
+      const running = offSubs.filter(s => s.status === KYC_STATUS.IN_REVIEW && !s.isResubmitted).length;
       const resubmitted = offSubs.filter(s => s.isResubmitted).length;
       const branchesMapped = off.assignedBranches?.length || (off.branchName ? 1 : 0);
 
@@ -537,10 +564,20 @@ Document Count:    ${fullSub?.documents?.length || 0}
 
     const data = bNames.map((name: string) => {
       const isTemporary = tempSet.has(name.toLowerCase());
-      const branchSubs = submissions.filter(s =>
-        s.branchName === name &&
-        (s.assignedToId === selectedOfficer.id || s.assignedToId === null)
-      );
+      const nameNorm = normalizeBranchName(name).toLowerCase();
+      
+      const branchSubs = submissions.filter(s => {
+        const sBranchNorm = normalizeBranchName(s.branchName || "").toLowerCase();
+        if (sBranchNorm !== nameNorm) return false;
+        
+        if (s.assignedToId === selectedOfficer.id) return true;
+        if (s.assignedToId === null) return true;
+        
+        return s.commentHistory?.some((h: any) =>
+          h.userId === selectedOfficer.id &&
+          [KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED, KYC_STATUS.IN_REVIEW].includes(h.action)
+        );
+      });
       const approved = branchSubs.filter(s => s.status === KYC_STATUS.APPROVED);
       
       let avgResolutionMinutes = 0;
@@ -563,8 +600,8 @@ Document Count:    ${fullSub?.documents?.length || 0}
         totalFiles: branchSubs.reduce((acc, s) => acc + (s.documents?.length || 0), 0),
         total: branchSubs.length,
         approved: approved.length,
-        unseen: branchSubs.filter(s => s.status === KYC_STATUS.SUBMITTED).length,
-        running: branchSubs.filter(s => s.status === KYC_STATUS.IN_REVIEW).length,
+        unseen: branchSubs.filter(s => s.status === KYC_STATUS.SUBMITTED && !s.isResubmitted).length,
+        running: branchSubs.filter(s => s.status === KYC_STATUS.IN_REVIEW && !s.isResubmitted).length,
         amended: branchSubs.reduce((acc, s) => acc + (s.amendCycles || 0), 0),
         avgResolutionMinutes,
         pending,
@@ -603,12 +640,31 @@ Document Count:    ${fullSub?.documents?.length || 0}
     });
   }, [selectedOfficer, submissions, branchSortField, branchSortOrder, officerTempBranches]);
 
+  const sortRows = (rows: any[], field: string, order: 'asc' | 'desc') =>
+    [...rows].sort((a, b) => {
+      const va = a[field];
+      const vb = b[field];
+      const cmp = typeof va === 'string' ? va.localeCompare(String(vb)) : (va || 0) - (vb || 0);
+      return order === 'asc' ? cmp : -cmp;
+    });
+
   const currentCases = useMemo(() => {
     if (!selectedBranch || !selectedOfficer) return [];
-    const filtered = submissions.filter(s =>
-      s.branchName === selectedBranch &&
-      (s.assignedToId === selectedOfficer.id || s.assignedToId === null)
-    );
+    
+    const nameNorm = normalizeBranchName(selectedBranch).toLowerCase();
+    
+    const filtered = submissions.filter(s => {
+      const sBranchNorm = normalizeBranchName(s.branchName || "").toLowerCase();
+      if (sBranchNorm !== nameNorm) return false;
+      
+      if (s.assignedToId === selectedOfficer.id) return true;
+      if (s.assignedToId === null) return true;
+      
+      return s.commentHistory?.some((h: any) =>
+        h.userId === selectedOfficer.id &&
+        [KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED, KYC_STATUS.IN_REVIEW].includes(h.action)
+      );
+    });
 
     return [...filtered].sort((a, b) => {
       let cmp = 0;
@@ -633,6 +689,66 @@ Document Count:    ${fullSub?.documents?.length || 0}
       return caseSortOrder === 'asc' ? cmp : -cmp;
     });
   }, [selectedBranch, selectedOfficer, submissions, caseSortField, caseSortOrder]);
+
+  // Branch Matrix Data Processing
+  const branchMatrixData = useMemo(() => {
+    if (!submissions.length) return [];
+
+    const branchStats: Record<string, { 
+      name: string; 
+      total: number; 
+      approved: number; 
+      pending: number; 
+      amended: number; 
+      resubmitted: number;
+    }> = {};
+
+    submissions.forEach(sub => {
+      const bName = sub.branchName || 'Unknown Branch';
+      if (!branchStats[bName]) {
+        branchStats[bName] = { name: bName, total: 0, approved: 0, pending: 0, amended: 0, resubmitted: 0 };
+      }
+      
+      branchStats[bName].total++;
+      if (sub.isResubmitted) branchStats[bName].resubmitted++;
+      
+      if (sub.status === KYC_STATUS.APPROVED) branchStats[bName].approved++;
+      else if (sub.status === KYC_STATUS.ACTION_REQUIRED) branchStats[bName].amended++;
+      else if ([KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status) && !sub.isResubmitted) {
+        branchStats[bName].pending++;
+      }
+    });
+
+    const branchRows = Object.values(branchStats).map(branch => ({
+      ...branch,
+      efficiency: Math.round((branch.approved / (branch.total - branch.pending || 1)) * 100) || 0,
+    }));
+
+    return sortRows(branchRows, matrixSortField, matrixSortOrder);
+  }, [submissions, matrixSortField, matrixSortOrder]);
+
+  const branchMatrixOptions = useMemo(() => {
+    return branchMatrixData.map(b => b.name).sort();
+  }, [branchMatrixData]);
+
+  const filteredBranchMatrixOptions = useMemo(() => {
+    const term = matrixBranchSearch.trim().toLowerCase();
+    if (!term) return branchMatrixOptions;
+    return branchMatrixOptions.filter((name) => name.toLowerCase().includes(term));
+  }, [branchMatrixOptions, matrixBranchSearch]);
+
+  const filteredBranchMatrixData = useMemo(() => {
+    if (matrixBranchFilter === 'all') return branchMatrixData;
+    return branchMatrixData.filter(b => b.name === matrixBranchFilter);
+  }, [branchMatrixData, matrixBranchFilter]);
+
+  const totalBranchMatrixPages = Math.max(1, Math.ceil(filteredBranchMatrixData.length / BRANCH_MATRIX_PAGE_SIZE));
+  const safeBranchMatrixPage = Math.min(branchMatrixPage, totalBranchMatrixPages);
+  const branchMatrixPageStart = (safeBranchMatrixPage - 1) * BRANCH_MATRIX_PAGE_SIZE;
+  const pagedBranchMatrixData = useMemo(() => 
+    filteredBranchMatrixData.slice(branchMatrixPageStart, branchMatrixPageStart + BRANCH_MATRIX_PAGE_SIZE),
+    [filteredBranchMatrixData, branchMatrixPageStart]
+  );
 
   const handleExportCSV = () => {
     const headers = ['KYC Officer', 'Mapped Branches', 'Case Volume', 'Authorized', 'Unseen', 'Avg. Resolution', 'Amendment Cycles', 'Performance Index'];
@@ -661,6 +777,15 @@ Document Count:    ${fullSub?.documents?.length || 0}
     const name = `${o.firstName} ${o.lastName}`.toLowerCase();
     return name.includes(officerSearch.toLowerCase());
   });
+
+  const totalOfficers = processedOfficers.length;
+  const totalOfficerPages = Math.max(1, Math.ceil(totalOfficers / OFFICER_PAGE_SIZE));
+  const safeOfficerPage = Math.min(officerPage, totalOfficerPages);
+  const officerPageStart = (safeOfficerPage - 1) * OFFICER_PAGE_SIZE;
+  const pagedOfficers = useMemo(
+    () => processedOfficers.slice(officerPageStart, officerPageStart + OFFICER_PAGE_SIZE),
+    [processedOfficers, officerPageStart]
+  );
 
   if (loading || permissionsLoading) return <div className="py-48 text-center flex items-center justify-center"><Loader2 className="w-12 h-12 animate-spin text-primary" /></div>;
 
@@ -836,6 +961,13 @@ Document Count:    ${fullSub?.documents?.length || 0}
         >
           Officer Matrix
         </Button>
+        <Button
+          variant={viewMode === 'branch-matrix' ? 'secondary' : 'ghost'}
+          onClick={() => { setViewMode('branch-matrix'); setSelectedOfficer(null); setSelectedBranch(null); }}
+          className={cn("h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all", viewMode === 'branch-matrix' ? "bg-primary text-white shadow-lg" : "text-slate-500")}
+        >
+          Branch Matrix
+        </Button>
         {selectedOfficer && (
           <>
             <ChevronRight className="w-4 h-4 text-slate-300" />
@@ -993,7 +1125,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
                 <TableBody>
                   {processedOfficers.length === 0 ? (
                     <TableRow><TableCell colSpan={10} className="py-32 text-center text-slate-400 italic">No personnel discovered in current selection context.</TableCell></TableRow>
-                  ) : processedOfficers.map((off) => (
+                  ) : pagedOfficers.map((off) => (
                     <TableRow key={off.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-100 group">
                       <TableCell className="py-8 pl-10">
                         <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setSelectedOfficer(off); setViewMode('branches'); }}>
@@ -1051,6 +1183,255 @@ Document Count:    ${fullSub?.documents?.length || 0}
                 </TableBody>
               </Table>
             </CardContent>
+            {totalOfficerPages > 1 && (
+              <div className="flex items-center justify-between gap-4 border-t bg-slate-50/80 px-6 py-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safeOfficerPage <= 1}
+                  onClick={() => setOfficerPage(p => Math.max(1, p - 1))}
+                  className="h-9 gap-1 font-bold border-slate-200"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Prev
+                </Button>
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                  Page {safeOfficerPage} of {totalOfficerPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safeOfficerPage >= totalOfficerPages}
+                  onClick={() => setOfficerPage(p => Math.min(totalOfficerPages, p + 1))}
+                  className="h-9 gap-1 font-bold border-slate-200"
+                >
+                  Next <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {viewMode === 'branch-matrix' && (
+          <Card className="shadow-2xl border-slate-200 overflow-hidden rounded-[2.5rem] bg-white">
+            <CardHeader className="bg-primary text-white p-8 border-b flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-2xl font-black flex items-center gap-3"><Building2 className="w-6 h-6 text-white" /> Branch Throughput Matrix</CardTitle>
+                <CardDescription className="text-white/70 font-bold text-[10px] uppercase tracking-widest mt-1">Comparative monitoring data for all branches</CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-white/20 border-white/20 text-white font-black px-4 py-1.5 h-9">
+                {branchMatrixData.length} Branches
+              </Badge>
+            </CardHeader>
+            <CardHeader className="bg-slate-50/50 border-b">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <Popover open={matrixBranchOpen} onOpenChange={setMatrixBranchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-10 w-full justify-between gap-2 border-slate-200 bg-white md:w-[280px]">
+                      <span className="truncate text-sm font-bold">
+                        {matrixBranchFilter === "all" ? "All Branches" : matrixBranchFilter}
+                      </span>
+                      <ChevronsUpDown className="h-4 w-4 text-slate-400" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 rounded-xl border border-slate-200 p-0 shadow-xl">
+                    <div className="relative border-b border-slate-100 p-3">
+                      <Search className="absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        placeholder="Search branch..."
+                        value={matrixBranchSearch}
+                        onChange={(e) => setMatrixBranchSearch(e.target.value)}
+                        className="h-10 rounded-lg border-slate-200 pl-9 text-sm"
+                      />
+                    </div>
+                    <ScrollArea className="max-h-64 p-2">
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                          matrixBranchFilter === "all" ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                        )}
+                        onClick={() => {
+                          setMatrixBranchFilter("all");
+                          setMatrixBranchOpen(false);
+                        }}
+                      >
+                        <span>All Branches</span>
+                        {matrixBranchFilter === "all" && <Check className="h-4 w-4" />}
+                      </button>
+                      {filteredBranchMatrixOptions.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          className={cn(
+                            "mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors",
+                            matrixBranchFilter === name ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700"
+                          )}
+                          onClick={() => {
+                            setMatrixBranchFilter(name);
+                            setMatrixBranchOpen(false);
+                          }}
+                        >
+                          <span className="truncate">{name}</span>
+                          {matrixBranchFilter === name && <Check className="h-4 w-4" />}
+                        </button>
+                      ))}
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-slate-50 border-b">
+                  <TableRow>
+                    <TableHead 
+                      className={cn(
+                        "py-6 pl-10 font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        matrixSortField === 'name' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleMatrixSort('name')}
+                    >
+                      <div className="flex items-center">
+                        Branch
+                        <SortIndicator field="name" currentField={matrixSortField} currentOrder={matrixSortOrder} />
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        matrixSortField === 'total' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleMatrixSort('total')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Case Volume
+                        <SortIndicator field="total" currentField={matrixSortField} currentOrder={matrixSortOrder} />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        matrixSortField === 'approved' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleMatrixSort('approved')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Authorized
+                        <SortIndicator field="approved" currentField={matrixSortField} currentOrder={matrixSortOrder} />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        matrixSortField === 'amended' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleMatrixSort('amended')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Amendments
+                        <SortIndicator field="amended" currentField={matrixSortField} currentOrder={matrixSortOrder} />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        matrixSortField === 'pending' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleMatrixSort('pending')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Unseen
+                        <SortIndicator field="pending" currentField={matrixSortField} currentOrder={matrixSortOrder} />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-center font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        matrixSortField === 'resubmitted' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleMatrixSort('resubmitted')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Resubmitted
+                        <SortIndicator field="resubmitted" currentField={matrixSortField} currentOrder={matrixSortOrder} />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className={cn(
+                        "text-right pr-10 font-black text-[11px] uppercase tracking-widest cursor-pointer transition-all duration-300 group",
+                        matrixSortField === 'efficiency' ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-slate-500 hover:bg-slate-100"
+                      )}
+                      onClick={() => toggleMatrixSort('efficiency')}
+                    >
+                      <div className="flex items-center justify-end">
+                        Efficiency
+                        <SortIndicator field="efficiency" currentField={matrixSortField} currentOrder={matrixSortOrder} />
+                      </div>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pagedBranchMatrixData.length === 0 ? (
+                    <TableRow><TableCell colSpan={8} className="py-32 text-center text-slate-400 italic">No branch data available.</TableCell></TableRow>
+                  ) : pagedBranchMatrixData.map((branch) => (
+                    <TableRow key={branch.name} className="hover:bg-slate-50/80 transition-all border-b border-slate-100 group">
+                      <TableCell className="py-6 pl-10">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                            <Building2 className="w-5 h-5" />
+                          </div>
+                          <span className="font-black text-slate-900">{branch.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center font-black text-primary text-lg">{branch.total}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold">{branch.approved}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="bg-orange-50 text-orange-700 font-bold">{branch.amended}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="bg-primary/10 text-primary font-bold">{branch.pending}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="bg-purple-50 text-purple-700 font-bold">{branch.resubmitted}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-10">
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="text-xs font-black text-emerald-600">{branch.efficiency}%</span>
+                          <Progress value={branch.efficiency} className="w-24 h-1.5 bg-slate-100" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+            {totalBranchMatrixPages > 1 && (
+              <div className="flex items-center justify-between gap-4 border-t bg-slate-50/80 px-6 py-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safeBranchMatrixPage <= 1}
+                  onClick={() => setBranchMatrixPage(p => Math.max(1, p - 1))}
+                  className="h-9 gap-1 font-bold border-slate-200"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Prev
+                </Button>
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                  Page {safeBranchMatrixPage} of {totalBranchMatrixPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safeBranchMatrixPage >= totalBranchMatrixPages}
+                  onClick={() => setBranchMatrixPage(p => Math.min(totalBranchMatrixPages, p + 1))}
+                  className="h-9 gap-1 font-bold border-slate-200"
+                >
+                  Next <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
           </Card>
         )}
 

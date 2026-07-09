@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/hooks/use-permissions";
+import { normalizeAssignedBranches } from "@/lib/jurisdiction";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Card, 
@@ -154,7 +155,7 @@ export default function ManagementReportingPage() {
         getBranches(),
         getDistricts()
       ]);
-      setSubmissions(subs || []);
+      setSubmissions(subs.submissions || []);
       setBranches(b || []);
       setDistricts(d || []);
     } catch (e) {
@@ -165,15 +166,77 @@ export default function ManagementReportingPage() {
   };
 
   const branchOptions = useMemo(() => {
-    return (branches || [])
-      .filter((branch: any) => selectedDistrict === "all" || branch?.district?.name === selectedDistrict)
+    let availableBranches = branches || [];
+
+    // Filter based on user's jurisdiction if not super admin
+    if (!isSuperAdmin && user) {
+      const userAssignedBranches = normalizeAssignedBranches(user.assignedBranches || []);
+      const userBranchName = user.branchName;
+
+      availableBranches = availableBranches.filter((branch: any) => {
+        const branchName = branch.name;
+        const districtName = branch.district?.name;
+
+        // If user has assigned branches, only include those
+        if (userAssignedBranches.length > 0) {
+          return userAssignedBranches.some((ab: string) => normalizeAssignedBranches([ab]).includes(branchName));
+        }
+
+        // Otherwise, include user's own branch
+        if (userBranchName) {
+          return branchName === userBranchName;
+        }
+
+        return false;
+      });
+    }
+
+    // Then filter by selected district
+    availableBranches = availableBranches.filter((branch: any) => 
+      selectedDistrict === "all" || branch?.district?.name === selectedDistrict
+    );
+
+    return availableBranches
       .map((branch: any) => branch.name)
       .sort((a: string, b: string) => a.localeCompare(b));
-  }, [branches, selectedDistrict]);
+  }, [branches, selectedDistrict, isSuperAdmin, user]);
 
   const districtOptions = useMemo(() => {
-    return (districts || []).map((district: any) => district.name).sort((a: string, b: string) => a.localeCompare(b));
-  }, [districts]);
+    let availableDistricts = districts || [];
+
+    // Filter based on user's jurisdiction if not super admin
+    if (!isSuperAdmin && user) {
+      const userAssignedBranches = normalizeAssignedBranches(user.assignedBranches || []);
+      const userDistrictName = user.districtName;
+      const userBranchName = user.branchName;
+
+      if (userAssignedBranches.length > 0) {
+        // If user has assigned branches, get all districts those branches belong to
+        const userAssignedBranchNames = userAssignedBranches;
+        availableDistricts = availableDistricts.filter((district: any) => {
+          return branches.some((branch: any) => 
+            branch.district?.name === district.name && 
+            userAssignedBranchNames.some((ab: string) => normalizeAssignedBranches([ab]).includes(branch.name))
+          );
+        });
+      } else if (userDistrictName) {
+        // Otherwise, only include user's own district
+        availableDistricts = availableDistricts.filter((district: any) => district.name === userDistrictName);
+      } else if (userBranchName) {
+        // If no district, get the district from user's branch
+        const userBranch = branches.find((b: any) => b.name === userBranchName);
+        if (userBranch?.district?.name) {
+          availableDistricts = availableDistricts.filter((district: any) => district.name === userBranch.district.name);
+        }
+      } else {
+        availableDistricts = [];
+      }
+    }
+
+    return availableDistricts
+      .map((district: any) => district.name)
+      .sort((a: string, b: string) => a.localeCompare(b));
+  }, [districts, branches, isSuperAdmin, user]);
 
   const filteredDistrictOptions = useMemo(() => {
     const query = districtSearch.trim().toLowerCase();
@@ -249,21 +312,55 @@ export default function ManagementReportingPage() {
     });
   }, [submissions, selectedDistrict, selectedBranch, selectedStatus, selectedType, searchTerm, selectedRisk]);
 
+  const districtPerformanceData = useMemo(() => {
+    if (!filteredData || filteredData.length === 0) return [];
+
+    const districtStats: Record<string, { name: string; authorized: number; pending: number; returned: number; total: number; efficiency: number }> = {};
+
+    filteredData.forEach((s: any) => {
+      const districtName = s.districtName || s.branch?.district?.name || 'Unknown';
+      if (!districtStats[districtName]) {
+        districtStats[districtName] = { name: districtName, authorized: 0, pending: 0, returned: 0, total: 0, efficiency: 0 };
+      }
+      
+      districtStats[districtName].total += 1;
+      
+      const status = (s.status || '').toUpperCase();
+      if (status === KYC_STATUS.APPROVED) {
+        districtStats[districtName].authorized += 1;
+      } else if (status === KYC_STATUS.ACTION_REQUIRED) {
+        districtStats[districtName].returned += 1;
+      } else {
+        districtStats[districtName].pending += 1;
+      }
+    });
+
+    // Calculate efficiency for each district
+    Object.values(districtStats).forEach((stat) => {
+      stat.efficiency = stat.total > 0 ? Math.round((stat.authorized / stat.total) * 100) : 0;
+    });
+
+    return Object.values(districtStats).sort((a, b) => b.efficiency - a.efficiency);
+  }, [filteredData]);
+
   const stats = useMemo(() => {
     const total = filteredData.length;
     const approved = filteredData.filter(s => s.status === KYC_STATUS.APPROVED).length;
-    // Precise separation of Analysis (Unseen) and Running (In Review)
-    const unseen = filteredData.filter(s => s.status === KYC_STATUS.SUBMITTED).length;
-    const running = filteredData.filter(s => s.status === KYC_STATUS.IN_REVIEW).length;
+    // Precise separation of Analysis (Unseen) and Running (In Review). Both
+    // exclude resubmitted cases — a case returned for amendment and resubmitted
+    // is a distinct workflow from a fresh, never-seen case.
+    const unseen = filteredData.filter(s => s.status === KYC_STATUS.SUBMITTED && !s.isResubmitted).length;
+    const running = filteredData.filter(s => s.status === KYC_STATUS.IN_REVIEW && !s.isResubmitted).length;
     const rejected = filteredData.filter(s => s.status === KYC_STATUS.REJECTED).length;
     const returned = filteredData.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length;
+    const resubmitted = filteredData.filter(s => s.isResubmitted).length;
     
     const branchBreakdown: Record<string, number> = {};
     filteredData.forEach(s => {
       branchBreakdown[s.branchName] = (branchBreakdown[s.branchName] || 0) + 1;
     });
 
-    return { total, approved, unseen, running, rejected, returned, branchBreakdown };
+    return { total, approved, unseen, running, rejected, returned, resubmitted, branchBreakdown };
   }, [filteredData]);
 
   const chartsData = useMemo(() => {
@@ -271,7 +368,8 @@ export default function ManagementReportingPage() {
       { name: 'Authorized', value: stats.approved },
       { name: 'Analysis', value: stats.unseen },
       { name: 'Running', value: stats.running },
-      { name: 'Gaps', value: stats.returned }
+      { name: 'Gaps', value: stats.returned },
+      { name: 'Resubmitted', value: stats.resubmitted }
     ].filter(d => d.value > 0);
 
     const riskBar = [
@@ -297,11 +395,12 @@ export default function ManagementReportingPage() {
   const handleExportExcel = async () => {
     if (!user) return;
     toast({ title: "Compiling Spreadsheet", description: "Filtering active dataset for export..." });
-    const headers = ['Case ID', 'Customer Name', 'Status', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted At'];
+    const headers = ['Case ID', 'Customer Name', 'Status', 'Is Resubmitted', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted At'];
     const rows = filteredData.map(sub => [
       sub.id,
       sub.customerName,
       sub.status,
+      sub.isResubmitted ? 'Yes' : 'No',
       sub.branchName,
       sub.branch?.district?.name || 'N/A',
       sub.isExceptional ? 'High' : 'Standard',
@@ -365,15 +464,13 @@ export default function ManagementReportingPage() {
             <Popover
               open={districtFilterOpen}
               onOpenChange={(open) => {
-                if (!isSuperAdmin) return;
                 setDistrictFilterOpen(open);
               }}
             >
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  disabled={!isSuperAdmin}
-                  className="h-10 w-full justify-between rounded-xl border-slate-200 text-xs font-bold disabled:opacity-100"
+                  className="h-10 w-full justify-between rounded-xl border-slate-200 text-xs font-bold"
                 >
                   <span className="truncate">{selectedDistrict === "all" ? "Overall Network" : selectedDistrict}</span>
                   <ChevronsUpDown className="h-4 w-4 text-slate-400" />
@@ -616,13 +713,14 @@ export default function ManagementReportingPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         {[
           { label: 'Total Cases', value: summaryStats?.total ?? stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white', status: undefined as string | undefined },
           { label: 'Unseen Analysis', value: summaryStats?.unseen ?? stats.unseen, icon: Clock, color: 'text-primary', bg: 'bg-white', status: KYC_STATUS.SUBMITTED },
           { label: 'Running (In Review)', value: summaryStats?.running ?? stats.running, icon: Activity, color: 'text-blue-500', bg: 'bg-white', status: KYC_STATUS.IN_REVIEW },
           { label: 'Authorized Recently', value: summaryStats?.authorized ?? stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white', status: KYC_STATUS.APPROVED },
           { label: 'Need Amendment', value: summaryStats?.needAmendment ?? stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white', status: KYC_STATUS.ACTION_REQUIRED },
+          { label: 'Resubmitted', value: stats.resubmitted, icon: RotateCcw, color: 'text-purple-600', bg: 'bg-white', status: undefined as string | undefined },
         ].map((item, i) => (
           <Card
             key={i}
@@ -719,6 +817,43 @@ export default function ManagementReportingPage() {
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-full text-slate-400 italic text-sm">No trend data available.</div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* District Level Performance Comparison Chart */}
+        <Card className="lg:col-span-3 shadow-xl border-slate-200 overflow-hidden rounded-3xl bg-white">
+          <CardHeader className="bg-primary text-white p-6 border-b">
+            <CardTitle className="text-lg font-black flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-white" /> District Level Performance Comparison
+            </CardTitle>
+            <CardDescription className="text-slate-200">Compare authorized, pending, and returned cases across districts sorted by efficiency.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-8 h-[400px]">
+            {districtPerformanceData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={districtPerformanceData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 10, fontWeight: 'bold' }} 
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 10, fontWeight: 'bold' }} 
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip cursor={{ fill: 'rgba(184, 147, 52, 0.05)' }} />
+                  <Legend verticalAlign="top" align="center" iconType="circle" />
+                  <Bar dataKey="authorized" fill="#10B981" radius={[4, 4, 0, 0]} name="Authorized" />
+                  <Bar dataKey="pending" fill="#3F51B5" radius={[4, 4, 0, 0]} name="Pending" />
+                  <Bar dataKey="returned" fill="#F59E0B" radius={[4, 4, 0, 0]} name="Returned" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 italic text-sm">No district performance data available for selected filters.</div>
             )}
           </CardContent>
         </Card>

@@ -56,6 +56,7 @@ import JSZip from 'jszip';
 import { sanitizeBundleSegment } from "@/lib/bundle-path";
 import { resolveDownloadFileName } from "@/lib/documents";
 import { cn } from "@/lib/utils";
+import { Pagination } from "@/components/ui/pagination";
 
 const STATUS_OPTIONS = [
   { id: KYC_STATUS.APPROVED, label: 'Authorized' },
@@ -66,11 +67,14 @@ const STATUS_OPTIONS = [
   { id: KYC_STATUS.REJECTED, label: 'Rejected' }
 ];
 
+const ITEMS_PER_PAGE = 10;
+
 export default function CaseArchivePage() {
   const { user } = useAuth();
   const { isSuperAdmin } = usePermissions();
   const { toast } = useToast();
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
@@ -80,6 +84,7 @@ export default function CaseArchivePage() {
   const [sortField, setSortField] = useState<string>('submittedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isZipping, setIsZipping] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // FILTER SYNCHRONIZATION: dashboard cards redirect here with their active
   // filters (e.g. /submissions?status=SUBMITTED&district=X&branch=Y&from=...&to=...)
@@ -105,26 +110,40 @@ export default function CaseArchivePage() {
 
   useEffect(() => {
     loadArchive();
-  }, [dateRange]);
+  }, [dateRange, selectedDistricts, selectedBranches, selectedStatuses, currentPage]);
 
   const loadArchive = async () => {
     setLoading(true);
     try {
-      let filters: any = { limit: 1000 };
+      let filters: any = { 
+        limit: ITEMS_PER_PAGE,
+        offset: (currentPage - 1) * ITEMS_PER_PAGE
+      };
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
+      // Scope the fetch server-side to the active filters (district/branch/status)
+      // so the archive's result count matches exactly what a dashboard card
+      // (getCaseMetrics, same filters) reported — instead of fetching everything
+      // and relying only on a client-side string match, which can silently drift
+      // out of sync (casing, whitespace) from the server's jurisdiction filter.
+      // Only a single district maps 1:1 to a server filter; multi-select falls
+      // back to the client-side match below.
+      if (selectedDistricts.length === 1) filters.district = selectedDistricts[0];
+      if (selectedBranches.length > 0) filters.branches = selectedBranches;
+      if (selectedStatuses.length > 0) filters.status = selectedStatuses;
       // Non-superadmin users only see submissions from their assigned branches
-      if (!isSuperAdmin && user) {
+      if (!isSuperAdmin && user && selectedBranches.length === 0) {
         if (user.assignedBranches && user.assignedBranches.length > 0) {
           filters.branches = user.assignedBranches;
         } else if (user.branchName) {
           filters.branch = user.branchName;
         }
       }
-      const data = await getSubmissions(filters);
-      setSubmissions(data || []);
+      const result = await getSubmissions(filters);
+      setSubmissions(result.submissions || []);
+      setTotalCount(result.total || 0);
     } catch (error) {
       toast({ variant: "destructive", title: "Archive Error", description: "Could not retrieve archive records." });
     } finally {
@@ -260,15 +279,18 @@ export default function CaseArchivePage() {
 
   const toggleStatus = (status: string) => {
     setSelectedStatuses(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]);
+    setCurrentPage(1);
   };
 
   const toggleBranch = (branch: string) => {
     setSelectedBranches(prev => prev.includes(branch) ? prev.filter(b => b !== branch) : [...prev, branch]);
+    setCurrentPage(1);
   };
 
   const toggleDistrict = (district: string) => {
     setSelectedDistricts(prev => prev.includes(district) ? prev.filter(d => d !== district) : [...prev, district]);
     setSelectedBranches([]); // Clear selected branches when district selection changes
+    setCurrentPage(1);
   };
 
   const resetFilters = () => {
@@ -277,6 +299,7 @@ export default function CaseArchivePage() {
     setSelectedBranches([]);
     setSearchTerm("");
     setDateRange(undefined);
+    setCurrentPage(1);
   };
 
   const getStatusBadge = (sub: any) => {
@@ -449,8 +472,8 @@ export default function CaseArchivePage() {
                   </div>
                 </TableCell>
                 <TableCell>{getStatusBadge(sub)}</TableCell>
-                <TableCell className="text-slate-500 font-medium text-xs">{sub.submittedAt ? format(new Date(sub.submittedAt), 'MMM dd, yyyy') : 'N/A'}</TableCell>
-                <TableCell className="text-slate-500 font-medium text-xs">{sub.updatedAt ? format(new Date(sub.updatedAt), 'MMM dd, yyyy') : 'N/A'}</TableCell>
+                <TableCell className="text-slate-500 font-medium text-xs">{sub.submittedAt ? format(new Date(sub.submittedAt), 'MMM dd, yyyy HH:mm:ss') : 'N/A'}</TableCell>
+                <TableCell className="text-slate-500 font-medium text-xs">{sub.updatedAt ? format(new Date(sub.updatedAt), 'MMM dd, yyyy HH:mm:ss') : 'N/A'}</TableCell>
                 <TableCell className="text-right pr-8">
                   <div className="flex justify-end gap-1">
                     <Button
@@ -471,6 +494,16 @@ export default function CaseArchivePage() {
           </TableBody>
         </Table>
       </div>
+      
+      {!loading && totalCount > ITEMS_PER_PAGE && (
+        <div className="mt-6">
+          <Pagination 
+            currentPage={currentPage}
+            totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+            onPageChange={setCurrentPage}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -20,7 +20,10 @@ import {
   Building2,
   ShieldAlert,
   RefreshCw,
-  Map
+  RotateCcw,
+  Map,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -68,6 +71,7 @@ const chartConfig = {
   SUBMITTED: { label: "Officer Analysis", color: STATUS_COLORS.SUBMITTED },
   ACTION_REQUIRED: { label: "Need Amendment", color: STATUS_COLORS.ACTION_REQUIRED },
   REJECTED: { label: "Risk Rejected", color: STATUS_COLORS.REJECTED },
+  RESUBMITTED: { label: "Resubmitted", color: "#a855f7" },
 } satisfies ChartConfig;
 
 const volumeConfig = {
@@ -91,6 +95,36 @@ export default function DistrictMonitoringPage() {
   const [branchSortOrder, setBranchSortOrder] = useState<'asc' | 'desc'>("asc");
   const [staffSortField, setStaffSortField] = useState<string>("name");
   const [staffSortOrder, setStaffSortOrder] = useState<'asc' | 'desc'>("asc");
+  const [activeTab, setActiveTab] = useState<string>("summary");
+
+  // Sync tab state with URL hash
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.slice(1); // Remove # prefix
+      if (["summary", "all-cases", "branch-matrix", "staff-matrix"].includes(hash)) {
+        setActiveTab(hash);
+      }
+    }
+  }, []);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `#${value}`);
+    }
+  };
+
+  const [branchPage, setBranchPage] = useState(1);
+  const [staffPage, setStaffPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  useEffect(() => {
+    setBranchPage(1);
+  }, [searchTerm, matrixBranchFilter, dateRange, branchSortField, branchSortOrder]);
+
+  useEffect(() => {
+    setStaffPage(1);
+  }, [searchTerm, matrixBranchFilter, dateRange, staffSortField, staffSortOrder]);
 
   const toggleBranchSort = (field: string) => {
     if (branchSortField === field) {
@@ -135,8 +169,8 @@ export default function DistrictMonitoringPage() {
           if (dateRange.to) filters.endDate = dateRange.to.toISOString();
         }
 
-        const data = await getSubmissions(filters);
-        setSubmissions(data);
+        const result = await getSubmissions(filters);
+        setSubmissions(result.submissions);
       } catch (error) {
       } finally {
         setLoading(false);
@@ -158,16 +192,18 @@ export default function DistrictMonitoringPage() {
     const stats = {
       total: scopedSubmissions.length,
       approved: scopedSubmissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
-      pending: scopedSubmissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length,
+      pending: scopedSubmissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status) && !s.isResubmitted).length,
       rejected: scopedSubmissions.filter(s => s.status === KYC_STATUS.REJECTED).length,
       amended: scopedSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
-      branches: {} as Record<string, { name: string, total: number, approved: number, pending: number, amended: number }>,
+      resubmitted: scopedSubmissions.filter(s => s.isResubmitted).length,
+      branches: {} as Record<string, { name: string, total: number, approved: number, pending: number, amended: number, resubmitted: number }>,
       officers: {} as Record<string, { name: string, total: number, approved: number, amended: number, pending: number, cycles: number, branches: Set<string> }>,
       byStatus: [
         { name: 'APPROVED', value: 0, fill: STATUS_COLORS.APPROVED },
         { name: 'SUBMITTED', value: 0, fill: STATUS_COLORS.SUBMITTED },
         { name: 'ACTION_REQUIRED', value: 0, fill: STATUS_COLORS.ACTION_REQUIRED },
         { name: 'REJECTED', value: 0, fill: STATUS_COLORS.REJECTED },
+        { name: 'RESUBMITTED', value: 0, fill: '#a855f7' },
       ],
       volumeHistory: [] as { date: string, count: number }[]
     };
@@ -195,9 +231,10 @@ export default function DistrictMonitoringPage() {
 
       const bName = sub.branch?.name || sub.branchName || "Unknown Branch";
       if (!stats.branches[bName]) {
-        stats.branches[bName] = { name: bName, total: 0, approved: 0, pending: 0, amended: 0 };
+        stats.branches[bName] = { name: bName, total: 0, approved: 0, pending: 0, amended: 0, resubmitted: 0 };
       }
       stats.branches[bName].total++;
+      if (sub.isResubmitted) stats.branches[bName].resubmitted++;
 
       const officerName = sub.createdBy ? `${sub.createdBy.firstName} ${sub.createdBy.lastName}` : 'Institutional Staff';
       const officerKey = sub.createdById || 'SYSTEM';
@@ -217,9 +254,13 @@ export default function DistrictMonitoringPage() {
         stats.officers[officerKey].amended++;
         stats.byStatus[2].value++;
       } else if ([KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(sub.status)) {
-        stats.branches[bName].pending++;
-        stats.officers[officerKey].pending++;
-        stats.byStatus[1].value++;
+        if (!sub.isResubmitted) {
+          stats.branches[bName].pending++;
+          stats.officers[officerKey].pending++;
+          stats.byStatus[1].value++;
+        } else {
+          stats.byStatus[4].value++;
+        }
       } else if (sub.status === KYC_STATUS.REJECTED) {
         stats.byStatus[3].value++;
       }
@@ -258,6 +299,16 @@ export default function DistrictMonitoringPage() {
       return matchesSearch && matchesBranch && matchesDistrict;
     });
   }, [submissions, searchTerm, matrixBranchFilter, isAdmin, districtName]);
+
+  // Card stats are derived from the SAME filteredSubmissions source used for
+  // the table and export, so the numbers always reconcile exactly.
+  const filteredCardStats = useMemo(() => ({
+    total: filteredSubmissions.length,
+    approved: filteredSubmissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
+    amended: filteredSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
+    pending: filteredSubmissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status) && !s.isResubmitted).length,
+    resubmitted: filteredSubmissions.filter(s => s.isResubmitted).length,
+  }), [filteredSubmissions]);
 
   const branchMatrixOptions = useMemo(() => {
     return Object.keys(analytics?.branches || {}).sort((a, b) => a.localeCompare(b));
@@ -318,19 +369,39 @@ export default function DistrictMonitoringPage() {
       .map((officer) => ({
         ...officer,
         efficiency: Math.round((officer.approved / (officer.total - officer.pending || 1)) * 100),
+        branch: Array.from(officer.branches as Set<string>).sort()[0] || '', // First branch name for sorting
       }));
     return sortRows(rows, staffSortField, staffSortOrder);
   }, [analytics?.officers, staffMatrixFilter, staffSortField, staffSortOrder]);
 
+  const totalBranches = branchRows.length;
+  const totalBranchPages = Math.max(1, Math.ceil(totalBranches / PAGE_SIZE));
+  const safeBranchPage = Math.min(branchPage, totalBranchPages);
+  const branchPageStart = (safeBranchPage - 1) * PAGE_SIZE;
+  const pagedBranchRows = useMemo(
+    () => branchRows.slice(branchPageStart, branchPageStart + PAGE_SIZE),
+    [branchRows, branchPageStart]
+  );
+
+  const totalStaff = staffRows.length;
+  const totalStaffPages = Math.max(1, Math.ceil(totalStaff / PAGE_SIZE));
+  const safeStaffPage = Math.min(staffPage, totalStaffPages);
+  const staffPageStart = (safeStaffPage - 1) * PAGE_SIZE;
+  const pagedStaffRows = useMemo(
+    () => staffRows.slice(staffPageStart, staffPageStart + PAGE_SIZE),
+    [staffRows, staffPageStart]
+  );
+
   const handleExportCSV = () => {
     if (!filteredSubmissions || filteredSubmissions.length === 0) return;
-    const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Amendments', 'Submitted At', 'Updated At'];
+    const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Is Resubmitted', 'Amendments', 'Submitted At', 'Updated At'];
     const rows = filteredSubmissions.map((s: any) => [
       s.id,
       s.customerName,
       s.branch?.name || s.branchName || '',
       s.branch?.district?.name || s.districtName || '',
       s.status,
+      s.isResubmitted ? 'Yes' : 'No',
       s.amendCycles || 0,
       s.submittedAt ? format(new Date(s.submittedAt), 'yyyy-MM-dd HH:mm') : '',
       s.updatedAt ? format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm') : '',
@@ -391,26 +462,30 @@ export default function DistrictMonitoringPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
             <Card className="shadow-lg border-slate-200 group hover:border-primary/40 transition-all duration-300">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Regional Volume</CardTitle></CardHeader>
-              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-slate-900 tracking-tighter">{analytics?.total || 0}</span><div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/5 group-hover:text-primary transition-colors"><Inbox className="w-6 h-6" /></div></CardContent>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-slate-900 tracking-tighter">{filteredCardStats.total}</span><div className="p-3 bg-slate-100 rounded-2xl group-hover:bg-primary/5 group-hover:text-primary transition-colors"><Inbox className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-emerald-500">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Successfully Authorized</CardTitle></CardHeader>
-              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-emerald-600 tracking-tighter">{analytics?.approved || 0}</span><div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-6 h-6" /></div></CardContent>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-emerald-600 tracking-tighter">{filteredCardStats.approved}</span><div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-orange-500">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600">Amendments</CardTitle></CardHeader>
-              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-orange-600 tracking-tighter">{analytics?.amended || 0}</span><div className="p-3 bg-orange-50 rounded-2xl text-orange-600"><AlertCircle className="w-6 h-6" /></div></CardContent>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-orange-600 tracking-tighter">{filteredCardStats.amended}</span><div className="p-3 bg-orange-50 rounded-2xl text-orange-600"><AlertCircle className="w-6 h-6" /></div></CardContent>
             </Card>
             <Card className="shadow-lg border-slate-200 border-l-4 border-l-primary">
               <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-primary">Unseen Analysis</CardTitle></CardHeader>
-              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{analytics?.pending || 0}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-primary tracking-tighter">{filteredCardStats.pending}</span><div className="p-3 bg-primary/5 rounded-2xl text-primary"><Activity className="w-6 h-6" /></div></CardContent>
+            </Card>
+            <Card className="shadow-lg border-slate-200 border-l-4 border-l-purple-500">
+              <CardHeader className="pb-2"><CardTitle className="text-[10px] font-black uppercase tracking-widest text-purple-600">Resubmitted</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between"><span className="text-4xl font-black text-purple-600 tracking-tighter">{filteredCardStats.resubmitted}</span><div className="p-3 bg-purple-50 rounded-2xl text-purple-600"><RotateCcw className="w-6 h-6" /></div></CardContent>
             </Card>
           </div>
 
-          <Tabs defaultValue="summary" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             <TabsList className="bg-slate-100 p-1 border h-12">
               <TabsTrigger value="summary" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><TrendingUp className="w-4 h-4 mr-2" />Regional Pulse</TabsTrigger>
               <TabsTrigger value="all-cases" className="data-[state=active]:bg-white data-[state=active]:text-primary font-bold px-8"><Activity className="w-4 h-4 mr-2" />Monitoring Archive</TabsTrigger>
@@ -535,11 +610,12 @@ export default function DistrictMonitoringPage() {
                         <TableHead className="font-bold text-center text-emerald-600 cursor-pointer select-none" onClick={() => toggleBranchSort('approved')}>Authorized<SortIndicator field="approved" activeField={branchSortField} order={branchSortOrder} /></TableHead>
                         <TableHead className="font-bold text-center text-orange-600 cursor-pointer select-none" onClick={() => toggleBranchSort('amended')}>Amendments<SortIndicator field="amended" activeField={branchSortField} order={branchSortOrder} /></TableHead>
                         <TableHead className="font-bold text-center text-primary cursor-pointer select-none" onClick={() => toggleBranchSort('pending')}>Unseen<SortIndicator field="pending" activeField={branchSortField} order={branchSortOrder} /></TableHead>
+                        <TableHead className="font-bold text-center text-purple-600 cursor-pointer select-none" onClick={() => toggleBranchSort('resubmitted')}>Resubmitted<SortIndicator field="resubmitted" activeField={branchSortField} order={branchSortOrder} /></TableHead>
                         <TableHead className="font-bold text-right pr-8 cursor-pointer select-none" onClick={() => toggleBranchSort('efficiency')}>Efficiency Index<SortIndicator field="efficiency" activeField={branchSortField} order={branchSortOrder} /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {branchRows.map((branch) => {
+                      {pagedBranchRows.map((branch) => {
                         const efficiency = branch.efficiency;
                         return (
                           <TableRow key={branch.name} className="hover:bg-slate-50 transition-colors">
@@ -553,6 +629,9 @@ export default function DistrictMonitoringPage() {
                             <TableCell className="text-center">
                               <Badge variant="secondary" className="bg-primary/10 text-primary font-bold">{branch.pending}</Badge>
                             </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="secondary" className="bg-purple-50 text-purple-700 font-bold">{branch.resubmitted}</Badge>
+                            </TableCell>
                             <TableCell className="text-right pr-8">
                               <div className="flex flex-col items-end gap-1.5">
                                 <span className="text-xs font-black text-emerald-600">{efficiency}%</span>
@@ -565,6 +644,31 @@ export default function DistrictMonitoringPage() {
                     </TableBody>
                   </Table>
                 </CardContent>
+                {totalBranchPages > 1 && (
+                  <div className="flex items-center justify-between gap-4 border-t bg-slate-50/80 px-6 py-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safeBranchPage <= 1}
+                      onClick={() => setBranchPage(p => Math.max(1, p - 1))}
+                      className="h-9 gap-1 font-bold border-slate-200"
+                    >
+                      <ChevronLeft className="h-4 w-4" /> Prev
+                    </Button>
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                      Page {safeBranchPage} of {totalBranchPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safeBranchPage >= totalBranchPages}
+                      onClick={() => setBranchPage(p => Math.min(totalBranchPages, p + 1))}
+                      className="h-9 gap-1 font-bold border-slate-200"
+                    >
+                      Next <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </Card>
             </TabsContent>
 
@@ -637,7 +741,7 @@ export default function DistrictMonitoringPage() {
                     <TableHeader className="bg-slate-50/80">
                       <TableRow>
                         <TableHead className="font-bold py-4 pl-8 cursor-pointer select-none" onClick={() => toggleStaffSort('name')}>Staff Member<SortIndicator field="name" activeField={staffSortField} order={staffSortOrder} /></TableHead>
-                        <TableHead className="font-bold cursor-pointer select-none">Branch</TableHead>
+                        <TableHead className="font-bold cursor-pointer select-none" onClick={() => toggleStaffSort('branch')}>Branch<SortIndicator field="branch" activeField={staffSortField} order={staffSortOrder} /></TableHead>
                         <TableHead className="font-bold text-center cursor-pointer select-none" onClick={() => toggleStaffSort('total')}>Total Requests<SortIndicator field="total" activeField={staffSortField} order={staffSortOrder} /></TableHead>
                         <TableHead className="font-bold text-center text-emerald-600 cursor-pointer select-none" onClick={() => toggleStaffSort('approved')}>Authorized<SortIndicator field="approved" activeField={staffSortField} order={staffSortOrder} /></TableHead>
                         <TableHead className="font-bold text-center text-orange-600 cursor-pointer select-none" onClick={() => toggleStaffSort('amended')}>Amendments<SortIndicator field="amended" activeField={staffSortField} order={staffSortOrder} /></TableHead>
@@ -647,7 +751,7 @@ export default function DistrictMonitoringPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {staffRows.map((officer) => {
+                      {pagedStaffRows.map((officer) => {
                         const efficiency = officer.efficiency;
                         return (
                           <TableRow key={officer.name} className="hover:bg-slate-50 transition-colors">
@@ -688,6 +792,31 @@ export default function DistrictMonitoringPage() {
                     </TableBody>
                   </Table>
                 </CardContent>
+                {totalStaffPages > 1 && (
+                  <div className="flex items-center justify-between gap-4 border-t bg-slate-50/80 px-6 py-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safeStaffPage <= 1}
+                      onClick={() => setStaffPage(p => Math.max(1, p - 1))}
+                      className="h-9 gap-1 font-bold border-slate-200"
+                    >
+                      <ChevronLeft className="h-4 w-4" /> Prev
+                    </Button>
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                      Page {safeStaffPage} of {totalStaffPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safeStaffPage >= totalStaffPages}
+                      onClick={() => setStaffPage(p => Math.min(totalStaffPages, p + 1))}
+                      className="h-9 gap-1 font-bold border-slate-200"
+                    >
+                      Next <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </Card>
             </TabsContent>
           </Tabs>
