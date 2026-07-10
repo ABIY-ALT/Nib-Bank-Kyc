@@ -86,6 +86,9 @@ export default function CaseArchivePage() {
   const [isZipping, setIsZipping] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isResubmitted, setIsResubmitted] = useState<boolean | undefined>(undefined);
+  const [isExceptional, setIsExceptional] = useState<boolean | undefined>(undefined);
+  const [activeReviewersOnly, setActiveReviewersOnly] = useState<boolean | undefined>(undefined);
 
   // FILTER SYNCHRONIZATION: dashboard cards redirect here with their active
   // filters (e.g. /submissions?status=SUBMITTED&district=X&branch=Y&from=...&to=...)
@@ -107,6 +110,17 @@ export default function CaseArchivePage() {
         setDateRange({ from: fromDate, to: toDate && !isNaN(toDate.getTime()) ? toDate : undefined });
       }
     }
+    const isResub = params.get('isResubmitted');
+    if (isResub === 'true') setIsResubmitted(true);
+    else if (isResub === 'false') setIsResubmitted(false);
+    
+    const isExcept = params.get('isExceptional');
+    if (isExcept === 'true') setIsExceptional(true);
+    else if (isExcept === 'false') setIsExceptional(false);
+
+    const activeRev = params.get('activeReviewersOnly');
+    if (activeRev === 'true') setActiveReviewersOnly(true);
+    else if (activeRev === 'false') setActiveReviewersOnly(false);
   }, []);
 
   // Debounce the search box, then search SERVER-SIDE: the table is paginated,
@@ -122,7 +136,7 @@ export default function CaseArchivePage() {
 
   useEffect(() => {
     loadArchive();
-  }, [dateRange, selectedDistricts, selectedBranches, selectedStatuses, currentPage, sortField, sortOrder, debouncedSearch]);
+  }, [dateRange, selectedDistricts, selectedBranches, selectedStatuses, currentPage, sortField, sortOrder, debouncedSearch, isResubmitted, isExceptional, activeReviewersOnly]);
 
   // Shared with the CSV export: the export must hit the server with the exact
   // same district/branch/status/date scoping as the on-screen page, just
@@ -145,14 +159,9 @@ export default function CaseArchivePage() {
     if (selectedDistricts.length === 1) filters.district = selectedDistricts[0];
     if (selectedBranches.length > 0) filters.branches = selectedBranches;
     if (selectedStatuses.length > 0) filters.status = selectedStatuses;
-    // Non-superadmin users only see submissions from their assigned branches
-    if (!isSuperAdmin && user && selectedBranches.length === 0) {
-      if (user.assignedBranches && user.assignedBranches.length > 0) {
-        filters.branches = user.assignedBranches;
-      } else if (user.branchName) {
-        filters.branch = user.branchName;
-      }
-    }
+    if (isResubmitted !== undefined) filters.isResubmitted = isResubmitted;
+    if (isExceptional !== undefined) filters.isExceptional = isExceptional;
+    if (activeReviewersOnly !== undefined) filters.activeReviewersOnly = activeReviewersOnly;
     return filters;
   };
 
@@ -317,6 +326,9 @@ export default function CaseArchivePage() {
     setSelectedBranches([]);
     setSearchTerm("");
     setDateRange(undefined);
+    setIsResubmitted(undefined);
+    setIsExceptional(undefined);
+    setActiveReviewersOnly(undefined);
     setCurrentPage(1);
   };
 

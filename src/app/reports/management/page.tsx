@@ -758,12 +758,12 @@ export default function ManagementReportingPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         {[
-          { label: 'Total Cases', value: summaryStats?.total ?? stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white', status: undefined as string | undefined },
-          { label: 'Unseen Analysis', value: summaryStats?.unseen ?? stats.unseen, icon: Clock, color: 'text-primary', bg: 'bg-white', status: KYC_STATUS.SUBMITTED },
-          { label: 'Running (In Review)', value: summaryStats?.running ?? stats.running, icon: Activity, color: 'text-blue-500', bg: 'bg-white', status: KYC_STATUS.IN_REVIEW },
-          { label: 'Authorized Recently', value: summaryStats?.authorized ?? stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white', status: KYC_STATUS.APPROVED },
-          { label: 'Need Amendment', value: summaryStats?.needAmendment ?? stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white', status: KYC_STATUS.ACTION_REQUIRED },
-          { label: 'Resubmitted', value: summaryStats?.resubmitted ?? stats.resubmitted, icon: RotateCcw, color: 'text-purple-600', bg: 'bg-white', status: undefined as string | undefined },
+          { label: 'Total Cases', value: summaryStats?.total ?? stats.total, icon: Inbox, color: 'text-slate-900', bg: 'bg-white', status: undefined as string | undefined, isResubmitted: undefined as boolean | undefined, activeReviewersOnly: undefined as boolean | undefined },
+          { label: 'Unseen Analysis', value: summaryStats?.unseen ?? stats.unseen, icon: Clock, color: 'text-primary', bg: 'bg-white', status: KYC_STATUS.SUBMITTED, isResubmitted: false },
+          { label: 'Running (In Review)', value: summaryStats?.running ?? stats.running, icon: Activity, color: 'text-blue-500', bg: 'bg-white', status: KYC_STATUS.IN_REVIEW, isResubmitted: false, activeReviewersOnly: true },
+          { label: 'Authorized Recently', value: summaryStats?.authorized ?? stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white', status: KYC_STATUS.APPROVED, isResubmitted: undefined },
+          { label: 'Need Amendment', value: summaryStats?.needAmendment ?? stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white', status: KYC_STATUS.ACTION_REQUIRED, isResubmitted: undefined },
+          { label: 'Resubmitted', value: summaryStats?.resubmitted ?? stats.resubmitted, icon: RotateCcw, color: 'text-purple-600', bg: 'bg-white', status: undefined as string | undefined, isResubmitted: true },
         ].map((item, i) => (
           <Card
             key={i}
@@ -772,8 +772,11 @@ export default function ManagementReportingPage() {
               // card's status plus the dashboard's active district/branch/date filters.
               const params = new URLSearchParams();
               if (item.status) params.set('status', item.status);
+              if (item.isResubmitted !== undefined) params.set('isResubmitted', String(item.isResubmitted));
+              if (item.activeReviewersOnly !== undefined) params.set('activeReviewersOnly', String(item.activeReviewersOnly));
               if (selectedDistrict !== 'all') params.set('district', selectedDistrict);
               if (selectedBranch !== 'all') params.set('branch', selectedBranch);
+              if (selectedRisk !== 'all') params.set('isExceptional', String(selectedRisk === 'HIGH'));
               if (dateRange?.from) params.set('from', dateRange.from.toISOString());
               if (dateRange?.to) params.set('to', dateRange.to.toISOString());
               const qs = params.toString();

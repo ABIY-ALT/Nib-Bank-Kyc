@@ -260,11 +260,24 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
   const isBranchScopeStaff = userPermissions.some(p => BRANCH_SCOPE_PERMISSIONS.has(p));
   const normalizedAssigned = assignedBranches.map((branch) => normalizeBranchName(branch)).filter(Boolean);
 
+  // Helper to build explicit request filters for users with global or network-wide access
+  const buildExplicitFilters = () => {
+    let filter: any = {};
+    if (requestedDistrict) filter.districtName = { equals: requestedDistrict, mode: 'insensitive' };
+    if (requestedBranches.length > 0) {
+      const normalizedRequested = requestedBranches.map((b) => normalizeBranchName(b));
+      filter.branchName = normalizedRequested.length === 1
+        ? { equals: normalizedRequested[0], mode: 'insensitive' }
+        : { in: normalizedRequested, mode: 'insensitive' };
+    }
+    return filter;
+  };
+
   // Time-based Configuration: this officer sees cases from all branches based on schedule,
   // independent of their normal branch mappings.
-  if ((user as any).saturdayAllBranches && isSaturdayNow()) return {};
-  if ((user as any).lateHourAllBranches && isLateHourNow()) return {};
-  if ((user as any).lunchBreakAllBranches && isLunchBreakNow()) return {};
+  if ((user as any).saturdayAllBranches && isSaturdayNow()) return buildExplicitFilters();
+  if ((user as any).lateHourAllBranches && isLateHourNow()) return buildExplicitFilters();
+  if ((user as any).lunchBreakAllBranches && isLunchBreakNow()) return buildExplicitFilters();
 
   const isBranchLevelStaff = branchName && 
     isBranchScopeStaff && 
@@ -272,7 +285,7 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
     (normalizedAssigned.length === 0 || normalizedAssigned.length === 1);
 
   if (!isDistrictAdmin && !isBranchLevelStaff && userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
-    return {}; // No restriction for global executives
+    return buildExplicitFilters(); // Global executives can view entire network but should still be able to filter
   }
 
   let filter: any = {};
@@ -320,6 +333,7 @@ export async function getSubmissions(filters?: {
   assignedToId?: string,
   isResubmitted?: boolean,
   isExceptional?: boolean,
+  activeReviewersOnly?: boolean,
   entityType?: string,
   startDate?: string,
   endDate?: string,
@@ -391,6 +405,26 @@ export async function getSubmissions(filters?: {
 
     let where: any;
     const hasJurisFilter = Object.keys(jurisdictionalFilter).length > 0;
+
+    // ACTIVE_REVIEW_ASSIGNEE_FILTER equivalent for the Case Archive when strict 'Running' matches are needed
+    const ACTIVE_REVIEW_ASSIGNEE_FILTER = {
+      assignedToId: { not: null },
+      assignedTo: {
+        roles: {
+          some: {
+            role: {
+              active: true,
+              permissions: { some: { permission: { slug: 'KYC_VIEW_QUEUE' } } },
+            },
+          },
+          none: { role: { name: 'SUPER_ADMIN' } },
+        },
+      },
+    };
+
+    if (filters?.activeReviewersOnly) {
+      Object.assign(baseWhere, ACTIVE_REVIEW_ASSIGNEE_FILTER);
+    }
 
     if (isOfficer && !isManagement && !filters?.assignedToId) {
       // Officers must always see cases directly assigned to them, regardless of branch.
