@@ -18,6 +18,7 @@ import { resolvePreviewMimeType } from '@/lib/documents';
 import { performCompleteFileValidation } from '@/lib/file-upload-security-integration';
 import { writeSecureUploadedFile } from '@/lib/secure-file-storage';
 import { getExceptionalWorkflowStage, getExceptionalWorkflowAction, getActionsForCase } from '@/lib/exceptional-workflow';
+import { format, startOfMonth, endOfMonth, subDays, eachMonthOfInterval } from 'date-fns';
 import { EXCEPTIONAL_RESTORE_SENTINEL } from '@/lib/kyc-data';
 
 import { 
@@ -323,7 +324,17 @@ export async function getSubmissions(filters?: {
   startDate?: string,
   endDate?: string,
   limit?: number,
-  offset?: number
+  offset?: number,
+  // Server-side search across the WHOLE dataset (case id, customer, branch,
+  // district). With limit/offset pagination a client-side search can only ever
+  // match rows on the currently loaded page — a case sitting on the last page
+  // would be unfindable.
+  search?: string,
+  // Server-side ordering: with limit/offset pagination the DB must order the
+  // FULL result set before slicing the page — client-side sorting can only ever
+  // rearrange the rows of the currently visible page.
+  sortField?: 'id' | 'customer' | 'branch' | 'district' | 'status' | 'submittedAt' | 'updatedAt',
+  sortOrder?: 'asc' | 'desc'
 }) {
   const session = await getServerSession();
   if (!session) return { submissions: [], total: 0 };
@@ -359,6 +370,12 @@ export async function getSubmissions(filters?: {
     const isOfficer = roleNames.some(r => ['KYC_OFFICER', 'KYC_SPECIALIST', 'SUPERVISOR'].includes(r));
     const isManagement = session.role === 'SUPER_ADMIN' || roleNames.includes('DISTRICT_DIRECTOR');
 
+    // When the query is explicitly for AUTHORIZED cases, a date range means
+    // "authorized in this window", so it must match the approval timestamp
+    // (updatedAt — approval is the case's final state change), not the day the
+    // branch first submitted it, which can be weeks earlier.
+    const approvedOnly = filters?.status?.length === 1 && filters.status[0] === KYC_STATUS.APPROVED;
+
     // Base conditions that always apply, regardless of role.
     const baseWhere: any = {
       status: filters?.status ? { in: filters.status } : undefined,
@@ -367,7 +384,8 @@ export async function getSubmissions(filters?: {
       isResubmitted: filters?.isResubmitted,
       isExceptional: filters?.isExceptional ?? false,
       entityType: filters?.entityType,
-      submittedAt: dateFilter,
+      submittedAt: approvedOnly ? undefined : dateFilter,
+      updatedAt: approvedOnly ? dateFilter : undefined,
       active: true,
     };
 
@@ -413,6 +431,41 @@ export async function getSubmissions(filters?: {
       );
     }
 
+    // Search lives in AND so it narrows (never replaces) the jurisdiction/officer
+    // OR clauses built above.
+    const searchTerm = filters?.search?.trim();
+    if (searchTerm) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: [
+            { id: { contains: searchTerm, mode: 'insensitive' } },
+            { customerName: { contains: searchTerm, mode: 'insensitive' } },
+            { branchName: { contains: searchTerm, mode: 'insensitive' } },
+            { districtName: { contains: searchTerm, mode: 'insensitive' } },
+          ],
+        },
+      ];
+    }
+
+    const sortOrder = filters?.sortOrder === 'desc' ? 'desc' as const : 'asc' as const;
+    const sortColumn: Record<string, any> = {
+      id: { id: sortOrder },
+      customer: { customerName: sortOrder },
+      branch: { branchName: sortOrder },
+      district: { districtName: sortOrder },
+      status: { status: sortOrder },
+      updatedAt: { updatedAt: sortOrder },
+      submittedAt: { submittedAt: sortOrder },
+    };
+    // FIFO with urgent priority: URGENT cases are pinned to the top of the
+    // list; after them, cases follow the requested order (default oldest /
+    // first-submitted first, new arrivals joining at the bottom). `id` breaks
+    // ties deterministically so pages never overlap.
+    const orderBy: any[] = filters?.sortField
+      ? [{ isUrgent: 'desc' }, sortColumn[filters.sortField] || { submittedAt: sortOrder }, { id: 'asc' }]
+      : [{ submittedAt: 'desc' }];
+
     const [data, total] = await Promise.all([
       prisma.kYC.findMany({
         where,
@@ -422,7 +475,7 @@ export async function getSubmissions(filters?: {
           branch: { include: { district: true } },
           memos: true
         },
-        orderBy: { submittedAt: 'desc' },
+        orderBy,
         take: filters?.limit || 5000,
         skip: filters?.offset || 0,
       }),
@@ -482,6 +535,9 @@ export interface CaseMetricsFilter {
   submittedBy?: string;
   createdById?: string;
   assignedToId?: string;
+  // Matches cases the staff member touched in either capacity (creator OR
+  // assignee) — the semantics the Branch Performance staff filter needs.
+  staffId?: string;
   status?: string[] | string;
   isResubmitted?: boolean;
   isExceptional?: boolean;
@@ -504,16 +560,16 @@ export interface CaseMetrics {
   performanceIndex: number;
 }
 
-export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseMetrics> {
-  const session = await getServerSession();
-  if (!session) throw new Error("Please log in to continue.");
-
+/**
+ * Shared where-clause builder for getCaseMetrics and getDistrictPerformance so
+ * both stay identical in how they scope jurisdiction, dates, and status — the
+ * district breakdown must sum back to the same totals as the summary cards.
+ */
+async function buildCaseMetricsWhere(session: NonNullable<Awaited<ReturnType<typeof getServerSession>>>, filters?: CaseMetricsFilter) {
   const requestedDistrict = filters?.district;
   const requestedBranches = filters?.branches || (filters?.branch ? [filters.branch] : []);
   const jurisdictionalFilter = await buildJurisdictionalFilter(session, requestedDistrict, requestedBranches);
-  if (jurisdictionalFilter === null) {
-    return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0, performanceIndex: 100 };
-  }
+  if (jurisdictionalFilter === null) return null;
 
   const dateFilter = filters?.startDate || filters?.endDate ? (() => {
     const filter: any = {};
@@ -545,12 +601,24 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
   if (filters?.isResubmitted !== undefined) where.isResubmitted = filters.isResubmitted;
   if (filters?.isExceptional !== undefined) where.isExceptional = filters.isExceptional;
   if (filters?.entityType) where.entityType = filters.entityType;
-  if (dateFilter) where.submittedAt = dateFilter;
-  if (statusFilter) where.status = statusFilter;
-  if (filters?.branchId) {
-    // A requested branch narrows the jurisdiction; it must never replace it.
-    where.AND = [{ branchId: filters.branchId }];
+  // Queries scoped to AUTHORIZED cases interpret the date range as "authorized
+  // in this window" — matched on the approval timestamp (updatedAt, the case's
+  // final state change), not the original submission date. Mirrors getSubmissions.
+  const approvedOnly = Array.isArray(filters?.status)
+    ? filters!.status.length === 1 && filters!.status[0] === KYC_STATUS.APPROVED
+    : filters?.status === KYC_STATUS.APPROVED;
+  if (dateFilter) {
+    if (approvedOnly) where.updatedAt = dateFilter;
+    else where.submittedAt = dateFilter;
   }
+  if (statusFilter) where.status = statusFilter;
+  // Narrowing conditions live in AND so they never replace jurisdiction keys.
+  const andConditions: any[] = [];
+  if (filters?.branchId) andConditions.push({ branchId: filters.branchId });
+  if (filters?.staffId) {
+    andConditions.push({ OR: [{ createdById: filters.staffId }, { assignedToId: filters.staffId }] });
+  }
+  if (andConditions.length > 0) where.AND = andConditions;
 
   // NEW: Assignment filter for KYC Officers / Specialists to ensure Dashboard matches My Cases
   // Only apply if filters.assignedToId is NOT explicitly provided (to avoid double filtering)
@@ -559,7 +627,7 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
     where: { id: session.id },
     select: { roles: { include: { role: true } } }
   });
-  
+
   const roleNames = user?.roles.map(r => r.role.name) || [];
   const isOfficer = roleNames.some(r => ['KYC_OFFICER', 'KYC_SPECIALIST', 'SUPERVISOR'].includes(r));
   const isManagement = session.role === 'SUPER_ADMIN' || roleNames.includes('DISTRICT_DIRECTOR');
@@ -570,6 +638,18 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
       { assignedToId: null },
       { status: KYC_STATUS.SUBMITTED }
     ];
+  }
+
+  return where;
+}
+
+export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseMetrics> {
+  const session = await getServerSession();
+  if (!session) throw new Error("Please log in to continue.");
+
+  const where = await buildCaseMetricsWhere(session, filters);
+  if (where === null) {
+    return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0, performanceIndex: 100 };
   }
 
   try {
@@ -607,20 +687,172 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.SUBMITTED, isExceptional: false, isResubmitted: false } })
     ]);
 
-    // NEW: Refined Performance Calculation Rule
-    // Formula: (Authorized + Amendment) / (Authorized + Amendment + Unseen) * 100
-    // This index intentionally only weighs these three buckets — it is a quality
-    // score, not a case count, so it stays separate from `total` below.
-    const unseenTotal = pending - running; // pending includes SUBMITTED and IN_REVIEW
-    const denominator = authorized + needAmendment + unseenTotal;
-    const numerator = authorized + needAmendment;
-    const performanceIndex = denominator > 0 ? Math.round((numerator / denominator) * 100) : 100;
+    // Branch / District Workflow Performance (institutional formula):
+    // ((Total Submitted − Cases Requiring Amendment − Amendment Cycle Cases) ÷ Total Submitted) × 100
+    // — the share of submissions that never needed correction.
     const total = rawTotal;
+    const performanceIndex = total > 0
+      ? Math.round(Math.min(Math.max(((total - needAmendment - resubmitted) / total) * 100, 0), 100))
+      : 100;
 
     return { total, authorized, needAmendment, unseen, running, viewed, resubmitted, escalated, exceptional, pending, performanceIndex };
   } catch (error) {
     logInstitutionalError(error, 'DB_CASE_METRICS');
     return { total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, viewed: 0, resubmitted: 0, escalated: 0, exceptional: 0, pending: 0, performanceIndex: 100 };
+  }
+}
+
+export interface DistrictPerformanceRow {
+  name: string;
+  authorized: number;
+  pending: number;
+  returned: number;
+  total: number;
+  efficiency: number;
+}
+
+/**
+ * SQL-aggregated per-district breakdown for Management Reporting's district
+ * comparison chart. Previously that chart was derived client-side from a
+ * submissions list capped at 5000 rows (getSubmissions' default `take`), so on
+ * datasets larger than that (this bank has 25k+ authorized cases alone) the
+ * chart silently undercounted and drifted from the accurate SQL totals shown
+ * on the summary cards above it. Reusing buildCaseMetricsWhere/the same
+ * isExceptional-defaulting rule as getCaseMetrics keeps the sum across
+ * districts reconciled with those cards.
+ */
+export async function getDistrictPerformance(filters?: CaseMetricsFilter): Promise<DistrictPerformanceRow[]> {
+  const session = await getServerSession();
+  if (!session) throw new Error("Please log in to continue.");
+
+  const where = await buildCaseMetricsWhere(session, filters);
+  if (where === null) return [];
+
+  try {
+    const totalWhere = filters?.isExceptional !== undefined ? where : { ...where, isExceptional: false };
+
+    const [totalRows, authorizedRows, returnedRows] = await Promise.all([
+      prisma.kYC.groupBy({ by: ['districtName'], where: totalWhere, _count: { _all: true } }),
+      prisma.kYC.groupBy({ by: ['districtName'], where: { ...totalWhere, status: KYC_STATUS.APPROVED }, _count: { _all: true } }),
+      prisma.kYC.groupBy({ by: ['districtName'], where: { ...totalWhere, status: KYC_STATUS.ACTION_REQUIRED }, _count: { _all: true } }),
+    ]);
+
+    const authorizedByDistrict = new Map(authorizedRows.map((r) => [r.districtName, r._count._all]));
+    const returnedByDistrict = new Map(returnedRows.map((r) => [r.districtName, r._count._all]));
+
+    return totalRows
+      .map((r) => {
+        const total = r._count._all;
+        const authorized = authorizedByDistrict.get(r.districtName) || 0;
+        const returned = returnedByDistrict.get(r.districtName) || 0;
+        const pending = total - authorized - returned;
+        return {
+          name: r.districtName || 'Unknown',
+          authorized,
+          returned,
+          pending,
+          total,
+          efficiency: total > 0 ? Math.round((authorized / total) * 100) : 0,
+        };
+      })
+      .sort((a, b) => b.efficiency - a.efficiency);
+  } catch (error) {
+    logInstitutionalError(error, 'DB_DISTRICT_PERFORMANCE');
+    return [];
+  }
+}
+
+export interface BranchPerformanceRow {
+  name: string;
+  district: string;
+  total: number;
+  unseen: number;
+  authorized: number;
+  amended: number;
+  resubmitted: number;
+}
+
+/**
+ * SQL-aggregated per-branch breakdown (same contract as getDistrictPerformance,
+ * grouped one level lower). Feeds the Branch Matrix tables on the district and
+ * branch performance pages, which previously counted client-side over a fetch
+ * capped at 1000 rows and silently undercounted past that.
+ */
+export async function getBranchPerformance(filters?: CaseMetricsFilter): Promise<BranchPerformanceRow[]> {
+  const session = await getServerSession();
+  if (!session) throw new Error("Please log in to continue.");
+
+  const where = await buildCaseMetricsWhere(session, filters);
+  if (where === null) return [];
+
+  try {
+    const totalWhere = filters?.isExceptional !== undefined ? where : { ...where, isExceptional: false };
+
+    const [totalRows, unseenRows, authorizedRows, amendedRows, resubmittedRows] = await Promise.all([
+      prisma.kYC.groupBy({ by: ['branchName', 'districtName'], where: totalWhere, _count: { _all: true } }),
+      prisma.kYC.groupBy({ by: ['branchName'], where: { ...totalWhere, status: KYC_STATUS.SUBMITTED, isResubmitted: false }, _count: { _all: true } }),
+      prisma.kYC.groupBy({ by: ['branchName'], where: { ...totalWhere, status: KYC_STATUS.APPROVED }, _count: { _all: true } }),
+      prisma.kYC.groupBy({ by: ['branchName'], where: { ...totalWhere, status: KYC_STATUS.ACTION_REQUIRED }, _count: { _all: true } }),
+      prisma.kYC.groupBy({ by: ['branchName'], where: { ...totalWhere, isResubmitted: true }, _count: { _all: true } }),
+    ]);
+
+    const toMap = (rows: { branchName: string; _count: { _all: number } }[]) =>
+      new Map(rows.map((r) => [r.branchName, r._count._all]));
+    const unseenByBranch = toMap(unseenRows as any);
+    const authorizedByBranch = toMap(authorizedRows as any);
+    const amendedByBranch = toMap(amendedRows as any);
+    const resubmittedByBranch = toMap(resubmittedRows as any);
+
+    return totalRows
+      .map((r) => ({
+        name: r.branchName || 'Unmapped Branch',
+        district: r.districtName || 'Unknown',
+        total: r._count._all,
+        unseen: unseenByBranch.get(r.branchName) || 0,
+        authorized: authorizedByBranch.get(r.branchName) || 0,
+        amended: amendedByBranch.get(r.branchName) || 0,
+        resubmitted: resubmittedByBranch.get(r.branchName) || 0,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    logInstitutionalError(error, 'DB_BRANCH_PERFORMANCE');
+    return [];
+  }
+}
+
+/**
+ * Monthly submission volumes for the trend chart, counted in SQL over the whole
+ * jurisdiction-scoped dataset — the client previously derived this from a
+ * 5000-row-capped fetch. Month windows are intersected (AND) with any caller
+ * date filter rather than replacing it.
+ */
+export async function getMonthlyTrend(filters?: CaseMetricsFilter): Promise<{ name: string; volume: number }[]> {
+  const session = await getServerSession();
+  if (!session) throw new Error("Please log in to continue.");
+
+  const where = await buildCaseMetricsWhere(session, filters);
+  if (where === null) return [];
+
+  try {
+    const totalWhere = filters?.isExceptional !== undefined ? where : { ...where, isExceptional: false };
+    const end = new Date();
+    const start = startOfMonth(subDays(end, 180));
+    const months = eachMonthOfInterval({ start, end });
+
+    const counts = await Promise.all(
+      months.map((m) =>
+        prisma.kYC.count({
+          where: { AND: [totalWhere, { submittedAt: { gte: m, lte: endOfMonth(m) } }] },
+        })
+      )
+    );
+
+    // Unambiguous month labels: 'MMM yy' rendered "Jun 26" reads like a future
+    // calendar day, so spell the year out.
+    return months.map((m, i) => ({ name: format(m, 'MMM yyyy'), volume: counts[i] }));
+  } catch (error) {
+    logInstitutionalError(error, 'DB_MONTHLY_TREND');
+    return [];
   }
 }
 
@@ -1487,12 +1719,16 @@ export async function getWorkflowCounts() {
           active: true
         }
       }),
+      // Amendment Review badge: only resubmitted cases still awaiting a verdict.
+      // `isResubmitted` is permanent, so without the status scope the badge (and
+      // the queue it points to) kept every historical resubmission forever.
       prisma.kYC.count({
         where: {
           ...jurisdictionalFilter,
           isResubmitted: true,
           isExceptional: false,
-          active: true
+          active: true,
+          status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED] }
         }
       }),
       // In Review count restricted to cases actively assigned to a front-line

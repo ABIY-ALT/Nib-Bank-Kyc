@@ -38,8 +38,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast"
-import { getSubmissions } from "@/actions/submissions";
-import { KYC_STATUS } from "@/lib/kyc-data";
+import { getSubmissions, getBranchPerformance } from "@/actions/submissions";
 import { usePermissions } from "@/hooks/use-permissions";
 import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +53,7 @@ export default function BranchPerformancePage() {
   const { toast } = useToast();
   
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [branchPerf, setBranchPerf] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>("all");
@@ -67,21 +67,31 @@ export default function BranchPerformancePage() {
 
   useEffect(() => {
     loadData();
-  }, [isAdmin, isDistDir, user, dateRange]);
+  }, [isAdmin, isDistDir, user, dateRange, selectedStaffFilter]);
 
   const loadData = async () => {
     if (!user) return;
     setLoading(true);
     let filters: any = {
       district: isDistDir && !isAdmin ? user.districtName || undefined : undefined,
-      limit: 1000
     };
     if (dateRange?.from) {
       filters.startDate = dateRange.from.toISOString();
       if (dateRange.to) filters.endDate = dateRange.to.toISOString();
     }
-    const result = await getSubmissions(filters);
+    // Per-branch counts come from SQL aggregation over the whole dataset —
+    // counting a row-limited getSubmissions fetch undercounts once the network
+    // has more cases than the fetch cap. The submissions fetch remains only to
+    // build the staff dropdown options.
+    const [result, perfRows] = await Promise.all([
+      getSubmissions({ ...filters, limit: 1000 }),
+      getBranchPerformance({
+        ...filters,
+        staffId: selectedStaffFilter !== 'all' ? selectedStaffFilter : undefined,
+      }),
+    ]);
     setSubmissions(result.submissions || []);
+    setBranchPerf(perfRows || []);
     setLoading(false);
   };
 
@@ -124,74 +134,31 @@ export default function BranchPerformancePage() {
     }
   }, [staffOptions, selectedStaffFilter]);
 
-  const scopedSubmissions = useMemo(() => {
-    if (selectedStaffFilter === "all") return submissions;
-    return submissions.filter((sub) => {
-      const staffId = sub.createdById || sub.createdBy?.id || sub.assignedToId || sub.assignedTo?.id;
-      return String(staffId || "") === selectedStaffFilter;
-    });
-  }, [submissions, selectedStaffFilter]);
-
   const branchList = useMemo(() => {
-    return Array.from(new Set(scopedSubmissions.map(s => s.branchName))).sort() as string[];
-  }, [scopedSubmissions]);
+    return branchPerf.map((r: any) => r.name).sort() as string[];
+  }, [branchPerf]);
 
   useEffect(() => {
     setSelectedBranches((prev) => prev.filter((branchName) => branchList.includes(branchName)));
   }, [branchList]);
 
   const branchMetrics = useMemo(() => {
-    const stats: Record<string, any> = {};
-    scopedSubmissions.forEach(sub => {
-      const bName = sub.branchName || 'Unknown';
-      if (!stats[bName]) {
-        stats[bName] = {
-          name: bName,
-          district: sub.districtName,
-          volume: 0,
-          unseen: 0,
-          authorized: 0,
-          amended: 0,
-          resubmitted: 0
-        };
-      }
-      
-      if (sub.status === KYC_STATUS.APPROVED) {
-        stats[bName].authorized++;
-        stats[bName].volume++;
-      }
-      
-      if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
-        stats[bName].amended++;
-        stats[bName].volume++;
-      }
-
-      if (sub.status === KYC_STATUS.SUBMITTED) {
-        // Resubmitted cases still count toward branch volume, just not "unseen"
-        // (a resubmitted case re-entering SUBMITTED isn't a never-seen case).
-        if (!sub.isResubmitted) stats[bName].unseen++;
-        stats[bName].volume++;
-      }
-
-      if (sub.isResubmitted) {
-        stats[bName].resubmitted++;
-      }
-    });
-
-    return Object.values(stats)
-      .map(b => {
+    // SQL-aggregated rows (see loadData) — `total` counts every case in the
+    // branch, matching the district matrix and archive totals.
+    return branchPerf
+      .map((b: any) => {
         const accuracy = calculatePerformanceIndex({
-          total: b.volume,
+          total: b.total,
           unseen: b.unseen || 0,
           amended: b.amended || 0,
           authorized: b.authorized || 0,
           recycles: b.resubmitted || 0
         });
-        return { ...b, accuracy };
+        return { ...b, volume: b.total, accuracy };
       })
-      .filter(b => selectedBranches.length === 0 || selectedBranches.includes(b.name))
-      .sort((a, b) => b.volume - a.volume);
-  }, [scopedSubmissions, selectedBranches]);
+      .filter((b: any) => selectedBranches.length === 0 || selectedBranches.includes(b.name))
+      .sort((a: any, b: any) => b.volume - a.volume);
+  }, [branchPerf, selectedBranches]);
 
   const filteredBranchMetrics = useMemo(() => {
     const query = branchSearch.trim().toLowerCase();
@@ -203,6 +170,26 @@ export default function BranchPerformancePage() {
       );
     });
   }, [branchMetrics, branchSearch]);
+
+  const handleExportCSV = () => {
+    if (filteredBranchMetrics.length === 0) {
+      toast({ variant: "destructive", title: "Nothing to export", description: "No branches match the current filters." });
+      return;
+    }
+    const headers = ['Branch', 'District', 'Volume', 'Unseen', 'Authorized', 'Amended', 'Resubmitted', 'Performance Index (%)'];
+    const rows = filteredBranchMetrics.map((b: any) => [
+      b.name, b.district || '', b.volume, b.unseen || 0, b.authorized || 0, b.amended || 0, b.resubmitted || 0, b.accuracy
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `branch-performance-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Export Complete", description: `${filteredBranchMetrics.length} branch(es) exported.` });
+  };
 
   const aggregateStats = useMemo(() => {
     const total = branchMetrics.reduce((acc, b) => acc + b.volume, 0);
@@ -305,7 +292,7 @@ export default function BranchPerformancePage() {
             </PopoverContent>
           </Popover>
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="gap-2 font-bold h-12 px-6 border-slate-200 bg-white rounded-xl shadow-sm"><Filter className="w-4 h-4 text-primary" /> Filter Branch</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-64 rounded-xl shadow-2xl"><DropdownMenuLabel className="text-[10px] font-black uppercase text-slate-400 px-4 py-2">Authorized Jurisdiction</DropdownMenuLabel>{branchList.map(b => (<DropdownMenuCheckboxItem key={b} checked={selectedBranches.includes(b)} onCheckedChange={() => setSelectedBranches(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b])}>{b}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu>
-          <Button className="gap-2 h-12 px-8 bg-slate-900 text-white font-black shadow-xl rounded-xl" onClick={() => toast({ title: "Export Started" })}><FileDown className="w-5 h-5" /> Export Data</Button>
+          <Button className="gap-2 h-12 px-8 bg-slate-900 text-white font-black shadow-xl rounded-xl" onClick={handleExportCSV}><FileDown className="w-5 h-5" /> Export Data</Button>
         </div>
       </div>
 

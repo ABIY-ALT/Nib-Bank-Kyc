@@ -121,7 +121,10 @@ export default function MasterBundleDownloadPage() {
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      let filters: any = { limit: 5000 };
+      // Oldest-first so the FIRST submitted case leads the list — fetching
+      // newest-first would also drop the oldest cases entirely once the
+      // dataset exceeds the fetch cap.
+      let filters: any = { limit: 5000, sortField: 'submittedAt', sortOrder: 'asc' };
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
@@ -357,7 +360,7 @@ CASE INVENTORY
 
       const filterSummary = `FILTER SUMMARY
 ==================================================
-Export Date:           ${format(now, 'yyyy-MM-dd HH:mm:ss')}
+Export Date:           ${format(now, 'yyyy-MM-dd h:mm:ss a')}
 Status Filters:        ${selectedStatuses.length === 0 ? 'All Statuses' : selectedStatuses.map(s => STATUS_OPTIONS.find(opt => opt.id === s)?.label).join(', ')}
 Date Range:            ${dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : 'Start'} to ${dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : 'End'}
 District:              ${selectedDistrict !== 'all' ? selectedDistrict : 'All'}

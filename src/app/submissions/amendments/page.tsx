@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
+import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 import { Pagination } from "@/components/ui/pagination";
 
@@ -19,9 +20,21 @@ export default function AmendmentReviewPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sort, setSort] = useState<{ field: string; order: 'asc' | 'desc' }>({ field: 'submittedAt', order: 'asc' });
 
   const isAdmin = isSuperAdmin;
+
+  // Server-side search: the list is paginated, so a client-side match over the
+  // 10 visible rows could never find a case sitting on another page.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   useEffect(() => {
     async function loadData() {
@@ -30,17 +43,24 @@ export default function AmendmentReviewPage() {
       const assignedBranches = user.assignedBranches || [];
       const result = await getSubmissions({
         isResubmitted: true,
+        // Only cases still awaiting a verdict belong in this queue. `isResubmitted`
+        // stays true for the case's lifetime, so without a status scope a case that
+        // was approved or returned again would remain stuck in Amendment Review.
+        status: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED],
         branches: !isAdmin && assignedBranches.length > 0 ? assignedBranches :
           (!isAdmin && assignedBranches.length === 0 && user.branchName ? [user.branchName] : undefined),
         limit: ITEMS_PER_PAGE,
-        offset: (currentPage - 1) * ITEMS_PER_PAGE
+        offset: (currentPage - 1) * ITEMS_PER_PAGE,
+        search: debouncedSearch || undefined,
+        sortField: sort.field as any,
+        sortOrder: sort.order
       });
       setSubmissions(result.submissions);
       setTotalCount(result.total);
       setLoading(false);
     }
     loadData();
-  }, [user, isAdmin, currentPage]);
+  }, [user, isAdmin, currentPage, sort, debouncedSearch]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -103,13 +123,15 @@ export default function AmendmentReviewPage() {
         </div>
       ) : (
         <>
-          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          <SubmissionsPageContent submissions={filteredSubmissions || []} sort={sort} onSortChange={(field, order) => { setSort({ field, order }); setCurrentPage(1); }} />
           
           {totalCount > ITEMS_PER_PAGE && (
             <div className="mt-6">
-              <Pagination 
+              <Pagination
                 currentPage={currentPage}
                 totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                totalItems={totalCount}
+                pageSize={ITEMS_PER_PAGE}
                 onPageChange={setCurrentPage}
               />
             </div>

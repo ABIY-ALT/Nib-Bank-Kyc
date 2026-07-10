@@ -40,7 +40,9 @@ export default function FollowUpDashboard() {
 
   const loadData = async () => {
     setLoading(true);
-    const filters: any = {};
+    // Load the WHOLE pool: the action defaults to take:100, which silently
+    // capped the pending pool, the quality analytics, and the history export.
+    const filters: any = { limit: 100000 };
 
     if (dateRange?.from) {
       filters.startDate = dateRange.from.toISOString();

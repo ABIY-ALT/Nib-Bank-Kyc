@@ -20,9 +20,21 @@ export default function EscalatedCasesPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sort, setSort] = useState<{ field: string; order: 'asc' | 'desc' }>({ field: 'submittedAt', order: 'asc' });
 
   const isAdmin = isSuperAdmin;
+
+  // Server-side search: the list is paginated, so a client-side match over the
+  // 10 visible rows could never find a case sitting on another page.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   useEffect(() => {
     async function loadData() {
@@ -35,14 +47,17 @@ export default function EscalatedCasesPage() {
         branches: !isAdmin && assignedBranches.length > 0 ? assignedBranches :
           (!isAdmin && assignedBranches.length === 0 && user.branchName ? [user.branchName] : undefined),
         limit: ITEMS_PER_PAGE,
-        offset: (currentPage - 1) * ITEMS_PER_PAGE
+        offset: (currentPage - 1) * ITEMS_PER_PAGE,
+        search: debouncedSearch || undefined,
+        sortField: sort.field as any,
+        sortOrder: sort.order
       });
       setSubmissions(result.submissions || []);
       setTotalCount(result.total || 0);
       setLoading(false);
     }
     loadData();
-  }, [user, isAdmin, currentPage]);
+  }, [user, isAdmin, currentPage, sort, debouncedSearch]);
 
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -100,13 +115,15 @@ export default function EscalatedCasesPage() {
         </div>
       ) : (
         <>
-          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          <SubmissionsPageContent submissions={filteredSubmissions || []} sort={sort} onSortChange={(field, order) => { setSort({ field, order }); setCurrentPage(1); }} />
           
           {totalCount > ITEMS_PER_PAGE && (
             <div className="mt-6">
-              <Pagination 
+              <Pagination
                 currentPage={currentPage}
                 totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                totalItems={totalCount}
+                pageSize={ITEMS_PER_PAGE}
                 onPageChange={setCurrentPage}
               />
             </div>

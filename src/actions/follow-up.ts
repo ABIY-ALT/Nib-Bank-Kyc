@@ -23,7 +23,19 @@ async function getFollowUpAccess() {
 /**
  * Retrieves follow-up verifications with optional date filtering and pagination.
  */
-export async function getFollowUpVerifications(filters?: { startDate?: string; endDate?: string; limit?: number; offset?: number }) {
+export async function getFollowUpVerifications(filters?: {
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+  offset?: number;
+  // Server-side narrowing/ordering for the paginated Follow-up Report: with
+  // limit/offset pagination, search/result filters and sorting applied
+  // client-side would only ever operate on the currently visible page.
+  search?: string;
+  result?: string;
+  sortField?: 'id' | 'customer' | 'result' | 'verifiedBy' | 'verifiedAt';
+  sortOrder?: 'asc' | 'desc';
+}) {
   try {
     const { canWorkPool, canViewLogs } = await getFollowUpAccess();
     if (!canWorkPool && !canViewLogs) {
@@ -38,7 +50,34 @@ export async function getFollowUpVerifications(filters?: { startDate?: string; e
       dateFilter = { gte: start, lte: end };
     }
 
-    const where = { verifiedAt: dateFilter };
+    const where: any = { verifiedAt: dateFilter };
+    if (filters?.result) where.result = filters.result;
+
+    const searchTerm = filters?.search?.trim();
+    if (searchTerm) {
+      where.OR = [
+        { id: { contains: searchTerm, mode: 'insensitive' } },
+        { submissionId: { contains: searchTerm, mode: 'insensitive' } },
+        { customerName: { contains: searchTerm, mode: 'insensitive' } },
+        { branch: { contains: searchTerm, mode: 'insensitive' } },
+        { verifiedBy: { contains: searchTerm, mode: 'insensitive' } },
+      ];
+    }
+
+    // Without an explicit sortField the order stays newest-first, so existing
+    // callers (e.g. the head-office pool page) are unaffected. The report page
+    // passes its own explicit sort. `id` tiebreak keeps pagination stable.
+    const order = filters?.sortOrder === 'desc' ? 'desc' as const : 'asc' as const;
+    const sortColumn: Record<string, any> = {
+      id: { id: order },
+      customer: { customerName: order },
+      result: { result: order },
+      verifiedBy: { verifiedBy: order },
+      verifiedAt: { verifiedAt: order },
+    };
+    const orderBy: any = filters?.sortField
+      ? [sortColumn[filters.sortField] || { verifiedAt: order }, { id: 'asc' }]
+      : { verifiedAt: 'desc' };
 
     const [verifications, total] = await Promise.all([
       prisma.followUpVerification.findMany({
@@ -50,7 +89,7 @@ export async function getFollowUpVerifications(filters?: { startDate?: string; e
             }
           }
         },
-        orderBy: { verifiedAt: 'desc' },
+        orderBy,
         take: filters?.limit || 100,
         skip: filters?.offset || 0
       }),

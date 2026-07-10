@@ -66,8 +66,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { format, startOfMonth, eachMonthOfInterval, isSameMonth, subDays } from "date-fns";
-import { getSubmissions, getCaseMetrics } from "@/actions/submissions";
+import { format } from "date-fns";
+import { getSubmissions, getCaseMetrics, getDistrictPerformance, getMonthlyTrend } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { cn } from "@/lib/utils";
@@ -85,7 +85,10 @@ export default function ManagementReportingPage() {
   const [branches, setBranches] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
   const [summaryStats, setSummaryStats] = useState<any>(null);
+  const [districtPerformance, setDistrictPerformance] = useState<any[]>([]);
+  const [monthlyTrend, setMonthlyTrend] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
@@ -128,9 +131,15 @@ export default function ManagementReportingPage() {
     let active = true;
     const loadMetrics = async () => {
       try {
-        const metrics = await getCaseMetrics(metricFilters);
+        const [metrics, districtRows, trendRows] = await Promise.all([
+          getCaseMetrics(metricFilters),
+          getDistrictPerformance(metricFilters),
+          getMonthlyTrend(metricFilters),
+        ]);
         if (active) {
           setSummaryStats(metrics);
+          setDistrictPerformance(districtRows);
+          setMonthlyTrend(trendRows);
         }
       } catch (e) {
       }
@@ -166,20 +175,22 @@ export default function ManagementReportingPage() {
   };
 
   const branchOptions = useMemo(() => {
-    let availableBranches = branches || [];
+    const allBranches = branches || [];
+    let availableBranches = allBranches;
 
     // Filter based on user's jurisdiction if not super admin
     if (!isSuperAdmin && user) {
-      const userAssignedBranches = normalizeAssignedBranches(user.assignedBranches || []);
-      const userBranchName = user.branchName;
+      const userAssignedBranches = normalizeAssignedBranches(user.assignedBranches || []).map((b) => b.toLowerCase());
+      const userBranchName = user.branchName?.toLowerCase();
+      const userDistrictName = user.districtName?.toLowerCase();
 
-      availableBranches = availableBranches.filter((branch: any) => {
-        const branchName = branch.name;
-        const districtName = branch.district?.name;
+      availableBranches = allBranches.filter((branch: any) => {
+        const branchName = (branch.name || '').toLowerCase();
+        const districtName = (branch.district?.name || '').toLowerCase();
 
         // If user has assigned branches, only include those
         if (userAssignedBranches.length > 0) {
-          return userAssignedBranches.some((ab: string) => normalizeAssignedBranches([ab]).includes(branchName));
+          return userAssignedBranches.includes(branchName);
         }
 
         // Otherwise, include user's own branch
@@ -187,8 +198,26 @@ export default function ManagementReportingPage() {
           return branchName === userBranchName;
         }
 
-        return false;
+        // District-level users (e.g. District Director) can filter across every
+        // branch of their district.
+        if (userDistrictName) {
+          return districtName === userDistrictName;
+        }
+
+        // Management/head-office users with no branch or district binding can
+        // filter across the whole network — the SERVER still scopes the data to
+        // their jurisdiction, so an out-of-scope pick simply returns nothing.
+        // Returning false here left these users with empty, unusable dropdowns.
+        return true;
       });
+
+      // Never present an empty, unusable filter: if jurisdiction narrowing
+      // matched nothing (e.g. assigned-branch names drifted from the canonical
+      // branch registry), fall back to the full list — the server still scopes
+      // every query, so this can never leak out-of-jurisdiction data.
+      if (availableBranches.length === 0) {
+        availableBranches = allBranches;
+      }
     }
 
     // Then filter by selected district
@@ -202,34 +231,42 @@ export default function ManagementReportingPage() {
   }, [branches, selectedDistrict, isSuperAdmin, user]);
 
   const districtOptions = useMemo(() => {
-    let availableDistricts = districts || [];
+    const allDistricts = districts || [];
+    let availableDistricts = allDistricts;
 
     // Filter based on user's jurisdiction if not super admin
     if (!isSuperAdmin && user) {
-      const userAssignedBranches = normalizeAssignedBranches(user.assignedBranches || []);
-      const userDistrictName = user.districtName;
-      const userBranchName = user.branchName;
+      const userAssignedBranches = normalizeAssignedBranches(user.assignedBranches || []).map((b) => b.toLowerCase());
+      const userDistrictName = user.districtName?.toLowerCase();
+      const userBranchName = user.branchName?.toLowerCase();
 
       if (userAssignedBranches.length > 0) {
         // If user has assigned branches, get all districts those branches belong to
-        const userAssignedBranchNames = userAssignedBranches;
-        availableDistricts = availableDistricts.filter((district: any) => {
-          return branches.some((branch: any) => 
-            branch.district?.name === district.name && 
-            userAssignedBranchNames.some((ab: string) => normalizeAssignedBranches([ab]).includes(branch.name))
+        availableDistricts = allDistricts.filter((district: any) => {
+          return branches.some((branch: any) =>
+            (branch.district?.name || '').toLowerCase() === (district.name || '').toLowerCase() &&
+            userAssignedBranches.includes((branch.name || '').toLowerCase())
           );
         });
       } else if (userDistrictName) {
         // Otherwise, only include user's own district
-        availableDistricts = availableDistricts.filter((district: any) => district.name === userDistrictName);
+        availableDistricts = allDistricts.filter((district: any) => (district.name || '').toLowerCase() === userDistrictName);
       } else if (userBranchName) {
         // If no district, get the district from user's branch
-        const userBranch = branches.find((b: any) => b.name === userBranchName);
+        const userBranch = branches.find((b: any) => (b.name || '').toLowerCase() === userBranchName);
         if (userBranch?.district?.name) {
-          availableDistricts = availableDistricts.filter((district: any) => district.name === userBranch.district.name);
+          availableDistricts = allDistricts.filter((district: any) => district.name === userBranch.district.name);
         }
-      } else {
-        availableDistricts = [];
+      }
+      // Users with no branch/district binding (head-office management roles)
+      // keep the full district list — the server still scopes the data itself.
+      // Emptying the list here made the filter unusable for them.
+
+      // Never present an empty, unusable filter: if jurisdiction narrowing
+      // matched nothing, fall back to the full list — the server still scopes
+      // every query, so this can never leak out-of-jurisdiction data.
+      if (availableDistricts.length === 0) {
+        availableDistricts = allDistricts;
       }
     }
 
@@ -312,37 +349,6 @@ export default function ManagementReportingPage() {
     });
   }, [submissions, selectedDistrict, selectedBranch, selectedStatus, selectedType, searchTerm, selectedRisk]);
 
-  const districtPerformanceData = useMemo(() => {
-    if (!filteredData || filteredData.length === 0) return [];
-
-    const districtStats: Record<string, { name: string; authorized: number; pending: number; returned: number; total: number; efficiency: number }> = {};
-
-    filteredData.forEach((s: any) => {
-      const districtName = s.districtName || s.branch?.district?.name || 'Unknown';
-      if (!districtStats[districtName]) {
-        districtStats[districtName] = { name: districtName, authorized: 0, pending: 0, returned: 0, total: 0, efficiency: 0 };
-      }
-      
-      districtStats[districtName].total += 1;
-      
-      const status = (s.status || '').toUpperCase();
-      if (status === KYC_STATUS.APPROVED) {
-        districtStats[districtName].authorized += 1;
-      } else if (status === KYC_STATUS.ACTION_REQUIRED) {
-        districtStats[districtName].returned += 1;
-      } else {
-        districtStats[districtName].pending += 1;
-      }
-    });
-
-    // Calculate efficiency for each district
-    Object.values(districtStats).forEach((stat) => {
-      stat.efficiency = stat.total > 0 ? Math.round((stat.authorized / stat.total) * 100) : 0;
-    });
-
-    return Object.values(districtStats).sort((a, b) => b.efficiency - a.efficiency);
-  }, [filteredData]);
-
   const stats = useMemo(() => {
     const total = filteredData.length;
     const approved = filteredData.filter(s => s.status === KYC_STATUS.APPROVED).length;
@@ -364,60 +370,97 @@ export default function ManagementReportingPage() {
   }, [filteredData]);
 
   const chartsData = useMemo(() => {
+    // Prefer the SQL-counted metrics (accurate over the whole dataset); the
+    // client-derived `stats`/`filteredData` come from a fetch capped at 5000
+    // rows and only serve as a fallback while the metrics are still loading.
+    const source = summaryStats
+      ? {
+          approved: summaryStats.authorized,
+          unseen: summaryStats.unseen,
+          running: summaryStats.running,
+          returned: summaryStats.needAmendment,
+          resubmitted: summaryStats.resubmitted,
+        }
+      : stats;
+
     const statusPie = [
-      { name: 'Authorized', value: stats.approved },
-      { name: 'Analysis', value: stats.unseen },
-      { name: 'Running', value: stats.running },
-      { name: 'Gaps', value: stats.returned },
-      { name: 'Resubmitted', value: stats.resubmitted }
+      { name: 'Authorized', value: source.approved },
+      { name: 'Analysis', value: source.unseen },
+      { name: 'Running', value: source.running },
+      { name: 'Gaps', value: source.returned },
+      { name: 'Resubmitted', value: source.resubmitted }
     ].filter(d => d.value > 0);
 
+    const standardCount = selectedRisk === 'HIGH'
+      ? 0
+      : (summaryStats ? summaryStats.total : filteredData.filter(s => !s.isExceptional).length);
+    const highRiskCount = selectedRisk === 'LOW'
+      ? 0
+      : (summaryStats ? summaryStats.exceptional : filteredData.filter(s => s.isExceptional).length);
     const riskBar = [
-      { name: 'Standard', count: filteredData.filter(s => !s.isExceptional).length },
-      { name: 'High Risk', count: filteredData.filter(s => s.isExceptional).length }
+      { name: 'Standard', count: standardCount },
+      { name: 'High Risk', count: highRiskCount }
     ];
 
-    const end = new Date();
-    const start = startOfMonth(subDays(end, 180));
-    const months = eachMonthOfInterval({ start, end });
-    
-    // Unambiguous month labels: 'MMM yy' rendered "Jun 26" (June 2026), which
-    // reads like a future calendar day. Spell the year out instead.
-    const trendLine = months.map(m => {
-      const monthLabel = format(m, 'MMM yyyy');
-      const count = filteredData.filter(s => isSameMonth(new Date(s.submittedAt || s.createdAt), m)).length;
-      return { name: monthLabel, volume: count };
-    });
-
-    return { statusPie, riskBar, trendLine };
-  }, [filteredData, stats]);
+    return { statusPie, riskBar };
+  }, [filteredData, stats, summaryStats, selectedRisk]);
 
   const handleExportExcel = async () => {
     if (!user) return;
-    toast({ title: "Compiling Spreadsheet", description: "Filtering active dataset for export..." });
-    const headers = ['Case ID', 'Customer Name', 'Status', 'Is Resubmitted', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted At'];
-    const rows = filteredData.map(sub => [
-      sub.id,
-      sub.customerName,
-      sub.status,
-      sub.isResubmitted ? 'Yes' : 'No',
-      sub.branchName,
-      sub.branch?.district?.name || 'N/A',
-      sub.isExceptional ? 'High' : 'Standard',
-      sub.entityType || 'Individual',
-      sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'
-    ]);
+    setIsExporting(true);
+    toast({ title: "Compiling Spreadsheet", description: "Gathering every filtered record for export..." });
+    try {
+      // Pull the complete filtered dataset straight from the server instead of
+      // the in-memory `filteredData` — that list is sourced from a submissions
+      // fetch capped at 5000 rows, so exports on a district/status with more
+      // matches than that silently dropped the rest.
+      const result = await getSubmissions({
+        ...metricFilters,
+        status: metricFilters.status ? [metricFilters.status] : undefined,
+        limit: 100000,
+      });
+      let exportRows = result.submissions || [];
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        exportRows = exportRows.filter((sub: any) =>
+          sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
+        );
+      }
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `NIB_KYC_REPORT_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      if (exportRows.length === 0) {
+        toast({ variant: "destructive", title: "Nothing to export", description: "No records match the current filters." });
+        return;
+      }
+
+      const headers = ['Case ID', 'Customer Name', 'Status', 'Is Resubmitted', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted At'];
+      const rows = exportRows.map((sub: any) => [
+        sub.id,
+        sub.customerName,
+        sub.status,
+        sub.isResubmitted ? 'Yes' : 'No',
+        sub.branchName,
+        sub.branch?.district?.name || sub.districtName || 'N/A',
+        sub.isExceptional ? 'High' : 'Standard',
+        sub.entityType || 'Individual',
+        sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd h:mm:ss a') : 'N/A'
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `NIB_KYC_REPORT_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Export Complete", description: `${exportRows.length} record(s) exported.` });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Export Failed", description: "Could not compile the export file." });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (loading) {
@@ -446,8 +489,8 @@ export default function ManagementReportingPage() {
             date={dateRange} 
             onDateChange={setDateRange} 
           />
-          <Button className="h-12 px-8 gap-3 bg-primary text-white font-black shadow-xl rounded-xl hover:bg-primary/90 transition-all active:scale-[0.98]" onClick={handleExportExcel}>
-            <Download className="w-5 h-5" /> Export Data (CSV)
+          <Button className="h-12 px-8 gap-3 bg-primary text-white font-black shadow-xl rounded-xl hover:bg-primary/90 transition-all active:scale-[0.98]" onClick={handleExportExcel} disabled={isExporting}>
+            {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />} Export Data (CSV)
           </Button>
         </div>
       </div>
@@ -720,7 +763,7 @@ export default function ManagementReportingPage() {
           { label: 'Running (In Review)', value: summaryStats?.running ?? stats.running, icon: Activity, color: 'text-blue-500', bg: 'bg-white', status: KYC_STATUS.IN_REVIEW },
           { label: 'Authorized Recently', value: summaryStats?.authorized ?? stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white', status: KYC_STATUS.APPROVED },
           { label: 'Need Amendment', value: summaryStats?.needAmendment ?? stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white', status: KYC_STATUS.ACTION_REQUIRED },
-          { label: 'Resubmitted', value: stats.resubmitted, icon: RotateCcw, color: 'text-purple-600', bg: 'bg-white', status: undefined as string | undefined },
+          { label: 'Resubmitted', value: summaryStats?.resubmitted ?? stats.resubmitted, icon: RotateCcw, color: 'text-purple-600', bg: 'bg-white', status: undefined as string | undefined },
         ].map((item, i) => (
           <Card
             key={i}
@@ -782,7 +825,7 @@ export default function ManagementReportingPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-8 h-[300px]">
-            {stats.total > 0 ? (
+            {chartsData.riskBar.some(r => r.count > 0) ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartsData.riskBar}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -805,9 +848,9 @@ export default function ManagementReportingPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-8 h-[300px]">
-            {filteredData.length > 0 ? (
+            {monthlyTrend.some(m => m.volume > 0) ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartsData.trendLine}>
+                <LineChart data={monthlyTrend}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} />
                   <YAxis tick={{ fontSize: 10, fontWeight: 'bold' }} />
@@ -830,9 +873,9 @@ export default function ManagementReportingPage() {
             <CardDescription className="text-slate-200">Compare authorized, pending, and returned cases across districts sorted by efficiency.</CardDescription>
           </CardHeader>
           <CardContent className="pt-8 h-[400px]">
-            {districtPerformanceData.length > 0 ? (
+            {districtPerformance.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={districtPerformanceData}>
+                <BarChart data={districtPerformance}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
                     dataKey="name" 

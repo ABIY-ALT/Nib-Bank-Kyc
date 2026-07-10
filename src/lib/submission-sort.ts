@@ -9,9 +9,13 @@ export function getSubmissionSortTime(submission: any) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+// FIFO with urgent priority: URGENT cases are pinned to the top of every
+// list; after them, cases run in FIFO order (oldest / first-submitted first,
+// new arrivals joining at the bottom).
+
 export function sortSubmissionsNewestFirst<T extends { id?: string }>(submissions: T[]) {
   return [...submissions].sort((a: any, b: any) => {
-    // Prioritize urgent cases first
+    // Urgent cases always lead the list
     if (a?.isUrgent && !b?.isUrgent) return -1;
     if (!a?.isUrgent && b?.isUrgent) return 1;
 
@@ -27,7 +31,7 @@ export function sortSubmissionsNewestFirst<T extends { id?: string }>(submission
 
 export function sortSubmissionsOldestFirst<T extends { id?: string }>(submissions: T[]) {
   return [...submissions].sort((a: any, b: any) => {
-    // Prioritize urgent cases first
+    // Urgent cases always lead the list
     if (a?.isUrgent && !b?.isUrgent) return -1;
     if (!a?.isUrgent && b?.isUrgent) return 1;
 

@@ -97,7 +97,12 @@ export default function BranchReportsPage() {
       let filters: any = {
         district: activeDistrict || undefined,
         branch: selectedBranch === 'all' ? undefined : selectedBranch,
-        limit: 1000
+        // Audit compilation must include every matching record — a low cap made
+        // the "N Records" badge and the CSV export silently incomplete.
+        limit: 100000,
+        // Chronological: the FIRST submitted case leads, newer ones follow.
+        sortField: 'submittedAt',
+        sortOrder: 'asc'
       };
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();

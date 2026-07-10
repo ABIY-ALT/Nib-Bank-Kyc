@@ -37,10 +37,6 @@ export const RATE_LIMIT_CONFIG = {
     maxAttempts: 50,
     windowMs: 60 * 60 * 1000, // 1 hour
   },
-  MEMO_ACCESS: {
-    maxAttempts: 600,
-    windowMs: 60 * 60 * 1000, // 1 hour
-  },
 };
 
 interface RateLimitEntry {
@@ -128,17 +124,10 @@ export async function checkUploadRateLimit(userId: string) {
   return null;
 }
 
-export async function checkAccessRateLimit(userId: string) {
-  const key = `access:${userId}`;
-  const { allowed, remaining, resetAt } = checkRateLimit(key, RATE_LIMIT_CONFIG.MEMO_ACCESS.maxAttempts, RATE_LIMIT_CONFIG.MEMO_ACCESS.windowMs);
-
-  if (!allowed) {
-    const response = tooManyRequestsResponse('Access limit exceeded.');
-    addRateLimitHeaders(response, allowed, remaining, resetAt, RATE_LIMIT_CONFIG.MEMO_ACCESS.maxAttempts);
-    return response;
-  }
-  return null;
-}
+// NOTE: Document VIEWING is intentionally not rate limited. Access is already
+// session-authenticated, token-verified, and jurisdiction-checked per document;
+// a per-user cap (formerly MEMO_ACCESS, 600/hr) kept locking out follow-up
+// reviewers doing legitimate all-day case reviews.
 
 export function addRateLimitHeaders(
   response: NextResponse,

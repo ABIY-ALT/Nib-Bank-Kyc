@@ -82,7 +82,8 @@ export default function GlobalAuditLogPage() {
     if (total === 0) return;
     
     toast({ title: "Compiling Export", description: "Fetching full history for CSV compilation..." });
-    const fullResult = await getGlobalAuditLogs({ page: 1, limit: 1000, search: debouncedSearch });
+    // Export every matching log — a 1000-row cap silently truncated the trail.
+    const fullResult = await getGlobalAuditLogs({ page: 1, limit: 100000, search: debouncedSearch });
     const exportLogs = fullResult.logs;
 
     const headers = ['ID', 'User', 'Email', 'Action', 'IP Address', 'Timestamp', 'Details'];
@@ -220,7 +221,7 @@ export default function GlobalAuditLogPage() {
                         {log.timestamp ? format(new Date(log.timestamp), 'MMM dd, yyyy') : 'N/A'}
                       </span>
                       <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
-                        {log.timestamp ? format(new Date(log.timestamp), 'HH:mm:ss') : ''}
+                        {log.timestamp ? format(new Date(log.timestamp), 'h:mm:ss a') : ''}
                       </span>
                     </div>
                   </TableCell>

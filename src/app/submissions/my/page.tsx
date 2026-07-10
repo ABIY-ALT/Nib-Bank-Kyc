@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { SubmissionsPageContent } from "../submissions-content";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Inbox, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getSubmissions } from "@/actions/submissions";
@@ -17,32 +16,40 @@ export default function MySubmissionsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sort, setSort] = useState<{ field: string; order: 'asc' | 'desc' }>({ field: 'submittedAt', order: 'asc' });
+
+  // Server-side search: the list is paginated, so a client-side match over the
+  // 10 visible rows could never find a case sitting on another page.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   useEffect(() => {
     async function loadData() {
       if (!user) return;
       setLoading(true);
-      const result = await getSubmissions({ 
+      const result = await getSubmissions({
         submittedBy: user.id,
         limit: ITEMS_PER_PAGE,
-        offset: (currentPage - 1) * ITEMS_PER_PAGE 
+        offset: (currentPage - 1) * ITEMS_PER_PAGE,
+        search: debouncedSearch || undefined,
+        sortField: sort.field as any,
+        sortOrder: sort.order
       });
       setSubmissions(result.submissions || []);
       setTotalCount(result.total || 0);
       setLoading(false);
     }
     loadData();
-  }, [user, currentPage]);
+  }, [user, currentPage, sort, debouncedSearch]);
 
-  const filteredSubmissions = useMemo(() => {
-    if (!submissions) return [];
-    const term = searchTerm.toLowerCase();
-    return submissions.filter(sub => 
-      sub.customerName.toLowerCase().includes(term) || 
-      sub.id.toLowerCase().includes(term)
-    );
-  }, [submissions, searchTerm]);
+  // Server already filtered via debouncedSearch — pass results directly.
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -76,13 +83,15 @@ export default function MySubmissionsPage() {
         </div>
       ) : (
         <>
-          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          <SubmissionsPageContent submissions={submissions || []} sort={sort} onSortChange={(field, order) => { setSort({ field, order }); setCurrentPage(1); }} />
           
           {totalCount > ITEMS_PER_PAGE && (
             <div className="mt-6">
-              <Pagination 
+              <Pagination
                 currentPage={currentPage}
                 totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                totalItems={totalCount}
+                pageSize={ITEMS_PER_PAGE}
                 onPageChange={setCurrentPage}
               />
             </div>

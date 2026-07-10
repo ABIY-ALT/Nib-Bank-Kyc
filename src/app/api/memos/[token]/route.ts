@@ -1,5 +1,4 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { checkAccessRateLimit } from '@/lib/rate-limiting';
 import { createReadStream, secureUploadedFileExists, type StorageTier } from '@/lib/secure-file-storage';
 import { createAuditLog } from '@/actions/audit';
 import { getServerSession } from '@/actions/auth-server';
@@ -51,11 +50,12 @@ export async function GET(
       return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
     }
 
-    // 2. Rate Limiting
-    const rateLimitResponse = await checkAccessRateLimit(session.id);
-    if (rateLimitResponse) return rateLimitResponse;
+    // NOTE: No rate limiting on document viewing — access is already session-
+    // authenticated, token-verified, and jurisdiction-checked per document, and
+    // a per-user cap kept locking out follow-up reviewers doing legitimate
+    // all-day case reviews.
 
-    // 3. Jurisdictional Access Control
+    // 2. Jurisdictional Access Control
     const user = await prisma.user.findUnique({ 
       where: { id: session.id },
       include: {
@@ -95,7 +95,7 @@ export async function GET(
     // straight from the archive volume (e.g. E:) — the DB row records the tier.
     const tier: StorageTier = (memo as any).storageTier === 'ARCHIVE' ? 'ARCHIVE' : 'PRIMARY';
 
-    // 4. Verify the file physically exists before streaming.
+    // 3. Verify the file physically exists before streaming.
     // fs.createReadStream does NOT throw synchronously for a missing file —
     // ENOENT surfaces as an async 'error' event mid-stream, which would crash
     // the response. Check existence up front and fail gracefully with a 404.
@@ -115,7 +115,7 @@ export async function GET(
       );
     }
 
-    // 5. Streamed Read to prevent memory exhaustion
+    // 4. Streamed Read to prevent memory exhaustion
     let stream: any;
     try {
       stream = createReadStream(memo.storageKey, tier);

@@ -12,6 +12,11 @@ interface PaginationProps {
   totalPages: number;
   onPageChange: (page: number) => void;
   className?: string;
+  // When provided, renders a "Showing X–Y of Z records" summary so the reader
+  // can see how many records the whole (sorted/filtered) set contains, not just
+  // the visible page.
+  totalItems?: number;
+  pageSize?: number;
 }
 
 export function Pagination({
@@ -19,9 +24,11 @@ export function Pagination({
   totalPages,
   onPageChange,
   className,
+  totalItems,
+  pageSize,
 }: PaginationProps) {
   const pages = [];
-  
+
   // Generate page numbers
   for (let i = 1; i <= totalPages; i++) {
     if (
@@ -35,8 +42,18 @@ export function Pagination({
     }
   }
 
+  const showSummary = typeof totalItems === "number" && typeof pageSize === "number" && totalItems > 0;
+  const rangeStart = showSummary ? (currentPage - 1) * pageSize! + 1 : 0;
+  const rangeEnd = showSummary ? Math.min(currentPage * pageSize!, totalItems!) : 0;
+
   return (
-    <div className={cn("flex items-center justify-center gap-2", className)}>
+    <div className={cn("flex flex-col items-center gap-3", className)}>
+      {showSummary && (
+        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+          Showing {rangeStart}&ndash;{rangeEnd} of {totalItems} records &bull; Page {currentPage} of {totalPages}
+        </p>
+      )}
+      <div className="flex items-center justify-center gap-2">
       <Button
         variant="outline"
         size="icon"
@@ -69,6 +86,7 @@ export function Pagination({
       >
         <ChevronRight className="h-4 w-4" />
       </Button>
+      </div>
     </div>
   );
 }

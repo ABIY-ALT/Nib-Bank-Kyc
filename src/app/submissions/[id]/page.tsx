@@ -129,7 +129,9 @@ const KYC_CHECKLIST_ITEMS = [
 
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
+// Combined budget for the whole upload (matches the 30MB transport/body limit)
+// — individual files are NOT size-capped, only the total is.
+const MAX_TOTAL_UPLOAD_SIZE = 30 * 1024 * 1024; // 30MB
 
 interface ResubmitFile {
   id: string;
@@ -746,15 +748,18 @@ Document Count:    ${previewableDocuments.length}
     if (e.target.files) {
       const files = Array.from(e.target.files);
       const valid: ResubmitFile[] = [];
+      // Size is validated on the COMBINED upload, not per file.
+      let runningTotal = resubmitFiles.reduce((sum, f) => sum + f.file.size, 0);
       for (const f of files) {
-        if (f.size > MAX_FILE_SIZE) {
-          toast({ variant: "destructive", title: "File Too Large", description: f.name });
-          continue;
-        }
         if (!ALLOWED_TYPES.includes(f.type)) {
           toast({ variant: "destructive", title: "Invalid Type", description: f.name });
           continue;
         }
+        if (runningTotal + f.size > MAX_TOTAL_UPLOAD_SIZE) {
+          toast({ variant: "destructive", title: "Upload Too Large", description: `Adding "${f.name}" would exceed the ${MAX_TOTAL_UPLOAD_SIZE / (1024 * 1024)}MB combined limit.` });
+          continue;
+        }
+        runningTotal += f.size;
         valid.push({ file: f, type: "", id: crypto.randomUUID(), previewUrl: URL.createObjectURL(f) });
       }
       setResubmitFiles(prev => [...prev, ...valid]);
@@ -762,7 +767,7 @@ Document Count:    ${previewableDocuments.length}
 
     // Allow picking the same file again after removal.
     e.target.value = "";
-  }, [toast]);
+  }, [toast, resubmitFiles]);
 
   const removeResubmitFile = useCallback((id: string) => {
     setResubmitFiles(prev => {
@@ -1228,64 +1233,6 @@ Document Count:    ${previewableDocuments.length}
                 </div>
               );
             })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-slate-200 shadow-lg overflow-hidden rounded-3xl bg-white">
-        <CardHeader className="bg-primary p-6 border-b">
-          <div className="flex items-center gap-3">
-            <FileText className="w-5 h-5 text-white" />
-            <CardTitle className="text-xl font-black text-white">Case Overview</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Customer Name</p>
-              <p className="font-bold text-slate-800">{submission.customerName}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Entity Type</p>
-              <p className="font-bold text-slate-800">{submission.entityType || "Individual"}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Branch</p>
-              <p className="font-bold text-slate-800">{submission.branchName}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">District</p>
-              <p className="font-bold text-slate-800">{submission.districtName || "Central"}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Submitted By</p>
-              <p className="font-bold text-slate-800">
-                {submission.createdBy ? `${submission.createdBy.firstName || ""} ${submission.createdBy.lastName || ""}`.trim() || submission.createdBy.email : "Unknown"}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Assigned KYC Officer</p>
-              <p className="font-bold text-slate-800">
-                {submission.assignedTo ? `${submission.assignedTo.firstName || ""} ${submission.assignedTo.lastName || ""}`.trim() || submission.assignedTo.email : "Not Assigned"}
-              </p>
-            </div>
-            {(() => {
-              const approvalEntry = sortedHistory.find((entry: any) => entry.action === KYC_STATUS.APPROVED);
-              if (approvalEntry) {
-                return (
-                  <div className="space-y-1 md:col-span-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Authorized By</p>
-                    <div className="flex flex-col gap-1">
-                      <p className="font-bold text-emerald-700">{approvalEntry.performedBy}</p>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        {new Date(approvalEntry.timestamp).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                );
-              }
-              return null;
-            })()}
           </div>
         </CardContent>
       </Card>

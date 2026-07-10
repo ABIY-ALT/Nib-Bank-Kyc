@@ -45,7 +45,9 @@ export default function ExceptionalCasesPage() {
   const [availableCases, setAvailableCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sort, setSort] = useState<{ field: string; order: 'asc' | 'desc' }>({ field: 'submittedAt', order: 'asc' });
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState("");
@@ -78,7 +80,10 @@ export default function ExceptionalCasesPage() {
         branches: (!isDistrictDirector && !isGlobalGovernanceReviewer) ? branchesContext : undefined,
         district: districtContext,
         limit: ITEMS_PER_PAGE,
-        offset: (currentPage - 1) * ITEMS_PER_PAGE
+        offset: (currentPage - 1) * ITEMS_PER_PAGE,
+        search: debouncedSearch || undefined,
+        sortField: sort.field as any,
+        sortOrder: sort.order
       });
 
       const availablePromise = getSubmissions({
@@ -103,9 +108,19 @@ export default function ExceptionalCasesPage() {
     }
   };
 
+  // Server-side search: the list is paginated, so a client-side match over the
+  // 10 visible rows could never find a case sitting on another page.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     loadData();
-  }, [user, isAdmin, isDistrictDirector, isGlobalGovernanceReviewer, currentPage]);
+  }, [user, isAdmin, isDistrictDirector, isGlobalGovernanceReviewer, currentPage, sort, debouncedSearch]);
 
   const selectedCase = useMemo(() => 
     availableCases.find(c => c.id === selectedCaseId), 
@@ -231,13 +246,15 @@ export default function ExceptionalCasesPage() {
         </div>
       ) : (
         <>
-          <SubmissionsPageContent submissions={filteredSubmissions || []} />
+          <SubmissionsPageContent submissions={filteredSubmissions || []} sort={sort} onSortChange={(field, order) => { setSort({ field, order }); setCurrentPage(1); }} />
           
           {totalCount > ITEMS_PER_PAGE && (
             <div className="mt-6">
-              <Pagination 
+              <Pagination
                 currentPage={currentPage}
                 totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                totalItems={totalCount}
+                pageSize={ITEMS_PER_PAGE}
                 onPageChange={setCurrentPage}
               />
             </div>

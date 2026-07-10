@@ -71,7 +71,9 @@ interface UploadedFileRowProps {
 }
 
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
-const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
+// Combined budget for the whole submission (matches the 30MB transport/body
+// limit) — individual files are NOT size-capped, only the total is.
+const MAX_TOTAL_UPLOAD_SIZE = 30 * 1024 * 1024; // 30MB
 
 const getFileStatusLabel = (file: UploadedFile) =>
   file.type ? "Ready for submission" : "Classification pending";
@@ -360,16 +362,12 @@ export default function NewSubmission() {
     const files = Array.from(event.target.files);
     const validFiles: UploadedFile[] = [];
 
-    for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) {
-        toast({
-          variant: "destructive",
-          title: "File is too big",
-          description: `"${file.name}" is over the 30MB limit.`,
-        });
-        continue;
-      }
+    // Size is validated on the COMBINED submission, not per file — a single
+    // large-but-legitimate document must not be rejected while many smaller
+    // ones passing individually could still blow the same budget.
+    let runningTotal = uploadedFiles.reduce((sum, f) => sum + f.file.size, 0);
 
+    for (const file of files) {
       if (!ALLOWED_TYPES.includes(file.type)) {
         toast({
           variant: "destructive",
@@ -379,6 +377,16 @@ export default function NewSubmission() {
         continue;
       }
 
+      if (runningTotal + file.size > MAX_TOTAL_UPLOAD_SIZE) {
+        toast({
+          variant: "destructive",
+          title: "Submission is too big",
+          description: `Adding "${file.name}" would push the total upload over the ${MAX_TOTAL_UPLOAD_SIZE / (1024 * 1024)}MB combined limit.`,
+        });
+        continue;
+      }
+
+      runningTotal += file.size;
       validFiles.push({
         id: crypto.randomUUID(),
         file,

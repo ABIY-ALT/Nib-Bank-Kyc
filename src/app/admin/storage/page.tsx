@@ -107,7 +107,7 @@ const StorageFileRow = memo(function StorageFileRow({
           <div className="flex flex-col">
             <span className="font-black text-slate-900 leading-tight truncate max-w-[300px]">{file.name}</span>
             <span className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-widest">
-              Timestamp: {format(new Date(file.createdAt), 'MMM dd, yyyy - HH:mm')}
+              Timestamp: {format(new Date(file.createdAt), 'MMM dd, yyyy - h:mm a')}
             </span>
           </div>
         </div>

@@ -56,20 +56,36 @@ import {
 } from "@/lib/bundle-path";
 import { cn } from "@/lib/utils";
 
-export function SubmissionsPageContent({ submissions }: { submissions: any[] }) {
+export function SubmissionsPageContent({
+  submissions,
+  sort,
+  onSortChange,
+}: {
+  submissions: any[];
+  // Controlled mode: when the host page paginates server-side it must own the
+  // sort state and refetch on change — sorting client-side would only rearrange
+  // the visible page. When omitted, sorting falls back to local (full-list) mode.
+  sort?: { field: string; order: 'asc' | 'desc' };
+  onSortChange?: (field: string, order: 'asc' | 'desc') => void;
+}) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<string>('submittedAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [localSortField, setLocalSortField] = useState<string>('submittedAt');
+  const [localSortOrder, setLocalSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const isControlled = !!sort && !!onSortChange;
+  const sortField = isControlled ? sort.field : localSortField;
+  const sortOrder = isControlled ? sort.order : localSortOrder;
 
   const toggleSort = (field: string) => {
-    if (sortField === field) {
-      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('asc');
+    const nextOrder: 'asc' | 'desc' = sortField === field ? (sortOrder === 'asc' ? 'desc' : 'asc') : 'asc';
+    if (isControlled) {
+      onSortChange!(field, nextOrder);
+      return;
     }
+    setLocalSortField(field);
+    setLocalSortOrder(nextOrder);
   };
 
   const SortIndicator = ({ field }: { field: string }) => {
@@ -80,7 +96,9 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
   };
 
   // Default oldest-first ordering, overridable by clicking column headers.
+  // In controlled mode the server already returned rows in their final order.
   const sortedSubmissions = useMemo(() => {
+    if (isControlled) return submissions || [];
     const base = sortSubmissionsOldestFirst(submissions || []);
     const valueOf = (s: any): string | number => {
       switch (sortField) {
@@ -100,7 +118,7 @@ export function SubmissionsPageContent({ submissions }: { submissions: any[] }) 
         : String(va).localeCompare(String(vb));
       return sortOrder === 'asc' ? cmp : -cmp;
     });
-  }, [submissions, sortField, sortOrder]);
+  }, [submissions, sortField, sortOrder, isControlled]);
 
   const handleDownloadBundle = async (sub: any) => {
     if (!user) return;
@@ -274,6 +292,9 @@ Document Count:    ${fullSub?.documents?.length || 0}
             <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'branch' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('branch')}>
               Authorized Branch<SortIndicator field="branch" />
             </TableHead>
+            <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'status' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('status')}>
+              Status<SortIndicator field="status" />
+            </TableHead>
             <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'submittedAt' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('submittedAt')}>
               Dispatch Date<SortIndicator field="submittedAt" />
             </TableHead>
@@ -282,7 +303,7 @@ Document Count:    ${fullSub?.documents?.length || 0}
         </TableHeader>
         <TableBody>
           {sortedSubmissions.length === 0 ? (
-            <TableRow><TableCell colSpan={5} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No cases found.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No cases found.</TableCell></TableRow>
           ) : sortedSubmissions.map((sub) => (
             <TableRow
               key={sub.id}
@@ -336,8 +357,16 @@ Document Count:    ${fullSub?.documents?.length || 0}
                   )}
                 </div>
               </TableCell>
+              <TableCell>{getStatusBadge(sub)}</TableCell>
               <TableCell className="text-slate-400 tabular-nums font-bold text-[10px] uppercase">
-                {format(new Date(sub.submittedAt), 'MMM dd, yyyy HH:mm:ss')}
+                <div className="flex flex-col gap-0.5">
+                  <span>{format(new Date(sub.submittedAt), 'MMM dd, yyyy h:mm:ss a')}</span>
+                  {sub.status === KYC_STATUS.APPROVED && sub.updatedAt && (
+                    <span className="text-emerald-600">
+                      Authorized: {format(new Date(sub.updatedAt), 'MMM dd, yyyy h:mm:ss a')}
+                    </span>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="text-right pr-8">
                 <DropdownMenu>

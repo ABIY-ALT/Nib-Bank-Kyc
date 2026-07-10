@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,10 +11,12 @@ import { Separator } from "@/components/ui/separator";
 import {
   ClipboardCheck, Download, Loader2, ShieldCheck, RotateCcw,
   Eye, User, Building2, FileText, CheckCircle2, AlertTriangle,
-  CalendarDays, UserCheck, MessageSquare, Paperclip, X
+  CalendarDays, UserCheck, MessageSquare, Paperclip, X,
+  ArrowDown, ArrowUp, ChevronsUpDown, Search
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getFollowUpVerifications } from "@/actions/follow-up";
 import { getSubmissionById } from "@/actions/submissions";
@@ -38,6 +40,11 @@ export default function FollowUpReportsPage() {
   const [selectedResult, setSelectedResult] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isExporting, setIsExporting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  // Default: first-submitted (oldest) verification first.
+  const [sort, setSort] = useState<{ field: 'id' | 'customer' | 'result' | 'verifiedBy' | 'verifiedAt'; order: 'asc' | 'desc' }>({ field: 'verifiedAt', order: 'asc' });
 
   // Detail modal state
   const [detailOpen, setDetailOpen] = useState(false);
@@ -51,22 +58,42 @@ export default function FollowUpReportsPage() {
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [isDocPreviewOpen, setIsDocPreviewOpen] = useState(false);
 
+  // Server-side search with debounce: the list is paginated, so a client-side
+  // match over the 10 visible rows could never find a record on another page.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateRange, selectedResult]);
+  }, [dateRange, selectedResult, sort]);
 
   useEffect(() => {
     loadData();
-  }, [currentPage, dateRange, selectedResult]);
+  }, [currentPage, dateRange, selectedResult, sort, debouncedSearch]);
+
+  const buildServerFilters = () => {
+    const filters: any = {
+      search: debouncedSearch || undefined,
+      result: selectedResult === "all" ? undefined : selectedResult,
+      sortField: sort.field,
+      sortOrder: sort.order,
+    };
+    if (dateRange?.from) {
+      filters.startDate = dateRange.from.toISOString();
+      if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+    }
+    return filters;
+  };
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const filters: any = {};
-      if (dateRange?.from) {
-        filters.startDate = dateRange.from.toISOString();
-        if (dateRange.to) filters.endDate = dateRange.to.toISOString();
-      }
+      const filters: any = buildServerFilters();
       filters.limit = ITEMS_PER_PAGE;
       filters.offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
@@ -80,18 +107,20 @@ export default function FollowUpReportsPage() {
     }
   };
 
-  const filteredData = useMemo(() => {
-    return allVerifications.filter(v => {
-      const matchesResult = selectedResult === "all" || v.result === selectedResult;
-      let matchesDate = true;
-      if (dateRange?.from) {
-        const vDate = new Date(v.verifiedAt);
-        const end = dateRange.to || dateRange.from;
-        matchesDate = vDate >= dateRange.from && vDate <= end;
-      }
-      return matchesResult && matchesDate;
-    });
-  }, [allVerifications, selectedResult, dateRange]);
+  // Result/date/search filtering all happens server-side now (so counts and
+  // pagination stay exact); the rows arrive ready to render.
+  const filteredData = allVerifications;
+
+  const toggleSort = (field: typeof sort.field) => {
+    setSort(prev => ({ field, order: prev.field === field ? (prev.order === 'asc' ? 'desc' : 'asc') : 'asc' }));
+  };
+
+  const SortIndicator = ({ field }: { field: typeof sort.field }) => {
+    if (sort.field !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 inline-block text-slate-300" />;
+    return sort.order === 'asc'
+      ? <ArrowUp className="w-3 h-3 ml-1 inline-block text-primary" />
+      : <ArrowDown className="w-3 h-3 ml-1 inline-block text-primary" />;
+  };
 
   const handleViewDetails = async (v: any) => {
     setDetailVerification(v);
@@ -189,23 +218,40 @@ export default function FollowUpReportsPage() {
     return approvalEntry?.performedBy || '—';
   };
 
-  const handleExportCSV = () => {
-    if (filteredData.length === 0) return;
-    const headers = ['Audit ID', 'Case ID', 'Customer', 'Branch', 'Result', 'Authorized By', 'Verified By', 'Date', 'Remarks'];
-    const rows = filteredData.map(v => [
-      v.id, v.submissionId, v.customerName, v.branch,
-      v.result || 'N/A', getAuthorizedBy(v), v.verifiedBy || 'N/A',
-      v.verifiedAt ? format(new Date(v.verifiedAt), 'yyyy-MM-dd') : 'N/A',
-      (v.remarks || '').replace(/"/g, '""') // Escape quotes for CSV
-    ]);
-    const csv = [headers.join(','), ...rows.map(r => r.map(cell => `"${cell}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'nib-followup-report.csv');
-    link.click();
-    toast({ title: "Export Successful" });
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    try {
+      // Refetch ALL matching verifications — the on-screen list is one 10-row
+      // page of a server-paginated fetch, so exporting it would only ever
+      // export the current page. Same search/result/date/sort as the table.
+      const filters: any = { ...buildServerFilters(), limit: 100000 };
+      const result = await getFollowUpVerifications(filters);
+      const exportRows = result.verifications || [];
+      if (exportRows.length === 0) {
+        toast({ variant: "destructive", title: "Nothing to export", description: "No records match the current filters." });
+        return;
+      }
+      const headers = ['Audit ID', 'Case ID', 'Customer', 'Branch', 'Result', 'Authorized By', 'Verified By', 'Date', 'Remarks'];
+      const rows = exportRows.map((v: any) => [
+        v.id, v.submissionId, v.customerName, v.branch,
+        v.result || 'N/A', getAuthorizedBy(v), v.verifiedBy || 'N/A',
+        v.verifiedAt ? format(new Date(v.verifiedAt), 'yyyy-MM-dd') : 'N/A',
+        (v.remarks || '').replace(/"/g, '""') // Escape quotes for CSV
+      ]);
+      const csv = [headers.join(','), ...rows.map(r => r.map(cell => `"${cell}"`).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'nib-followup-report.csv');
+      link.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export Successful", description: `${exportRows.length} record(s) exported.` });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Export Failed", description: "Could not compile the export file." });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const InfoRow = ({ icon: Icon, label, value }: { icon: any; label: string; value?: string | null }) => (
@@ -230,11 +276,11 @@ export default function FollowUpReportsPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
-          <Button variant="outline" className="gap-2 h-12 px-6 border-slate-200 bg-white" onClick={() => { setSelectedResult("all"); setDateRange(undefined); }}>
+          <Button variant="outline" className="gap-2 h-12 px-6 border-slate-200 bg-white" onClick={() => { setSelectedResult("all"); setDateRange(undefined); setSearchTerm(""); setSort({ field: 'verifiedAt', order: 'asc' }); }}>
             <RotateCcw className="w-4 h-4" /> Reset
           </Button>
-          <Button className="gap-2 bg-primary hover:bg-primary/90 h-12 px-6 font-bold shadow-lg text-white" disabled={filteredData.length === 0} onClick={handleExportCSV}>
-            <ShieldCheck className="w-4 h-4" /> Download Report
+          <Button className="gap-2 bg-primary hover:bg-primary/90 h-12 px-6 font-bold shadow-lg text-white" disabled={isExporting || totalCount === 0} onClick={handleExportCSV}>
+            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Download Report
           </Button>
         </div>
       </div>
@@ -254,6 +300,18 @@ export default function FollowUpReportsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2 w-full sm:flex-1">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Search by customer, case ID, branch, or reviewer..."
+                  className="pl-11 h-12 rounded-xl border-slate-200 bg-white font-medium"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -268,18 +326,28 @@ export default function FollowUpReportsPage() {
               <CardTitle className="text-2xl font-bold tracking-tight flex items-center gap-3">
                 <ClipboardCheck className="w-6 h-6 text-white" /> Quality Control Log
               </CardTitle>
-              <Badge variant="outline" className="bg-white/20 border-white/40 text-white font-black px-4 h-8">{filteredData.length} Records</Badge>
+              <Badge variant="outline" className="bg-white/20 border-white/40 text-white font-black px-4 h-8">{totalCount} Records</Badge>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader className="bg-slate-50/80">
                   <TableRow>
-                    <TableHead className="font-black py-4 pl-8 text-[11px] uppercase">Follow-up ID</TableHead>
-                    <TableHead className="font-black text-[11px] uppercase">Customer / Case</TableHead>
-                    <TableHead className="font-black text-center text-[11px] uppercase">Result</TableHead>
+                    <TableHead className="font-black py-4 pl-8 text-[11px] uppercase cursor-pointer select-none hover:text-primary" onClick={() => toggleSort('id')}>
+                      Follow-up ID<SortIndicator field="id" />
+                    </TableHead>
+                    <TableHead className="font-black text-[11px] uppercase cursor-pointer select-none hover:text-primary" onClick={() => toggleSort('customer')}>
+                      Customer / Case<SortIndicator field="customer" />
+                    </TableHead>
+                    <TableHead className="font-black text-center text-[11px] uppercase cursor-pointer select-none hover:text-primary" onClick={() => toggleSort('result')}>
+                      Result<SortIndicator field="result" />
+                    </TableHead>
                     <TableHead className="font-black text-[11px] uppercase">Authorized By</TableHead>
-                    <TableHead className="font-black text-[11px] uppercase">Verified By</TableHead>
-                    <TableHead className="font-black text-[11px] uppercase">Date</TableHead>
+                    <TableHead className="font-black text-[11px] uppercase cursor-pointer select-none hover:text-primary" onClick={() => toggleSort('verifiedBy')}>
+                      Verified By<SortIndicator field="verifiedBy" />
+                    </TableHead>
+                    <TableHead className="font-black text-[11px] uppercase cursor-pointer select-none hover:text-primary" onClick={() => toggleSort('verifiedAt')}>
+                      Date<SortIndicator field="verifiedAt" />
+                    </TableHead>
                     <TableHead className="font-black text-[11px] uppercase">Remarks</TableHead>
                     <TableHead className="font-black text-center pr-8 text-[11px] uppercase">Actions</TableHead>
                   </TableRow>
@@ -335,6 +403,8 @@ export default function FollowUpReportsPage() {
               <Pagination
                 currentPage={currentPage}
                 totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                totalItems={totalCount}
+                pageSize={ITEMS_PER_PAGE}
                 onPageChange={setCurrentPage}
               />
             </div>
@@ -415,7 +485,7 @@ export default function FollowUpReportsPage() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Review Information</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <InfoRow icon={UserCheck} label="Verified By" value={detailVerification.verifiedBy} />
-                  <InfoRow icon={CalendarDays} label="Verified At" value={detailVerification.verifiedAt ? format(new Date(detailVerification.verifiedAt), 'MMM dd, yyyy – HH:mm') : undefined} />
+                  <InfoRow icon={CalendarDays} label="Verified At" value={detailVerification.verifiedAt ? format(new Date(detailVerification.verifiedAt), 'MMM dd, yyyy – h:mm a') : undefined} />
                 </div>
               </div>
 

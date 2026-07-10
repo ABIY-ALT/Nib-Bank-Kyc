@@ -29,15 +29,13 @@ import {
   RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getSubmissions } from "@/actions/submissions";
-import { KYC_STATUS } from "@/lib/kyc-data";
+import { getCaseMetrics, getBranchPerformance } from "@/actions/submissions";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 export default function SystemWideReportsPage() {
   const { user } = useAuth();
   const { isSuperAdmin } = usePermissions();
   const { toast } = useToast();
-  const [submissions, setSubmissions] = useState<any[]>([]);
   const [stats, setStats] = useState<{ total: number; approved: number; pending: number; unseen: number; resubmitted: number; accuracy: string; branches: { name: string; count: number }[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [reportDataActive, setReportDataActive] = useState(false);
@@ -51,47 +49,36 @@ export default function SystemWideReportsPage() {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
-      const result = await getSubmissions(filters);
+      // SQL-counted metrics over the whole dataset — the previous approach
+      // counted a getSubmissions fetch (default cap 5000 rows), so every figure
+      // on this system-wide report undercounted once the bank passed that size.
+      const [metrics, branchRows] = await Promise.all([
+        getCaseMetrics(filters),
+        getBranchPerformance(filters),
+      ]);
       setReportDataActive(true);
 
-      if (!result.submissions || result.submissions.length === 0) {
-        setSubmissions([]);
+      if (!metrics || metrics.total === 0) {
         setStats(null);
         return;
       }
 
-      setSubmissions(result.submissions);
-
-      // All figures derive from the same record set so the cards, the accuracy
-      // index, and the Branch Network throughput always reconcile exactly.
-      const approved = result.submissions.filter((s: any) => s.status === KYC_STATUS.APPROVED).length;
-      const actionRequired = result.submissions.filter((s: any) => s.status === KYC_STATUS.ACTION_REQUIRED).length;
-      // Fresh submissions only — a resubmitted case re-entering SUBMITTED isn't
-      // a never-seen case.
-      const unseen = result.submissions.filter((s: any) => s.status === KYC_STATUS.SUBMITTED && !s.isResubmitted).length;
-      const pending = result.submissions.filter((s: any) => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status)).length;
-      const resubmitted = result.submissions.filter((s: any) => s.isResubmitted).length;
-      const decided = approved + actionRequired;
-
-      const branches = result.submissions.reduce((acc: Record<string, number>, sub: any) => {
-        const name = sub.branchName || 'Unknown Branch';
-        acc[name] = (acc[name] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
+      const decided = metrics.authorized + metrics.needAmendment;
       setStats({
-        total: result.submissions.length,
-        approved,
-        pending,
-        unseen,
-        resubmitted,
+        total: metrics.total,
+        approved: metrics.authorized,
+        pending: metrics.pending,
+        unseen: metrics.unseen,
+        resubmitted: metrics.resubmitted,
         // Accuracy = authorized share of all decided cases (authorized + amendments).
-        accuracy: decided > 0 ? ((approved / decided) * 100).toFixed(1) : '0.0',
-        branches: Object.entries(branches).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+        accuracy: decided > 0 ? ((metrics.authorized / decided) * 100).toFixed(1) : '0.0',
+        branches: branchRows
+          .map((b) => ({ name: b.name, count: b.total }))
+          .sort((a, b) => b.count - a.count)
       });
       toast({
         title: "Compliance Report Ready",
-        description: `Analyzed ${result.submissions.length} system-wide records.`,
+        description: `Analyzed ${metrics.total} system-wide records.`,
       });
     } catch (e) {
       toast({ variant: "destructive", title: "Report Generation Failed" });
@@ -122,7 +109,6 @@ export default function SystemWideReportsPage() {
 
   const resetFilters = () => {
     setReportDataActive(false);
-    setSubmissions([]);
     setStats(null);
     setDateRange(undefined);
   };

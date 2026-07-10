@@ -52,7 +52,8 @@ import {
 } from "recharts";
 import { type ChartConfig, ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { SubmissionsPageContent } from "../submissions-content";
-import { getSubmissions } from "@/actions/submissions";
+import { getSubmissions, getCaseMetrics } from "@/actions/submissions";
+import { useToast } from "@/hooks/use-toast";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -81,6 +82,8 @@ const volumeConfig = {
 export default function DistrictMonitoringPage() {
   const { user } = useAuth();
   const { isSuperAdmin } = usePermissions();
+  const { toast } = useToast();
+  const [isExporting, setIsExporting] = useState(false);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -159,9 +162,14 @@ export default function DistrictMonitoringPage() {
       if (!user) return;
       setLoading(true);
       try {
+        // Oldest-first so the FIRST submitted case leads the list — fetching
+        // newest-first would also drop the oldest cases entirely once the
+        // dataset exceeds the fetch cap.
         let filters: any = {
           district: isAdmin ? undefined : (districtName || undefined),
-          limit: 1000
+          limit: 1000,
+          sortField: 'submittedAt',
+          sortOrder: 'asc'
         };
 
         if (dateRange?.from) {
@@ -300,15 +308,47 @@ export default function DistrictMonitoringPage() {
     });
   }, [submissions, searchTerm, matrixBranchFilter, isAdmin, districtName]);
 
-  // Card stats are derived from the SAME filteredSubmissions source used for
-  // the table and export, so the numbers always reconcile exactly.
-  const filteredCardStats = useMemo(() => ({
+  // Summary cards come from SQL counts over the WHOLE jurisdiction — the
+  // on-screen list is capped at 1000 rows, so counting it client-side
+  // undercounted any district larger than that. Falls back to client counts
+  // until the metrics arrive.
+  const [cardMetrics, setCardMetrics] = useState<any>(null);
+  useEffect(() => {
+    async function loadCardMetrics() {
+      if (!user) return;
+      try {
+        const filters: any = {
+          district: isAdmin ? undefined : (districtName || undefined),
+          branch: matrixBranchFilter === 'all' ? undefined : matrixBranchFilter,
+        };
+        if (dateRange?.from) {
+          filters.startDate = dateRange.from.toISOString();
+          if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+        }
+        const m = await getCaseMetrics(filters);
+        setCardMetrics({
+          total: m.total,
+          approved: m.authorized,
+          amended: m.needAmendment,
+          pending: m.unseen + m.running,
+          resubmitted: m.resubmitted,
+        });
+      } catch {
+        setCardMetrics(null);
+      }
+    }
+    loadCardMetrics();
+  }, [user, isAdmin, districtName, dateRange, matrixBranchFilter]);
+
+  const clientCardStats = useMemo(() => ({
     total: filteredSubmissions.length,
     approved: filteredSubmissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
     amended: filteredSubmissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
     pending: filteredSubmissions.filter(s => [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW].includes(s.status) && !s.isResubmitted).length,
     resubmitted: filteredSubmissions.filter(s => s.isResubmitted).length,
   }), [filteredSubmissions]);
+
+  const filteredCardStats = cardMetrics ?? clientCardStats;
 
   const branchMatrixOptions = useMemo(() => {
     return Object.keys(analytics?.branches || {}).sort((a, b) => a.localeCompare(b));
@@ -392,28 +432,56 @@ export default function DistrictMonitoringPage() {
     [staffRows, staffPageStart]
   );
 
-  const handleExportCSV = () => {
-    if (!filteredSubmissions || filteredSubmissions.length === 0) return;
-    const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Is Resubmitted', 'Amendments', 'Submitted At', 'Updated At'];
-    const rows = filteredSubmissions.map((s: any) => [
-      s.id,
-      s.customerName,
-      s.branch?.name || s.branchName || '',
-      s.branch?.district?.name || s.districtName || '',
-      s.status,
-      s.isResubmitted ? 'Yes' : 'No',
-      s.amendCycles || 0,
-      s.submittedAt ? format(new Date(s.submittedAt), 'yyyy-MM-dd HH:mm') : '',
-      s.updatedAt ? format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm') : '',
-    ]);
-    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `district-monitoring-${format(new Date(), 'yyyyMMdd_HHmm')}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    try {
+      // Refetch the FULL dataset with the active server filters — the on-screen
+      // list is capped at 1000 rows, so exporting it would silently drop
+      // everything past that (e.g. only part of the paginated records).
+      let filters: any = {
+        district: isAdmin ? undefined : (districtName || undefined),
+        branch: matrixBranchFilter === 'all' ? undefined : matrixBranchFilter,
+        limit: 100000
+      };
+      if (dateRange?.from) {
+        filters.startDate = dateRange.from.toISOString();
+        if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+      }
+      const result = await getSubmissions(filters);
+      const term = searchTerm.toLowerCase();
+      const exportRows = (result.submissions || []).filter((sub: any) =>
+        !term || sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
+      );
+      if (exportRows.length === 0) {
+        toast({ variant: "destructive", title: "Nothing to export", description: "No records match the current filters." });
+        return;
+      }
+      const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Is Resubmitted', 'Amendments', 'Submitted At', 'Updated At'];
+      const rows = exportRows.map((s: any) => [
+        s.id,
+        s.customerName,
+        s.branch?.name || s.branchName || '',
+        s.branch?.district?.name || s.districtName || '',
+        s.status,
+        s.isResubmitted ? 'Yes' : 'No',
+        s.amendCycles || 0,
+        s.submittedAt ? format(new Date(s.submittedAt), 'yyyy-MM-dd h:mm a') : '',
+        s.updatedAt ? format(new Date(s.updatedAt), 'yyyy-MM-dd h:mm a') : '',
+      ]);
+      const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `district-monitoring-${format(new Date(), 'yyyyMMdd_HHmm')}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export Complete", description: `${exportRows.length} record(s) exported.` });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Export Failed", description: "Could not compile the export file." });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -440,8 +508,8 @@ export default function DistrictMonitoringPage() {
         </div>
         <div className="flex gap-3">
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
-          <Button onClick={handleExportCSV} className="h-12 px-6 gap-2 bg-primary text-white font-bold rounded-xl shadow-sm hover:bg-primary/90">
-            <FileDown className="w-4 h-4" /> Export CSV
+          <Button onClick={handleExportCSV} disabled={isExporting} className="h-12 px-6 gap-2 bg-primary text-white font-bold rounded-xl shadow-sm hover:bg-primary/90">
+            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />} Export CSV
           </Button>
         </div>
       </div>

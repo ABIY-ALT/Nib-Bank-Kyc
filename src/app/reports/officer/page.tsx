@@ -51,7 +51,7 @@ import { getSubmissions } from "@/actions/submissions";
 import { Progress } from "@/components/ui/progress";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { cn } from "@/lib/utils";
-import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
+import { calculateOfficerPerformanceIndex, getPerformanceLabel } from "@/lib/performance";
 import { differenceInMinutes } from "date-fns";
 
 export default function OfficerReportsPage() {
@@ -160,18 +160,25 @@ export default function OfficerReportsPage() {
 
         // Recycles: case was resubmitted (customer recycled after amendment)
         if (sub.isResubmitted) entry.resubmitted++;
+
+        // Unseen / Running: attributed cases still sitting unopened or
+        // mid-review (fresh workflow only — resubmitted cases are a distinct
+        // cycle). These feed the officer performance formula.
+        if (!sub.isResubmitted) {
+          if (sub.status === KYC_STATUS.SUBMITTED) entry.unseen++;
+          if (sub.status === KYC_STATUS.IN_REVIEW) entry.running++;
+        }
       });
     });
 
     return Object.values(matrix)
       .map(({ _caseIds: _omit, _branches, ...o }) => {
         const branches = Array.from(_branches).sort();
-        const accuracy = calculatePerformanceIndex({
+        // Officer formula: ((Total Assigned − Unseen − Running) ÷ Total Assigned) × 100
+        const accuracy = calculateOfficerPerformanceIndex({
           total: o.total,
           unseen: o.unseen || 0,
-          amended: o.amended || 0,
-          authorized: o.approved || 0,
-          recycles: o.resubmitted || 0,
+          running: o.running || 0,
         });
         return { ...o, branches, accuracy };
       })

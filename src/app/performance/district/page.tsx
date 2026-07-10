@@ -49,13 +49,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { getSubmissions, getCaseMetrics } from "@/actions/submissions"
+import { getBranchPerformance, getCaseMetrics } from "@/actions/submissions"
 import { getDistricts } from "@/actions/hierarchy"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { usePermissions } from "@/hooks/use-permissions"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
 import { differenceInMinutes } from "date-fns";
@@ -65,7 +64,7 @@ export default function DistrictPerformancePage() {
   const { isSuperAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
   
-  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [branchPerf, setBranchPerf] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
   const [summaryStats, setSummaryStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -95,25 +94,27 @@ export default function DistrictPerformancePage() {
     try {
       let filters: any = {
         district: activeDistrict || undefined,
-        limit: 1000
       };
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
       }
       // Summary cards must reflect the selected branch too, matching Management
-      // Reporting's behavior. The submissions fetch stays district-wide (no
+      // Reporting's behavior. The branch breakdown stays district-wide (no
       // branch filter) so the Branch Matrix table and the branch dropdown
       // options keep listing every branch in the district.
       const metricsFilters = selectedBranchFilter !== 'all'
         ? { ...filters, branch: selectedBranchFilter }
         : filters;
-      const [subs, dists, metrics] = await Promise.all([
-        getSubmissions(filters),
+      const [branchRows, dists, metrics] = await Promise.all([
+        // SQL-aggregated per-branch counts: the previous approach counted a
+        // getSubmissions fetch capped at 1000 rows, so any district with more
+        // cases than that showed silently wrong Branch Matrix numbers.
+        getBranchPerformance(filters),
         isAdmin ? getDistricts() : Promise.resolve([]),
         getCaseMetrics(metricsFilters)
       ]);
-      setSubmissions(subs.submissions || []);
+      setBranchPerf(branchRows || []);
       setDistricts(dists || []);
       setSummaryStats(metrics);
     } catch (e) {
@@ -124,47 +125,18 @@ export default function DistrictPerformancePage() {
   };
 
   const analytics = useMemo(() => {
-    const stats = {
-      // True case count (getSubmissions already excludes exceptional cases by
-      // default) — matches getCaseMetrics().total and the Case Archive count for
-      // the same filters, instead of only summing three of the workflow statuses.
-      total: submissions.length,
-      authorized: submissions.filter(s => s.status === KYC_STATUS.APPROVED).length,
-      amended: submissions.filter(s => s.status === KYC_STATUS.ACTION_REQUIRED).length,
-      // Fresh submissions only — a resubmitted case re-enters at SUBMITTED but
-      // isn't a never-seen case.
-      unseen: submissions.filter(s => s.status === KYC_STATUS.SUBMITTED && !s.isResubmitted).length,
-      resubmitted: submissions.filter(s => s.isResubmitted).length,
-      byBranch: {} as Record<string, any>
-    };
-
-    submissions.forEach(sub => {
-      const bName = sub.branchName || 'Unmapped Branch';
-      if (!stats.byBranch[bName]) {
-        stats.byBranch[bName] = { total: 0, unseen: 0, authorized: 0, amended: 0, resubmitted: 0 };
-      }
-
-      stats.byBranch[bName].total++;
-
-      if (sub.status === KYC_STATUS.APPROVED) {
-        stats.byBranch[bName].authorized++;
-      }
-
-      if (sub.status === KYC_STATUS.ACTION_REQUIRED) {
-        stats.byBranch[bName].amended++;
-      }
-
-      if (sub.status === KYC_STATUS.SUBMITTED && !sub.isResubmitted) {
-        stats.byBranch[bName].unseen++;
-      }
-
-      if (sub.isResubmitted) {
-        stats.byBranch[bName].resubmitted++;
-      }
+    const byBranch: Record<string, any> = {};
+    let total = 0, authorized = 0, amended = 0, unseen = 0, resubmitted = 0;
+    branchPerf.forEach((r) => {
+      byBranch[r.name] = { total: r.total, unseen: r.unseen, authorized: r.authorized, amended: r.amended, resubmitted: r.resubmitted };
+      total += r.total;
+      authorized += r.authorized;
+      amended += r.amended;
+      unseen += r.unseen;
+      resubmitted += r.resubmitted;
     });
-
-    return stats;
-  }, [submissions]);
+    return { total, authorized, amended, unseen, resubmitted, byBranch };
+  }, [branchPerf]);
 
   const branchCount = Object.keys(analytics.byBranch).length;
   const branchOptions = useMemo(() => {
@@ -188,6 +160,33 @@ export default function DistrictPerformancePage() {
     const entries = Object.entries(analytics.byBranch);
     return entries.filter(([name]) => selectedBranchFilter === "all" || name === selectedBranchFilter);
   }, [analytics.byBranch, selectedBranchFilter]);
+
+  const handleExportCSV = () => {
+    if (branchRows.length === 0) {
+      toast({ variant: "destructive", title: "Nothing to export", description: "No branches match the current filters." });
+      return;
+    }
+    const headers = ['Branch', 'Volume', 'Unseen', 'Authorized', 'Amended', 'Resubmitted', 'Performance Index (%)'];
+    const rows = branchRows.map(([name, data]: [string, any]) => [
+      name, data.total, data.unseen || 0, data.authorized || 0, data.amended || 0, data.resubmitted || 0,
+      calculatePerformanceIndex({
+        total: data.total,
+        unseen: data.unseen || 0,
+        amended: data.amended || 0,
+        authorized: data.authorized || 0,
+        recycles: data.resubmitted || 0,
+      })
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `district-performance-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Export Complete", description: `${branchRows.length} branch(es) exported.` });
+  };
 
   if (loading || permissionsLoading) return <div className="py-40 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" /></div>;
 
@@ -261,7 +260,7 @@ export default function DistrictPerformancePage() {
           {isAdmin && (
             <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="gap-2 font-bold h-12 px-6 border-slate-200 shadow-sm bg-white rounded-xl"><Globe className="w-4 h-4 text-primary" /> {selectedDistrict === 'all' ? 'All Regions' : selectedDistrict}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-56 rounded-xl shadow-2xl"><DropdownMenuItem onClick={() => setSelectedDistrict('all')} className="font-bold">All Regions</DropdownMenuItem>{districts.map(d => <DropdownMenuItem key={d.id} onClick={() => setSelectedDistrict(d.name)} className="font-medium">{d.name}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
           )}
-          <Button className="gap-2 h-12 px-8 bg-slate-900 text-white font-black shadow-xl rounded-xl" onClick={() => toast({ title: "Export Started" })}><FileDown className="w-5 h-5" /> Export</Button>
+          <Button className="gap-2 h-12 px-8 bg-slate-900 text-white font-black shadow-xl rounded-xl" onClick={handleExportCSV}><FileDown className="w-5 h-5" /> Export</Button>
         </div>
       </div>
 

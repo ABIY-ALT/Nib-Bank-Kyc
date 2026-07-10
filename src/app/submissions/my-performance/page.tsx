@@ -55,6 +55,7 @@ import {
 import { getSubmissions } from '@/actions/submissions';
 import { getGlobalSettings } from '@/actions/settings';
 import { KYC_STATUS } from '@/lib/kyc-data';
+import { calculateOfficerPerformanceIndex } from '@/lib/performance';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -177,11 +178,11 @@ export default function MyCasesPerformancePage() {
     const pending = filteredSubmissions.filter(s => s.status === KYC_STATUS.SUBMITTED && !s.isResubmitted).length;
     const resubmitted = filteredSubmissions.filter(s => s.isResubmitted).length;
 
-    // REFINED: Only consider Authorize, Amendment, and Unseen (Pending) in total and performance
-    const total = completed + amendment + pending;
-    const denominator = total;
-    const numerator = completed + amendment;
-    const performanceIndex = denominator > 0 ? Math.round((numerator / denominator) * 100) : 100;
+    // Officer formula: ((Total Assigned − Unseen − Running) ÷ Total Assigned) × 100.
+    // Total assigned = the officer's full actionable caseload (approved,
+    // amendment, pending/unseen, and in-review).
+    const total = completed + amendment + pending + running;
+    const performanceIndex = calculateOfficerPerformanceIndex({ total, unseen: pending, running });
 
     const branchBreakdown: Record<string, number> = {};
     filteredSubmissions.forEach(s => {

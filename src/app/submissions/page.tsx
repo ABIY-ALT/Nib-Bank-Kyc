@@ -51,7 +51,6 @@ import { getSubmissions, getSubmissionById, logBundleDownload } from "@/actions/
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import { format } from "date-fns";
-import { sortSubmissionsOldestFirst } from "@/lib/submission-sort";
 import JSZip from 'jszip';
 import { sanitizeBundleSegment } from "@/lib/bundle-path";
 import { resolveDownloadFileName } from "@/lib/documents";
@@ -77,6 +76,7 @@ export default function CaseArchivePage() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
@@ -84,6 +84,7 @@ export default function CaseArchivePage() {
   const [sortField, setSortField] = useState<string>('submittedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isZipping, setIsZipping] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   // FILTER SYNCHRONIZATION: dashboard cards redirect here with their active
@@ -108,39 +109,65 @@ export default function CaseArchivePage() {
     }
   }, []);
 
+  // Debounce the search box, then search SERVER-SIDE: the table is paginated,
+  // so filtering the 10 loaded rows client-side could never find a case that
+  // lives on another page.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     loadArchive();
-  }, [dateRange, selectedDistricts, selectedBranches, selectedStatuses, currentPage]);
+  }, [dateRange, selectedDistricts, selectedBranches, selectedStatuses, currentPage, sortField, sortOrder, debouncedSearch]);
+
+  // Shared with the CSV export: the export must hit the server with the exact
+  // same district/branch/status/date scoping as the on-screen page, just
+  // without the page-size limit — otherwise it silently only exports whatever
+  // page happens to be loaded in `submissions`.
+  const buildActiveFilters = () => {
+    let filters: any = {};
+    if (debouncedSearch) filters.search = debouncedSearch;
+    if (dateRange?.from) {
+      filters.startDate = dateRange.from.toISOString();
+      if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+    }
+    // Scope the fetch server-side to the active filters (district/branch/status)
+    // so the archive's result count matches exactly what a dashboard card
+    // (getCaseMetrics, same filters) reported — instead of fetching everything
+    // and relying only on a client-side string match, which can silently drift
+    // out of sync (casing, whitespace) from the server's jurisdiction filter.
+    // Only a single district maps 1:1 to a server filter; multi-select falls
+    // back to the client-side match below.
+    if (selectedDistricts.length === 1) filters.district = selectedDistricts[0];
+    if (selectedBranches.length > 0) filters.branches = selectedBranches;
+    if (selectedStatuses.length > 0) filters.status = selectedStatuses;
+    // Non-superadmin users only see submissions from their assigned branches
+    if (!isSuperAdmin && user && selectedBranches.length === 0) {
+      if (user.assignedBranches && user.assignedBranches.length > 0) {
+        filters.branches = user.assignedBranches;
+      } else if (user.branchName) {
+        filters.branch = user.branchName;
+      }
+    }
+    return filters;
+  };
 
   const loadArchive = async () => {
     setLoading(true);
     try {
-      let filters: any = { 
+      const filters = {
+        ...buildActiveFilters(),
         limit: ITEMS_PER_PAGE,
-        offset: (currentPage - 1) * ITEMS_PER_PAGE
+        offset: (currentPage - 1) * ITEMS_PER_PAGE,
+        // Order server-side: with paginated fetches, client-side sorting could
+        // only ever rearrange the 10 rows of the visible page.
+        sortField: sortField as any,
+        sortOrder,
       };
-      if (dateRange?.from) {
-        filters.startDate = dateRange.from.toISOString();
-        if (dateRange.to) filters.endDate = dateRange.to.toISOString();
-      }
-      // Scope the fetch server-side to the active filters (district/branch/status)
-      // so the archive's result count matches exactly what a dashboard card
-      // (getCaseMetrics, same filters) reported — instead of fetching everything
-      // and relying only on a client-side string match, which can silently drift
-      // out of sync (casing, whitespace) from the server's jurisdiction filter.
-      // Only a single district maps 1:1 to a server filter; multi-select falls
-      // back to the client-side match below.
-      if (selectedDistricts.length === 1) filters.district = selectedDistricts[0];
-      if (selectedBranches.length > 0) filters.branches = selectedBranches;
-      if (selectedStatuses.length > 0) filters.status = selectedStatuses;
-      // Non-superadmin users only see submissions from their assigned branches
-      if (!isSuperAdmin && user && selectedBranches.length === 0) {
-        if (user.assignedBranches && user.assignedBranches.length > 0) {
-          filters.branches = user.assignedBranches;
-        } else if (user.branchName) {
-          filters.branch = user.branchName;
-        }
-      }
       const result = await getSubmissions(filters);
       setSubmissions(result.submissions || []);
       setTotalCount(result.total || 0);
@@ -165,23 +192,9 @@ export default function CaseArchivePage() {
     return Array.from(new Set(relevantSubmissions.map(s => s.branchName || "Unknown"))).sort();
   }, [submissions, selectedDistricts]);
 
-  const filteredSubmissions = useMemo(() => {
-    if (!submissions) return [];
-    const term = searchTerm.toLowerCase();
-    
-    return submissions.filter(s => {
-      const matchesSearch = s.customerName.toLowerCase().includes(term) ||
-                          s.id.toLowerCase().includes(term) ||
-                          (s.branchName || "").toLowerCase().includes(term) ||
-                          (s.districtName || "").toLowerCase().includes(term);
-      
-      const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(s.status);
-      const matchesDistrict = selectedDistricts.length === 0 || selectedDistricts.includes(s.districtName);
-      const matchesBranch = selectedBranches.length === 0 || selectedBranches.includes(s.branchName);
-      
-      return matchesSearch && matchesStatus && matchesDistrict && matchesBranch;
-    });
-  }, [submissions, searchTerm, selectedStatuses, selectedDistricts, selectedBranches]);
+  // Server already applies all active filters (status/district/branch/search/date)
+  // via buildActiveFilters — rows arrive pre-filtered. No client-side re-filter needed.
+  const orderedFilteredSubmissions = submissions;
 
   const toggleSort = (field: string) => {
     if (sortField === field) {
@@ -190,32 +203,8 @@ export default function CaseArchivePage() {
       setSortField(field);
       setSortOrder('asc');
     }
+    setCurrentPage(1);
   };
-
-  // Default oldest-first ordering, overridable by clicking column headers.
-  const orderedFilteredSubmissions = useMemo(() => {
-    const base = sortSubmissionsOldestFirst(filteredSubmissions || []);
-    const valueOf = (s: any): string | number => {
-      switch (sortField) {
-        case 'id': return (s.id || '').toLowerCase();
-        case 'customer': return (s.customerName || '').toLowerCase();
-        case 'branch': return (s.branchName || '').toLowerCase();
-        case 'district': return (s.districtName || '').toLowerCase();
-        case 'status': return s.status || '';
-        case 'updatedAt': return s.updatedAt ? new Date(s.updatedAt).getTime() : 0;
-        case 'submittedAt':
-        default: return s.submittedAt ? new Date(s.submittedAt).getTime() : 0;
-      }
-    };
-    return [...base].sort((a, b) => {
-      const va = valueOf(a);
-      const vb = valueOf(b);
-      const cmp = typeof va === 'number' && typeof vb === 'number'
-        ? va - vb
-        : String(va).localeCompare(String(vb));
-      return sortOrder === 'asc' ? cmp : -cmp;
-    });
-  }, [filteredSubmissions, sortField, sortOrder]);
 
   const handleDownloadZip = async (sub: any) => {
     setIsZipping(sub.id);
@@ -263,18 +252,47 @@ export default function CaseArchivePage() {
       : <ArrowDown className="w-3 h-3 ml-1 inline-block text-primary" />;
   };
 
-  const handleExportCSV = () => {
-    if (filteredSubmissions.length === 0) return;
-    const headers = ['Case ID', 'Customer', 'Branch', 'Status', 'Submitted At'];
-    const rows = filteredSubmissions.map(s => [s.id, s.customerName, s.branchName, s.status, new Date(s.submittedAt).toLocaleDateString()]);
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `nib-kyc-archive-export.csv`);
-    link.click();
-    toast({ title: "Archive Exported" });
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    try {
+      // Fetch every record matching the active filters, not just the page
+      // currently on screen (`submissions` here is limited to ITEMS_PER_PAGE).
+      const result = await getSubmissions({ ...buildActiveFilters(), limit: 100000 });
+      let exportRows = result.submissions || [];
+      if (selectedDistricts.length > 1) {
+        exportRows = exportRows.filter((s: any) => selectedDistricts.includes(s.districtName));
+      }
+      const term = searchTerm.toLowerCase();
+      if (term) {
+        exportRows = exportRows.filter((s: any) =>
+          s.customerName.toLowerCase().includes(term) ||
+          s.id.toLowerCase().includes(term) ||
+          (s.branchName || "").toLowerCase().includes(term) ||
+          (s.districtName || "").toLowerCase().includes(term)
+        );
+      }
+
+      if (exportRows.length === 0) {
+        toast({ variant: "destructive", title: "Nothing to export", description: "No records match the current filters." });
+        return;
+      }
+
+      const headers = ['Case ID', 'Customer', 'Branch', 'Status', 'Submitted At'];
+      const rows = exportRows.map((s: any) => [s.id, s.customerName, s.branchName, s.status, new Date(s.submittedAt).toLocaleDateString()]);
+      const csvContent = [headers.join(','), ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `nib-kyc-archive-export.csv`);
+      link.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Archive Exported", description: `${exportRows.length} record(s) exported.` });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Export Failed", description: "Could not compile the export file." });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const toggleStatus = (status: string) => {
@@ -404,8 +422,8 @@ export default function CaseArchivePage() {
               <DropdownMenuItem onClick={resetFilters} className="text-destructive font-bold">Reset All Filters</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button className="gap-2 h-12 px-6 bg-primary hover:bg-primary/90 text-white font-bold" onClick={handleExportCSV}>
-            <FileDown className="w-4 h-4" /> Export
+          <Button className="gap-2 h-12 px-6 bg-primary hover:bg-primary/90 text-white font-bold" onClick={handleExportCSV} disabled={isExporting}>
+            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />} Export
           </Button>
         </div>
       </div>
@@ -437,6 +455,7 @@ export default function CaseArchivePage() {
                   else if (sortField === 'branch') { setSortField('district'); setSortOrder('asc'); }
                   else if (sortField === 'district' && sortOrder === 'asc') setSortOrder('desc');
                   else { setSortField('branch'); setSortOrder('asc'); }
+                  setCurrentPage(1);
                 }}
               >
                 District & Branch
@@ -472,8 +491,8 @@ export default function CaseArchivePage() {
                   </div>
                 </TableCell>
                 <TableCell>{getStatusBadge(sub)}</TableCell>
-                <TableCell className="text-slate-500 font-medium text-xs">{sub.submittedAt ? format(new Date(sub.submittedAt), 'MMM dd, yyyy HH:mm:ss') : 'N/A'}</TableCell>
-                <TableCell className="text-slate-500 font-medium text-xs">{sub.updatedAt ? format(new Date(sub.updatedAt), 'MMM dd, yyyy HH:mm:ss') : 'N/A'}</TableCell>
+                <TableCell className="text-slate-500 font-medium text-xs">{sub.submittedAt ? format(new Date(sub.submittedAt), 'MMM dd, yyyy h:mm:ss a') : 'N/A'}</TableCell>
+                <TableCell className="text-slate-500 font-medium text-xs">{sub.updatedAt ? format(new Date(sub.updatedAt), 'MMM dd, yyyy h:mm:ss a') : 'N/A'}</TableCell>
                 <TableCell className="text-right pr-8">
                   <div className="flex justify-end gap-1">
                     <Button
@@ -497,9 +516,11 @@ export default function CaseArchivePage() {
       
       {!loading && totalCount > ITEMS_PER_PAGE && (
         <div className="mt-6">
-          <Pagination 
+          <Pagination
             currentPage={currentPage}
             totalPages={Math.ceil(totalCount / ITEMS_PER_PAGE)}
+            totalItems={totalCount}
+            pageSize={ITEMS_PER_PAGE}
             onPageChange={setCurrentPage}
           />
         </div>

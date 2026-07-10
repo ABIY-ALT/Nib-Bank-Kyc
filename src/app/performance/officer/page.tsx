@@ -63,7 +63,7 @@ import { getDistricts, getBranches } from "@/actions/hierarchy";
 import { getGlobalSettings } from "@/actions/settings";
 import { cn } from "@/lib/utils";
 import { KYC_STATUS } from "@/lib/kyc-data";
-import { calculatePerformanceIndex, getPerformanceLabel } from "@/lib/performance";
+import { calculateOfficerPerformanceIndex, getPerformanceLabel } from "@/lib/performance";
 import Link from "next/link";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import JSZip from 'jszip';
@@ -469,11 +469,11 @@ Document Count:    ${fullSub?.documents?.length || 0}
         avgResolutionMinutes = Math.round(totalMinutes / approvedCases.length);
       }
 
-      const performanceIndex = calculatePerformanceIndex({
+      // Officer formula: ((Total Assigned − Unseen − Running) ÷ Total Assigned) × 100
+      const performanceIndex = calculateOfficerPerformanceIndex({
         total: offSubs.length,
         unseen,
-        amended,
-        authorized,
+        running,
       });
 
       return {
