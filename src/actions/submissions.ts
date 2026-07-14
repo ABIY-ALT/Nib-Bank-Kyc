@@ -18,14 +18,14 @@ import { resolvePreviewMimeType } from '@/lib/documents';
 import { performCompleteFileValidation } from '@/lib/file-upload-security-integration';
 import { writeSecureUploadedFile } from '@/lib/secure-file-storage';
 import { getExceptionalWorkflowStage, getExceptionalWorkflowAction, getActionsForCase } from '@/lib/exceptional-workflow';
-import { format, startOfMonth, endOfMonth, subDays, eachMonthOfInterval } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subDays, eachMonthOfInterval, eachDayOfInterval, differenceInDays, startOfDay, endOfDay } from 'date-fns';
 import { EXCEPTIONAL_RESTORE_SENTINEL } from '@/lib/kyc-data';
 
-import { 
-  normalizeAssignedBranches, 
+import {
+  normalizeAssignedBranches,
   normalizeBranchName,
-  getResolvedUserBranchName, 
-  getResolvedUserDistrictName, 
+  getResolvedUserBranchName,
+  getResolvedUserDistrictName,
   getNormalizedRole,
   hasJurisdictionalAccess,
   isSaturdayNow,
@@ -143,7 +143,7 @@ function hasPermission(user: any, slug: string) {
   return Boolean(
     user?.roles?.some((userRole: any) =>
       userRole?.role?.active !== false &&
-      userRole?.role?.permissions?.some((rolePermission: any) => 
+      userRole?.role?.permissions?.some((rolePermission: any) =>
         normalizePermissionSlug(rolePermission?.permission?.slug) === normalized
       )
     )
@@ -223,7 +223,7 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
 
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    include: { 
+    include: {
       roles: {
         include: {
           role: {
@@ -237,13 +237,13 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
           }
         }
       },
-      branch: { include: { district: true } } 
+      branch: { include: { district: true } }
     }
   });
-  
+
   if (!user) return null;
 
-  const userPermissions = user.roles.flatMap((ur: any) => 
+  const userPermissions = user.roles.flatMap((ur: any) =>
     ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
   );
 
@@ -279,9 +279,9 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
   if ((user as any).lateHourAllBranches && isLateHourNow()) return buildExplicitFilters();
   if ((user as any).lunchBreakAllBranches && isLunchBreakNow()) return buildExplicitFilters();
 
-  const isBranchLevelStaff = branchName && 
-    isBranchScopeStaff && 
-    !isPortfolioStaff && 
+  const isBranchLevelStaff = branchName &&
+    isBranchScopeStaff &&
+    !isPortfolioStaff &&
     (normalizedAssigned.length === 0 || normalizedAssigned.length === 1);
 
   if (!isDistrictAdmin && !isBranchLevelStaff && userPermissions.some(p => GLOBAL_SCOPE_PERMISSIONS.has(p))) {
@@ -303,9 +303,9 @@ async function buildJurisdictionalFilter(session: any, requestedDistrict?: strin
     const visibleBranches = requestedBranches.length > 0
       ? normalizedAssigned.filter((branch) => normalizedRequested.includes(branch.toLowerCase()))
       : normalizedAssigned;
-    
+
     if (visibleBranches.length === 0) return null;
-    
+
     filter.branchName = visibleBranches.length === 1
       ? { equals: normalizeBranchName(visibleBranches[0]), mode: 'insensitive' }
       : { in: visibleBranches.map(b => normalizeBranchName(b)), mode: 'insensitive' };
@@ -358,19 +358,19 @@ export async function getSubmissions(filters?: {
     // Accept a single `branch` alongside `branches` (mirrors getCaseMetrics) — several
     // callers only set the singular field, which this function used to silently ignore.
     const requestedBranches = filters?.branches || (filters?.branch ? [filters.branch] : []);
-    
+
     const dateFilter = filters?.startDate || filters?.endDate ? (() => {
-        const filter: any = {};
-        if (filters.startDate) {
-          filter.gte = new Date(filters.startDate);
-        }
-        if (filters.endDate) {
-          const endDate = new Date(filters.endDate);
-          endDate.setHours(23, 59, 59, 999);
-          filter.lte = endDate;
-        }
-        return filter;
-      })() : undefined;
+      const filter: any = {};
+      if (filters.startDate) {
+        filter.gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        filter.lte = endDate;
+      }
+      return filter;
+    })() : undefined;
 
     const jurisdictionalFilter = await buildJurisdictionalFilter(session, requestedDistrict, requestedBranches);
     if (jurisdictionalFilter === null) return { submissions: [], total: 0 };
@@ -379,7 +379,7 @@ export async function getSubmissions(filters?: {
       where: { id: session.id },
       select: { roles: { include: { role: true } } }
     });
-    
+
     const roleNames = user?.roles.map(r => r.role.name) || [];
     const isOfficer = roleNames.some(r => ['KYC_OFFICER', 'KYC_SPECIALIST', 'SUPERVISOR'].includes(r));
     const isManagement = session.role === 'SUPER_ADMIN' || roleNames.includes('DISTRICT_DIRECTOR');
@@ -431,9 +431,9 @@ export async function getSubmissions(filters?: {
       // For all other cases they follow normal portfolio/branch jurisdiction.
       const portfolioConditions: any[] = hasJurisFilter
         ? [
-            { ...jurisdictionalFilter, assignedToId: null },
-            { ...jurisdictionalFilter, status: KYC_STATUS.SUBMITTED },
-          ]
+          { ...jurisdictionalFilter, assignedToId: null },
+          { ...jurisdictionalFilter, status: KYC_STATUS.SUBMITTED },
+        ]
         : [{ assignedToId: null }, { status: KYC_STATUS.SUBMITTED }];
 
       // For exceptional cases: any officer with portfolio access to the branch can see all
@@ -628,13 +628,12 @@ async function buildCaseMetricsWhere(session: NonNullable<Awaited<ReturnType<typ
   // Spreading raw (possibly undefined) request values over the jurisdiction
   // object previously erased the branch restriction (branchId: undefined wiped
   // a branch user's scope), leaking organization-wide totals on dashboards.
-  const where: any = { ...jurisdictionalFilter, active: true };
+  const baseWhere: any = { active: true };
   const requestedCreatedById = filters?.submittedBy || filters?.createdById;
-  if (requestedCreatedById) where.createdById = requestedCreatedById;
-  if (filters?.assignedToId) where.assignedToId = filters.assignedToId;
-  if (filters?.isResubmitted !== undefined) where.isResubmitted = filters.isResubmitted;
-  if (filters?.isExceptional !== undefined) where.isExceptional = filters.isExceptional;
-  if (filters?.entityType) where.entityType = filters.entityType;
+  if (requestedCreatedById) baseWhere.createdById = requestedCreatedById;
+  if (filters?.isResubmitted !== undefined) baseWhere.isResubmitted = filters.isResubmitted;
+  if (filters?.isExceptional !== undefined) baseWhere.isExceptional = filters.isExceptional;
+  if (filters?.entityType) baseWhere.entityType = filters.entityType;
   // Queries scoped to AUTHORIZED cases interpret the date range as "authorized
   // in this window" — matched on the approval timestamp (updatedAt, the case's
   // final state change), not the original submission date. Mirrors getSubmissions.
@@ -642,17 +641,13 @@ async function buildCaseMetricsWhere(session: NonNullable<Awaited<ReturnType<typ
     ? filters!.status.length === 1 && filters!.status[0] === KYC_STATUS.APPROVED
     : filters?.status === KYC_STATUS.APPROVED;
   if (dateFilter) {
-    if (approvedOnly) where.updatedAt = dateFilter;
-    else where.submittedAt = dateFilter;
+    if (approvedOnly) baseWhere.updatedAt = dateFilter;
+    else baseWhere.submittedAt = dateFilter;
   }
-  if (statusFilter) where.status = statusFilter;
-  // Narrowing conditions live in AND so they never replace jurisdiction keys.
-  const andConditions: any[] = [];
-  if (filters?.branchId) andConditions.push({ branchId: filters.branchId });
-  if (filters?.staffId) {
-    andConditions.push({ OR: [{ createdById: filters.staffId }, { assignedToId: filters.staffId }] });
-  }
-  if (andConditions.length > 0) where.AND = andConditions;
+  if (statusFilter) baseWhere.status = statusFilter;
+
+  let where: any;
+  const hasJurisFilter = Object.keys(jurisdictionalFilter).length > 0;
 
   // NEW: Assignment filter for KYC Officers / Specialists to ensure Dashboard matches My Cases
   // Only apply if filters.assignedToId is NOT explicitly provided (to avoid double filtering)
@@ -667,12 +662,36 @@ async function buildCaseMetricsWhere(session: NonNullable<Awaited<ReturnType<typ
   const isManagement = session.role === 'SUPER_ADMIN' || roleNames.includes('DISTRICT_DIRECTOR');
 
   if (isOfficer && !isManagement && !filters?.assignedToId) {
-    where.OR = [
-      { assignedToId: session.id },
-      { assignedToId: null },
-      { status: KYC_STATUS.SUBMITTED }
-    ];
+    const portfolioConditions: any[] = hasJurisFilter
+      ? [
+          { ...jurisdictionalFilter, assignedToId: null },
+          { ...jurisdictionalFilter, status: KYC_STATUS.SUBMITTED },
+        ]
+      : [{ assignedToId: null }, { status: KYC_STATUS.SUBMITTED }];
+
+    const exceptionalPortfolio: any[] = filters?.isExceptional && hasJurisFilter
+      ? [{ ...jurisdictionalFilter }]
+      : [];
+
+    where = {
+      ...baseWhere,
+      OR: [{ assignedToId: session.id }, ...portfolioConditions, ...exceptionalPortfolio],
+    };
+  } else {
+    where = {
+      ...baseWhere,
+      ...jurisdictionalFilter,
+      assignedToId: filters?.assignedToId,
+    };
   }
+
+  // Narrowing conditions live in AND so they never replace jurisdiction keys.
+  const andConditions: any[] = [];
+  if (filters?.branchId) andConditions.push({ branchId: filters.branchId });
+  if (filters?.staffId) {
+    andConditions.push({ OR: [{ createdById: filters.staffId }, { assignedToId: filters.staffId }] });
+  }
+  if (andConditions.length > 0) where.AND = andConditions;
 
   return where;
 }
@@ -712,7 +731,7 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
         },
       }),
       prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED] }, isExceptional: false } }),
-      prisma.kYC.count({ where: { ...where, isResubmitted: true, isExceptional: false } }),
+      prisma.kYC.count({ where: { ...where, isResubmitted: true, isExceptional: false, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED, KYC_STATUS.RESUBMITTED] } } }),
       prisma.kYC.count({ where: { ...where, status: KYC_STATUS.ESCALATED, isExceptional: false } }),
       prisma.kYC.count({ where: { ...where, isExceptional: true } }),
       prisma.kYC.count({ where: { ...where, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] }, isExceptional: false } }),
@@ -869,21 +888,56 @@ export async function getMonthlyTrend(filters?: CaseMetricsFilter): Promise<{ na
 
   try {
     const totalWhere = filters?.isExceptional !== undefined ? where : { ...where, isExceptional: false };
-    const end = new Date();
-    const start = startOfMonth(subDays(end, 180));
-    const months = eachMonthOfInterval({ start, end });
+    
+    // If any date boundaries are provided, respect them strictly
+    const hasAnyDateFilter = !!filters?.startDate || !!filters?.endDate;
+    
+    let intervals: Date[] = [];
+    let isDaily = false;
+    
+    if (hasAnyDateFilter) {
+      // If only one side is provided, use sensible defaults for the missing bound
+      const start = filters?.startDate 
+        ? startOfDay(new Date(filters.startDate)) 
+        : startOfMonth(subDays(new Date(), 180));
+      const end = filters?.endDate 
+        ? endOfDay(new Date(filters.endDate)) 
+        : endOfDay(new Date());
+
+      const daysDiff = differenceInDays(end, start);
+      
+      if (daysDiff <= 60 && daysDiff >= 0) {
+        // Less than 60 days: show daily bars to give fine-grained resolution
+        intervals = eachDayOfInterval({ start, end });
+        isDaily = true;
+      } else if (daysDiff > 60) {
+        // More than 60 days: show monthly bars strictly within selection
+        intervals = eachMonthOfInterval({ start, end });
+      } else {
+        // Fallback for invalid ranges (start > end)
+        intervals = [start];
+        isDaily = true;
+      }
+    } else {
+      // Default fallback: Last 6 months
+      const end = new Date();
+      const start = startOfMonth(subDays(end, 180));
+      intervals = eachMonthOfInterval({ start, end });
+    }
 
     const counts = await Promise.all(
-      months.map((m) =>
-        prisma.kYC.count({
-          where: { AND: [totalWhere, { submittedAt: { gte: m, lte: endOfMonth(m) } }] },
-        })
-      )
+      intervals.map((d) => {
+        const boundaryStart = isDaily ? startOfDay(d) : startOfMonth(d);
+        const boundaryEnd = isDaily ? endOfDay(d) : endOfMonth(d);
+        
+        return prisma.kYC.count({
+          where: { AND: [totalWhere, { submittedAt: { gte: boundaryStart, lte: boundaryEnd } }] },
+        });
+      })
     );
 
-    // Unambiguous month labels: 'MMM yy' rendered "Jun 26" reads like a future
-    // calendar day, so spell the year out.
-    return months.map((m, i) => ({ name: format(m, 'MMM yyyy'), volume: counts[i] }));
+    const formatStr = isDaily ? 'MMM dd, yyyy' : 'MMM yyyy';
+    return intervals.map((d, i) => ({ name: format(d, formatStr), volume: counts[i] }));
   } catch (error) {
     logInstitutionalError(error, 'DB_MONTHLY_TREND');
     return [];
@@ -935,7 +989,7 @@ export async function getSubmissionById(id: string) {
     });
     if (!user) return null;
 
-    const userPermissions = user.roles.flatMap((ur: any) => 
+    const userPermissions = user.roles.flatMap((ur: any) =>
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     );
 
@@ -1033,8 +1087,8 @@ export async function createSubmission(formData: FormData) {
     const branch = await prisma.branch.upsert({
       where: { name: validated.branchName },
       update: {},
-      create: { 
-        name: validated.branchName, 
+      create: {
+        name: validated.branchName,
         code: `BR-${generateSecureString(3, '0123456789')}`,
         districtId: district.id
       }
@@ -1044,11 +1098,11 @@ export async function createSubmission(formData: FormData) {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i] || 'OTHER';
-      
+
       // CRITICAL SECURITY: 5-Layer Threat Detection (VULN #12/17)
       const buffer = Buffer.from(await file.arrayBuffer());
       const validation = await performCompleteFileValidation(file.name, file.type, buffer, session.id);
-      
+
       if (!validation.valid || !validation.storageKey) {
         await createAuditLog({
           userId: session.id,
@@ -1097,6 +1151,7 @@ export async function createSubmission(formData: FormData) {
             districtName: validated.districtName,
             createdById: session.id,
             status: KYC_STATUS.SUBMITTED,
+            statusChangedAt: new Date(),
             entityType: validated.entityType,
             remarks: validated.remarks,
             checklistState: {},
@@ -1153,7 +1208,7 @@ export async function resubmitSubmission(formData: FormData) {
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
-    const actor = await prisma.user.findUnique({ 
+    const actor = await prisma.user.findUnique({
       where: { id: session.id },
       include: {
         roles: {
@@ -1172,7 +1227,7 @@ export async function resubmitSubmission(formData: FormData) {
       }
     });
 
-    const userPermissions = actor?.roles.flatMap((ur: any) => 
+    const userPermissions = actor?.roles.flatMap((ur: any) =>
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
@@ -1199,11 +1254,11 @@ export async function resubmitSubmission(formData: FormData) {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const type = types[i] || 'OTHER';
-      
+
       // CRITICAL SECURITY: 5-Layer Threat Detection (VULN #12/17)
       const buffer = Buffer.from(await file.arrayBuffer());
       const validation = await performCompleteFileValidation(file.name, file.type, buffer, session.id);
-      
+
       if (!validation.valid || !validation.storageKey) {
         await createAuditLog({
           userId: session.id,
@@ -1217,12 +1272,12 @@ export async function resubmitSubmission(formData: FormData) {
 
       const persistableBuffer = validation.sanitisedBuffer || buffer;
       await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
-      
-      memoData.push({ 
-        name: file.name.split('.').slice(0, -1).join('.'), 
-        originalName: file.name, 
-        type: type, 
-        storageKey: validation.storageKey!, 
+
+      memoData.push({
+        name: file.name.split('.').slice(0, -1).join('.'),
+        originalName: file.name,
+        type: type,
+        storageKey: validation.storageKey!,
         fileHash: validation.fileHash,
         uploadedById: session.id,
         kycId: id,
@@ -1254,9 +1309,9 @@ export async function resubmitSubmission(formData: FormData) {
     // absent (account not ACTIVE) or has no active mapping.
     const primaryOfficers = current.branchId
       ? await prisma.branchMappingOfficer.findMany({
-          where: { mapping: { branchId: current.branchId, active: true }, isPrimary: true },
-          select: { userId: true, user: { select: { status: true } }, mapping: { select: { type: true } } },
-        })
+        where: { mapping: { branchId: current.branchId, active: true }, isPrimary: true },
+        select: { userId: true, user: { select: { status: true } }, mapping: { select: { type: true } } },
+      })
       : [];
     const permanentPrimary = primaryOfficers.find((o) => o.mapping.type === 'PERMANENT');
     const temporaryPrimary = primaryOfficers.find((o) => o.mapping.type === 'TEMPORARY');
@@ -1271,11 +1326,12 @@ export async function resubmitSubmission(formData: FormData) {
       prisma.kYC.update({
         where: { id },
         data: {
-          status: isExceptionalAmendment ? KYC_STATUS.ESCALATED : KYC_STATUS.SUBMITTED,
+          status: isExceptionalAmendment ? KYC_STATUS.ESCALATED : KYC_STATUS.RESUBMITTED,
           isResubmitted: true,
           exceptionalStatus: isExceptionalAmendment ? EXCEPTIONAL_STATUS.AWAITING_DIVISION : current.exceptionalStatus,
           assignedToId: isExceptionalAmendment ? null : (primaryOfficerRecord?.userId ?? current.assignedToId),
           commentHistory: newHistory,
+          statusChangedAt: new Date(),
           updatedAt: new Date(),
         },
       })
@@ -1337,7 +1393,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
   }
 
   const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
-  const reviewer = await prisma.user.findUnique({ 
+  const reviewer = await prisma.user.findUnique({
     where: { id: session.id },
     include: {
       roles: {
@@ -1356,7 +1412,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     }
   });
 
-  const userPermissions = reviewer?.roles.flatMap((ur: any) => 
+  const userPermissions = reviewer?.roles.flatMap((ur: any) =>
     ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
   ) || [];
 
@@ -1374,18 +1430,18 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     isMappedOfficer = (await getActingPrimaryOfficerId(current.branchId)) === session.id;
   }
 
-  if (current.status === KYC_STATUS.SUBMITTED && status === KYC_STATUS.IN_REVIEW && !isMappedOfficer) {
+  if ((current.status === KYC_STATUS.SUBMITTED || current.status === KYC_STATUS.RESUBMITTED) && status === KYC_STATUS.IN_REVIEW && !isMappedOfficer) {
     return { success: false as const, error: "Only the assigned KYC Officer can open this case for review." };
   }
 
   // REDUCE DUPLICATE ENTRIES: Prevent rapid-fire or redundant status updates
   const lastEntry = history.length > 0 ? history[history.length - 1] : null;
   const isStatusChanging = current.status !== status;
-  
+
   // Rule 1: Same status and same person without a unique comment is a duplicate
   const isSameStatusAndPerson = lastEntry?.action === status && lastEntry?.performedBy === `${reviewer?.firstName} ${reviewer?.lastName}`;
   const hasNewRemarks = !!remarks && remarks !== lastEntry?.comment;
-  
+
   // Rule 2: Specifically prevent multiple "Open" entries (automatic background transitions)
   const isAutoOpen = remarks === "Case opened for analysis.";
   const wasAlreadyOpened = history.some(h => h.comment === "Case opened for analysis." && h.performedBy === `${reviewer?.firstName} ${reviewer?.lastName}`);
@@ -1433,6 +1489,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
         // it back to false the instant a resubmitted case was opened for review
         // (SUBMITTED -> IN_REVIEW), silently losing the distinction downstream.
         isResubmitted: current.isResubmitted,
+        statusChangedAt: new Date(),
         amendCycles: status === KYC_STATUS.ACTION_REQUIRED ? { increment: 1 } : undefined
       }
     });
@@ -1505,6 +1562,7 @@ export async function returnEscalatedCaseToOfficer(id: string, remarks: string) 
       data: {
         status: KYC_STATUS.IN_REVIEW, // Normal workflow continues
         assignedToId: mappedOfficerId,
+        statusChangedAt: new Date(),
         updatedAt: new Date(),
         commentHistory: [...history, newEntry],
       }
@@ -1534,7 +1592,7 @@ export async function updateSubmissionChecklist(id: string, state: any) {
   try {
     const [currentKyc, actor] = await Promise.all([
       prisma.kYC.findUnique({ where: { id } }),
-      prisma.user.findUnique({ 
+      prisma.user.findUnique({
         where: { id: session.id },
         include: {
           roles: {
@@ -1558,7 +1616,7 @@ export async function updateSubmissionChecklist(id: string, state: any) {
       throw new Error("The case could not be found.");
     }
 
-    const userPermissions = actor?.roles.flatMap((ur: any) => 
+    const userPermissions = actor?.roles.flatMap((ur: any) =>
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
@@ -1593,7 +1651,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
-    const actor = await prisma.user.findUnique({ 
+    const actor = await prisma.user.findUnique({
       where: { id: session.id },
       include: {
         roles: {
@@ -1612,7 +1670,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       }
     });
 
-    const userPermissions = actor?.roles.flatMap((ur: any) => 
+    const userPermissions = actor?.roles.flatMap((ur: any) =>
       ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
     ) || [];
 
@@ -1627,15 +1685,15 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
 
     const buffer = Buffer.from(await memo.arrayBuffer());
     const validation = await performCompleteFileValidation(memo.name, memo.type, buffer, session.id);
-    
+
     if (!validation.valid || !validation.storageKey) {
-      await createAuditLog({ 
-        userId: session.id, 
-        userEmail: session.email, 
-        action: 'FILE_UPLOAD_REJECTED', 
-        details: `Exceptional memo rejected: ${memo.name} - ${validation.error}`, 
-        kycId: id 
-      }).catch(() => {});
+      await createAuditLog({
+        userId: session.id,
+        userEmail: session.email,
+        action: 'FILE_UPLOAD_REJECTED',
+        details: `Exceptional memo rejected: ${memo.name} - ${validation.error}`,
+        kycId: id
+      }).catch(() => { });
       throw new Error(toFriendlyUploadError(validation.error));
     }
 
@@ -1672,6 +1730,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
           isExceptional: true,
           exceptionalStatus: EXCEPTIONAL_STATUS.AWAITING_DISTRICT,
           commentHistory: [...history, newEntry],
+          statusChangedAt: new Date(),
           updatedAt: new Date()
         }
       })
@@ -1701,16 +1760,24 @@ export async function getWorkflowCounts() {
   }
 
   try {
-    const jurisdictionalFilter = await buildJurisdictionalFilter(session);
-    if (jurisdictionalFilter === null) {
+    // Use buildCaseMetricsWhere (not raw jurisdictionalFilter) so that KYC Officers
+    // get the same portfolio OR-clause here as they do on the main dashboard —
+    // previously sidebar badges used the raw jurisdictional filter and missed cases
+    // assigned directly to the officer, causing a persistent mismatch with the
+    // dashboard card counts.
+    const baseWhere = await buildCaseMetricsWhere(session);
+    if (baseWhere === null) {
       return { mySubmissions: 0, actionRequired: 0, reviewQueue: 0, resubmitted: 0, escalated: 0, exceptional: 0, unseenCases: 0, branchNode: 0 };
     }
+
+    // Strip the top-level isExceptional default so each count below can set its own.
+    const { isExceptional: _unused, ...officerWhere } = baseWhere;
 
     const [myCount, actionRequired, queueCounts, unseenCases, exceptionalCount, escalatedCount, resubmittedCount, activeInReview] = await Promise.all([
       prisma.kYC.count({ where: { createdById: session.id, active: true, isExceptional: false } }),
       prisma.kYC.count({
         where: {
-          ...jurisdictionalFilter,
+          ...officerWhere,
           status: KYC_STATUS.ACTION_REQUIRED,
           isExceptional: false,
           active: true
@@ -1720,7 +1787,7 @@ export async function getWorkflowCounts() {
         by: ['status'],
         // Excludes resubmitted cases so the SUBMITTED bucket (consumed below as
         // `reviewQueue`) only reflects fresh, never-seen submissions.
-        where: { ...jurisdictionalFilter, active: true, isExceptional: false, isResubmitted: false },
+        where: { ...officerWhere, active: true, isExceptional: false, isResubmitted: false },
         _count: true
       }),
       // Status-driven: a case is "unseen" until the mapped officer opens it
@@ -1728,7 +1795,7 @@ export async function getWorkflowCounts() {
       // Resubmitted cases re-enter at SUBMITTED but are not fresh/never-seen.
       prisma.kYC.count({
         where: {
-          ...jurisdictionalFilter,
+          ...officerWhere,
           status: KYC_STATUS.SUBMITTED,
           active: true,
           isExceptional: false,
@@ -1737,7 +1804,7 @@ export async function getWorkflowCounts() {
       }),
       prisma.kYC.count({
         where: {
-          ...jurisdictionalFilter,
+          ...officerWhere,
           isExceptional: true,
           active: true,
           NOT: {
@@ -1747,7 +1814,7 @@ export async function getWorkflowCounts() {
       }),
       prisma.kYC.count({
         where: {
-          ...jurisdictionalFilter,
+          ...officerWhere,
           status: KYC_STATUS.ESCALATED,
           isExceptional: false,
           active: true
@@ -1758,11 +1825,11 @@ export async function getWorkflowCounts() {
       // the queue it points to) kept every historical resubmission forever.
       prisma.kYC.count({
         where: {
-          ...jurisdictionalFilter,
+          ...officerWhere,
           isResubmitted: true,
           isExceptional: false,
           active: true,
-          status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED] }
+          status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED, KYC_STATUS.RESUBMITTED] }
         }
       }),
       // In Review count restricted to cases actively assigned to a front-line
@@ -1772,7 +1839,7 @@ export async function getWorkflowCounts() {
       // cases, which are a distinct workflow from a fresh case under first review.
       prisma.kYC.count({
         where: {
-          ...jurisdictionalFilter,
+          ...officerWhere,
           status: KYC_STATUS.IN_REVIEW,
           isExceptional: false,
           isResubmitted: false,
@@ -1819,7 +1886,7 @@ export async function processExceptionalStep(formData: FormData) {
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
-    const actor = await prisma.user.findUnique({ 
+    const actor = await prisma.user.findUnique({
       where: { id: session.id },
       include: {
         roles: {
@@ -1838,7 +1905,7 @@ export async function processExceptionalStep(formData: FormData) {
       }
     });
 
-    const userPermissions = actor?.roles.flatMap((ur: any) => 
+    const userPermissions = actor?.roles.flatMap((ur: any) =>
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
@@ -1909,6 +1976,7 @@ export async function processExceptionalStep(formData: FormData) {
 
     const data: any = {
       exceptionalStatus: resolvedNextStatus,
+      statusChangedAt: new Date(),
       updatedAt: new Date(),
       commentHistory: [...history, historyEntry],
     };
@@ -2048,7 +2116,7 @@ export async function uploadAdditionalDocuments(formData: FormData) {
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("Case not found");
 
-    const actor = await prisma.user.findUnique({ 
+    const actor = await prisma.user.findUnique({
       where: { id: session.id },
       include: {
         roles: {
@@ -2067,7 +2135,7 @@ export async function uploadAdditionalDocuments(formData: FormData) {
       }
     });
 
-    const userPermissions = actor?.roles.flatMap((ur: any) => 
+    const userPermissions = actor?.roles.flatMap((ur: any) =>
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
@@ -2082,26 +2150,26 @@ export async function uploadAdditionalDocuments(formData: FormData) {
       const buffer = Buffer.from(await file.arrayBuffer());
 
       const validation = await performCompleteFileValidation(file.name, file.type, buffer, session.id);
-      
+
       if (!validation.valid || !validation.storageKey) {
-        await createAuditLog({ 
-          userId: session.id, 
-          userEmail: session.email || 'unknown@nibbank.com.et', 
-          action: 'FILE_UPLOAD_REJECTED', 
-          details: `Additional document rejected: ${file.name} - ${validation.error}`, 
-          kycId: id 
-        }).catch(() => {});
+        await createAuditLog({
+          userId: session.id,
+          userEmail: session.email || 'unknown@nibbank.com.et',
+          action: 'FILE_UPLOAD_REJECTED',
+          details: `Additional document rejected: ${file.name} - ${validation.error}`,
+          kycId: id
+        }).catch(() => { });
         return { success: false, error: toFriendlyUploadError(validation.error) };
       }
 
       const storedKey = validation.storageKey!;
       const persistableBuffer = validation.sanitisedBuffer || buffer;
       await writeSecureUploadedFile(storedKey, persistableBuffer);
-      
-      memoData.push({ 
+
+      memoData.push({
         name: file.name.split('.').slice(0, -1).join('.'),
         originalName: file.name,
-        type: type, 
+        type: type,
         storageKey: storedKey,
         uploadedById: session.id,
         kycId: id,
@@ -2161,7 +2229,7 @@ export async function toggleSubmissionUrgentFlag(id: string, urgentRemark?: stri
     const current = await prisma.kYC.findUnique({ where: { id } });
     if (!current) throw new Error("KYC record not found");
 
-    const actor = await prisma.user.findUnique({ 
+    const actor = await prisma.user.findUnique({
       where: { id: session.id },
       include: {
         roles: {
@@ -2189,7 +2257,7 @@ export async function toggleSubmissionUrgentFlag(id: string, urgentRemark?: stri
     }
 
     // Jurisdictional access check
-    const userPermissions = actor.roles.flatMap((ur: any) => 
+    const userPermissions = actor.roles.flatMap((ur: any) =>
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 

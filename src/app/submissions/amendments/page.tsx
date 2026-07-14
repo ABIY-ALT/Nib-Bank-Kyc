@@ -40,15 +40,19 @@ export default function AmendmentReviewPage() {
     async function loadData() {
       if (!user) return;
       setLoading(true);
-      const assignedBranches = user.assignedBranches || [];
+      // IMPORTANT: Do NOT pass `branches` from the client here.
+      // The server's buildJurisdictionalFilter already resolves the correct
+      // branch scope — including time-based all-branch access (Saturday,
+      // Late Hour, Lunch Break). If we override it with the client's
+      // assignedBranches, the time-based flags are silently bypassed.
+      // Mirror the same pattern used by queue/page.tsx.
       const result = await getSubmissions({
         isResubmitted: true,
+        isExceptional: false, // Only non-exceptional resubmitted cases (exceptional cases are handled in Special Approvals)
         // Only cases still awaiting a verdict belong in this queue. `isResubmitted`
         // stays true for the case's lifetime, so without a status scope a case that
         // was approved or returned again would remain stuck in Amendment Review.
-        status: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED],
-        branches: !isAdmin && assignedBranches.length > 0 ? assignedBranches :
-          (!isAdmin && assignedBranches.length === 0 && user.branchName ? [user.branchName] : undefined),
+        status: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED, KYC_STATUS.RESUBMITTED],
         limit: ITEMS_PER_PAGE,
         offset: (currentPage - 1) * ITEMS_PER_PAGE,
         search: debouncedSearch || undefined,
@@ -61,14 +65,6 @@ export default function AmendmentReviewPage() {
     }
     loadData();
   }, [user, isAdmin, currentPage, sort, debouncedSearch]);
-
-  const filteredSubmissions = useMemo(() => {
-    if (!submissions) return [];
-    const term = searchTerm.toLowerCase();
-    return submissions.filter(sub => 
-      sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term)
-    );
-  }, [submissions, searchTerm]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-40 gap-4">
@@ -123,7 +119,7 @@ export default function AmendmentReviewPage() {
         </div>
       ) : (
         <>
-          <SubmissionsPageContent submissions={filteredSubmissions || []} sort={sort} onSortChange={(field, order) => { setSort({ field, order }); setCurrentPage(1); }} />
+          <SubmissionsPageContent submissions={submissions || []} sort={sort} onSortChange={(field, order) => { setSort({ field, order }); setCurrentPage(1); }} />
           
           {totalCount > ITEMS_PER_PAGE && (
             <div className="mt-6">

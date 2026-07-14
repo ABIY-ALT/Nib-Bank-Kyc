@@ -55,7 +55,7 @@ import { getSubmissions, getCaseMetrics } from "@/actions/submissions";
 import { getBranchOfficers } from "@/actions/branch-mappings";
 import { useToast } from "@/hooks/use-toast";
 import { KYC_STATUS } from "@/lib/kyc-data";
-import { cn } from "@/lib/utils";
+import { cn, toLocalStartOfDayISO, toLocalEndOfDayISO } from "@/lib/utils";
 import { format } from "date-fns";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
@@ -136,8 +136,8 @@ export default function BranchMonitoringPage() {
         };
 
         if (dateRange?.from) {
-          filters.startDate = dateRange.from.toISOString();
-          if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+          filters.startDate = toLocalStartOfDayISO(dateRange.from);
+          if (dateRange.to) filters.endDate = toLocalEndOfDayISO(dateRange.to);
         }
 
         const [result, officers] = await Promise.all([
@@ -216,7 +216,11 @@ export default function BranchMonitoringPage() {
         const submitted = new Date(sub.submittedAt);
         // Guard against invalid or future-dated records corrupting the trend graph.
         if (!isNaN(submitted.getTime()) && submitted.getTime() <= Date.now()) {
-          const key = format(submitted, 'yyyy-MM-dd');
+          // Get local date components to avoid timezone issues
+          const year = submitted.getFullYear();
+          const month = String(submitted.getMonth() + 1).padStart(2, '0');
+          const day = String(submitted.getDate()).padStart(2, '0');
+          const key = `${year}-${month}-${day}`;
           dateMap[key] = (dateMap[key] || 0) + 1;
         }
       }
@@ -246,11 +250,16 @@ export default function BranchMonitoringPage() {
       const matchesSearch = sub.customerName.toLowerCase().includes(term) || sub.id.toLowerCase().includes(term);
       
       if (isAdmin) return matchesSearch;
-      
-      const subBranchName = (sub.branch?.name || sub.branchName || '').toLowerCase();
+
+      // Server already scoped submissions to the user's branch via branchId or branchName.
+      // The client check here is a safety fallback only. Use case-insensitive comparison
+      // to match the server's `mode: 'insensitive'` filter — a strict equality check
+      // was hiding valid cases when branchName casing differed between user profile and
+      // the case record (e.g. "Head Office" vs "head office").
+      const subBranchName = (sub.branch?.name || sub.branchName || '').toLowerCase().trim();
       const subBranchId = sub.branchId;
       
-      const matchesBranch = (branchId && subBranchId === branchId) || (branchName && subBranchName === branchName);
+      const matchesBranch = (branchId && subBranchId === branchId) || (branchName && subBranchName === branchName.trim());
       return matchesSearch && matchesBranch;
     });
   }, [submissions, searchTerm, isAdmin, user?.branchName, user?.branchId]);
@@ -269,8 +278,8 @@ export default function BranchMonitoringPage() {
           branchId: isAdmin ? undefined : (user.branchId || undefined),
         };
         if (dateRange?.from) {
-          filters.startDate = dateRange.from.toISOString();
-          if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+          filters.startDate = toLocalStartOfDayISO(dateRange.from);
+          if (dateRange.to) filters.endDate = toLocalEndOfDayISO(dateRange.to);
         }
         const m = await getCaseMetrics(filters);
         setCardMetrics({
@@ -363,7 +372,7 @@ export default function BranchMonitoringPage() {
         toast({ variant: "destructive", title: "Nothing to export", description: "No records match the current filters." });
         return;
       }
-      const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Is Resubmitted', 'Amendments', 'Submitted At', 'Updated At'];
+      const headers = ['Case ID', 'Customer', 'Branch', 'District', 'Status', 'Is Resubmitted', 'Amendments', 'Submitted Date', 'Status Changed Date', 'Updated At'];
       const rows = exportRows.map((s: any) => [
         s.id,
         s.customerName,
@@ -373,6 +382,7 @@ export default function BranchMonitoringPage() {
         s.isResubmitted ? 'Yes' : 'No',
         s.amendCycles || 0,
         s.submittedAt ? format(new Date(s.submittedAt), 'yyyy-MM-dd h:mm a') : '',
+        s.statusChangedAt ? format(new Date(s.statusChangedAt), 'yyyy-MM-dd h:mm a') : '',
         s.updatedAt ? format(new Date(s.updatedAt), 'yyyy-MM-dd h:mm a') : '',
       ]);
       const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');

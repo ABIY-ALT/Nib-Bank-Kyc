@@ -41,18 +41,26 @@ export default function ReviewActionPage() {
       if (!user) return;
       setLoading(true);
 
-      const assignedBranches = user.assignedBranches || [];
 
+      // IMPORTANT: Do NOT pass `branches` from the client here.
+      // The server's buildJurisdictionalFilter already resolves the correct
+      // branch scope — including time-based all-branch access (Saturday,
+      // Late Hour, Lunch Break). If we override it with the client's
+      // assignedBranches, the time-based flags are silently bypassed and the
+      // officer sees 0 cases while the badge/count (which does NOT override
+      // the server filter) still shows the correct expanded count.
+      //
+      // For SuperAdmin: pass nothing (server returns global scope).
+      // For Officers: pass nothing (server resolves their portfolio or
+      //   expanded time-based scope automatically).
+      // The RESTRICTED_NODE fallback was masking the real issue — when an
+      // officer has no assignedBranches their scope is their primary branch,
+      // which buildJurisdictionalFilter handles correctly via branchId/branchName.
       const [result, mappings] = await Promise.all([
         getSubmissions({
           status: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW],
           isExceptional: false,
           isResubmitted: false,
-          branches: isSuperAdmin ? undefined : (
-            assignedBranches.length > 0
-              ? assignedBranches
-              : [user.branchName || "RESTRICTED_NODE_UNASSIGNED"]
-          ),
           limit: ITEMS_PER_PAGE,
           offset: (currentPage - 1) * ITEMS_PER_PAGE,
           search: debouncedSearch || undefined,
@@ -77,7 +85,7 @@ export default function ReviewActionPage() {
       setLoading(false);
     }
     loadData();
-  }, [user, isSuperAdmin, currentPage, sort, debouncedSearch]);
+  }, [user, currentPage, sort, debouncedSearch]);
 
   // Server already handles search via debouncedSearch.
   // Only map isTemporaryBranch — the search filter is applied server-side.

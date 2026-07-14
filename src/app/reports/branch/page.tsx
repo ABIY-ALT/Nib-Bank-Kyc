@@ -47,6 +47,7 @@ import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
+import { toLocalStartOfDayISO, toLocalEndOfDayISO } from "@/lib/utils";
 
 export default function BranchReportsPage() {
   const { user } = useAuth();
@@ -105,8 +106,8 @@ export default function BranchReportsPage() {
         sortOrder: 'asc'
       };
       if (dateRange?.from) {
-        filters.startDate = dateRange.from.toISOString();
-        if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+        filters.startDate = toLocalStartOfDayISO(dateRange.from);
+        if (dateRange.to) filters.endDate = toLocalEndOfDayISO(dateRange.to);
       }
       // Non-superadmin users only see submissions from their assigned branches
       if (!isSuperAdmin && user) {

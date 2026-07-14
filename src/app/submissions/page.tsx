@@ -54,7 +54,7 @@ import { format } from "date-fns";
 import JSZip from 'jszip';
 import { sanitizeBundleSegment } from "@/lib/bundle-path";
 import { resolveDownloadFileName } from "@/lib/documents";
-import { cn } from "@/lib/utils";
+import { cn, toLocalStartOfDayISO, toLocalEndOfDayISO } from "@/lib/utils";
 import { Pagination } from "@/components/ui/pagination";
 
 const STATUS_OPTIONS = [
@@ -63,7 +63,8 @@ const STATUS_OPTIONS = [
   { id: KYC_STATUS.IN_REVIEW, label: 'In Review' },
   { id: KYC_STATUS.ACTION_REQUIRED, label: 'Returned' },
   { id: KYC_STATUS.ESCALATED, label: 'Escalated' },
-  { id: KYC_STATUS.REJECTED, label: 'Rejected' }
+  { id: KYC_STATUS.REJECTED, label: 'Rejected' },
+  { id: KYC_STATUS.RESUBMITTED, label: 'Resubmitted' }
 ];
 
 const ITEMS_PER_PAGE = 10;
@@ -146,8 +147,8 @@ export default function CaseArchivePage() {
     let filters: any = {};
     if (debouncedSearch) filters.search = debouncedSearch;
     if (dateRange?.from) {
-      filters.startDate = dateRange.from.toISOString();
-      if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+      filters.startDate = toLocalStartOfDayISO(dateRange.from);
+      if (dateRange.to) filters.endDate = toLocalEndOfDayISO(dateRange.to);
     }
     // Scope the fetch server-side to the active filters (district/branch/status)
     // so the archive's result count matches exactly what a dashboard card
@@ -286,8 +287,15 @@ export default function CaseArchivePage() {
         return;
       }
 
-      const headers = ['Case ID', 'Customer', 'Branch', 'Status', 'Submitted At'];
-      const rows = exportRows.map((s: any) => [s.id, s.customerName, s.branchName, s.status, new Date(s.submittedAt).toLocaleDateString()]);
+      const headers = ['Case ID', 'Customer', 'Branch', 'Status', 'Submitted Date', 'Status Changed Date'];
+      const rows = exportRows.map((s: any) => [
+        s.id, 
+        s.customerName, 
+        s.branchName, 
+        s.status, 
+        s.submittedAt ? format(new Date(s.submittedAt), 'yyyy-MM-dd h:mm:ss a') : 'N/A',
+        s.statusChangedAt ? format(new Date(s.statusChangedAt), 'yyyy-MM-dd h:mm:ss a') : 'N/A'
+      ]);
       const csvContent = [headers.join(','), ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);

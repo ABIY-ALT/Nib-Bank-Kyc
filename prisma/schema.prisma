@@ -171,6 +171,7 @@ model KYC {
   urgentFlaggedBy   User?    @relation("UrgentFlaggedBy", fields: [urgentFlaggedById], references: [id])
   active            Boolean  @default(true)
   submittedAt       DateTime @default(now())
+  statusChangedAt   DateTime?
   updatedAt         DateTime @updatedAt
   memos             Memo[]
   followUps         FollowUpVerification[]

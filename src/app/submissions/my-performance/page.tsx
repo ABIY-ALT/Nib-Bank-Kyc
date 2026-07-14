@@ -57,7 +57,7 @@ import { getGlobalSettings } from '@/actions/settings';
 import { KYC_STATUS } from '@/lib/kyc-data';
 import { calculateOfficerPerformanceIndex } from '@/lib/performance';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, toLocalStartOfDayISO, toLocalEndOfDayISO } from '@/lib/utils';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
@@ -115,8 +115,8 @@ export default function MyCasesPerformancePage() {
       }
 
       if (dateRange?.from) {
-        filters.startDate = dateRange.from.toISOString();
-        if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+        filters.startDate = toLocalStartOfDayISO(dateRange.from);
+        if (dateRange.to) filters.endDate = toLocalEndOfDayISO(dateRange.to);
       }
 
       const result = await getSubmissions(filters);
@@ -155,19 +155,15 @@ export default function MyCasesPerformancePage() {
       const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
       const matchesType = selectedType === 'all' || sub.entityType === selectedType;
 
-      // SECURITY: Ensure officers only see their own active work and history
-      // 1. Cases assigned directly to the user
-      // 2. Unassigned cases (SUBMITTED) in their jurisdiction
-      // 3. Cases they have previously acted on (history)
-      const isMyCase = sub.assignedToId === user?.id;
-      const isUnassigned = !sub.assignedToId || sub.status === KYC_STATUS.SUBMITTED;
-      const hasHistory = sub.commentHistory?.some((h: any) => h.userId === user?.id);
-      
-      const matchesAssignment = isMyCase || isUnassigned || hasHistory;
-
-      return matchesSearch && matchesBranch && matchesStatus && matchesType && matchesAssignment;
+      // Server-side query (getSubmissions) already scopes submissions correctly for
+      // KYC Officers via the portfolio OR-clause: cases assigned to the officer,
+      // unassigned cases in their branch portfolio, and cases they submitted.
+      // A redundant client-side matchesAssignment check here caused stat card counts
+      // to silently undercount relative to the actual server data, breaking date filter
+      // consistency. All rows returned from the server are valid for this officer.
+      return matchesSearch && matchesBranch && matchesStatus && matchesType;
     });
-  }, [submissions, searchTerm, selectedBranch, selectedStatus, selectedType, user?.id]);
+  }, [submissions, searchTerm, selectedBranch, selectedStatus, selectedType]);
 
   const stats = useMemo(() => {
     // Resubmitted cases are a distinct workflow from a fresh case under first
@@ -180,8 +176,8 @@ export default function MyCasesPerformancePage() {
 
     // Officer formula: ((Total Assigned − Unseen − Running) ÷ Total Assigned) × 100.
     // Total assigned = the officer's full actionable caseload (approved,
-    // amendment, pending/unseen, and in-review).
-    const total = completed + amendment + pending + running;
+    // amendment, pending/unseen, in-review, and resubmitted).
+    const total = completed + amendment + pending + running + resubmitted;
     const performanceIndex = calculateOfficerPerformanceIndex({ total, unseen: pending, running });
 
     const branchBreakdown: Record<string, number> = {};

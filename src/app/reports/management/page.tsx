@@ -70,7 +70,7 @@ import { format } from "date-fns";
 import { getSubmissions, getCaseMetrics, getDistrictPerformance, getMonthlyTrend } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYC_STATUS } from "@/lib/kyc-data";
-import { cn } from "@/lib/utils";
+import { cn, toLocalStartOfDayISO, toLocalEndOfDayISO } from "@/lib/utils";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 
 const COLORS = ['#B89334', '#10B981', '#3F51B5', '#F59E0B', '#EF4444', '#8B5CF6'];
@@ -112,7 +112,14 @@ export default function ManagementReportingPage() {
 
   const metricFilters = useMemo(() => {
     const branch = selectedBranch === 'all' ? undefined : selectedBranch;
-    const status = selectedStatus === 'all' ? undefined : selectedStatus;
+    // Elevate "RESUBMITTED" to a virtual primary status for filtering
+    const isVirtualResubmitted = selectedStatus === 'RESUBMITTED';
+    const status = selectedStatus === 'all' || isVirtualResubmitted ? undefined : selectedStatus;
+    
+    // If filtering by a specific status (like SUBMITTED), explicitly exclude resubmitted cases
+    // so they only appear under the RESUBMITTED filter.
+    const isResubmitted = isVirtualResubmitted ? true : (selectedStatus !== 'all' ? false : undefined);
+
     const entityType = selectedType === 'all' ? undefined : selectedType;
     const isExceptional = selectedRisk === 'all' ? undefined : selectedRisk === 'HIGH';
 
@@ -122,8 +129,9 @@ export default function ManagementReportingPage() {
       status,
       entityType,
       isExceptional,
-      startDate: dateRange?.from ? dateRange.from.toISOString() : undefined,
-      endDate: dateRange?.to ? dateRange.to.toISOString() : undefined,
+      isResubmitted,
+      startDate: dateRange?.from ? toLocalStartOfDayISO(dateRange.from) : undefined,
+      endDate: dateRange?.to ? toLocalEndOfDayISO(dateRange.to) : undefined,
     };
   }, [selectedDistrict, selectedBranch, selectedStatus, selectedType, selectedRisk, dateRange]);
 
@@ -338,7 +346,11 @@ export default function ManagementReportingPage() {
         const branchDistrict = sub.branch?.district?.name || sub.branch?.districtName || sub.districtName;
         return branchName === selectedBranch && branchDistrict === selectedDistrict;
       })();
-      const matchesStatus = selectedStatus === 'all' || sub.status === selectedStatus;
+      const matchesStatus = (() => {
+        if (selectedStatus === 'all') return true;
+        if (selectedStatus === 'RESUBMITTED') return sub.isResubmitted === true;
+        return sub.status === selectedStatus && !sub.isResubmitted;
+      })();
       const matchesType = selectedType === 'all' || sub.entityType === selectedType;
       const matchesSearch = sub.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || sub.id.toLowerCase().includes(searchTerm.toLowerCase());
       
@@ -432,17 +444,18 @@ export default function ManagementReportingPage() {
         return;
       }
 
-      const headers = ['Case ID', 'Customer Name', 'Status', 'Is Resubmitted', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted At'];
+      const headers = ['Case ID', 'Customer Name', 'Status', 'Is Resubmitted', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted Date', 'Status Changed Date'];
       const rows = exportRows.map((sub: any) => [
         sub.id,
         sub.customerName,
-        sub.status,
+        sub.isResubmitted ? 'RESUBMITTED' : sub.status,
         sub.isResubmitted ? 'Yes' : 'No',
         sub.branchName,
         sub.branch?.district?.name || sub.districtName || 'N/A',
         sub.isExceptional ? 'High' : 'Standard',
         sub.entityType || 'Individual',
-        sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd h:mm:ss a') : 'N/A'
+        sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd h:mm:ss a') : 'N/A',
+        sub.statusChangedAt ? format(new Date(sub.statusChangedAt), 'yyyy-MM-dd h:mm:ss a') : 'N/A'
       ]);
 
       const csvContent = [headers.join(','), ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
@@ -763,7 +776,7 @@ export default function ManagementReportingPage() {
           { label: 'Running (In Review)', value: summaryStats?.running ?? stats.running, icon: Activity, color: 'text-blue-500', bg: 'bg-white', status: KYC_STATUS.IN_REVIEW, isResubmitted: false, activeReviewersOnly: true },
           { label: 'Authorized Recently', value: summaryStats?.authorized ?? stats.approved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-white', status: KYC_STATUS.APPROVED, isResubmitted: undefined },
           { label: 'Need Amendment', value: summaryStats?.needAmendment ?? stats.returned, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-white', status: KYC_STATUS.ACTION_REQUIRED, isResubmitted: undefined },
-          { label: 'Resubmitted', value: summaryStats?.resubmitted ?? stats.resubmitted, icon: RotateCcw, color: 'text-purple-600', bg: 'bg-white', status: undefined as string | undefined, isResubmitted: true },
+          { label: 'Resubmitted', value: summaryStats?.resubmitted ?? stats.resubmitted, icon: RotateCcw, color: 'text-purple-600', bg: 'bg-white', statuses: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED, KYC_STATUS.RESUBMITTED] as string[], isResubmitted: true },
         ].map((item, i) => (
           <Card
             key={i}
@@ -772,13 +785,14 @@ export default function ManagementReportingPage() {
               // card's status plus the dashboard's active district/branch/date filters.
               const params = new URLSearchParams();
               if (item.status) params.set('status', item.status);
+              if (item.statuses && item.statuses.length > 0) params.set('status', item.statuses.join(','));
               if (item.isResubmitted !== undefined) params.set('isResubmitted', String(item.isResubmitted));
               if (item.activeReviewersOnly !== undefined) params.set('activeReviewersOnly', String(item.activeReviewersOnly));
               if (selectedDistrict !== 'all') params.set('district', selectedDistrict);
               if (selectedBranch !== 'all') params.set('branch', selectedBranch);
               if (selectedRisk !== 'all') params.set('isExceptional', String(selectedRisk === 'HIGH'));
-              if (dateRange?.from) params.set('from', dateRange.from.toISOString());
-              if (dateRange?.to) params.set('to', dateRange.to.toISOString());
+              if (dateRange?.from) params.set('from', toLocalStartOfDayISO(dateRange.from));
+              if (dateRange?.to) params.set('to', toLocalEndOfDayISO(dateRange.to));
               const qs = params.toString();
               router.push(qs ? `/submissions?${qs}` : '/submissions');
             }}

@@ -31,6 +31,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getCaseMetrics, getBranchPerformance } from "@/actions/submissions";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
+import { toLocalStartOfDayISO, toLocalEndOfDayISO } from "@/lib/utils";
 
 export default function SystemWideReportsPage() {
   const { user } = useAuth();
@@ -46,8 +47,8 @@ export default function SystemWideReportsPage() {
     try {
       let filters: any = {};
       if (dateRange?.from) {
-        filters.startDate = dateRange.from.toISOString();
-        if (dateRange.to) filters.endDate = dateRange.to.toISOString();
+        filters.startDate = toLocalStartOfDayISO(dateRange.from);
+        if (dateRange.to) filters.endDate = toLocalEndOfDayISO(dateRange.to);
       }
       // SQL-counted metrics over the whole dataset — the previous approach
       // counted a getSubmissions fetch (default cap 5000 rows), so every figure

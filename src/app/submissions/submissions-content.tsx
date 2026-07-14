@@ -252,6 +252,10 @@ Document Count:    ${fullSub?.documents?.length || 0}
         return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-[9px] px-3 py-1 uppercase flex items-center gap-1.5">
           <ShieldCheck className="w-3 h-3" /> Successfully Authorized
         </Badge>;
+      case KYC_STATUS.RESUBMITTED:
+        return <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1.5 font-black text-[9px] px-3 py-1 uppercase">
+            <History className="w-3 h-3" /> Resubmitted
+          </Badge>;
       case KYC_STATUS.SUBMITTED: 
       case KYC_STATUS.IN_REVIEW:
         return isResubmitted ? 
@@ -298,12 +302,15 @@ Document Count:    ${fullSub?.documents?.length || 0}
             <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'submittedAt' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('submittedAt')}>
               Dispatch Date<SortIndicator field="submittedAt" />
             </TableHead>
+            <TableHead className={cn("font-black text-[11px] uppercase tracking-widest cursor-pointer select-none", sortField === 'statusChangedAt' ? "text-primary" : "text-slate-500")} onClick={() => toggleSort('statusChangedAt')}>
+              Status Changed Date<SortIndicator field="statusChangedAt" />
+            </TableHead>
             <TableHead className="text-right font-black text-slate-500 text-[11px] uppercase tracking-widest pr-8">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedSubmissions.length === 0 ? (
-            <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No cases found.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={7} className="text-center py-20 text-muted-foreground italic bg-slate-50/30">No cases found.</TableCell></TableRow>
           ) : sortedSubmissions.map((sub) => (
             <TableRow
               key={sub.id}
@@ -361,11 +368,11 @@ Document Count:    ${fullSub?.documents?.length || 0}
               <TableCell className="text-slate-400 tabular-nums font-bold text-[10px] uppercase">
                 <div className="flex flex-col gap-0.5">
                   <span>{format(new Date(sub.submittedAt), 'MMM dd, yyyy h:mm:ss a')}</span>
-                  {sub.status === KYC_STATUS.APPROVED && sub.updatedAt && (
-                    <span className="text-emerald-600">
-                      Authorized: {format(new Date(sub.updatedAt), 'MMM dd, yyyy h:mm:ss a')}
-                    </span>
-                  )}
+                </div>
+              </TableCell>
+              <TableCell className="text-slate-400 tabular-nums font-bold text-[10px] uppercase">
+                <div className="flex flex-col gap-0.5">
+                  <span>{sub.statusChangedAt ? format(new Date(sub.statusChangedAt), 'MMM dd, yyyy h:mm:ss a') : 'N/A'}</span>
                 </div>
               </TableCell>
               <TableCell className="text-right pr-8">
