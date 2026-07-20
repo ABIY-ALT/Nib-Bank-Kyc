@@ -144,7 +144,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
     ) || [];
 
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !(await hasJurisdictionalAccess(actor, userPermissions, session.id, current, prisma)))) {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 

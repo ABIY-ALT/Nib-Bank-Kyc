@@ -20,6 +20,9 @@ export interface UserProfile {
   assignedBranches: string[];
   roles: any[]; 
   needsPasswordChange?: boolean;
+  saturdayAllBranches: boolean;
+  lateHourAllBranches: boolean;
+  lunchBreakAllBranches: boolean;
 }
 
 interface AuthContextType {
@@ -79,10 +82,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     hydrateSession();
 
-    // Periodic session refresh every 5 minutes to keep token alive
-    const refreshInterval = setInterval(hydrateSession, 5 * 60 * 1000);
+    // Periodic session refresh every 30 seconds to keep temp access in sync
+    const refreshInterval = setInterval(hydrateSession, 30 * 1000);
 
-    return () => clearInterval(refreshInterval);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        hydrateSession();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const login = async (email: string, pass: string): Promise<UserProfile> => {

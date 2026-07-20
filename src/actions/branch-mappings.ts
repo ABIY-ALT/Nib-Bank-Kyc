@@ -272,6 +272,17 @@ export async function createMapping(input: {
       details: `Created ${type} mapping for ${created.length} branch(es) [${created.join(', ')}] with ${officerIds.length} officer(s).`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { created, skipped };
   } catch (error: any) {
@@ -322,6 +333,17 @@ export async function updateMapping(
       details: `Edited mapping for branch "${current.branch?.name}".`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -351,6 +373,17 @@ export async function setMappingActive(id: string, active: boolean) {
       details: `${active ? 'Activated' : 'Deactivated'} mapping for branch "${mapping.branch?.name}".`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -389,6 +422,17 @@ export async function setMappingsActive(ids: string[], active: boolean) {
       details: `${active ? 'Activated' : 'Deactivated'} ${mappingIds.length} mapping(s) in bulk.`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -423,6 +467,17 @@ export async function setSaturdayVisibility(userId: string, enabled: boolean) {
       severity: 'MEDIUM',
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -452,6 +507,17 @@ export async function setAllSaturdayVisibility(userIds: string[], enabled: boole
       severity: 'HIGH',
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -482,6 +548,17 @@ export async function setLateHourVisibility(userId: string, enabled: boolean) {
       severity: 'MEDIUM',
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -511,6 +588,17 @@ export async function setAllLateHourVisibility(userIds: string[], enabled: boole
       severity: 'HIGH',
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -541,6 +629,17 @@ export async function setLunchBreakVisibility(userId: string, enabled: boolean) 
       severity: 'MEDIUM',
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -570,6 +669,17 @@ export async function setAllLunchBreakVisibility(userIds: string[], enabled: boo
       severity: 'HIGH',
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -602,6 +712,17 @@ export async function deleteMapping(id: string) {
       details: `Deleted mapping for branch "${mapping.branch?.name}".`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -635,6 +756,17 @@ export async function bulkDeleteMappings(ids: string[]) {
       details: `Deleted ${mappings.length} mappings for branches: ${mappings.map((m) => m.branch?.name).join(', ')}.`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { count: mappings.length };
   } catch (error: any) {
@@ -688,6 +820,17 @@ export async function setPrimaryOfficer(mappingId: string, userId: string) {
       details: `Set ${target.firstName} ${target.lastName} as assigned KYC officer for branch "${mapping.branch?.name}"${alreadyOfficer ? '' : ' (added to mapping)'}.`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -729,6 +872,17 @@ export async function addOfficers(mappingId: string, userIds: string[]) {
       details: `Added ${ids.length} additional officer(s) to branch "${mapping.branch?.name}".`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -768,6 +922,17 @@ export async function removeOfficer(mappingId: string, userId: string) {
       details: `Removed an additional officer from branch "${mapping.branch?.name}".`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { ok: true };
   } catch (error: any) {
@@ -840,6 +1005,17 @@ export async function reassignAllOfficerBranches(oldOfficerId: string, newOffice
       details: `Reassigned all ${mappings.length} branch mapping(s) from ${oldUser.firstName} ${oldUser.lastName} to ${newUser.firstName} ${newUser.lastName}.`,
     });
 
+    // Revalidate all relevant paths to update UI immediately
+    revalidatePath('/');
+    revalidatePath('/submissions');
+    revalidatePath('/submissions/queue');
+    revalidatePath('/submissions/my');
+    revalidatePath('/submissions/amendments');
+    revalidatePath('/submissions/escalated');
+    revalidatePath('/submissions/exceptional');
+    revalidatePath('/submissions/branch-node');
+    revalidatePath('/submissions/district-node');
+    revalidatePath('/admin/storage');
     revalidatePath('/admin/assignments');
     return { count: mappings.length };
   } catch (error: any) {

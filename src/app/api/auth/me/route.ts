@@ -60,6 +60,9 @@ export async function GET(req: Request) {
         lastActivity: true,
         needsPasswordChange: true,
         assignedBranches: true,
+        saturdayAllBranches: true,
+        lateHourAllBranches: true,
+        lunchBreakAllBranches: true,
         branch: { include: { district: true } },
         roles: {
           include: {
@@ -127,7 +130,10 @@ export async function GET(req: Request) {
         districtName: user.districtName || user.branch?.district?.name || null,
         assignedBranches: user.assignedBranches ? user.assignedBranches.split(',').map((branch) => branch.trim()).filter(Boolean) : [],
         roles: serializableRoles,
-        needsPasswordChange: user.needsPasswordChange
+        needsPasswordChange: user.needsPasswordChange,
+        saturdayAllBranches: user.saturdayAllBranches,
+        lateHourAllBranches: user.lateHourAllBranches,
+        lunchBreakAllBranches: user.lunchBreakAllBranches
       }
     });
 

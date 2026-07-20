@@ -84,6 +84,7 @@ export interface VaultPaginatedResult {
  * All access is derived from server-side session — no client privilege params.
  */
 export async function getVaultInventory(filters: VaultFilters = {}): Promise<VaultPaginatedResult> {
+  try {
   const ctx = await resolveRbacContext();
   if (!ctx) throw new Error('Authentication required');
 
@@ -163,17 +164,17 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
     if (dateTo) kycFilters.submittedAt.lte = new Date(dateTo);
   }
 
-  // Merge jurisdiction KYC constraint with filters and dashboard logic
+  // Merge jurisdiction KYC constraint with filters.
+  // NOTE: The Vault is a storage management tool — unlike the workflow dashboard,
+  // it must surface ALL authorized cases with documents, including:
+  //   • Exceptional/governance cases (isExceptional: true)
+  //   • Cases approved via the exceptional workflow (status: APPROVED, isExceptional: true)
+  //   • Soft-deactivated cases (active: false) that still have memo records
+  // Do NOT apply active: true or isExceptional: false here.
   const mergedKycFilter = {
     ...jurisdictionClause?.kyc,
     ...kycFilters,
-    active: true // MUST MATCH DASHBOARD LOGIC (ACTIVE CASES ONLY)
   };
-
-  // DASHBOARD EXCLUDES EXCEPTIONAL CASES FROM "ACTIVE CASES" TOTAL
-  if (kycFilters.isExceptional !== true) {
-    mergedKycFilter.isExceptional = false;
-  }
 
   // Fetch distinct KYC IDs matching the filters directly from KYC table
   const matchingKycs = await prisma.kYC.findMany({
@@ -374,6 +375,12 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
     totalPages,
     retentionConfig,
   };
+  } catch (error: any) {
+    // Surface a safe empty result instead of propagating an uncaught exception
+    // that would trigger "Failed to load vault data" on the client.
+    console.error('[VaultInventory] Unexpected error:', error?.message || error);
+    return emptyResult(filters.page ?? 1, filters.pageSize ?? 25);
+  }
 }
 
 /**

@@ -80,7 +80,7 @@ export async function GET(
       ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
     );
 
-    if (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(user, userPermissions, session.id, memo.kyc)) {
+    if (session.role !== 'SUPER_ADMIN' && !(await hasJurisdictionalAccess(user, userPermissions, session.id, memo.kyc, prisma))) {
       await createAuditLog({ 
         userId: session.id, 
         userEmail: session.email, 

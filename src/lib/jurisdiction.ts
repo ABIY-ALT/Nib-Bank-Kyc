@@ -124,7 +124,7 @@ export function isLunchBreakNow(date: Date = new Date()): boolean {
 /**
  * Checks if a user has jurisdictional access to a specific KYC case based on their permissions.
  */
-export function hasJurisdictionalAccess(user: any, userPermissions: string[], sessionId: string, kyc: any) {
+export async function hasJurisdictionalAccess(user: any, userPermissions: string[], sessionId: string, kyc: any, prisma: any) {
   const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
   const branchName = getResolvedUserBranchName(user);
   const districtName = getResolvedUserDistrictName(user);
@@ -139,6 +139,17 @@ export function hasJurisdictionalAccess(user: any, userPermissions: string[], se
   if (user?.saturdayAllBranches && isSaturdayNow()) return true;
   if (user?.lateHourAllBranches && isLateHourNow()) return true;
   if (user?.lunchBreakAllBranches && isLunchBreakNow()) return true;
+
+  // 1c. History Check: user has worked on this case before (read-only access)
+  if (prisma) {
+    const hasHistory = await prisma.auditLog.count({
+      where: {
+        userId: sessionId,
+        kycId: kyc.id
+      }
+    });
+    if (hasHistory > 0) return true;
+  }
 
   // 2. Resolve Role Scopes
   const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');

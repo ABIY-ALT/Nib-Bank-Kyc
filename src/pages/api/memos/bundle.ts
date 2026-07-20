@@ -98,7 +98,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (
         session.role !== 'SUPER_ADMIN' &&
-        !hasJurisdictionalAccess(actor, userPermissions, session.id, m.kyc as any)
+        !(await hasJurisdictionalAccess(actor, userPermissions, session.id, m.kyc as any, prisma))
       ) {
         return res.status(403).json({
           success: false,

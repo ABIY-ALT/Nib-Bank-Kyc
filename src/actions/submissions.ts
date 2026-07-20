@@ -367,7 +367,24 @@ export async function getSubmissions(filters?: {
   // FULL result set before slicing the page — client-side sorting can only ever
   // rearrange the rows of the currently visible page.
   sortField?: 'id' | 'customer' | 'branch' | 'district' | 'status' | 'submittedAt' | 'updatedAt',
-  sortOrder?: 'asc' | 'desc'
+  sortOrder?: 'asc' | 'desc',
+  // New advanced filters for Special Approvals
+  caseId?: string,
+  customerName?: string,
+  customerType?: string,
+  authorizedBranch?: string,
+  currentDistrict?: string,
+  exceptionalStatus?: string,
+  requestType?: string,
+  requestedBy?: string,
+  currentApprover?: string,
+  dispatchStartDate?: string,
+  dispatchEndDate?: string,
+  statusChangedStartDate?: string,
+  statusChangedEndDate?: string,
+  approvalResult?: string,
+  cycleCount?: number,
+  hasComments?: boolean
 }) {
   const session = await getServerSession();
   if (!session) return { submissions: [], total: 0 };
@@ -385,6 +402,32 @@ export async function getSubmissions(filters?: {
       }
       if (filters.endDate) {
         const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        filter.lte = endDate;
+      }
+      return filter;
+    })() : undefined;
+
+    const dispatchDateFilter = filters?.dispatchStartDate || filters?.dispatchEndDate ? (() => {
+      const filter: any = {};
+      if (filters.dispatchStartDate) {
+        filter.gte = new Date(filters.dispatchStartDate);
+      }
+      if (filters.dispatchEndDate) {
+        const endDate = new Date(filters.dispatchEndDate);
+        endDate.setHours(23, 59, 59, 999);
+        filter.lte = endDate;
+      }
+      return filter;
+    })() : undefined;
+
+    const statusChangedDateFilter = filters?.statusChangedStartDate || filters?.statusChangedEndDate ? (() => {
+      const filter: any = {};
+      if (filters.statusChangedStartDate) {
+        filter.gte = new Date(filters.statusChangedStartDate);
+      }
+      if (filters.statusChangedEndDate) {
+        const endDate = new Date(filters.statusChangedEndDate);
         endDate.setHours(23, 59, 59, 999);
         filter.lte = endDate;
       }
@@ -421,7 +464,58 @@ export async function getSubmissions(filters?: {
       submittedAt: approvedOnly ? undefined : dateFilter,
       updatedAt: approvedOnly ? dateFilter : undefined,
       active: true,
+      // New advanced filters
+      id: filters?.caseId ? { contains: filters.caseId, mode: 'insensitive' } : undefined,
+      customerName: filters?.customerName ? { contains: filters.customerName, mode: 'insensitive' } : undefined,
+      branchName: filters?.authorizedBranch ? { equals: filters.authorizedBranch, mode: 'insensitive' } : undefined,
+      districtName: filters?.currentDistrict ? { equals: filters.currentDistrict, mode: 'insensitive' } : undefined,
+      exceptionalStatus: filters?.exceptionalStatus,
+      assignedToId: (hasTemporaryAccess || !filters?.currentApprover) 
+        ? (filters?.assignedToId) 
+        : filters.currentApprover,
+      cycleCount: filters?.cycleCount,
     };
+
+    // Handle createdBy (requestedBy) filter
+    if (filters?.requestedBy && !hasTemporaryAccess) {
+      baseWhere.createdBy = {
+        OR: [
+          { firstName: { contains: filters.requestedBy, mode: 'insensitive' } },
+          { lastName: { contains: filters.requestedBy, mode: 'insensitive' } },
+          { name: { contains: filters.requestedBy, mode: 'insensitive' } },
+        ]
+      };
+    }
+
+    // Handle currentApprover filter (assignedTo)
+    if (filters?.currentApprover) {
+      baseWhere.assignedTo = {
+        OR: [
+          { firstName: { contains: filters.currentApprover, mode: 'insensitive' } },
+          { lastName: { contains: filters.currentApprover, mode: 'insensitive' } },
+          { name: { contains: filters.currentApprover, mode: 'insensitive' } },
+        ]
+      };
+    }
+
+    // Handle dispatch date (submittedAt)
+    if (dispatchDateFilter) {
+      baseWhere.submittedAt = dispatchDateFilter;
+    }
+
+    // Handle status changed date (updatedAt)
+    if (statusChangedDateFilter) {
+      baseWhere.updatedAt = statusChangedDateFilter;
+    }
+
+    // Handle hasComments filter
+    if (filters?.hasComments !== undefined) {
+      if (filters.hasComments) {
+        baseWhere.commentHistory = { isEmpty: false };
+      } else {
+        baseWhere.commentHistory = { isEmpty: true };
+      }
+    }
 
     let where: any;
     const hasJurisFilter = Object.keys(jurisdictionalFilter).length > 0;
@@ -1015,7 +1109,7 @@ export async function getSubmissionById(id: string) {
 
     if (
       session.role === 'SUPER_ADMIN' ||
-      hasJurisdictionalAccess(user, userPermissions, session.id, kyc) ||
+      await hasJurisdictionalAccess(user, userPermissions, session.id, kyc, prisma) ||
       await hasFollowUpCaseAccess(user, kyc.id)
     ) {
       // SECURITY: Log VIEW action for audit and tracking "Unseen" cases
@@ -1254,7 +1348,7 @@ export async function resubmitSubmission(formData: FormData) {
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !(await hasJurisdictionalAccess(actor, userPermissions, session.id, current, prisma)))) {
       throw new Error("Unauthorized case access.");
     }
 
@@ -1428,7 +1522,7 @@ export async function updateSubmissionStatus(id: string, status: string, reviewe
     ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
   ) || [];
 
-  if (!reviewer || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(reviewer, userPermissions, session.id, current))) {
+  if (!reviewer || (session.role !== 'SUPER_ADMIN' && !(await hasJurisdictionalAccess(reviewer, userPermissions, session.id, current, prisma)))) {
     return { success: false as const, error: "You do not have permission to access this case." };
   }
 
@@ -1632,7 +1726,7 @@ export async function updateSubmissionChecklist(id: string, state: any) {
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, currentKyc))) {
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !(await hasJurisdictionalAccess(actor, userPermissions, session.id, currentKyc, prisma)))) {
       throw new Error("You do not have permission to access this case.");
     }
 
@@ -1686,7 +1780,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
       ur.role.active ? ur.role.permissions.map((rp: any) => rp.permission.slug as string) : []
     ) || [];
 
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !(await hasJurisdictionalAccess(actor, userPermissions, session.id, current, prisma)))) {
       throw new Error("You do not have permission to access this case.");
     }
 
@@ -1921,7 +2015,7 @@ export async function processExceptionalStep(formData: FormData) {
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !(await hasJurisdictionalAccess(actor, userPermissions, session.id, current, prisma)))) {
       throw new Error("Unauthorized case access.");
     }
 
@@ -2151,7 +2245,7 @@ export async function uploadAdditionalDocuments(formData: FormData) {
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
-    if (!actor || (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current))) {
+    if (!actor || (session.role !== 'SUPER_ADMIN' && !(await hasJurisdictionalAccess(actor, userPermissions, session.id, current, prisma)))) {
       throw new Error("Unauthorized case access.");
     }
 
@@ -2273,7 +2367,7 @@ export async function toggleSubmissionUrgentFlag(id: string, urgentRemark?: stri
       ur.role.active ? ur.role.permissions.map((rp: any) => normalizePermissionSlug(rp.permission?.slug)) : []
     ) || [];
 
-    if (session.role !== 'SUPER_ADMIN' && !hasJurisdictionalAccess(actor, userPermissions, session.id, current)) {
+    if (session.role !== 'SUPER_ADMIN' && !(await hasJurisdictionalAccess(actor, userPermissions, session.id, current, prisma))) {
       throw new Error("Unauthorized case access.");
     }
 

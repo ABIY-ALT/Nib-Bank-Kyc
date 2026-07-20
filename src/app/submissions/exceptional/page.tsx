@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { SubmissionsPageContent } from "../submissions-content";
-import { Zap, Loader2, Search, Info, Upload } from "lucide-react";
+import { Zap, Loader2, Search, Info, Upload, Filter, X, ChevronDown, ChevronUp, SlidersHorizontal, FileDown } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getSubmissions, initiateExceptionalWorkflow } from "@/actions/submissions";
+import { getGlobalSettings } from "@/actions/settings";
 import { 
   Dialog, 
   DialogContent, 
@@ -29,8 +30,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import Link from "next/link";
-import { KYC_STATUS } from "@/lib/kyc-data";
+import { KYC_STATUS, EXCEPTIONAL_STATUS } from "@/lib/kyc-data";
 import { Pagination } from "@/components/ui/pagination";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
@@ -48,6 +51,8 @@ export default function ExceptionalCasesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sort, setSort] = useState<{ field: string; order: 'asc' | 'desc' }>({ field: 'submittedAt', order: 'asc' });
+  const [entityTypes, setEntityTypes] = useState<any[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState("");
@@ -56,6 +61,29 @@ export default function ExceptionalCasesPage() {
   const [remarks, setRemarks] = useState("");
   const [memoFile, setMemoFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Advanced filters state
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<any>({
+    caseId: "",
+    customerName: "",
+    customerType: "",
+    authorizedBranch: "",
+    currentDistrict: "",
+    exceptionalStatus: "",
+    requestType: "",
+    requestedBy: "",
+    currentApprover: "",
+    dispatchDatePreset: "",
+    dispatchStartDate: "",
+    dispatchEndDate: "",
+    statusChangedDatePreset: "",
+    statusChangedStartDate: "",
+    statusChangedEndDate: "",
+    cycleCount: "",
+    hasComments: ""
+  });
+  const [appliedFilters, setAppliedFilters] = useState<any>({});
 
   const isAdmin = isSuperAdmin;
   const canTrigger = hasPermission('TRIGGER_GOVERNANCE_FLOW');
@@ -83,7 +111,22 @@ export default function ExceptionalCasesPage() {
         offset: (currentPage - 1) * ITEMS_PER_PAGE,
         search: debouncedSearch || undefined,
         sortField: sort.field as any,
-        sortOrder: sort.order
+        sortOrder: sort.order,
+        // Applied advanced filters
+        caseId: appliedFilters.caseId || undefined,
+        customerName: appliedFilters.customerName || undefined,
+        entityType: appliedFilters.customerType || undefined,
+        authorizedBranch: appliedFilters.authorizedBranch || undefined,
+        currentDistrict: appliedFilters.currentDistrict || undefined,
+        exceptionalStatus: appliedFilters.exceptionalStatus || undefined,
+        requestedBy: appliedFilters.requestedBy || undefined,
+        currentApprover: appliedFilters.currentApprover || undefined,
+        dispatchStartDate: appliedFilters.dispatchStartDate || undefined,
+        dispatchEndDate: appliedFilters.dispatchEndDate || undefined,
+        statusChangedStartDate: appliedFilters.statusChangedStartDate || undefined,
+        statusChangedEndDate: appliedFilters.statusChangedEndDate || undefined,
+        cycleCount: appliedFilters.cycleCount ? parseInt(appliedFilters.cycleCount) : undefined,
+        hasComments: appliedFilters.hasComments === "yes" ? true : (appliedFilters.hasComments === "no" ? false : undefined)
       });
 
       const availablePromise = getSubmissions({
@@ -120,7 +163,133 @@ export default function ExceptionalCasesPage() {
 
   useEffect(() => {
     loadData();
-  }, [user, isAdmin, isDistrictDirector, isGlobalGovernanceReviewer, currentPage, sort, debouncedSearch]);
+  }, [user, isAdmin, isDistrictDirector, isGlobalGovernanceReviewer, currentPage, sort, debouncedSearch, appliedFilters]);
+
+  // Helper to count active filters
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    Object.keys(appliedFilters).forEach(key => {
+      if (appliedFilters[key] && appliedFilters[key] !== "") count++;
+    });
+    return count;
+  }, [appliedFilters]);
+
+  // Handle filter input changes
+  const handleFilterChange = (key: string, value: any) => {
+    setAdvancedFilters((prev: any) => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  // Apply filters
+  const applyFilters = () => {
+    setAppliedFilters({ ...advancedFilters });
+    setCurrentPage(1); // Reset to first page
+  };
+
+  // Reset filters
+  const resetFilters = () => {
+    const resetState = {
+      caseId: "",
+      customerName: "",
+      customerType: "",
+      authorizedBranch: "",
+      currentDistrict: "",
+      exceptionalStatus: "",
+      requestType: "",
+      requestedBy: "",
+      currentApprover: "",
+      dispatchDatePreset: "",
+      dispatchStartDate: "",
+      dispatchEndDate: "",
+      statusChangedDatePreset: "",
+      statusChangedStartDate: "",
+      statusChangedEndDate: "",
+      cycleCount: "",
+      hasComments: ""
+    };
+    setAdvancedFilters(resetState);
+    setAppliedFilters(resetState);
+    setCurrentPage(1);
+  };
+
+  // Helper to get preset dates
+  const getPresetDates = (preset: string) => {
+    const today = new Date();
+    const start = new Date(today);
+    const end = new Date(today);
+
+    switch(preset) {
+      case "today":
+        return { startDate: formatDate(start), endDate: formatDate(end) };
+      case "yesterday":
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        return { startDate: formatDate(yesterday), endDate: formatDate(yesterday) };
+      case "last7days":
+        const last7 = new Date(today);
+        last7.setDate(last7.getDate() - 7);
+        return { startDate: formatDate(last7), endDate: formatDate(end) };
+      case "last30days":
+        const last30 = new Date(today);
+        last30.setDate(last30.getDate() - 30);
+        return { startDate: formatDate(last30), endDate: formatDate(end) };
+      default:
+        return { startDate: "", endDate: "" };
+    }
+  };
+
+  // Format date as YYYY-MM-DD
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Effect to update date range when preset changes
+  useEffect(() => {
+    if (advancedFilters.dispatchDatePreset) {
+      const dates = getPresetDates(advancedFilters.dispatchDatePreset);
+      handleFilterChange("dispatchStartDate", dates.startDate);
+      handleFilterChange("dispatchEndDate", dates.endDate);
+    }
+  }, [advancedFilters.dispatchDatePreset]);
+
+  useEffect(() => {
+    if (advancedFilters.statusChangedDatePreset) {
+      const dates = getPresetDates(advancedFilters.statusChangedDatePreset);
+      handleFilterChange("statusChangedStartDate", dates.startDate);
+      handleFilterChange("statusChangedEndDate", dates.endDate);
+    }
+  }, [advancedFilters.statusChangedDatePreset]);
+
+  // Load entity types on mount
+  useEffect(() => {
+    const loadEntityTypes = async () => {
+      try {
+        const settings = await getGlobalSettings();
+        if (settings?.entityTypes && Array.isArray(settings.entityTypes)) {
+          setEntityTypes(settings.entityTypes as any[]);
+        }
+      } catch (error) {
+        console.error("Failed to load entity types:", error);
+        // Fallback to default types
+        setEntityTypes([
+          { id: "individual", label: "Individual" },
+          { id: "joint", label: "Joint" },
+          { id: "sole_proprietorship", label: "Sole Proprietorship" },
+          { id: "corporate", label: "Corporate" },
+          { id: "associations_organisations", label: "Associations & Organisations" },
+          { id: "institutions", label: "Institutions" },
+          { id: "ngos", label: "NGOs" },
+          { id: "other", label: "Other" },
+        ]);
+      }
+    };
+    loadEntityTypes();
+  }, []);
 
   const selectedCase = useMemo(() => 
     availableCases.find(c => c.id === selectedCaseId), 
@@ -189,6 +358,54 @@ export default function ExceptionalCasesPage() {
     setMemoFile(null);
   };
 
+  const handleExportCSV = async () => {
+    if (submissions.length === 0) {
+      toast({ variant: "destructive", title: "No data to export", description: "There are no exceptional cases to export." });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // Prepare CSV data
+      const headers = ["Case ID", "Customer Name", "Entity Type", "Status", "Exceptional Status", "Authorized Branch", "District", "Dispatch Date", "Status Changed Date"];
+      const rows = submissions.map(sub => [
+        sub.id || "",
+        sub.customerName || "",
+        sub.entityType || "",
+        sub.status || "",
+        sub.exceptionalStatus || "",
+        sub.branchName || "",
+        sub.districtName || "",
+        sub.dispatchDate ? new Date(sub.dispatchDate).toLocaleDateString() : "",
+        sub.statusChangedDate ? new Date(sub.statusChangedDate).toLocaleDateString() : ""
+      ]);
+
+      // Convert to CSV string
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      ].join("\n");
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().slice(0, 10);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `exceptional-cases-${timestamp}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({ title: "Success", description: `Exported ${submissions.length} exceptional cases to CSV.` });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Export failed", description: "Failed to export data. Please try again." });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (permissionsLoading) return <div className="py-32 text-center"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
 
   return (
@@ -210,6 +427,16 @@ export default function ExceptionalCasesPage() {
               Request Exception
             </Button>
           )}
+          <Button 
+            onClick={handleExportCSV}
+            disabled={isExporting || submissions.length === 0}
+            variant="outline"
+            className="h-12 px-4 gap-2 rounded-lg font-bold"
+            title="Export current results to CSV"
+          >
+            <FileDown className="w-5 h-5" />
+            Export
+          </Button>
           <div className="relative w-full md:w-80">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input 
@@ -228,6 +455,287 @@ export default function ExceptionalCasesPage() {
             Standard Protocol: Exceptional cases require sequential sign-off from District, Director, and Supervisor branches.
           </AlertDescription>
       </Alert>
+
+      {/* ADVANCED FILTER CONSOLE (MATCHES DOCUMENT VAULT STYLE) */}
+      <Card className="border-slate-200 shadow-xl overflow-hidden bg-white rounded-[2rem]">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div 
+              className="flex items-center gap-2 text-slate-900 font-bold cursor-pointer" 
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            >
+              <SlidersHorizontal className="w-5 h-5" /> Advanced Filters
+              {activeFilterCount > 0 && (
+                <Badge className="bg-yellow-600 hover:bg-yellow-700">{activeFilterCount} Active</Badge>
+              )}
+              {showAdvancedFilters ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+            </div>
+          </div>
+          
+          {showAdvancedFilters && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Search (like vault's Search) */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Search</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input 
+                      placeholder="Case ID, Customer Name..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-9 h-11 bg-slate-50 border-slate-200 rounded-xl font-medium focus-visible:ring-primary/20"
+                    />
+                  </div>
+                </div>
+
+                {/* Case ID */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Case ID</label>
+                  <Input 
+                    placeholder="Case ID..."
+                    value={advancedFilters.caseId}
+                    onChange={(e) => handleFilterChange("caseId", e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                  />
+                </div>
+
+                {/* Customer Type */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Customer Type</label>
+                  <Select 
+                    value={advancedFilters.customerType} 
+                    onValueChange={(v) => handleFilterChange("customerType", v)}
+                  >
+                    <SelectTrigger className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      {entityTypes.map((type: any) => (
+                        <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Current Status (Exceptional Status) */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Status</label>
+                  <Select 
+                    value={advancedFilters.exceptionalStatus} 
+                    onValueChange={(v) => handleFilterChange("exceptionalStatus", v)}
+                  >
+                    <SelectTrigger className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      {Object.values(EXCEPTIONAL_STATUS).map(s => (
+                        <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Authorized Branch */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Authorized Branch</label>
+                  <Input 
+                    placeholder="Branch Name..."
+                    value={advancedFilters.authorizedBranch}
+                    onChange={(e) => handleFilterChange("authorizedBranch", e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                  />
+                </div>
+
+                {/* District */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">District</label>
+                  <Input 
+                    placeholder="District Name..."
+                    value={advancedFilters.currentDistrict}
+                    onChange={(e) => handleFilterChange("currentDistrict", e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                  />
+                </div>
+
+                {/* Request Type */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Request Type</label>
+                  <Select 
+                    value={advancedFilters.requestType} 
+                    onValueChange={(v) => handleFilterChange("requestType", v)}
+                  >
+                    <SelectTrigger className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="NEW_EXCEPTION">New Exception</SelectItem>
+                      <SelectItem value="AMENDMENT">Amendment</SelectItem>
+                      <SelectItem value="RESUBMISSION">Resubmission</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Requested By */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Requested By</label>
+                  <Input 
+                    placeholder="Name..."
+                    value={advancedFilters.requestedBy}
+                    onChange={(e) => handleFilterChange("requestedBy", e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                  />
+                </div>
+
+                {/* Current Approver */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Current Approver</label>
+                  <Input 
+                    placeholder="Name..."
+                    value={advancedFilters.currentApprover}
+                    onChange={(e) => handleFilterChange("currentApprover", e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                  />
+                </div>
+
+                {/* Has Comments */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Has Comments</label>
+                  <Select 
+                    value={advancedFilters.hasComments} 
+                    onValueChange={(v) => handleFilterChange("hasComments", v)}
+                  >
+                    <SelectTrigger className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="yes">Yes</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Cycle Count */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Cycle Count</label>
+                  <Input 
+                    type="number"
+                    placeholder="Number..."
+                    value={advancedFilters.cycleCount}
+                    onChange={(e) => handleFilterChange("cycleCount", e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                  />
+                </div>
+
+                {/* Dispatch Date Preset */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Dispatch Date</label>
+                  <Select 
+                    value={advancedFilters.dispatchDatePreset} 
+                    onValueChange={(v) => handleFilterChange("dispatchDatePreset", v)}
+                  >
+                    <SelectTrigger className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="yesterday">Yesterday</SelectItem>
+                      <SelectItem value="last7days">Last 7 Days</SelectItem>
+                      <SelectItem value="last30days">Last 30 Days</SelectItem>
+                      <SelectItem value="custom">Custom Range</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Dispatch Date Range (if custom) */}
+                {advancedFilters.dispatchDatePreset === "custom" && (
+                  <div className="space-y-1.5 md:col-span-3">
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Dispatch Date Range</label>
+                    <div className="flex gap-2">
+                      <Input 
+                        type="date" 
+                        value={advancedFilters.dispatchStartDate} 
+                        onChange={(e) => handleFilterChange("dispatchStartDate", e.target.value)} 
+                        className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                      />
+                      <Input 
+                        type="date" 
+                        value={advancedFilters.dispatchEndDate} 
+                        onChange={(e) => handleFilterChange("dispatchEndDate", e.target.value)} 
+                        className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Status Changed Preset */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Status Changed Date</label>
+                  <Select 
+                    value={advancedFilters.statusChangedDatePreset} 
+                    onValueChange={(v) => handleFilterChange("statusChangedDatePreset", v)}
+                  >
+                    <SelectTrigger className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="yesterday">Yesterday</SelectItem>
+                      <SelectItem value="last7days">Last 7 Days</SelectItem>
+                      <SelectItem value="last30days">Last 30 Days</SelectItem>
+                      <SelectItem value="custom">Custom Range</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Status Changed Range (if custom) */}
+                {advancedFilters.statusChangedDatePreset === "custom" && (
+                  <div className="space-y-1.5 md:col-span-3">
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Status Changed Date Range</label>
+                    <div className="flex gap-2">
+                      <Input 
+                        type="date" 
+                        value={advancedFilters.statusChangedStartDate} 
+                        onChange={(e) => handleFilterChange("statusChangedStartDate", e.target.value)} 
+                        className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                      />
+                      <Input 
+                        type="date" 
+                        value={advancedFilters.statusChangedEndDate} 
+                        onChange={(e) => handleFilterChange("statusChangedEndDate", e.target.value)} 
+                        className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Filter Actions */}
+              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-500">
+                  Showing {filteredSubmissions.length} of {totalCount} results
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={resetFilters} 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-600"
+                  >
+                    Reset Filters
+                  </Button>
+                  <Button 
+                    onClick={applyFilters} 
+                    className="h-8 bg-primary hover:bg-primary/90 text-white text-[10px] font-black uppercase tracking-widest rounded-xl"
+                  >
+                    Apply Filters
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
