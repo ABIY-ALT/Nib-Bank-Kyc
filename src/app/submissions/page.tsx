@@ -156,11 +156,28 @@ export default function CaseArchivePage() {
     // and relying only on a client-side string match, which can silently drift
     // out of sync (casing, whitespace) from the server's jurisdiction filter.
     // Only a single district maps 1:1 to a server filter; multi-select falls
-    // back to the client-side match below.
     if (selectedDistricts.length === 1) filters.district = selectedDistricts[0];
     if (selectedBranches.length > 0) filters.branches = selectedBranches;
-    if (selectedStatuses.length > 0) filters.status = selectedStatuses;
-    if (isResubmitted !== undefined) filters.isResubmitted = isResubmitted;
+
+    // MATCH DASHBOARD LOGIC FOR RESUBMITTED
+    let activeStatuses = [...selectedStatuses];
+    let activeIsResubmitted = isResubmitted;
+
+    if (activeStatuses.includes('RESUBMITTED')) {
+      activeIsResubmitted = true;
+      // Ensure all active workflow states are included so we catch resubmitted
+      // cases that are currently sitting in IN_REVIEW or SUBMITTED.
+      activeStatuses = Array.from(new Set([...activeStatuses, 'SUBMITTED', 'IN_REVIEW', 'ESCALATED']));
+    } else if (activeStatuses.length > 0 && activeIsResubmitted === undefined) {
+      // If filtering by active workflow stages but NOT asking for Resubmitted,
+      // exclude resubmitted cases to match "Unseen" and "Running" dashboard cards.
+      if (activeStatuses.some(s => ['SUBMITTED', 'IN_REVIEW', 'ESCALATED'].includes(s))) {
+        activeIsResubmitted = false;
+      }
+    }
+
+    if (activeStatuses.length > 0) filters.status = activeStatuses;
+    if (activeIsResubmitted !== undefined) filters.isResubmitted = activeIsResubmitted;
     if (isExceptional !== undefined) filters.isExceptional = isExceptional;
     if (activeReviewersOnly !== undefined) filters.activeReviewersOnly = activeReviewersOnly;
     return filters;

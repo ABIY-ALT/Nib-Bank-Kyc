@@ -39,6 +39,7 @@ const SYSTEM_CAPABILITIES = [
   
   // INFRASTRUCTURE
   { slug: 'MANAGE_VAULT_STORAGE', name: 'Manage Vault Storage', group: 'INFRASTRUCTURE' },
+  { slug: 'PURGE_VAULT_STORAGE', name: 'Purge Vault Documents', group: 'INFRASTRUCTURE' },
   { slug: 'VIEW_ARCHIVED_CASE', name: 'Access Case Archive', group: 'INFRASTRUCTURE' },
   { slug: 'EXPORT_CASE_ZIP', name: 'Download Case Bundle', group: 'INFRASTRUCTURE' },
 

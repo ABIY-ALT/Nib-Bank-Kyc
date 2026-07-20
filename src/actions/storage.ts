@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { signDownloadToken } from '@/lib/security';
 import { getServerSession } from './auth-server';
-import { resolveRbacContext, requireRole, logPrivilegeChange } from './rbac';
+import { resolveRbacContext, requireRole, requirePermission, logPrivilegeChange } from './rbac';
 import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 import { deleteSecureUploadedFile } from '@/lib/secure-file-storage';
 import { createAuditLog } from './audit';
@@ -102,11 +102,15 @@ export async function getStorageInventory() {
 
 /**
  * Purges a file from physical storage and removes its record from the Vault.
- * RBAC: Requires SUPER_ADMIN role exclusively from server-side session.
+ * If this was the LAST document of a case, the case is soft-deleted (active: false)
+ * so it immediately disappears from every workflow queue, dashboard count, and badge
+ * without breaking audit trails or referential integrity.
+ *
+ * RBAC: Requires PURGE_VAULT_STORAGE permission exclusively from server-side session.
  */
 export async function deleteInstitutionalFile(memoId: string) {
-  // requireRole fetches role from DB, never from client params
-  const ctx = await requireRole('SUPER_ADMIN', 'DELETE_INSTITUTIONAL_FILE');
+  // requirePermission fetches permissions from DB, never from client params
+  const ctx = await requirePermission('PURGE_VAULT_STORAGE', 'DELETE_INSTITUTIONAL_FILE');
 
   try {
     const memo = await prisma.memo.findUnique({ where: { id: memoId } });
@@ -131,11 +135,43 @@ export async function deleteInstitutionalFile(memoId: string) {
     // 2. Delete from database
     await prisma.memo.delete({ where: { id: memoId } });
 
-    // 3. Clear caches
+    let caseDeleted = false;
+    const remainingMemos = await prisma.memo.count({ where: { kycId: memo.kycId } });
+
+    if (remainingMemos === 0) {
+      // It was the last document — soft-delete the case so it vanishes from ALL queues
+      // (In Review, Submitted, Action Required, Resubmitted, Escalated, Exceptional,
+      //  Follow-up) without breaking foreign-key references or the audit trail.
+      await prisma.kYC.update({
+        where: { id: memo.kycId },
+        data: {
+          active: false,       // disappears from every active: true query (all dashboard cards, badge counts, queues)
+          assignedToId: null,  // release from officer queue so it doesn't inflate assigned counts
+        },
+      });
+
+      await createAuditLog({
+        userId: ctx.userId,
+        userEmail: ctx.email,
+        action: 'DELETE_KYC_CASE',
+        details: `Super Admin soft-deleted case ${memo.kycId} after its last document was removed. Case deactivated and removed from all workflow queues.`,
+        severity: 'CRITICAL',
+      });
+      caseDeleted = true;
+    }
+
+    // 3. Revalidate all pages whose badge counts / queue lists depend on active cases
     revalidatePath('/admin/storage');
+    revalidatePath('/admin/dashboard');
+    revalidatePath('/admin/submissions');
+    revalidatePath('/admin/review');
+    revalidatePath('/admin/cases');
+    revalidatePath('/admin/exceptional');
+    revalidatePath('/admin/escalated');
+    revalidatePath('/admin/follow-up');
     revalidatePath(`/submissions/${memo.kycId}`);
 
-    return { success: true, kycId: memo.kycId };
+    return { success: true, kycId: memo.kycId, caseDeleted };
   } catch (error: any) {
     return { success: false, error: getSafeErrorMessage(error) };
   }

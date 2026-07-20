@@ -227,6 +227,12 @@ export const ACCESS_CAPABILITY_CATALOG = [
     group: "INFRASTRUCTURE",
   },
   {
+    slug: "PURGE_VAULT_STORAGE",
+    label: "Purge Vault Storage",
+    description: "Permanently delete files and cases from the document vault.",
+    group: "INFRASTRUCTURE",
+  },
+  {
     slug: "VIEW_ARCHIVED_CASE",
     label: SIDEBAR_LABELS.caseArchive,
     description: "Open the archived case list and search historical cases.",

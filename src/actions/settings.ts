@@ -60,6 +60,77 @@ function normalizeEntityTypeId(rawId: string) {
     .replace(/\s+/g, '_');
 }
 
+function normalizeStorageQuotaGb(value: any) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 50;
+  }
+  return Math.floor(parsed);
+}
+
+function extractStorageQuotaGb(guidelines: any[] | undefined) {
+  const quotaEntry = Array.isArray(guidelines)
+    ? guidelines.find((entry: any) => entry?.kind === 'storageQuota' || entry?.id === '__storage_quota__')
+    : null;
+
+  if (!quotaEntry) return 50;
+
+  return normalizeStorageQuotaGb(quotaEntry.storageQuotaGb ?? quotaEntry.value);
+}
+
+interface DocumentRetentionConfig {
+  enabled: boolean;
+  days: number;
+  statuses: string[];
+}
+
+const defaultRetentionConfig: DocumentRetentionConfig = {
+  enabled: false,
+  days: 30,
+  statuses: []
+};
+
+function extractRetentionConfig(guidelines: any[] | undefined): DocumentRetentionConfig {
+  const retentionEntry = Array.isArray(guidelines)
+    ? guidelines.find((entry: any) => entry?.kind === 'documentRetention' || entry?.id === '__document_retention__')
+    : null;
+
+  if (!retentionEntry) return defaultRetentionConfig;
+
+  return {
+    enabled: !!retentionEntry.enabled,
+    days: Number(retentionEntry.days) || 30,
+    statuses: Array.isArray(retentionEntry.statuses) ? retentionEntry.statuses : []
+  };
+}
+
+function buildPersistedGuidelines(guidelines: any[] | undefined, storageQuotaGb: number, retentionConfig: DocumentRetentionConfig) {
+  const visibleGuidelines = (Array.isArray(guidelines) ? guidelines : []).filter((entry: any) => {
+    return entry?.kind !== 'storageQuota' && entry?.id !== '__storage_quota__' && 
+           entry?.kind !== 'documentRetention' && entry?.id !== '__document_retention__';
+  });
+
+  return [
+    ...visibleGuidelines,
+    {
+      id: '__storage_quota__',
+      kind: 'storageQuota',
+      storageQuotaGb,
+      title: '',
+      description: '',
+      type: 'info'
+    },
+    {
+      id: '__document_retention__',
+      kind: 'documentRetention',
+      ...retentionConfig,
+      title: '',
+      description: '',
+      type: 'info'
+    }
+  ];
+}
+
 function mergeEntityTypes(existing: any[] | undefined) {
   if (!Array.isArray(existing) || existing.length === 0) {
     return INITIAL_ENTITY_TYPES;
@@ -116,7 +187,7 @@ export async function getGlobalSettings() {
           id: 'global',
           entityTypes: INITIAL_ENTITY_TYPES,
           documentTypes: INITIAL_DOC_TYPES,
-          guidelines: [],
+          guidelines: buildPersistedGuidelines([], 50, defaultRetentionConfig),
           lastUpdated: new Date()
         }
       });
@@ -135,7 +206,15 @@ export async function getGlobalSettings() {
       }
     }
 
-    return settings;
+    const storageQuotaGb = extractStorageQuotaGb(settings.guidelines as any[]);
+    const retentionConfig = extractRetentionConfig(settings.guidelines as any[]);
+
+    return {
+      ...settings,
+      guidelines: (Array.isArray(settings.guidelines) ? settings.guidelines : []).filter((entry: any) => entry?.kind !== 'storageQuota' && entry?.id !== '__storage_quota__' && entry?.kind !== 'documentRetention' && entry?.id !== '__document_retention__'),
+      storageQuotaGb,
+      retentionConfig
+    };
   } catch (error) {
     return null;
   }
@@ -143,12 +222,18 @@ export async function getGlobalSettings() {
 
 export async function updateGlobalSettings(data: any) {
   try {
+    const storageQuotaGb = normalizeStorageQuotaGb(data.storageQuotaGb);
+    const retentionConfig: DocumentRetentionConfig = {
+      enabled: !!data.retentionConfig?.enabled,
+      days: Number(data.retentionConfig?.days) || 30,
+      statuses: Array.isArray(data.retentionConfig?.statuses) ? data.retentionConfig.statuses : []
+    };
     const settings = await prisma.globalSetting.update({
       where: { id: 'global' },
       data: {
         entityTypes: data.entityTypes,
         documentTypes: data.documentTypes,
-        guidelines: data.guidelines,
+        guidelines: buildPersistedGuidelines(data.guidelines, storageQuotaGb, retentionConfig),
         autoEscalation: data.autoEscalation,
         escalationHours: data.escalationHours,
         lastUpdated: new Date()
@@ -157,7 +242,12 @@ export async function updateGlobalSettings(data: any) {
     
     revalidatePath('/admin/settings');
     revalidatePath('/');
-    return settings;
+    return {
+      ...settings,
+      guidelines: (Array.isArray(settings.guidelines) ? settings.guidelines : []).filter((entry: any) => entry?.kind !== 'storageQuota' && entry?.id !== '__storage_quota__' && entry?.kind !== 'documentRetention' && entry?.id !== '__document_retention__'),
+      storageQuotaGb,
+      retentionConfig
+    };
   } catch (error: any) {
     throw new Error('Institutional database fault during configuration commit.');
   }

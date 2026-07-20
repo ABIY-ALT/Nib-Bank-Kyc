@@ -59,8 +59,8 @@ export default function ReturnedCasesPage() {
   const filteredSubmissions = useMemo(() => {
     if (!submissions) return [];
     const term = searchTerm.toLowerCase();
-    return submissions.filter(sub => 
-      sub.customerName.toLowerCase().includes(term) || 
+    return submissions.filter(sub =>
+      sub.customerName.toLowerCase().includes(term) ||
       sub.id.toLowerCase().includes(term)
     );
   }, [submissions, searchTerm]);
@@ -94,8 +94,8 @@ export default function ReturnedCasesPage() {
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="relative w-full md:w-80">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input 
-              placeholder="Search returned items..." 
+            <Input
+              placeholder="Search returned items..."
               className="pl-11 h-12 rounded-full border-2 border-primary focus-visible:ring-primary/20 bg-white shadow-sm font-medium"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -112,7 +112,7 @@ export default function ReturnedCasesPage() {
       ) : (
         <>
           <SubmissionsPageContent submissions={filteredSubmissions || []} sort={sort} onSortChange={(field, order) => { setSort({ field, order }); setCurrentPage(1); }} />
-          
+
           {totalCount > ITEMS_PER_PAGE && (
             <div className="mt-6">
               <Pagination

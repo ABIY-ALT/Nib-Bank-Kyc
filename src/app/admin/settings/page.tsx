@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -18,10 +19,12 @@ import {
   Trash2,
   FileText,
   Megaphone,
+  HardDrive,
   AlertTriangle,
   Info,
   Building2,
-  Layers
+  Layers,
+  Archive
 } from "lucide-react";
 import { Textarea } from '@/components/ui/textarea';
 import { 
@@ -50,7 +53,13 @@ export default function SystemSettingsPage() {
     slaHours: 24,
     documentTypes: [],
     entityTypes: [],
-    guidelines: []
+    guidelines: [],
+    storageQuotaGb: 50,
+    retentionConfig: {
+      enabled: false,
+      days: 30,
+      statuses: []
+    }
   });
 
   const [newDocLabel, setNewDocLabel] = useState("");
@@ -69,16 +78,28 @@ export default function SystemSettingsPage() {
     loadSettings();
   }, []);
 
+  const [availableStatuses, setAvailableStatuses] = useState<string[]>([]);
+  
   const loadSettings = async () => {
     setLoading(true);
     const s = await getGlobalSettings();
     if (s) setLocalSettings(s);
+    // Let's get available statuses from storage-vault's getVaultFilterOptions
+    try {
+      const { getVaultFilterOptions } = await import('@/actions/storage-vault');
+      const filterOptions = await getVaultFilterOptions();
+      setAvailableStatuses(filterOptions.statuses);
+    } catch {
+      // Fallback to common statuses
+      setAvailableStatuses(['SUBMITTED', 'RESUBMITTED', 'APPROVED', 'REJECTED', 'ACTION_REQUIRED']);
+    }
     setLoading(false);
   };
 
   const documentTypeCount = localSettings.documentTypes?.length || 0;
   const totalDocPages = Math.max(1, Math.ceil(documentTypeCount / docPageSize));
   const documentTypesPage = localSettings.documentTypes?.slice((currentDocPage - 1) * docPageSize, currentDocPage * docPageSize) || [];
+  const visibleGuidelines = (localSettings.guidelines || []).filter((guide: any) => guide?.kind !== 'storageQuota' && guide?.id !== '__storage_quota__');
 
   useEffect(() => {
     setCurrentDocPage((page) => Math.max(1, Math.min(page, totalDocPages)));
@@ -170,6 +191,113 @@ export default function SystemSettingsPage() {
                     <Label className="text-[10px] font-black uppercase text-slate-400">Breach Hours</Label>
                     <Input type="number" className="w-24 h-9 font-bold" value={localSettings.escalationHours} onChange={(e) => setLocalSettings({...localSettings, escalationHours: parseInt(e.target.value) || 0})} />
                   </div>
+                )}
+              </div>
+
+              <div className="flex flex-col p-4 rounded-xl border bg-slate-50/70 shadow-sm gap-3">
+                <div className="flex items-center gap-2">
+                  <HardDrive className="w-4 h-4 text-primary" />
+                  <Label className="text-base font-bold">Storage Quota</Label>
+                </div>
+                <p className="text-[10px] text-muted-foreground font-medium uppercase px-1">Set the institutional vault quota shown on the storage dashboard</p>
+                <div className="flex items-center gap-3 px-1">
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="w-32 h-9 font-bold"
+                    value={localSettings.storageQuotaGb !== undefined && localSettings.storageQuotaGb !== null ? localSettings.storageQuotaGb : ''}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      if (raw.trim() === '') {
+                        setLocalSettings({ ...localSettings, storageQuotaGb: undefined })
+                      } else {
+                        const parsed = parseInt(raw)
+                        setLocalSettings({ ...localSettings, storageQuotaGb: Number.isFinite(parsed) ? parsed : undefined })
+                      }
+                    }}
+                  />
+                  <span className="text-sm font-semibold text-slate-500">GB</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-primary text-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2"><Archive className="w-5 h-5 text-white" /> Document Retention Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-6">
+              <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4 group hover:border-primary/30 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-orange-600" />
+                      <Label className="text-base font-bold">Enable Retention Reminders</Label>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground font-medium uppercase px-6">Show cases that exceed the retention period in the vault</p>
+                  </div>
+                  <Switch 
+                    checked={localSettings.retentionConfig?.enabled || false} 
+                    onCheckedChange={(val) => setLocalSettings({
+                      ...localSettings,
+                      retentionConfig: { ...localSettings.retentionConfig, enabled: val }
+                    })} 
+                  />
+                </div>
+                {localSettings.retentionConfig?.enabled && (
+                  <>
+                    <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed">
+                      <Label className="text-[10px] font-black uppercase text-slate-400">Retention Period (Days)</Label>
+                      <Input 
+                        type="number" 
+                        min="1"
+                        className="w-24 h-9 font-bold" 
+                        value={typeof localSettings.retentionConfig?.days === 'number' ? String(localSettings.retentionConfig.days) : (localSettings.retentionConfig?.days || "")} 
+                        onChange={(e) => {
+                          const rawValue = e.target.value;
+                          setLocalSettings({
+                            ...localSettings,
+                            retentionConfig: { 
+                              ...localSettings.retentionConfig, 
+                              days: rawValue === "" ? "" : (parseInt(rawValue, 10) || 30)
+                            }
+                          });
+                        }} 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2 pl-6 pt-2 border-t border-dashed">
+                      <Label className="text-[10px] font-black uppercase text-slate-400">Apply to Statuses (Optional)</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {availableStatuses.map(status => (
+                          <div key={status} className="flex items-center gap-2">
+                            <Checkbox 
+                              id={`status-${status}`} 
+                              checked={(localSettings.retentionConfig?.statuses || []).includes(status)} 
+                              onCheckedChange={(checked) => {
+                                const newStatuses = checked 
+                                  ? [...(localSettings.retentionConfig?.statuses || []), status]
+                                  : (localSettings.retentionConfig?.statuses || []).filter((s: string) => s !== status);
+                                setLocalSettings({
+                                  ...localSettings,
+                                  retentionConfig: { 
+                                    ...localSettings.retentionConfig, 
+                                    statuses: newStatuses 
+                                  }
+                                });
+                              }}
+                            />
+                            <Label 
+                              htmlFor={`status-${status}`} 
+                              className="text-xs font-medium cursor-pointer"
+                            >
+                              {status}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </CardContent>
@@ -319,8 +447,8 @@ export default function SystemSettingsPage() {
               </div>
 
               <div className="space-y-3 pt-2">
-                {localSettings.guidelines?.length > 0 ? (
-                  localSettings.guidelines.map((guide: any) => (
+                {visibleGuidelines.length > 0 ? (
+                  visibleGuidelines.map((guide: any) => (
                     <div key={guide.id} className="flex items-start justify-between p-4 border rounded-xl bg-white group hover:border-primary/30 transition-all">
                       <div className="flex gap-3">
                         <div className={cn(
