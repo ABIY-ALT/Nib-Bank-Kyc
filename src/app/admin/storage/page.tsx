@@ -1,7 +1,7 @@
 import VaultClient from "./components/vault-client";
 
 export const metadata = {
-  title: 'KYC Document Vault | Enterprise Admin',
+  title: 'Nib Bank KYC',
 };
 
 export default function StorageVaultPage() {
