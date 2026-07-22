@@ -22,6 +22,8 @@ import {
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 const IDLE_TIMEOUT_MINUTES = 15;
+/** Avoid a DB write on every heartbeat — idle timeout still uses the stored timestamp. */
+const LAST_ACTIVITY_WRITE_INTERVAL_MS = 2 * 60 * 1000;
 
 export async function GET(req: Request) {
   try {
@@ -90,11 +92,13 @@ export async function GET(req: Request) {
       return unauthorizedResponse('Session idle timeout exceeded');
     }
 
-    // Update last_activity timestamp
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastActivity: now }
-    }).catch(() => { }); // Don't block response if update fails
+    // Update last_activity at most every few minutes to cut write churn from heartbeats.
+    if (now.getTime() - lastActivityTime.getTime() >= LAST_ACTIVITY_WRITE_INTERVAL_MS) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastActivity: now }
+      }).catch(() => { }); // Don't block response if update fails
+    }
 
     // POLICY UPDATE: Session versioning via updatedAt is unstable during activity tracking.
     // Concurrent sessions are enforced via 'sessionId' in the JWT payload.

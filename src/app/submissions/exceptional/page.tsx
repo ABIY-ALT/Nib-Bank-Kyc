@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getSubmissions, initiateExceptionalWorkflow } from "@/actions/submissions";
+import { getSubmissions, initiateExceptionalWorkflow, getEligibleExceptionalCandidates } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { 
   Dialog, 
@@ -94,7 +94,7 @@ export default function ExceptionalCasesPage() {
     hasPermission('CHIEF_RETAIL_REVIEW') ||
     hasPermission('DIVISION_MANAGER_REVIEW');
 
-  const loadData = async () => {
+  const loadExceptionalList = async () => {
     if (!user) return;
     setLoading(true);
     try {
@@ -103,7 +103,7 @@ export default function ExceptionalCasesPage() {
       const branchesContext = isAdmin || isGlobalGovernanceReviewer ? undefined : (assignedBranches.length > 0 ? assignedBranches : branchContext ? [branchContext] : undefined);
       const districtContext = isDistrictDirector && !isGlobalGovernanceReviewer ? (user.districtName ?? undefined) : undefined;
 
-      const exceptionalPromise = getSubmissions({
+      const exceptionalResult = await getSubmissions({
         isExceptional: true,
         branches: (!isDistrictDirector && !isGlobalGovernanceReviewer) ? branchesContext : undefined,
         district: districtContext,
@@ -112,7 +112,6 @@ export default function ExceptionalCasesPage() {
         search: debouncedSearch || undefined,
         sortField: sort.field as any,
         sortOrder: sort.order,
-        // Applied advanced filters
         caseId: appliedFilters.caseId || undefined,
         customerName: appliedFilters.customerName || undefined,
         entityType: appliedFilters.customerType || undefined,
@@ -129,26 +128,36 @@ export default function ExceptionalCasesPage() {
         hasComments: appliedFilters.hasComments === "yes" ? true : (appliedFilters.hasComments === "no" ? false : undefined)
       });
 
-      const availablePromise = getSubmissions({
-        isExceptional: false,
-        branches: (!isDistrictDirector && !isGlobalGovernanceReviewer) ? branchesContext : undefined,
-        district: districtContext,
-      });
-
-      const [exceptionalResult, allResult] = await Promise.all([exceptionalPromise, availablePromise]);
-      const activeExceptional = exceptionalResult.submissions || [];
-      // SECURITY: Exclude cases that are already authorized or already in the exceptional workflow
-      const available = (allResult.submissions || []).filter((candidate: any) =>
-        candidate.status !== KYC_STATUS.APPROVED &&
-        !activeExceptional.some((existing: any) => existing.id === candidate.id)
-      );
-      setSubmissions(activeExceptional);
+      setSubmissions(exceptionalResult.submissions || []);
       setTotalCount(exceptionalResult.total || 0);
-      setAvailableCases(available);
     } catch (error) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadAvailableCases = async () => {
+    if (!user || !canTrigger) return;
+    try {
+      const assignedBranches = user.assignedBranches || [];
+      const branchContext = isAdmin || isGlobalGovernanceReviewer ? undefined : (user.branchName || "RESTRICTED_BRANCH");
+      const branchesContext = isAdmin || isGlobalGovernanceReviewer ? undefined : (assignedBranches.length > 0 ? assignedBranches : branchContext ? [branchContext] : undefined);
+      const districtContext = isDistrictDirector && !isGlobalGovernanceReviewer ? (user.districtName ?? undefined) : undefined;
+
+      const available = await getEligibleExceptionalCandidates({
+        branches: (!isDistrictDirector && !isGlobalGovernanceReviewer) ? branchesContext : undefined,
+        district: districtContext,
+        excludeIds: submissions.map((s) => s.id),
+        limit: 200,
+      });
+      setAvailableCases(available);
+    } catch (error) {
+      setAvailableCases([]);
+    }
+  };
+
+  const loadData = async () => {
+    await loadExceptionalList();
   };
 
   // Server-side search: the list is paginated, so a client-side match over the
@@ -164,6 +173,12 @@ export default function ExceptionalCasesPage() {
   useEffect(() => {
     loadData();
   }, [user, isAdmin, isDistrictDirector, isGlobalGovernanceReviewer, currentPage, sort, debouncedSearch, appliedFilters]);
+
+  useEffect(() => {
+    if (isAddDialogOpen && canTrigger) {
+      loadAvailableCases();
+    }
+  }, [isAddDialogOpen, canTrigger, user, isAdmin, isDistrictDirector, isGlobalGovernanceReviewer, submissions]);
 
   // Helper to count active filters
   const activeFilterCount = useMemo(() => {

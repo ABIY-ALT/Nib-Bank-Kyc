@@ -82,8 +82,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     hydrateSession();
 
-    // Periodic session refresh every 30 seconds to keep temp access in sync
-    const refreshInterval = setInterval(hydrateSession, 30 * 1000);
+    // Refresh on a modest interval for token rotation and temp branch-access flags.
+    // 30s polling was causing excessive /api/auth/me load across all active sessions.
+    const refreshInterval = setInterval(hydrateSession, 5 * 60 * 1000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {

@@ -60,6 +60,8 @@ model User {
   passwordResetTokens PasswordResetToken[]
   sessions            Session[]
   branchMappings      BranchMappingOfficer[]
+
+  @@index([branchId])
 }
 
 model Role {
@@ -132,7 +134,7 @@ model BranchMapping {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  @@index([branchId])
+  @@index([branchId, active])
 }
 
 model BranchMappingOfficer {
@@ -144,6 +146,7 @@ model BranchMappingOfficer {
 
   @@id([mappingId, userId])
   @@index([userId])
+  @@index([mappingId, isPrimary])
 }
 
 model KYC {
@@ -175,6 +178,15 @@ model KYC {
   updatedAt         DateTime @updatedAt
   memos             Memo[]
   followUps         FollowUpVerification[]
+
+  @@index([status])
+  @@index([submittedAt])
+  @@index([updatedAt])
+  @@index([districtName, status, submittedAt])
+  @@index([branchName, status, submittedAt])
+  @@index([assignedToId, status])
+  @@index([createdById, submittedAt])
+  @@index([branchName, districtName])
 }
 
 model Memo {
@@ -205,6 +217,9 @@ model Memo {
   // original file on E: under its storageKey and running Restore recovers it.
   archiveDeletedAt   DateTime?
   archiveDeletedById String?
+
+  @@index([kycId, createdAt])
+  @@index([createdAt])
 }
 
 model GlobalSetting {
@@ -227,6 +242,9 @@ model AuditLog {
   ipAddress String
   timestamp DateTime @default(now())
   kycId     String?
+
+  @@index([userId, kycId])
+  @@index([timestamp])
 }
 
 model Finding {
@@ -298,8 +316,9 @@ model Session {
   auditLogs             SessionAuditLog[]
   rotations             RefreshTokenRotation[]
 
-  @@index([userId])
-  @@index([deviceId])
+  @@index([userId, isActive])
+  @@index([userId, deviceId, isActive])
+  @@index([expiresAt, isActive])
 }
 
 model SessionAuditLog {

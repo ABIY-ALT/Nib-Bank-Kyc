@@ -163,9 +163,12 @@ const tokenCache = new TokenRevocationCache();
 /**
  * Cleanup task: Remove expired revocations every 5 minutes
  */
-setInterval(() => {
+const tokenCleanupTimer = setInterval(() => {
   tokenCache.cleanupExpired();
 }, 5 * 60 * 1000);
+if (typeof tokenCleanupTimer === 'object' && 'unref' in tokenCleanupTimer) {
+  tokenCleanupTimer.unref();
+}
 
 /**
  * Verify Access Token Middleware

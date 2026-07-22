@@ -27,14 +27,17 @@ export function useQuery<T = any>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  const filterStr = filter ? JSON.stringify(filter) : '';
+  const refetchInterval = options?.refetchInterval;
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         const params = new URLSearchParams();
 
-        if (filter) {
-          params.append('filter', JSON.stringify(filter));
+        if (filterStr) {
+          params.append('filter', filterStr);
         }
 
         const response = await fetch(`/api/data/${resource}?${params.toString()}`);
@@ -57,11 +60,11 @@ export function useQuery<T = any>(
     fetchData();
 
     // Optional refetch interval
-    if (options?.refetchInterval) {
-      const interval = setInterval(fetchData, options.refetchInterval);
+    if (refetchInterval) {
+      const interval = setInterval(fetchData, refetchInterval);
       return () => clearInterval(interval);
     }
-  }, [resource, JSON.stringify(filter), options?.refetchInterval]);
+  }, [resource, filterStr, refetchInterval]);
 
   return { data, loading, error };
 }

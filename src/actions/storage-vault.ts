@@ -176,95 +176,154 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
     ...kycFilters,
   };
 
-  // Fetch distinct KYC IDs matching the filters directly from KYC table
-  const matchingKycs = await prisma.kYC.findMany({
-    where: mergedKycFilter,
-    select: { id: true }
-  });
+  const kycListSelect = {
+    id: true,
+    customerName: true,
+    branchName: true,
+    status: true,
+    districtName: true,
+    submittedAt: true,
+    updatedAt: true,
+    entityType: true,
+    isUrgent: true,
+    isExceptional: true,
+    isResubmitted: true,
+    assignedToId: true,
+  } as const;
 
-  const uniqueKycIds = matchingKycs.map(k => k.id);
+  const needsInMemorySort =
+    onlyRetentionEligible ||
+    category !== 'ALL' ||
+    ['docs', 'size'].includes(sortField);
 
-  // Fetch Memos for these KYCs to calculate aggregates
-  const matchingMemos = await prisma.memo.findMany({
-    where: {
-      kycId: { in: uniqueKycIds },
-      // Apply category filter if needed, though category filter is applied client-side or below
-    },
-    select: { kycId: true, size: true },
-  });
+  let totalCases = 0;
+  let totalFilesResult = 0;
+  let totalStorageBytes = 0;
+  let paginatedIds: string[] = [];
 
-  // Calculate aggregates
-  let kycAggregates: Record<string, { count: number, size: number }> = {};
-  matchingMemos.forEach(m => {
-    if (!kycAggregates[m.kycId]) kycAggregates[m.kycId] = { count: 0, size: 0 };
-    kycAggregates[m.kycId].count++;
-    kycAggregates[m.kycId].size += m.size || 0;
-  });
-
-  // Fetch basic fields for sorting (also need submittedAt for days calculation)
-  const allKycQuery = await prisma.kYC.findMany({
-    where: { id: { in: uniqueKycIds } },
-    select: {
-      id: true, customerName: true, branchName: true, status: true,
-      districtName: true, submittedAt: true, updatedAt: true
-    }
-  });
-
-  // Map to sorting array (calculate daysSinceSubmission here too for sorting)
-  let sortableArray = allKycQuery.map(k => {
-    const diffTime = Math.abs(now.getTime() - k.submittedAt.getTime());
-    const daysSinceSubmission = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    let isRetentionEligible = false;
-    if (retentionConfig.enabled) {
-      const statusMatch = retentionConfig.statuses.length === 0 || retentionConfig.statuses.includes(k.status);
-      const daysMatch = daysSinceSubmission >= retentionConfig.days;
-      isRetentionEligible = statusMatch && daysMatch;
-    }
-    return {
-      ...k,
-      totalDocuments: kycAggregates[k.id]?.count || 0,
-      totalSize: kycAggregates[k.id]?.size || 0,
-      daysSinceSubmission,
-      isRetentionEligible,
+  if (!needsInMemorySort) {
+    const isReverseField = sortField === 'daysSinceSubmission';
+    const effectiveDir = isReverseField ? (sortDir === 'asc' ? 'desc' : 'asc') : sortDir;
+    const dbSortMap: Record<string, string> = {
+      id: 'id',
+      customer: 'customerName',
+      branch: 'branchName',
+      district: 'districtName',
+      status: 'status',
+      submittedAt: 'submittedAt',
+      daysSinceSubmission: 'submittedAt',
+      updatedAt: 'updatedAt',
     };
-  });
+    const dbSortKey = dbSortMap[sortField] || 'updatedAt';
 
-  // Apply onlyRetentionEligible filter here to affect total count and sorting
-  if (onlyRetentionEligible) {
-    sortableArray = sortableArray.filter(k => k.isRetentionEligible);
+    const [totalCasesCount, memoTotals] = await Promise.all([
+      prisma.kYC.count({ where: mergedKycFilter }),
+      prisma.memo.aggregate({
+        where: { kyc: mergedKycFilter },
+        _count: { _all: true },
+        _sum: { size: true },
+      }),
+    ]);
+
+    totalCases = totalCasesCount;
+    totalFilesResult = memoTotals._count._all;
+    totalStorageBytes = memoTotals._sum.size ?? 0;
+
+    const totalPagesForFetch = Math.max(1, Math.ceil(totalCases / pageSize));
+    const safePageForFetch = Math.min(Math.max(1, page), totalPagesForFetch);
+
+    const paginatedKycs = await prisma.kYC.findMany({
+      where: mergedKycFilter,
+      select: kycListSelect,
+      orderBy: { [dbSortKey]: effectiveDir },
+      skip: (safePageForFetch - 1) * pageSize,
+      take: pageSize,
+    });
+
+    paginatedIds = paginatedKycs.map((k) => k.id);
+  } else {
+    const matchingKycs = await prisma.kYC.findMany({
+      where: mergedKycFilter,
+      select: kycListSelect,
+      take: 2000,
+    });
+
+    const uniqueKycIds = matchingKycs.map(k => k.id);
+
+    let kycAggregates: Record<string, { count: number, size: number }> = {};
+    if (uniqueKycIds.length > 0) {
+      const memoAggregates = await prisma.memo.groupBy({
+        by: ['kycId'],
+        where: { kycId: { in: uniqueKycIds } },
+        _count: { _all: true },
+        _sum: { size: true },
+      });
+
+      kycAggregates = Object.fromEntries(
+        memoAggregates.map((row) => [row.kycId, { count: row._count._all, size: row._sum.size ?? 0 }])
+      );
+    }
+
+    let sortableArray = matchingKycs.map(k => {
+      const diffTime = Math.abs(now.getTime() - k.submittedAt.getTime());
+      const daysSinceSubmission = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      let isRetentionEligible = false;
+      if (retentionConfig.enabled) {
+        const statusMatch = retentionConfig.statuses.length === 0 || retentionConfig.statuses.includes(k.status);
+        const daysMatch = daysSinceSubmission >= retentionConfig.days;
+        isRetentionEligible = statusMatch && daysMatch;
+      }
+      return {
+        ...k,
+        totalDocuments: kycAggregates[k.id]?.count || 0,
+        totalSize: kycAggregates[k.id]?.size || 0,
+        daysSinceSubmission,
+        isRetentionEligible,
+      };
+    });
+
+    if (onlyRetentionEligible) {
+      sortableArray = sortableArray.filter(k => k.isRetentionEligible);
+    }
+
+    sortableArray.sort((a, b) => {
+      let valA = a[sortField as keyof typeof a];
+      let valB = b[sortField as keyof typeof b];
+
+      if (sortField === 'docs') { valA = a.totalDocuments; valB = b.totalDocuments; }
+      if (sortField === 'size') { valA = a.totalSize; valB = b.totalSize; }
+      if (sortField === 'customer') { valA = a.customerName; valB = b.customerName; }
+      if (sortField === 'branch') { valA = a.branchName; valB = b.branchName; }
+      if (sortField === 'district') { valA = a.districtName; valB = b.districtName; }
+      if (sortField === 'daysSinceSubmission') { valA = a.daysSinceSubmission; valB = b.daysSinceSubmission; }
+
+      if (valA === valB) return 0;
+      if (valA == null) return sortDir === 'asc' ? -1 : 1;
+      if (valB == null) return sortDir === 'asc' ? 1 : -1;
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+
+      if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+      return sortDir === 'asc' ? 1 : -1;
+    });
+
+    totalCases = sortableArray.length;
+    totalFilesResult = uniqueKycIds.length > 0
+      ? Object.values(kycAggregates).reduce((sum, item) => sum + item.count, 0)
+      : 0;
+    totalStorageBytes = uniqueKycIds.length > 0
+      ? Object.values(kycAggregates).reduce((sum, item) => sum + item.size, 0)
+      : 0;
+
+    const totalPages = Math.max(1, Math.ceil(totalCases / pageSize));
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    paginatedIds = sortableArray.slice((safePage - 1) * pageSize, safePage * pageSize).map(s => s.id);
   }
 
-  // Sort in memory
-  sortableArray.sort((a, b) => {
-    let valA = a[sortField as keyof typeof a];
-    let valB = b[sortField as keyof typeof b];
-
-    // Default sort field mapping to handle undefined columns
-    if (sortField === 'docs') { valA = a.totalDocuments; valB = b.totalDocuments; }
-    if (sortField === 'size') { valA = a.totalSize; valB = b.totalSize; }
-    if (sortField === 'customer') { valA = a.customerName; valB = b.customerName; }
-    if (sortField === 'branch') { valA = a.branchName; valB = b.branchName; }
-    if (sortField === 'district') { valA = a.districtName; valB = b.districtName; }
-    if (sortField === 'daysSinceSubmission') { valA = a.daysSinceSubmission; valB = b.daysSinceSubmission; }
-
-    if (valA === valB) return 0;
-    if (valA == null) return sortDir === 'asc' ? -1 : 1;
-    if (valB == null) return sortDir === 'asc' ? 1 : -1;
-
-    if (typeof valA === 'string' && typeof valB === 'string') {
-      return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-    }
-
-    if (valA < valB) return sortDir === 'asc' ? -1 : 1;
-    return sortDir === 'asc' ? 1 : -1;
-  });
-
-  // Paginate
-  const totalCases = sortableArray.length;
   const totalPages = Math.max(1, Math.ceil(totalCases / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
-
-  const paginatedIds = sortableArray.slice((safePage - 1) * pageSize, safePage * pageSize).map(s => s.id);
 
   // Fetch full data for paginated cases
   let cases = await prisma.kYC.findMany({
@@ -284,13 +343,6 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
   // Re-order the fetched cases to match the sorted paginatedIds
   const casesMap = new Map(cases.map(c => [c.id, c]));
   cases = paginatedIds.map(id => casesMap.get(id)!).filter(Boolean);
-
-  // Count total files and aggregate storage size across all matching cases
-  const [totalFilesResult, totalSizeResult] = await Promise.all([
-    prisma.memo.count({ where: { kycId: { in: uniqueKycIds } } }),
-    prisma.memo.aggregate({ where: { kycId: { in: uniqueKycIds } }, _sum: { size: true } }),
-  ]);
-  const totalStorageBytes = totalSizeResult._sum.size ?? 0;
 
   // Transform to response format
   const transformedCases: VaultCaseItem[] = cases.map((kyc) => {
@@ -440,6 +492,7 @@ export async function getAllFilteredFileIds(filters: VaultFilters = {}): Promise
       kyc: { ...jurisdictionClause?.kyc, ...kycFilters },
     },
     select: { id: true },
+    take: 10000,
   });
 
   return memos.map((m) => m.id);

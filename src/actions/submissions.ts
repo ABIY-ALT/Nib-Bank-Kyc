@@ -201,8 +201,8 @@ function formatKYC(kyc: any) {
   };
 }
 
-async function hasTemporaryAllBranchAccess(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
+async function hasTemporaryAllBranchAccess(userId: string, prefetchedUser?: any): Promise<boolean> {
+  const user = prefetchedUser || await prisma.user.findUnique({
     where: { id: userId },
     select: {
       saturdayAllBranches: true,
@@ -621,10 +621,24 @@ export async function getSubmissions(filters?: {
           createdBy: true,
           assignedTo: true,
           branch: { include: { district: true } },
-          memos: true
+          memos: {
+            select: {
+              id: true,
+              name: true,
+              originalName: true,
+              type: true,
+              storageKey: true,
+              mimeType: true,
+              size: true,
+              storageTier: true,
+              archiveDeletedAt: true,
+              createdAt: true,
+              uploadedBy: { select: { firstName: true, lastName: true } },
+            },
+          },
         },
         orderBy,
-        take: filters?.limit || 5000,
+        take: Math.min(filters?.limit || 50, 1000),
         skip: filters?.offset || 0,
       }),
       prisma.kYC.count({ where })
@@ -829,30 +843,42 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
     // return for the same filters — same isExceptional default (false unless the
     // caller explicitly asked for exceptional cases) and no status restriction.
     const totalWhere = filters?.isExceptional !== undefined ? where : { ...where, isExceptional: false };
-    const [rawTotal, authorized, needAmendment, running, viewed, resubmitted, escalated, exceptional, pending, unseen] = await Promise.all([
+    const [rawTotal, metricsRows, runningRows, exceptional] = await Promise.all([
       prisma.kYC.count({ where: totalWhere }),
-      prisma.kYC.count({ where: { ...totalWhere, status: KYC_STATUS.APPROVED } }),
-      prisma.kYC.count({ where: { ...totalWhere, status: KYC_STATUS.ACTION_REQUIRED } }),
-      // Resubmitted cases must not inflate "In Review" — a case that was returned
-      // for amendment and came back is a distinct workflow from a fresh case being
-      // reviewed for the first time.
-      prisma.kYC.count({
+      prisma.kYC.groupBy({
+        by: ['status', 'isResubmitted', 'isExceptional'],
+        where: totalWhere,
+        _count: { _all: true },
+      }),
+      prisma.kYC.groupBy({
+        by: ['status', 'isResubmitted', 'isExceptional'],
         where: {
           ...totalWhere,
           status: KYC_STATUS.IN_REVIEW,
           isResubmitted: false,
           ...ACTIVE_REVIEW_ASSIGNEE_FILTER,
         },
+        _count: { _all: true },
       }),
-      prisma.kYC.count({ where: { ...totalWhere, status: { in: [KYC_STATUS.IN_REVIEW, KYC_STATUS.APPROVED, KYC_STATUS.ACTION_REQUIRED] } } }),
-      prisma.kYC.count({ where: { ...totalWhere, isResubmitted: true, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED, KYC_STATUS.RESUBMITTED] } } }),
-      prisma.kYC.count({ where: { ...totalWhere, status: KYC_STATUS.ESCALATED } }),
       prisma.kYC.count({ where: { ...where, isExceptional: true } }),
-      prisma.kYC.count({ where: { ...totalWhere, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW] } } }),
-      // "Unseen" must only reflect fresh submissions — a resubmitted case re-enters
-      // at SUBMITTED but is not a brand-new, never-seen case.
-      prisma.kYC.count({ where: { ...totalWhere, status: KYC_STATUS.SUBMITTED, isResubmitted: false } })
     ]);
+
+    const countRows = (rows: Array<{ status: string; isResubmitted: boolean; isExceptional: boolean; _count: { _all: number } }>, status: string, isResubmitted?: boolean, isExceptional?: boolean) =>
+      rows.reduce((sum, row) => {
+        const matchesStatus = row.status === status;
+        const matchesResubmitted = isResubmitted === undefined || row.isResubmitted === isResubmitted;
+        const matchesExceptional = isExceptional === undefined || row.isExceptional === isExceptional;
+        return matchesStatus && matchesResubmitted && matchesExceptional ? sum + row._count._all : sum;
+      }, 0);
+
+    const authorized = countRows(metricsRows as any, KYC_STATUS.APPROVED);
+    const needAmendment = countRows(metricsRows as any, KYC_STATUS.ACTION_REQUIRED);
+    const running = runningRows.reduce((sum, row) => sum + row._count._all, 0);
+    const viewed = countRows(metricsRows as any, KYC_STATUS.IN_REVIEW) + authorized + needAmendment;
+    const resubmitted = countRows(metricsRows as any, KYC_STATUS.SUBMITTED, true) + countRows(metricsRows as any, KYC_STATUS.IN_REVIEW, true) + countRows(metricsRows as any, KYC_STATUS.ESCALATED, true) + countRows(metricsRows as any, KYC_STATUS.RESUBMITTED, true);
+    const escalated = countRows(metricsRows as any, KYC_STATUS.ESCALATED);
+    const pending = countRows(metricsRows as any, KYC_STATUS.SUBMITTED) + countRows(metricsRows as any, KYC_STATUS.IN_REVIEW);
+    const unseen = countRows(metricsRows as any, KYC_STATUS.SUBMITTED, false, false);
 
     // Branch / District Workflow Performance (institutional formula):
     // ((Total Submitted − Cases Requiring Amendment − Amendment Cycle Cases) ÷ Total Submitted) × 100
@@ -1077,7 +1103,21 @@ export async function getSubmissionById(id: string) {
         createdBy: true,
         assignedTo: true,
         branch: { include: { district: true } },
-        memos: true
+        memos: {
+          select: {
+            id: true,
+            name: true,
+            originalName: true,
+            type: true,
+            storageKey: true,
+            mimeType: true,
+            size: true,
+            storageTier: true,
+            archiveDeletedAt: true,
+            createdAt: true,
+            uploadedBy: { select: { firstName: true, lastName: true } },
+          },
+        },
       }
     });
 
@@ -1858,6 +1898,53 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
   }
 }
 
+export async function getEligibleExceptionalCandidates(filters?: {
+  district?: string;
+  branches?: string[];
+  search?: string;
+  excludeIds?: string[];
+  limit?: number;
+}) {
+  const session = await getServerSession();
+  if (!session) return [];
+
+  const where = await buildCaseMetricsWhere(session, {
+    district: filters?.district,
+    branches: filters?.branches,
+    isExceptional: false,
+  });
+  if (where === null) return [];
+
+  const search = filters?.search?.trim();
+  const limit = Math.min(filters?.limit ?? 200, 500);
+
+  return prisma.kYC.findMany({
+    where: {
+      ...where,
+      isExceptional: false,
+      status: { not: KYC_STATUS.APPROVED },
+      ...(filters?.excludeIds?.length ? { id: { notIn: filters.excludeIds } } : {}),
+      ...(search
+        ? {
+            OR: [
+              { id: { contains: search, mode: 'insensitive' } },
+              { customerName: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+      customerName: true,
+      status: true,
+      branchName: true,
+      districtName: true,
+    },
+    orderBy: [{ submittedAt: 'desc' }],
+    take: limit,
+  });
+}
+
 export async function getWorkflowCounts() {
   // SECURITY: No parameters accepted — all identity/jurisdiction derived from server session.
   const session = await getServerSession();
@@ -1879,7 +1966,7 @@ export async function getWorkflowCounts() {
     // Strip the top-level isExceptional default so each count below can set its own.
     const { isExceptional: _unused, ...officerWhere } = baseWhere;
 
-    const [myCount, actionRequired, queueCounts, unseenCases, exceptionalCount, escalatedCount, resubmittedCount, activeInReview] = await Promise.all([
+    const [myCount, actionRequired, queueCounts, exceptionalCount, escalatedCount, resubmittedCount, activeInReview] = await Promise.all([
       prisma.kYC.count({ where: { createdById: session.id, active: true, isExceptional: false } }),
       prisma.kYC.count({
         where: {
@@ -1895,18 +1982,6 @@ export async function getWorkflowCounts() {
         // `reviewQueue`) only reflects fresh, never-seen submissions.
         where: { ...officerWhere, active: true, isExceptional: false, isResubmitted: false },
         _count: true
-      }),
-      // Status-driven: a case is "unseen" until the mapped officer opens it
-      // (open transitions SUBMITTED -> IN_REVIEW), regardless of who is viewing.
-      // Resubmitted cases re-enter at SUBMITTED but are not fresh/never-seen.
-      prisma.kYC.count({
-        where: {
-          ...officerWhere,
-          status: KYC_STATUS.SUBMITTED,
-          active: true,
-          isExceptional: false,
-          isResubmitted: false
-        }
       }),
       prisma.kYC.count({
         where: {
@@ -1960,6 +2035,8 @@ export async function getWorkflowCounts() {
       statsMap[item.status] = item._count;
     });
 
+    const unseenCases = statsMap[KYC_STATUS.SUBMITTED] || 0;
+
     return {
       mySubmissions: myCount,
       actionRequired: actionRequired,
@@ -1967,7 +2044,7 @@ export async function getWorkflowCounts() {
       resubmitted: resubmittedCount,
       escalated: escalatedCount,
       exceptional: exceptionalCount,
-      unseenCases: unseenCases,
+      unseenCases,
       branchNode: activeInReview
     };
   } catch (error) {

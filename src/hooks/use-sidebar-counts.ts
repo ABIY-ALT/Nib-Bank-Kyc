@@ -1,21 +1,18 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
 import { UserProfile } from "@/lib/auth";
 import { getWorkflowCounts } from '@/actions/submissions';
 import { usePermissions } from './use-permissions';
 
-const SIDEBAR_COUNTS_POLL_MS = 30000;
+const SIDEBAR_COUNTS_POLL_MS = 2 * 60 * 1000;
 
 /**
  * Optimized Sidebar Hook.
  * Calls a specialized SQL-level count action to avoid fetching full data payloads.
- * Polls every 30s and pauses while the tab is hidden to reduce request churn.
+ * Polls every 2 minutes and refreshes when the tab becomes visible again.
  */
 export function useSidebarCounts(user: UserProfile | null) {
-  const pathname = usePathname();
   const [counts, setCounts] = useState({
     mySubmissions: 0,
     actionRequired: 0,
@@ -79,7 +76,7 @@ export function useSidebarCounts(user: UserProfile | null) {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, pathname]);
+  }, [user]);
 
   return counts;
 }

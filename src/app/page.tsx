@@ -43,7 +43,6 @@ import { getBranches } from "@/actions/hierarchy";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getActiveRoleNames, getPrimaryRoleName } from "@/lib/access-control";
-import { useSidebarCounts } from "@/hooks/use-sidebar-counts";
 import { normalizeBranchName } from "@/lib/jurisdiction";
 
 function formatBranchName(name?: string | null) {
@@ -55,7 +54,6 @@ function formatBranchName(name?: string | null) {
 export default function Dashboard() {
   const { user } = useAuth();
   const { hasPermission, loading: permissionsLoading, isSuperAdmin } = usePermissions();
-  const counts = useSidebarCounts(user);
   const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
   const [summaryStats, setSummaryStats] = useState({ total: 0, authorized: 0, needAmendment: 0, unseen: 0, running: 0, performanceIndex: 100 });
   const [settings, setSettings] = useState<any>(null);

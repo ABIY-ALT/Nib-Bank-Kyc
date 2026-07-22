@@ -140,17 +140,6 @@ export async function hasJurisdictionalAccess(user: any, userPermissions: string
   if (user?.lateHourAllBranches && isLateHourNow()) return true;
   if (user?.lunchBreakAllBranches && isLunchBreakNow()) return true;
 
-  // 1c. History Check: user has worked on this case before (read-only access)
-  if (prisma) {
-    const hasHistory = await prisma.auditLog.count({
-      where: {
-        userId: sessionId,
-        kycId: kyc.id
-      }
-    });
-    if (hasHistory > 0) return true;
-  }
-
   // 2. Resolve Role Scopes
   const isDistrictAdmin = userPermissions.includes('DISTRICT_DIRECTOR_REVIEW') || userPermissions.includes('DASHBOARD_VIEW_DISTRICT');
   const isPortfolioStaff = userPermissions.some(p => PORTFOLIO_SCOPE_PERMISSIONS.has(p));
@@ -192,7 +181,21 @@ export async function hasJurisdictionalAccess(user: any, userPermissions: string
   // 6. Direct Branch Logic (Branch Level Staff fallback)
   if (isBranchScopeStaff) {
     if (userBranchId && kyc.branchId === userBranchId) return true;
-    return branchName && normalizeBranchName(branchName).toLowerCase() === normalizeBranchName(kyc.branchName).toLowerCase();
+    if (branchName && normalizeBranchName(branchName).toLowerCase() === normalizeBranchName(kyc.branchName).toLowerCase()) {
+      return true;
+    }
+  }
+
+  // 7. History Check: user has worked on this case before (read-only access)
+  // Only queried as a fallback if explicit static scope checks didn't match.
+  if (prisma) {
+    const hasHistory = await prisma.auditLog.count({
+      where: {
+        userId: sessionId,
+        kycId: kyc.id
+      }
+    });
+    if (hasHistory > 0) return true;
   }
 
   return false;

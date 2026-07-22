@@ -506,7 +506,7 @@ export function setupSessionCleanup(): void {
   // Run cleanup every 24 hours
   const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000;
 
-  setInterval(async () => {
+  const timer = setInterval(async () => {
     try {
       await sessionManager.cleanupExpired();
     } catch (error) {
@@ -515,6 +515,9 @@ export function setupSessionCleanup(): void {
       });
     }
   }, CLEANUP_INTERVAL);
+  if (typeof timer === 'object' && 'unref' in timer) {
+    timer.unref();
+  }
 
   safeLog.info('Session cleanup scheduled (every 24 hours)');
 }
