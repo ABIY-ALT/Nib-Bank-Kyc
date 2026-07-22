@@ -121,10 +121,18 @@ export function isLunchBreakNow(date: Date = new Date()): boolean {
   }
 }
 
+import { prisma as defaultPrisma } from '@/lib/prisma';
+
 /**
  * Checks if a user has jurisdictional access to a specific KYC case based on their permissions.
  */
-export async function hasJurisdictionalAccess(user: any, userPermissions: string[], sessionId: string, kyc: any, prisma: any) {
+export async function hasJurisdictionalAccess(
+  user: any,
+  userPermissions: string[],
+  sessionId: string,
+  kyc: any,
+  prisma: any = defaultPrisma
+) {
   const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
   const branchName = getResolvedUserBranchName(user);
   const districtName = getResolvedUserDistrictName(user);
