@@ -1207,8 +1207,15 @@ export async function createSubmission(formData: FormData) {
     const bypassDuplicateCheck = formData.get('bypassDuplicateCheck') === 'true';
     const accountNumber = (formData.get('accountNumber') as string || '').trim();
 
-    // Format validation: Account Number must be 13 digits starting with 7
-    if (accountNumber && !/^7\d{12}$/.test(accountNumber)) {
+    // Mandatory format validation: Account Number is required and must be exactly 13 digits starting with 7
+    if (!accountNumber) {
+      return {
+        success: false as const,
+        error: "Account Number is required.",
+      };
+    }
+
+    if (!/^7\d{12}$/.test(accountNumber)) {
       return {
         success: false as const,
         error: "Account Number must be exactly 13 digits starting with 7.",

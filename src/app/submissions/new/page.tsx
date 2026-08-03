@@ -525,7 +525,16 @@ export default function NewSubmission() {
       return;
     }
 
-    if (accountNumber.trim() && !/^7\d{12}$/.test(accountNumber.trim())) {
+    if (!accountNumber.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Information missing",
+        description: "Please enter the Account Number.",
+      });
+      return;
+    }
+
+    if (!/^7\d{12}$/.test(accountNumber.trim())) {
       toast({
         variant: "destructive",
         title: "Invalid Account Number",
@@ -705,6 +714,7 @@ export default function NewSubmission() {
               </Label>
               <input
                 placeholder="7XXXXXXXXXXXX (13 digits)"
+                required
                 maxLength={13}
                 className="h-11 w-full rounded-md border px-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={accountNumber}
