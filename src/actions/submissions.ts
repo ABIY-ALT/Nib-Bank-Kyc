@@ -638,7 +638,7 @@ export async function getSubmissions(filters?: {
           },
         },
         orderBy,
-        take: Math.min(filters?.limit || 50, 1000),
+        take: filters?.limit || 50,
         skip: filters?.offset || 0,
       }),
       prisma.kYC.count({ where })

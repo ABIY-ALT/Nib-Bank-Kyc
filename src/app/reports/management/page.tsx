@@ -444,6 +444,17 @@ export default function ManagementReportingPage() {
         return;
       }
 
+      // Warn if the total record count exceeds the export cap of 100,000.
+      // The exported file will be complete up to 100,000 rows; any records
+      // beyond that are silently omitted, so we surface a visible warning.
+      if ((result.total ?? 0) > exportRows.length) {
+        toast({
+          variant: "destructive",
+          title: "Export Truncated",
+          description: `Only ${exportRows.length.toLocaleString()} of ${(result.total ?? 0).toLocaleString()} records exported. Please narrow your filters to export all records.`,
+        });
+      }
+
       const headers = ['Case ID', 'Customer Name', 'Status', 'Is Resubmitted', 'Branch', 'District', 'Risk Level', 'Account Type', 'Submitted Date', 'Status Changed Date'];
       const rows = exportRows.map((sub: any) => [
         sub.id,
