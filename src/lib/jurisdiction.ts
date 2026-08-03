@@ -121,8 +121,6 @@ export function isLunchBreakNow(date: Date = new Date()): boolean {
   }
 }
 
-import { prisma as defaultPrisma } from '@/lib/prisma';
-
 /**
  * Checks if a user has jurisdictional access to a specific KYC case based on their permissions.
  */
@@ -131,8 +129,9 @@ export async function hasJurisdictionalAccess(
   userPermissions: string[],
   sessionId: string,
   kyc: any,
-  prisma: any = defaultPrisma
+  prisma?: any
 ) {
+  const prismaClient = prisma ?? (await import('@/lib/prisma')).prisma;
   const assignedBranches = normalizeAssignedBranches(user?.assignedBranches);
   const branchName = getResolvedUserBranchName(user);
   const districtName = getResolvedUserDistrictName(user);
@@ -196,8 +195,8 @@ export async function hasJurisdictionalAccess(
 
   // 7. History Check: user has worked on this case before (read-only access)
   // Only queried as a fallback if explicit static scope checks didn't match.
-  if (prisma) {
-    const hasHistory = await prisma.auditLog.count({
+  if (prismaClient) {
+    const hasHistory = await prismaClient.auditLog.count({
       where: {
         userId: sessionId,
         kycId: kyc.id
