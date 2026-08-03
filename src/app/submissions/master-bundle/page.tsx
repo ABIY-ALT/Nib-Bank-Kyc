@@ -62,7 +62,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import JSZip from 'jszip';
 import { Checkbox } from '@/components/ui/checkbox';
-import { cn } from "@/lib/utils";
+import { cn, extractAccountNumber, maskAccountNumber } from "@/lib/utils";
 import { getSubmissions, getSubmissionById } from "@/actions/submissions";
 import { getBranches, getDistricts } from "@/actions/hierarchy";
 import { KYC_STATUS } from "@/lib/kyc-data";
@@ -166,6 +166,7 @@ export default function MasterBundleDownloadPage() {
       const matchesSearch = !q ||
         (sub.customerName || "").toLowerCase().includes(q) ||
         (sub.id || "").toLowerCase().includes(q) ||
+        (sub.remarks || "").toLowerCase().includes(q) ||
         norm(getSubmissionBranchName(sub)).includes(q) ||
         norm(getSubmissionDistrictName(sub)).includes(q);
 
@@ -782,6 +783,11 @@ Failed Documents:      ${failedDocs.length}
                               <span className="font-black text-slate-900">{sub.customerName}</span>
                               <Badge variant="outline" className="text-[8px] font-black uppercase px-1.5 h-4">{sub.entityType || 'Individual'}</Badge>
                             </div>
+                            {extractAccountNumber(sub) && (
+                              <span className="text-[10px] text-muted-foreground font-mono font-medium block">
+                                Acc: {maskAccountNumber(extractAccountNumber(sub))}
+                              </span>
+                            )}
                             <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                               <span className="text-primary font-black">{sub.id}</span>
                               <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {sub.branchName?.toLowerCase().includes('branch') ? sub.branchName : `${sub.branchName} Branch`}</span>

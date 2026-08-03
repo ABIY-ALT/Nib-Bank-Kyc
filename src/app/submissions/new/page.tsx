@@ -285,6 +285,7 @@ export default function NewSubmission() {
   const [firstName, setFirstName] = useState("");
   const [fatherName, setFatherName] = useState("");
   const [grandfatherName, setGrandfatherName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [entityType, setEntityType] = useState("");
   const [remarks, setRemarks] = useState("");
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
@@ -524,6 +525,15 @@ export default function NewSubmission() {
       return;
     }
 
+    if (accountNumber.trim() && !/^7\d{12}$/.test(accountNumber.trim())) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Account Number",
+        description: "Account Number must be exactly 13 digits starting with 7.",
+      });
+      return;
+    }
+
     if (!entityType) {
       toast({
         variant: "destructive",
@@ -561,6 +571,7 @@ export default function NewSubmission() {
 
       const formData = new FormData();
       formData.append("customerName", customerName);
+      formData.append("accountNumber", accountNumber);
       formData.append("entityType", entityType);
       formData.append("branchName", branchName);
       formData.append("districtName", user.districtName || "Central");
@@ -651,7 +662,7 @@ export default function NewSubmission() {
               Entity Profile
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-6 pt-6 md:grid-cols-4">
+          <CardContent className="grid gap-6 pt-6 md:grid-cols-5">
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 First Name
@@ -686,6 +697,18 @@ export default function NewSubmission() {
                 className="h-11 w-full rounded-md border px-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={grandfatherName}
                 onChange={(event) => setGrandfatherName(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Account Number
+              </Label>
+              <input
+                placeholder="7XXXXXXXXXXXX (13 digits)"
+                maxLength={13}
+                className="h-11 w-full rounded-md border px-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={accountNumber}
+                onChange={(event) => setAccountNumber(event.target.value.replace(/\D/g, '').slice(0, 13))}
               />
             </div>
             <div className="space-y-2">

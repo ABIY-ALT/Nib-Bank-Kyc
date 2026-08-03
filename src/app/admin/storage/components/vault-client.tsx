@@ -26,7 +26,7 @@ import { getDistricts, getBranches } from '@/actions/hierarchy';
 import { format } from 'date-fns';
 import JSZip from 'jszip';
 import { resolveDownloadFileName } from '@/lib/documents';
-import { cn } from '@/lib/utils';
+import { cn, extractAccountNumber, maskAccountNumber } from '@/lib/utils';
 import { getGlobalSettings } from '@/actions/settings';
 import { DatePickerWithRange, DateRange } from '@/components/ui/date-range-picker';
 import { 
@@ -1075,8 +1075,15 @@ export default function VaultClient() {
                       </div>
                     </TableCell>
                     {visibleColumns.customer && (
-                      <TableCell className="font-bold text-sm text-slate-700 max-w-[200px] truncate" title={caseItem.customerName}>
-                        {caseItem.customerName}
+                      <TableCell className="font-bold text-sm text-slate-700 max-w-[200px]" title={caseItem.customerName}>
+                        <div className="flex flex-col">
+                          <span className="truncate">{caseItem.customerName}</span>
+                          {extractAccountNumber(caseItem) && (
+                            <span className="text-[10px] text-muted-foreground font-mono font-medium leading-tight">
+                              Acc: {maskAccountNumber(extractAccountNumber(caseItem))}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                     )}
                     {visibleColumns.branch && (

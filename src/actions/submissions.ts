@@ -595,6 +595,7 @@ export async function getSubmissions(filters?: {
             { customerName: { contains: searchTerm, mode: 'insensitive' } },
             { branchName: { contains: searchTerm, mode: 'insensitive' } },
             { districtName: { contains: searchTerm, mode: 'insensitive' } },
+            { remarks: { contains: searchTerm, mode: 'insensitive' } },
           ],
         },
       ];
@@ -1204,6 +1205,38 @@ export async function createSubmission(formData: FormData) {
     const files = formData.getAll('files') as File[];
     const types = formData.getAll('types') as string[];
     const bypassDuplicateCheck = formData.get('bypassDuplicateCheck') === 'true';
+    const accountNumber = (formData.get('accountNumber') as string || '').trim();
+
+    // Format validation: Account Number must be 13 digits starting with 7
+    if (accountNumber && !/^7\d{12}$/.test(accountNumber)) {
+      return {
+        success: false as const,
+        error: "Account Number must be exactly 13 digits starting with 7.",
+      };
+    }
+
+    // Check for duplicate submission with same Account Number (mandatory check)
+    if (accountNumber) {
+      const existingAccountCase = await prisma.kYC.findFirst({
+        where: {
+          active: true,
+          OR: [
+            { id: { contains: accountNumber, mode: 'insensitive' } },
+            { remarks: { contains: accountNumber, mode: 'insensitive' } }
+          ]
+        }
+      });
+
+      if (existingAccountCase) {
+        return {
+          success: false as const,
+          error: "A KYC case with this Account Number already exists. Duplicate submissions are not allowed.",
+          duplicateFound: false,
+          accountDuplicateFound: true,
+          existingCaseId: existingAccountCase.id
+        };
+      }
+    }
 
     // Check for duplicate submission with same customer name and account classification
     const existingCase = await prisma.kYC.findFirst({
@@ -1314,7 +1347,9 @@ export async function createSubmission(formData: FormData) {
             assignedToId: actingPrimaryOfficerId,
             statusChangedAt: new Date(),
             entityType: validated.entityType,
-            remarks: validated.remarks,
+            remarks: accountNumber
+              ? (validated.remarks ? `Account No: ${accountNumber} | ${validated.remarks}` : `Account No: ${accountNumber}`)
+              : validated.remarks,
             checklistState: {},
             commentHistory: initialHistory,
             memos: { create: memoData }

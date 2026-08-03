@@ -28,6 +28,7 @@ export interface VaultFilters {
 export interface VaultCaseItem {
   id: string;
   customerName: string;
+  remarks?: string | null;
   branchName: string;
   districtName: string;
   status: string;
@@ -156,6 +157,7 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
     kycFilters.OR = [
       { customerName: { contains: search, mode: 'insensitive' } },
       { id: { contains: search, mode: 'insensitive' } },
+      { remarks: { contains: search, mode: 'insensitive' } },
     ];
   }
   if (dateFrom || dateTo) {
@@ -394,6 +396,7 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
     return {
       id: kyc.id,
       customerName: kyc.customerName,
+      remarks: kyc.remarks,
       branchName: kyc.branchName,
       districtName: kyc.branch?.district?.name || kyc.districtName || 'Central',
       status: kyc.status,

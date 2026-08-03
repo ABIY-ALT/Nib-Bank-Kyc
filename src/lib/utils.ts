@@ -28,3 +28,32 @@ export function toLocalEndOfDayISO(date: Date): string {
   const localEnd = new Date(year, date.getMonth(), date.getDate(), 23, 59, 59, 999);
   return localEnd.toISOString();
 }
+
+/**
+ * Extracts account number from remarks or direct property
+ */
+export function extractAccountNumber(itemOrRemarks?: any): string | null {
+  if (!itemOrRemarks) return null;
+  if (typeof itemOrRemarks === 'object') {
+    if (itemOrRemarks.accountNumber) return String(itemOrRemarks.accountNumber).trim();
+    if (itemOrRemarks.remarks) itemOrRemarks = itemOrRemarks.remarks;
+  }
+  if (typeof itemOrRemarks === 'string') {
+    const match = itemOrRemarks.match(/Account\s*No:\s*([^\s|]+)/i);
+    if (match && match[1]) return match[1].trim();
+  }
+  return null;
+}
+
+/**
+ * Masks an account number (e.g. 100045****89)
+ */
+export function maskAccountNumber(accNo?: string | null): string | null {
+  if (!accNo) return null;
+  const clean = accNo.trim();
+  if (!clean) return null;
+  if (clean.length <= 4) return '****';
+  if (clean.length <= 8) return clean.slice(0, 2) + '****' + clean.slice(-2);
+  return clean.slice(0, 6) + '****' + clean.slice(-2);
+}
+

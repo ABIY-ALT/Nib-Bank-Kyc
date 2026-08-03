@@ -54,7 +54,7 @@ import {
   getSubmissionDistrictName,
   sanitizeBundleSegment,
 } from "@/lib/bundle-path";
-import { cn } from "@/lib/utils";
+import { cn, extractAccountNumber, maskAccountNumber } from "@/lib/utils";
 
 export function SubmissionsPageContent({
   submissions,
@@ -350,6 +350,11 @@ Document Count:    ${fullSub?.documents?.length || 0}
               <TableCell className="py-6">
                 <div className="flex flex-col">
                   <span className="font-black text-slate-900 leading-tight">{sub.customerName}</span>
+                  {extractAccountNumber(sub) && (
+                    <span className="text-[10px] text-muted-foreground font-mono font-medium leading-tight">
+                      Acc: {maskAccountNumber(extractAccountNumber(sub))}
+                    </span>
+                  )}
                   <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-tight">{sub.entityType?.replace(/_/g, ' ') || 'Individual'} Account</span>
                 </div>
               </TableCell>

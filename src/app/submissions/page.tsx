@@ -54,7 +54,7 @@ import { format } from "date-fns";
 import JSZip from 'jszip';
 import { sanitizeBundleSegment } from "@/lib/bundle-path";
 import { resolveDownloadFileName } from "@/lib/documents";
-import { cn, toLocalStartOfDayISO, toLocalEndOfDayISO } from "@/lib/utils";
+import { cn, toLocalStartOfDayISO, toLocalEndOfDayISO, extractAccountNumber, maskAccountNumber } from "@/lib/utils";
 import { Pagination } from "@/components/ui/pagination";
 
 const STATUS_OPTIONS = [
@@ -295,7 +295,8 @@ export default function CaseArchivePage() {
           s.customerName.toLowerCase().includes(term) ||
           s.id.toLowerCase().includes(term) ||
           (s.branchName || "").toLowerCase().includes(term) ||
-          (s.districtName || "").toLowerCase().includes(term)
+          (s.districtName || "").toLowerCase().includes(term) ||
+          (s.remarks || "").toLowerCase().includes(term)
         );
       }
 
@@ -520,7 +521,17 @@ export default function CaseArchivePage() {
             ) : orderedFilteredSubmissions.map((sub) => (
               <TableRow key={sub.id} className="group hover:bg-slate-50">
                 <TableCell className="font-bold text-primary py-4">{sub.id}</TableCell>
-                <TableCell><div className="flex flex-col"><span className="font-bold text-slate-900 leading-tight">{sub.customerName}</span><span className="text-[10px] text-muted-foreground uppercase">{sub.entityType || 'Individual'}</span></div></TableCell>
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-slate-900 leading-tight">{sub.customerName}</span>
+                    {extractAccountNumber(sub) && (
+                      <span className="text-[10px] text-muted-foreground font-mono font-medium leading-tight">
+                        Acc: {maskAccountNumber(extractAccountNumber(sub))}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground uppercase">{sub.entityType || 'Individual'}</span>
+                  </div>
+                </TableCell>
                 <TableCell>
                   <div className="flex flex-col">
                     <span className="font-medium text-slate-900 leading-tight">{sub.branchName}</span>

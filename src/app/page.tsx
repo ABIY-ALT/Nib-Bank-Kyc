@@ -35,7 +35,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
-import { cn } from "@/lib/utils";
+import { cn, extractAccountNumber, maskAccountNumber } from "@/lib/utils";
 import { getSubmissions, getDashboardSummaryStats } from "@/actions/submissions";
 import { getGlobalSettings } from "@/actions/settings";
 import { getBranchOfficers } from "@/actions/branch-mappings";
@@ -250,6 +250,11 @@ export default function Dashboard() {
                             </Badge>
                           )}
                         </div>
+                        {extractAccountNumber(sub) && (
+                          <p className="text-[10px] text-muted-foreground font-mono font-medium">
+                            Acc: {maskAccountNumber(extractAccountNumber(sub))}
+                          </p>
+                        )}
                         <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">
                           {sub.id || 'NO_ID'} • {formatBranchName(sub.branch?.name || sub.branchName || 'Head Office')}
                         </p>
