@@ -459,7 +459,7 @@ export async function getSubmissions(filters?: {
       branchId: filters?.branchId,
       createdById: hasTemporaryAccess ? undefined : (filters?.submittedBy || filters?.createdById),
       isResubmitted: filters?.isResubmitted,
-      isExceptional: filters?.isExceptional ?? false,
+      isExceptional: filters?.isExceptional,
       entityType: filters?.entityType,
       submittedAt: approvedOnly ? undefined : dateFilter,
       updatedAt: approvedOnly ? dateFilter : undefined,
@@ -543,12 +543,16 @@ export async function getSubmissions(filters?: {
     if (isOfficer && !isManagement && !filters?.assignedToId) {
       // Officers must always see cases directly assigned to them, regardless of branch.
       // For all other cases they follow normal portfolio/branch jurisdiction.
+      const portfolioStatusCondition = filters?.status?.length
+        ? { status: { in: filters.status } }
+        : { status: KYC_STATUS.SUBMITTED };
+
       const portfolioConditions: any[] = hasJurisFilter
         ? [
           { ...jurisdictionalFilter, assignedToId: null },
-          { ...jurisdictionalFilter, status: KYC_STATUS.SUBMITTED },
+          { ...jurisdictionalFilter, ...portfolioStatusCondition },
         ]
-        : [{ assignedToId: null }, { status: KYC_STATUS.SUBMITTED }];
+        : [{ assignedToId: null }, { ...portfolioStatusCondition }];
 
       // For exceptional cases: any officer with portfolio access to the branch can see all
       // exceptional cases from that branch regardless of assignedToId or base KYC status.

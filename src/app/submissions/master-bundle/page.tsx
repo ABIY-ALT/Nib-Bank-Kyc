@@ -77,18 +77,14 @@ import {
 import { resolveDownloadFileName } from "@/lib/documents";
 
 const STATUS_OPTIONS = [
-  { id: KYC_STATUS.APPROVED, label: 'Approved' },
-  { id: KYC_STATUS.SUBMITTED, label: 'Submitted / In Review' },
-  { id: KYC_STATUS.ACTION_REQUIRED, label: 'Need Amendment' },
-  { id: KYC_STATUS.REJECTED, label: 'Rejected' },
-  { id: KYC_STATUS.ESCALATED, label: 'Escalated' }
+  { id: KYC_STATUS.APPROVED, label: 'Approved' }
 ];
 
 export default function MasterBundleDownloadPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([KYC_STATUS.APPROVED]);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("all");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -124,7 +120,7 @@ export default function MasterBundleDownloadPage() {
       // Oldest-first so the FIRST submitted case leads the list — fetching
       // newest-first would also drop the oldest cases entirely once the
       // dataset exceeds the fetch cap.
-      let filters: any = { limit: 5000, sortField: 'submittedAt', sortOrder: 'asc' };
+      let filters: any = { limit: 5000, sortField: 'submittedAt', sortOrder: 'asc', status: [KYC_STATUS.APPROVED] };
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
@@ -545,28 +541,13 @@ Failed Documents:      ${failedDocs.length}
           </CardHeader>
           <CardContent className="py-4">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              {/* Status queues as toggle chips */}
+              {/* Status: locked to Approved only */}
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target Queues</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Status</Label>
                 <div className="flex flex-wrap gap-2">
-                  {STATUS_OPTIONS.map(status => {
-                    const active = selectedStatuses.includes(status.id);
-                    return (
-                      <button
-                        key={status.id}
-                        type="button"
-                        onClick={() => handleToggleStatus(status.id)}
-                        className={cn(
-                          "rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
-                          active
-                            ? "bg-primary text-white border-primary"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                        )}
-                      >
-                        {status.label}
-                      </button>
-                    );
-                  })}
+                  <span className="rounded-full border px-3 py-1.5 text-xs font-bold bg-primary text-white border-primary">
+                    Approved
+                  </span>
                 </div>
               </div>
 

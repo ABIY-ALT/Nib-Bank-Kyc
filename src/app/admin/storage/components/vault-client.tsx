@@ -723,7 +723,7 @@ export default function VaultClient() {
                 <SelectTrigger className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"><SelectValue placeholder="All" /></SelectTrigger>
                 <SelectContent className="rounded-xl">
                   <SelectItem value="all">All Statuses</SelectItem>
-                  {filterOptions.statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {filterOptions.statuses.filter(s => s !== 'APPROVED').map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
