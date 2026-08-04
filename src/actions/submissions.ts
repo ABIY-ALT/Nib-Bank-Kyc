@@ -691,6 +691,48 @@ export async function getSubmissions(filters?: {
 }
 
 /**
+ * Returns the distinct district and branch names visible to the current user
+ * within their jurisdictional scope. Used exclusively to populate the Case
+ * Archive filter dropdowns so the lists are complete (not limited to the
+ * current paginated page).
+ */
+export async function getArchiveFilterOptions(): Promise<{
+  districts: string[];
+  branches: { name: string; districtName: string | null }[];
+}> {
+  const session = await getServerSession();
+  if (!session) return { districts: [], branches: [] };
+
+  try {
+    // Build the same jurisdictional filter used by getSubmissions — this ensures
+    // the district/branch lists respect the user's access scope exactly.
+    const jurisdictionalFilter = await buildJurisdictionalFilter(session);
+    if (jurisdictionalFilter === null) return { districts: [], branches: [] };
+
+    const rows = await prisma.kYC.findMany({
+      where: { ...jurisdictionalFilter, active: true },
+      select: { districtName: true, branchName: true },
+      distinct: ['districtName', 'branchName'],
+      orderBy: [{ districtName: 'asc' }, { branchName: 'asc' }],
+    });
+
+    const districts = Array.from(
+      new Set(rows.map((r) => r.districtName).filter((d): d is string => Boolean(d)))
+    ).sort();
+
+    const branches = rows
+      .filter((r) => Boolean(r.branchName))
+      .map((r) => ({ name: r.branchName as string, districtName: r.districtName ?? null }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { districts, branches };
+  } catch (error) {
+    logInstitutionalError(error, 'DB_QUERY_ARCHIVE_FILTER_OPTIONS');
+    return { districts: [], branches: [] };
+  }
+}
+
+/**
  * Calculates accurate summary statistics for the dashboard using SQL counts.
  * Ensures counts are consistent across all dashboards and respect jurisdiction.
  */

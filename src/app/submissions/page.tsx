@@ -47,7 +47,7 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { getSubmissions, getSubmissionById, logBundleDownload } from "@/actions/submissions";
+import { getSubmissions, getSubmissionById, logBundleDownload, getArchiveFilterOptions } from "@/actions/submissions";
 import { KYC_STATUS } from "@/lib/kyc-data";
 import { DatePickerWithRange, DateRange } from "@/components/ui/date-range-picker";
 import { format } from "date-fns";
@@ -90,6 +90,10 @@ export default function CaseArchivePage() {
   const [isResubmitted, setIsResubmitted] = useState<boolean | undefined>(undefined);
   const [isExceptional, setIsExceptional] = useState<boolean | undefined>(undefined);
   const [activeReviewersOnly, setActiveReviewersOnly] = useState<boolean | undefined>(undefined);
+  // Authoritative lists of districts/branches the user can access, fetched
+  // once on mount and independent of the paginated submissions data.
+  const [allDistricts, setAllDistricts] = useState<string[]>([]);
+  const [allBranches, setAllBranches] = useState<{ name: string; districtName: string | null }[]>([]);
 
   // FILTER SYNCHRONIZATION: dashboard cards redirect here with their active
   // filters (e.g. /submissions?status=SUBMITTED&district=X&branch=Y&from=...&to=...)
@@ -122,6 +126,16 @@ export default function CaseArchivePage() {
     const activeRev = params.get('activeReviewersOnly');
     if (activeRev === 'true') setActiveReviewersOnly(true);
     else if (activeRev === 'false') setActiveReviewersOnly(false);
+  }, []);
+
+  // Fetch the complete set of districts and branches accessible to this user
+  // once on mount. These are used exclusively to populate filter dropdowns and
+  // are independent of the paginated `submissions` state.
+  useEffect(() => {
+    getArchiveFilterOptions().then(({ districts, branches }) => {
+      setAllDistricts(districts);
+      setAllBranches(branches);
+    });
   }, []);
 
   // Debounce the search box, then search SERVER-SIDE: the table is paginated,
@@ -205,19 +219,17 @@ export default function CaseArchivePage() {
     }
   };
 
-  const districts = useMemo(() => {
-    if (!submissions) return [];
-    return Array.from(new Set(submissions.map(s => s.districtName).filter(Boolean))).sort() as string[];
-  }, [submissions]);
+  // Districts: full authorized list from server, not the current paginated page.
+  const districts = allDistricts;
 
+  // Branches: when a district is selected, show only its branches; otherwise
+  // show all branches the user is authorized to access.
   const branches = useMemo(() => {
-    if (!submissions) return [];
-    let relevantSubmissions = submissions;
-    if (selectedDistricts.length > 0) {
-      relevantSubmissions = submissions.filter(s => selectedDistricts.includes(s.districtName));
-    }
-    return Array.from(new Set(relevantSubmissions.map(s => s.branchName || "Unknown"))).sort();
-  }, [submissions, selectedDistricts]);
+    if (selectedDistricts.length === 0) return allBranches.map(b => b.name);
+    return allBranches
+      .filter(b => b.districtName !== null && selectedDistricts.includes(b.districtName))
+      .map(b => b.name);
+  }, [allBranches, selectedDistricts]);
 
   // Server already applies all active filters (status/district/branch/search/date)
   // via buildActiveFilters — rows arrive pre-filtered. No client-side re-filter needed.
@@ -341,8 +353,19 @@ export default function CaseArchivePage() {
   };
 
   const toggleDistrict = (district: string) => {
-    setSelectedDistricts(prev => prev.includes(district) ? prev.filter(d => d !== district) : [...prev, district]);
-    setSelectedBranches([]); // Clear selected branches when district selection changes
+    const nextDistricts = selectedDistricts.includes(district)
+      ? selectedDistricts.filter(d => d !== district)
+      : [...selectedDistricts, district];
+    setSelectedDistricts(nextDistricts);
+    // Clear any selected branches that no longer belong to the updated district selection.
+    if (nextDistricts.length > 0) {
+      const validBranches = allBranches
+        .filter(b => b.districtName !== null && nextDistricts.includes(b.districtName))
+        .map(b => b.name);
+      setSelectedBranches(prev => prev.filter(b => validBranches.includes(b)));
+    } else {
+      setSelectedBranches([]);
+    }
     setCurrentPage(1);
   };
 
