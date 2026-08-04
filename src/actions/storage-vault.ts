@@ -221,7 +221,7 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
     const [totalCasesCount, memoTotals] = await Promise.all([
       prisma.kYC.count({ where: mergedKycFilter }),
       prisma.memo.aggregate({
-        where: { kyc: mergedKycFilter },
+        where: { kyc: mergedKycFilter, storageTier: 'PRIMARY' },
         _count: { _all: true },
         _sum: { size: true },
       }),
@@ -256,7 +256,7 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
     if (uniqueKycIds.length > 0) {
       const memoAggregates = await prisma.memo.groupBy({
         by: ['kycId'],
-        where: { kycId: { in: uniqueKycIds } },
+        where: { kycId: { in: uniqueKycIds }, storageTier: 'PRIMARY' },
         _count: { _all: true },
         _sum: { size: true },
       });
@@ -334,6 +334,7 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
       branch: { include: { district: true } },
       assignedTo: { select: { firstName: true, lastName: true } },
       memos: {
+        where: { storageTier: 'PRIMARY' },
         include: {
           uploadedBy: { select: { firstName: true, lastName: true } },
         },
@@ -493,6 +494,7 @@ export async function getAllFilteredFileIds(filters: VaultFilters = {}): Promise
     where: {
       ...jurisdictionClause,
       kyc: { ...jurisdictionClause?.kyc, ...kycFilters },
+      storageTier: 'PRIMARY',
     },
     select: { id: true },
     take: 10000,
