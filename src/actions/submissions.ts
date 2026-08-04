@@ -1033,7 +1033,11 @@ export async function getBranchPerformance(filters?: CaseMetricsFilter): Promise
       prisma.kYC.groupBy({ by: ['branchName'], where: { ...totalWhere, status: KYC_STATUS.SUBMITTED, isResubmitted: false }, _count: { _all: true } }),
       prisma.kYC.groupBy({ by: ['branchName'], where: { ...totalWhere, status: KYC_STATUS.APPROVED }, _count: { _all: true } }),
       prisma.kYC.groupBy({ by: ['branchName'], where: { ...totalWhere, status: KYC_STATUS.ACTION_REQUIRED }, _count: { _all: true } }),
-      prisma.kYC.groupBy({ by: ['branchName'], where: { ...totalWhere, isResubmitted: true }, _count: { _all: true } }),
+      // Match the summary card: only count resubmitted cases that are still
+      // in an active/open status (SUBMITTED, IN_REVIEW, ESCALATED, RESUBMITTED).
+      // Without this status filter the column showed all-time historical
+      // resubmissions (including already-authorized or rejected ones).
+      prisma.kYC.groupBy({ by: ['branchName'], where: { ...totalWhere, isResubmitted: true, status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED, KYC_STATUS.RESUBMITTED] } }, _count: { _all: true } }),
     ]);
 
     const toMap = (rows: { branchName: string; _count: { _all: number } }[]) =>
