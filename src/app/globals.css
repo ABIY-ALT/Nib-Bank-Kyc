@@ -160,3 +160,51 @@
     color: hsl(var(--muted-foreground));
   }
 }
+
+@keyframes unseen-slow-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.05);
+  }
+}
+
+.animate-slow-pulse {
+  animation: unseen-slow-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+.animate-collapsible-down,
+[data-state="open"].data-\[state\=open\]\:animate-collapsible-down {
+  animation: collapsible-down 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-collapsible-up,
+[data-state="closed"].data-\[state\=closed\]\:animate-collapsible-up {
+  animation: collapsible-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+

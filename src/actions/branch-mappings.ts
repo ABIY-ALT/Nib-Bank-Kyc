@@ -45,7 +45,7 @@ async function requireMappingActor(mutate: boolean): Promise<ActorResult> {
  * the existing case-routing logic (jurisdiction / queue filters) keeps working
  * unchanged while BranchMapping remains the management source of truth.
  */
-async function recomputeAssignedBranches(userIds: string[]) {
+export async function recomputeAssignedBranches(userIds: string[]) {
   const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
   if (uniqueIds.length === 0) return;
 
