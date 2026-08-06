@@ -173,10 +173,15 @@ export async function deleteSecureUploadedFile(
   await fs.unlink(target);
 }
 
-/** Computes the SHA-256 hex digest of a file already on disk. */
-async function computeFileHashAtPath(filePath: string): Promise<string> {
-  const buffer = await fs.readFile(filePath);
-  return crypto.createHash('sha256').update(buffer).digest('hex');
+/** Computes the SHA-256 hex digest of a file already on disk via streaming to avoid OOM. */
+function computeFileHashAtPath(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fsCreateReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', (err) => reject(err));
+  });
 }
 
 export type TierTransferResult = {

@@ -290,10 +290,14 @@ export interface FileUploadAuditEntry {
   userAgent?: string;
 }
 
+const MAX_AUDIT_LOG_ENTRIES = 500;
 const auditLog: FileUploadAuditEntry[] = [];
 
 export function logFileUploadAudit(entry: FileUploadAuditEntry): void {
   auditLog.push(entry);
+  if (auditLog.length > MAX_AUDIT_LOG_ENTRIES) {
+    auditLog.shift();
+  }
   logger.info('FILE_UPLOAD_AUDIT', {
     filename: entry.filename,
     validationResult: entry.validationResult,

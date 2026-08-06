@@ -5,7 +5,7 @@ import archiver from 'archiver';
 import { logBundleDownload } from '@/actions/submissions';
 import { hasJurisdictionalAccess, getNormalizedRole } from '@/lib/jurisdiction';
 import { format } from 'date-fns';
-import { readSecureUploadedFile } from '@/lib/secure-file-storage';
+import { createReadStream, secureUploadedFileExists } from '@/lib/secure-file-storage';
 import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 
 export const config = { api: { bodyParser: false } };
@@ -179,8 +179,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       try {
         const tier = (m as any).storageTier === 'ARCHIVE' ? 'ARCHIVE' : 'PRIMARY';
-        const fileBuffer = await readSecureUploadedFile(m.storageKey, tier);
-        archive.append(fileBuffer, { name: nameInZip });
+        const exists = await secureUploadedFileExists(m.storageKey, false, tier);
+        if (exists) {
+          const fileStream = createReadStream(m.storageKey, tier);
+          archive.append(fileStream, { name: nameInZip });
+        } else {
+          archive.append(`Missing file for memo ${m.id}\n`, {
+            name: `${nameInZip}.missing.txt`,
+          });
+        }
       } catch {
         archive.append(`Missing file for memo ${m.id}\n`, {
           name: `${nameInZip}.missing.txt`,

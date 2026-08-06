@@ -407,10 +407,14 @@ export interface QuarantineRecord {
   reason: string;
 }
 
+const MAX_QUARANTINE_LOG_ENTRIES = 500;
 const quarantineLog: QuarantineRecord[] = [];
 
 export function quarantineFile(record: QuarantineRecord): void {
   quarantineLog.push(record);
+  if (quarantineLog.length > MAX_QUARANTINE_LOG_ENTRIES) {
+    quarantineLog.shift();
+  }
 }
 
 export function getQuarantineLog(): QuarantineRecord[] {

@@ -214,6 +214,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const persistedBuffer = validation.sanitisedBuffer || buffer;
+        const fileSize = persistedBuffer.length;
         await writeSecureUploadedFile(validation.storageKey, persistedBuffer);
 
         memoData.push({
@@ -225,7 +226,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           mimeType: validation.fileType || file.mimetype || 'application/octet-stream',
           uploadedById: session.id,
           kycId: submissionId,
-          size: persistedBuffer.length,
+          size: fileSize,
         });
       } finally {
         await deleteSecureUploadedFile(quarantineKey, true).catch(() => {});
