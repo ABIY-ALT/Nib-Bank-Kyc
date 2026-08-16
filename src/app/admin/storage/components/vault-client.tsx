@@ -464,11 +464,27 @@ export default function VaultClient() {
         toast({ variant: 'destructive', title: 'Download required', description: 'For audit and recovery purposes, you must download the selected document(s) before deletion. Please complete the download and try again.' });
         return;
       }
+      let blockedCount = 0;
+      let firstError = '';
       for (const id of ids) {
         const res = await deleteKycCaseAndFiles(id);
         if (res.success) successCount++;
+        else {
+          blockedCount++;
+          if (!firstError) firstError = res.error || '';
+        }
       }
-      toast({ title: 'Purge Complete', description: `${successCount} cases permanently deleted.` });
+      // A case that keeps its record because storage could not be freed must be
+      // reported, not quietly dropped from the count.
+      if (blockedCount > 0) {
+        toast({
+          variant: 'destructive',
+          title: 'Purge Incomplete',
+          description: `${successCount} case(s) deleted. ${blockedCount} could not be fully purged and were kept. ${firstError}`,
+        });
+      } else {
+        toast({ title: 'Purge Complete', description: `${successCount} cases permanently deleted.` });
+      }
       loadData();
       setSelectedCaseIds(new Set());
     } finally {
@@ -503,11 +519,25 @@ export default function VaultClient() {
         toast({ variant: 'destructive', title: 'Download required', description: 'For audit and recovery purposes, you must download the selected document(s) before deletion. Please complete the download and try again.' });
         return;
       }
+      let blockedCount = 0;
+      let firstError = '';
       for (const fileId of fileIds) {
         const res = await deleteInstitutionalFile(fileId);
         if (res.success) deletedCount++;
+        else {
+          blockedCount++;
+          if (!firstError) firstError = res.error || '';
+        }
       }
-      toast({ title: 'All Files Purged', description: `${deletedCount} documents permanently deleted. Case has been deactivated.` });
+      if (blockedCount > 0) {
+        toast({
+          variant: 'destructive',
+          title: 'Purge Incomplete',
+          description: `${deletedCount} document(s) deleted. ${blockedCount} could not be removed from storage and were kept. ${firstError}`,
+        });
+      } else {
+        toast({ title: 'All Files Purged', description: `${deletedCount} documents permanently deleted. Case has been deactivated.` });
+      }
       loadData();
       setSelectedCaseIds(new Set());
     } catch {
@@ -528,11 +558,25 @@ export default function VaultClient() {
         toast({ variant: 'destructive', title: 'Download required', description: 'For audit and recovery purposes, you must download the selected document(s) before deletion. Please complete the download and try again.' });
         return;
       }
+      let blockedCount = 0;
+      let firstError = '';
       for (const fileId of fileIds) {
         const res = await deleteInstitutionalFile(fileId);
         if (res.success) deletedCount++;
+        else {
+          blockedCount++;
+          if (!firstError) firstError = res.error || '';
+        }
       }
-      toast({ title: 'Files Deleted', description: `${deletedCount} documents permanently deleted.` });
+      if (blockedCount > 0) {
+        toast({
+          variant: 'destructive',
+          title: 'Deletion Incomplete',
+          description: `${deletedCount} document(s) deleted. ${blockedCount} could not be removed from storage and were kept. ${firstError}`,
+        });
+      } else {
+        toast({ title: 'Files Deleted', description: `${deletedCount} documents permanently deleted.` });
+      }
       // remove from selection
       setSelectedFileIds(prev => {
         const next = new Set(prev);

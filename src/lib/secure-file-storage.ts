@@ -173,6 +173,42 @@ export async function deleteSecureUploadedFile(
   await fs.unlink(target);
 }
 
+/**
+ * Frees a stored file's bytes and CONFIRMS they are gone before returning.
+ *
+ * Callers must delete the owning DB row only after this resolves. `fs.unlink`
+ * can fail for reasons that have nothing to do with the record — an antivirus,
+ * backup or indexing agent holding a Windows handle without FILE_SHARE_DELETE
+ * (EBUSY/EPERM), an unavailable storage volume, a malformed storage key. If the
+ * row is removed anyway, the bytes stay on disk with nothing referencing them:
+ * no screen, query or report can ever surface them again, and the space is lost
+ * permanently because nothing in the system reconciles disk against the table.
+ *
+ * A file that is already absent (ENOENT) counts as freed — the space is back
+ * and the row is safe to remove.
+ *
+ * Throws if the file survives the attempt, so the caller can keep the record
+ * and report the failure instead of silently stranding storage.
+ */
+export async function purgeStoredFileOrThrow(
+  storageKey: string,
+  tier: StorageTier = 'PRIMARY',
+): Promise<void> {
+  try {
+    await deleteSecureUploadedFile(storageKey, false, tier);
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') return; // already gone — bytes are free
+    throw error;
+  }
+
+  // unlink reported success; verify rather than trust it.
+  if (await secureUploadedFileExists(storageKey, false, tier)) {
+    const stillPresent: any = new Error('File is still present on disk after deletion');
+    stillPresent.code = 'EPURGEUNVERIFIED';
+    throw stillPresent;
+  }
+}
+
 /** Computes the SHA-256 hex digest of a file already on disk via streaming to avoid OOM. */
 function computeFileHashAtPath(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {

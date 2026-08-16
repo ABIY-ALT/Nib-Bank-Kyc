@@ -573,32 +573,55 @@ export async function deleteKycCaseAndFiles(kycId: string) {
 
     if (!kyc) throw new Error('Case not found');
 
-    // Delete files from physical storage
-    const { deleteSecureUploadedFile } = await import('@/lib/secure-file-storage');
+    // Free each file's bytes first, keeping track of which are verifiably gone.
+    // A file we cannot remove must keep its record: dropping the row while the
+    // file survives strands the space with nothing referencing it.
+    const { purgeStoredFileOrThrow } = await import('@/lib/secure-file-storage');
+    const purgedMemoIds: string[] = [];
+    const blocked: string[] = [];
     for (const memo of kyc.memos) {
+      const tier = memo.storageTier === 'ARCHIVE' ? 'ARCHIVE' : 'PRIMARY';
       try {
-        const tier = memo.storageTier === 'ARCHIVE' ? 'ARCHIVE' : 'PRIMARY';
-        await deleteSecureUploadedFile(memo.storageKey, false, tier);
-      } catch (e) {
-        // Continue even if file is missing physically
+        await purgeStoredFileOrThrow(memo.storageKey, tier);
+        purgedMemoIds.push(memo.id);
+      } catch (purgeError: any) {
+        blocked.push(`${memo.originalName || memo.name || memo.id} (${purgeError?.code || 'UNKNOWN'})`);
       }
     }
 
-    // DB deletion in transaction to ensure integrity
+    // Remove only the records whose storage is confirmed freed. The case row is
+    // deleted only when nothing is left holding disk space, so a blocked file
+    // stays visible in the Vault instead of becoming untraceable.
     await prisma.$transaction(async (tx) => {
-      await tx.memo.deleteMany({ where: { kycId } });
-      await tx.kYC.delete({ where: { id: kycId } });
+      if (purgedMemoIds.length > 0) {
+        await tx.memo.deleteMany({ where: { id: { in: purgedMemoIds } } });
+      }
+      if (blocked.length === 0) {
+        await tx.kYC.delete({ where: { id: kycId } });
+      }
     });
 
     await createAuditLog({
       userId: ctx.userId,
       userEmail: ctx.email,
       action: 'DELETE_KYC_CASE',
-      details: `Super Admin permanently deleted case: ${kycId} with ${kyc.memos.length} assets.`,
+      details:
+        blocked.length === 0
+          ? `Super Admin permanently deleted case: ${kycId} with ${kyc.memos.length} assets.`
+          : `Super Admin purge of case ${kycId} was partial: ${purgedMemoIds.length}/${kyc.memos.length} assets freed. Case retained because these files could not be removed from storage: ${blocked.join('; ')}.`,
       severity: 'CRITICAL',
     });
 
-    return { success: true };
+    if (blocked.length > 0) {
+      return {
+        success: false,
+        filesPurged: purgedMemoIds.length,
+        filesBlocked: blocked.length,
+        error: `${blocked.length} of ${kyc.memos.length} document(s) could not be removed from storage, so this case has been kept. The files may be locked by another program (antivirus or backup) or their storage volume may be unavailable. Please try again shortly.`,
+      };
+    }
+
+    return { success: true, filesPurged: purgedMemoIds.length, filesBlocked: 0 };
   } catch (error: any) {
     return { success: false, error: getSafeErrorMessage(error) };
   }

@@ -6,7 +6,7 @@ import { signDownloadToken } from '@/lib/security';
 import { getServerSession } from './auth-server';
 import { resolveRbacContext, requireRole, requirePermission, logPrivilegeChange } from './rbac';
 import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
-import { deleteSecureUploadedFile } from '@/lib/secure-file-storage';
+import { purgeStoredFileOrThrow } from '@/lib/secure-file-storage';
 import { createAuditLog } from './audit';
 import { GLOBAL_SCOPE_PERMISSIONS } from '@/lib/jurisdiction';
 
@@ -123,16 +123,33 @@ export async function deleteInstitutionalFile(memoId: string) {
       targetUserId: ctx.userId,
       targetUserEmail: ctx.email,
       changeType: 'ROLE_ASSIGNED',
-      details: `Super Admin purged file: ${memoId} (storageKey: ${memo.storageKey})`,
+      details: `Super Admin initiated purge of file: ${memoId} (storageKey: ${memo.storageKey})`,
     });
 
-    // 1. Delete from physical storage (from whichever tier the file lives on)
+    // 1. Free the physical bytes, and proceed only once they are verifiably
+    //    gone. Deleting the record while the file survives would strand the
+    //    space forever — nothing references it and nothing reconciles it back.
+    const tier = (memo as any).storageTier === 'ARCHIVE' ? 'ARCHIVE' : 'PRIMARY';
     try {
-      const tier = (memo as any).storageTier === 'ARCHIVE' ? 'ARCHIVE' : 'PRIMARY';
-      await deleteSecureUploadedFile(memo.storageKey, false, tier);
-    } catch {}
+      await purgeStoredFileOrThrow(memo.storageKey, tier);
+    } catch (purgeError: any) {
+      await createAuditLog({
+        userId: ctx.userId,
+        userEmail: ctx.email,
+        action: 'FILE_PURGE_FAILED',
+        details: `Storage purge failed for memo ${memoId} (storageKey: ${memo.storageKey}, tier: ${tier}, code: ${purgeError?.code || 'UNKNOWN'}). Record retained to avoid orphaning the file.`,
+        kycId: memo.kycId,
+        severity: 'HIGH',
+      }).catch(() => {});
 
-    // 2. Delete from database
+      return {
+        success: false,
+        error:
+          'The document could not be removed from storage, so its record has been kept. The file may be locked by another program (antivirus or backup) or its storage volume may be unavailable. Please try again shortly.',
+      };
+    }
+
+    // 2. Bytes confirmed freed — now it is safe to drop the record.
     await prisma.memo.delete({ where: { id: memoId } });
 
     let caseDeleted = false;

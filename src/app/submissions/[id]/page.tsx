@@ -888,6 +888,10 @@ Document Count:    ${previewableDocuments.length}
         if (submission?.id) {
           await refreshSubmission(submission.id);
         }
+      } else {
+        // A purge that could not free the file keeps its record — say so rather
+        // than closing the dialog as though it had worked.
+        toast({ variant: "destructive", title: "Deletion Failed", description: (res as any).error || "The document could not be deleted." });
       }
     } finally {
       setIsPurging(null);
