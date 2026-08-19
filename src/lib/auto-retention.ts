@@ -295,19 +295,20 @@ export async function runAutoRetentionPurge(options: RunAutoPurgeOptions): Promi
 
   sweepInFlight = true;
   try {
-    const { purgeStoredFileOrThrow, secureUploadedFileExists, getSecureUploadRoot } =
+    const { purgeStoredFileOrThrow, secureUploadedFileExists, secureUploadRootAvailable } =
       await import('@/lib/secure-file-storage');
 
     // A missing storage root makes every file look "already deleted", which
     // would drop every record while freeing nothing. Refuse to sweep instead.
-    const uploadRoot = getSecureUploadRoot();
-    const fs = await import('fs/promises');
-    try {
-      const rootStat = await fs.stat(uploadRoot);
-      if (!rootStat.isDirectory()) throw new Error('not a directory');
-    } catch {
-      console.error(`[AutoRetention] Primary storage root unavailable: ${uploadRoot}`);
-      return skeleton(`Primary storage root is unavailable (${uploadRoot}). No records were touched.`);
+    const rootCheck = await secureUploadRootAvailable();
+    const uploadRoot = rootCheck.root;
+    if (!rootCheck.available) {
+      console.error(
+        `[AutoRetention] Primary storage root unavailable: ${uploadRoot} (${rootCheck.code})`
+      );
+      return skeleton(
+        `Primary storage root is unavailable (${uploadRoot} — ${rootCheck.code}). No records were touched.`
+      );
     }
 
     const now = new Date();

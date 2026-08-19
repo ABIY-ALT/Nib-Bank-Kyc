@@ -140,6 +140,30 @@ export async function writeSecureUploadedFile(storageKey: string, buffer: Buffer
  * This lets preview/download/retrieval endpoints run an existence check up
  * front and return a graceful 404 instead of crashing on an async stream error.
  */
+/**
+ * Reports whether the primary upload root is actually present.
+ *
+ * Deliberately does NOT create it (unlike ensureSecureUploadRoot) — a bulk
+ * purge must be able to tell "the root is missing" from "the files are gone",
+ * because a missing root makes every file look already-deleted. Creating it
+ * here would hide exactly the misconfiguration the caller is checking for.
+ */
+export async function secureUploadRootAvailable(): Promise<{
+  available: boolean;
+  root: string;
+  code?: string;
+}> {
+  const root = getSecureUploadRoot();
+  try {
+    const stats = await fs.stat(root);
+    return stats.isDirectory()
+      ? { available: true, root }
+      : { available: false, root, code: 'ENOTDIR' };
+  } catch (error: any) {
+    return { available: false, root, code: error?.code || 'UNKNOWN' };
+  }
+}
+
 export async function secureUploadedFileExists(
   storageKey: string,
   inQuarantine = false,
