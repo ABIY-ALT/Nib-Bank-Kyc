@@ -626,3 +626,46 @@ export async function deleteKycCaseAndFiles(kycId: string) {
     return { success: false, error: getSafeErrorMessage(error) };
   }
 }
+
+/**
+ * Reports what the automatic retention policy currently holds eligible for
+ * deletion — the live policy plus the case/file/byte counts it would free.
+ * Read-only: nothing is deleted.
+ */
+export async function getAutoRetentionStatus() {
+  const ctx = await resolveRbacContext();
+  if (!ctx) throw new Error('Authentication required');
+
+  try {
+    const { previewAutoPurge } = await import('@/lib/auto-retention');
+    const preview = await previewAutoPurge();
+    return { success: true as const, ...preview };
+  } catch (error: any) {
+    return { success: false as const, error: getSafeErrorMessage(error) };
+  }
+}
+
+/**
+ * Runs the retention sweep immediately instead of waiting for the next
+ * scheduled pass. Same policy, same safety rules — this only changes the timing.
+ *
+ * `force` runs the sweep even when the policy switch is off, and `dryRun`
+ * reports what would go without deleting anything.
+ */
+export async function runAutoRetentionNow(options: { force?: boolean; dryRun?: boolean } = {}) {
+  const ctx = await requirePermission('PURGE_VAULT_STORAGE', 'RUN_AUTO_RETENTION_PURGE');
+
+  try {
+    const { runAutoRetentionPurge } = await import('@/lib/auto-retention');
+    const result = await runAutoRetentionPurge({
+      trigger: 'MANUAL',
+      actorId: ctx.userId,
+      actorEmail: ctx.email,
+      force: options.force,
+      dryRun: options.dryRun,
+    });
+    return { success: true as const, result };
+  } catch (error: any) {
+    return { success: false as const, error: getSafeErrorMessage(error) };
+  }
+}

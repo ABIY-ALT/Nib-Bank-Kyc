@@ -38,6 +38,14 @@ import { getGlobalSettings, updateGlobalSettings } from '@/actions/settings';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/use-permissions';
 
+/** Local byte formatter — the retention engine is server-only and must not be bundled here. */
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
 export default function SystemSettingsPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -59,8 +67,22 @@ export default function SystemSettingsPage() {
       enabled: false,
       days: 30,
       statuses: []
+    },
+    autoPurgeConfig: {
+      enabled: true,
+      days: 6,
+      keepStatuses: ['APPROVED'],
+      dryRun: false
     }
   });
+
+  // Live picture of what the automatic cleanup currently holds eligible.
+  const [autoPurgeStatus, setAutoPurgeStatus] = useState<{
+    casesEligible: number;
+    filesEligible: number;
+    bytesEligible: number;
+  } | null>(null);
+  const [autoPurgeBusy, setAutoPurgeBusy] = useState(false);
 
   const [newDocLabel, setNewDocLabel] = useState("");
   const [newEntityLabel, setNewEntityLabel] = useState("");
@@ -93,7 +115,56 @@ export default function SystemSettingsPage() {
       // Fallback to common statuses
       setAvailableStatuses(['SUBMITTED', 'RESUBMITTED', 'APPROVED', 'REJECTED', 'ACTION_REQUIRED']);
     }
+    void refreshAutoPurgeStatus();
     setLoading(false);
+  };
+
+  const refreshAutoPurgeStatus = async () => {
+    try {
+      const { getAutoRetentionStatus } = await import('@/actions/storage-vault');
+      const status = await getAutoRetentionStatus();
+      if (status.success) {
+        setAutoPurgeStatus({
+          casesEligible: status.casesEligible,
+          filesEligible: status.filesEligible,
+          bytesEligible: status.bytesEligible,
+        });
+      }
+    } catch {
+      setAutoPurgeStatus(null);
+    }
+  };
+
+  const handleRunCleanupNow = async () => {
+    setAutoPurgeBusy(true);
+    try {
+      const { runAutoRetentionNow } = await import('@/actions/storage-vault');
+      const response = await runAutoRetentionNow({ force: true });
+      if (!response.success) {
+        toast({ variant: 'destructive', title: 'Cleanup failed', description: response.error });
+        return;
+      }
+      const result = response.result;
+      if (!result.ran) {
+        toast({ title: 'Cleanup skipped', description: result.skippedReason });
+        return;
+      }
+      if (result.storageWarning) {
+        toast({ variant: 'destructive', title: 'Storage path problem', description: result.storageWarning });
+        return;
+      }
+      toast({
+        title: result.config.dryRun ? 'Dry run complete' : 'Storage freed',
+        description:
+          `${result.filesPurged} file(s) across ${result.casesProcessed} case(s) — ${formatBytes(result.bytesFreed)}.` +
+          (result.filesMissing > 0 ? ` ${result.filesMissing} stale record(s) cleared.` : '') +
+          (result.filesBlocked > 0 ? ` ${result.filesBlocked} file(s) were locked and will be retried.` : '') +
+          (result.moreRemaining ? ' More cases remain and will be handled on the next pass.' : ''),
+      });
+    } finally {
+      setAutoPurgeBusy(false);
+      void refreshAutoPurgeStatus();
+    }
   };
 
   const documentTypeCount = localSettings.documentTypes?.length || 0;
@@ -299,6 +370,148 @@ export default function SystemSettingsPage() {
                     </div>
                   </>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-primary text-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2"><Trash2 className="w-5 h-5 text-white" /> Automatic Storage Cleanup</CardTitle>
+              <CardDescription className="text-white/80 text-xs">
+                Frees server disk on its own — no manual deletion needed.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-6">
+              <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <HardDrive className="w-4 h-4 text-red-600" />
+                      <Label className="text-base font-bold">Delete Documents of Un-Approved Cases</Label>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground font-medium uppercase px-6">
+                      Runs hourly. Permanently removes uploaded files once a case has gone unapproved past the limit.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={localSettings.autoPurgeConfig?.enabled ?? true}
+                    onCheckedChange={(val) => setLocalSettings({
+                      ...localSettings,
+                      autoPurgeConfig: { ...localSettings.autoPurgeConfig, enabled: val }
+                    })}
+                  />
+                </div>
+
+                <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] font-medium text-red-800 leading-relaxed">
+                    Deletion is permanent — the files cannot be recovered afterwards. The case record, its status
+                    and all reporting figures are kept; only the uploaded documents are removed. Documents already
+                    moved to the archive volume are never touched.
+                  </p>
+                </div>
+
+                {(localSettings.autoPurgeConfig?.enabled ?? true) && (
+                  <>
+                    <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed">
+                      <Label className="text-[10px] font-black uppercase text-slate-400">Delete After (Days From First Upload)</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        className="w-24 h-9 font-bold"
+                        value={
+                          typeof localSettings.autoPurgeConfig?.days === 'number'
+                            ? String(localSettings.autoPurgeConfig.days)
+                            : (localSettings.autoPurgeConfig?.days || "")
+                        }
+                        onChange={(e) => {
+                          const rawValue = e.target.value;
+                          setLocalSettings({
+                            ...localSettings,
+                            autoPurgeConfig: {
+                              ...localSettings.autoPurgeConfig,
+                              days: rawValue === "" ? "" : (parseInt(rawValue, 10) || 6)
+                            }
+                          });
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-2 pl-6 pt-2 border-t border-dashed">
+                      <Label className="text-[10px] font-black uppercase text-slate-400">Never Delete These Statuses</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {availableStatuses.map(status => (
+                          <div key={`keep-${status}`} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`keep-status-${status}`}
+                              checked={(localSettings.autoPurgeConfig?.keepStatuses || []).includes(status)}
+                              onCheckedChange={(checked) => {
+                                const current = localSettings.autoPurgeConfig?.keepStatuses || [];
+                                const newStatuses = checked
+                                  ? [...current, status]
+                                  : current.filter((s: string) => s !== status);
+                                setLocalSettings({
+                                  ...localSettings,
+                                  autoPurgeConfig: { ...localSettings.autoPurgeConfig, keepStatuses: newStatuses }
+                                });
+                              }}
+                            />
+                            <Label htmlFor={`keep-status-${status}`} className="text-xs font-medium cursor-pointer">
+                              {status}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground font-medium">
+                        Everything not ticked here is eligible for deletion once it passes the day limit.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pl-6 pt-2 border-t border-dashed">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-black uppercase text-slate-400">Simulation Mode</Label>
+                        <p className="text-[10px] text-muted-foreground font-medium">
+                          Log what would be deleted without deleting anything.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={localSettings.autoPurgeConfig?.dryRun || false}
+                        onCheckedChange={(val) => setLocalSettings({
+                          ...localSettings,
+                          autoPurgeConfig: { ...localSettings.autoPurgeConfig, dryRun: val }
+                        })}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pl-6 pt-3 border-t border-dashed">
+                  <p className="text-[11px] font-semibold text-slate-600">
+                    {autoPurgeStatus
+                      ? autoPurgeStatus.casesEligible === 0
+                        ? 'Nothing is currently past the limit.'
+                        : `Currently eligible: ${autoPurgeStatus.casesEligible} case(s), ${autoPurgeStatus.filesEligible} file(s), ${formatBytes(autoPurgeStatus.bytesEligible)}.`
+                      : 'Eligibility figures unavailable.'}
+                  </p>
+                  {hasPermission('PURGE_VAULT_STORAGE') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRunCleanupNow}
+                      disabled={autoPurgeBusy}
+                      className="border-red-200 text-red-700 hover:bg-red-50"
+                    >
+                      {autoPurgeBusy
+                        ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        : <Trash2 className="w-4 h-4 mr-2" />}
+                      Run Cleanup Now
+                    </Button>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground font-medium pl-6">
+                  Save first — “Run Cleanup Now” applies the saved policy, not unsaved edits. Otherwise changes take
+                  effect on the next hourly pass.
+                </p>
               </div>
             </CardContent>
           </Card>

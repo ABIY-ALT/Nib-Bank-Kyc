@@ -3,6 +3,12 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import {
+  AUTO_PURGE_GUIDELINE_ID,
+  AUTO_PURGE_GUIDELINE_KIND,
+  normalizeAutoPurgeConfig,
+  type AutoPurgeConfig,
+} from '@/lib/auto-retention';
 
 /**
  * Institutional standard defaults for seeding.
@@ -104,14 +110,38 @@ function extractRetentionConfig(guidelines: any[] | undefined): DocumentRetentio
   };
 }
 
-function buildPersistedGuidelines(guidelines: any[] | undefined, storageQuotaGb: number, retentionConfig: DocumentRetentionConfig) {
-  const visibleGuidelines = (Array.isArray(guidelines) ? guidelines : []).filter((entry: any) => {
-    return entry?.kind !== 'storageQuota' && entry?.id !== '__storage_quota__' && 
-           entry?.kind !== 'documentRetention' && entry?.id !== '__document_retention__';
-  });
+/**
+ * Machine-managed guideline entries. They ride along in the `guidelines` JSON
+ * column (so no schema migration is needed for new policy blocks) but they are
+ * never shown to admins as guideline text and must be stripped on every read.
+ */
+const INTERNAL_GUIDELINE_KINDS = new Set(['storageQuota', 'documentRetention', AUTO_PURGE_GUIDELINE_KIND]);
+const INTERNAL_GUIDELINE_IDS = new Set(['__storage_quota__', '__document_retention__', AUTO_PURGE_GUIDELINE_ID]);
 
+function isInternalGuideline(entry: any) {
+  return INTERNAL_GUIDELINE_KINDS.has(entry?.kind) || INTERNAL_GUIDELINE_IDS.has(entry?.id);
+}
+
+function visibleGuidelinesOf(guidelines: any) {
+  return (Array.isArray(guidelines) ? guidelines : []).filter((entry: any) => !isInternalGuideline(entry));
+}
+
+function extractAutoPurgeConfig(guidelines: any[] | undefined): AutoPurgeConfig {
+  const entry = Array.isArray(guidelines)
+    ? guidelines.find((g: any) => g?.kind === AUTO_PURGE_GUIDELINE_KIND || g?.id === AUTO_PURGE_GUIDELINE_ID)
+    : null;
+
+  return normalizeAutoPurgeConfig(entry);
+}
+
+function buildPersistedGuidelines(
+  guidelines: any[] | undefined,
+  storageQuotaGb: number,
+  retentionConfig: DocumentRetentionConfig,
+  autoPurgeConfig: AutoPurgeConfig
+) {
   return [
-    ...visibleGuidelines,
+    ...visibleGuidelinesOf(guidelines),
     {
       id: '__storage_quota__',
       kind: 'storageQuota',
@@ -124,6 +154,17 @@ function buildPersistedGuidelines(guidelines: any[] | undefined, storageQuotaGb:
       id: '__document_retention__',
       kind: 'documentRetention',
       ...retentionConfig,
+      title: '',
+      description: '',
+      type: 'info'
+    },
+    {
+      id: AUTO_PURGE_GUIDELINE_ID,
+      kind: AUTO_PURGE_GUIDELINE_KIND,
+      enabled: autoPurgeConfig.enabled,
+      days: autoPurgeConfig.days,
+      keepStatuses: autoPurgeConfig.keepStatuses,
+      dryRun: autoPurgeConfig.dryRun,
       title: '',
       description: '',
       type: 'info'
@@ -187,7 +228,7 @@ export async function getGlobalSettings() {
           id: 'global',
           entityTypes: INITIAL_ENTITY_TYPES,
           documentTypes: INITIAL_DOC_TYPES,
-          guidelines: buildPersistedGuidelines([], 50, defaultRetentionConfig),
+          guidelines: buildPersistedGuidelines([], 50, defaultRetentionConfig, normalizeAutoPurgeConfig(undefined)),
           lastUpdated: new Date()
         }
       });
@@ -208,12 +249,14 @@ export async function getGlobalSettings() {
 
     const storageQuotaGb = extractStorageQuotaGb(settings.guidelines as any[]);
     const retentionConfig = extractRetentionConfig(settings.guidelines as any[]);
+    const autoPurgeConfig = extractAutoPurgeConfig(settings.guidelines as any[]);
 
     return {
       ...settings,
-      guidelines: (Array.isArray(settings.guidelines) ? settings.guidelines : []).filter((entry: any) => entry?.kind !== 'storageQuota' && entry?.id !== '__storage_quota__' && entry?.kind !== 'documentRetention' && entry?.id !== '__document_retention__'),
+      guidelines: visibleGuidelinesOf(settings.guidelines),
       storageQuotaGb,
-      retentionConfig
+      retentionConfig,
+      autoPurgeConfig
     };
   } catch (error) {
     return null;
@@ -228,25 +271,29 @@ export async function updateGlobalSettings(data: any) {
       days: Number(data.retentionConfig?.days) || 30,
       statuses: Array.isArray(data.retentionConfig?.statuses) ? data.retentionConfig.statuses : []
     };
+    // Auto-purge deletes files permanently, so an absent/garbled block must never
+    // silently widen the policy — normalize it back to the safe defaults.
+    const autoPurgeConfig = normalizeAutoPurgeConfig(data.autoPurgeConfig);
     const settings = await prisma.globalSetting.update({
       where: { id: 'global' },
       data: {
         entityTypes: data.entityTypes,
         documentTypes: data.documentTypes,
-        guidelines: buildPersistedGuidelines(data.guidelines, storageQuotaGb, retentionConfig),
+        guidelines: buildPersistedGuidelines(data.guidelines, storageQuotaGb, retentionConfig, autoPurgeConfig),
         autoEscalation: data.autoEscalation,
         escalationHours: data.escalationHours,
         lastUpdated: new Date()
       }
     });
-    
+
     revalidatePath('/admin/settings');
     revalidatePath('/');
     return {
       ...settings,
-      guidelines: (Array.isArray(settings.guidelines) ? settings.guidelines : []).filter((entry: any) => entry?.kind !== 'storageQuota' && entry?.id !== '__storage_quota__' && entry?.kind !== 'documentRetention' && entry?.id !== '__document_retention__'),
+      guidelines: visibleGuidelinesOf(settings.guidelines),
       storageQuotaGb,
-      retentionConfig
+      retentionConfig,
+      autoPurgeConfig
     };
   } catch (error: any) {
     throw new Error('Institutional database fault during configuration commit.');
