@@ -215,30 +215,85 @@ async function findEligibleCases(config: AutoPurgeConfig, now: Date): Promise<El
  * Reports what the current policy would delete, without touching anything.
  * Used by the admin screens so the impact is visible before it happens.
  */
-export async function previewAutoPurge(): Promise<{
+export interface AutoPurgePreview {
   config: AutoPurgeConfig;
   casesEligible: number;
   filesEligible: number;
   bytesEligible: number;
-}> {
+  /** The folder the app stores documents in — the same one uploads write to. */
+  storageRoot: string;
+  /** False when that folder does not exist yet, with the errno in storageRootCode. */
+  storageRootAvailable: boolean;
+  storageRootCode?: string;
+  /** How many eligible documents were checked against the folder, and how many were found. */
+  filesSampled: number;
+  filesFoundOnDisk: number;
+}
+
+/** How many documents to physically check when reporting status. */
+const PRESENCE_SAMPLE_SIZE = 50;
+
+export async function previewAutoPurge(): Promise<AutoPurgePreview> {
   const config = await getAutoPurgeConfig();
+  const { secureUploadRootAvailable, secureUploadedFileExists } = await import(
+    '@/lib/secure-file-storage'
+  );
+  const rootCheck = await secureUploadRootAvailable();
   const eligible = await findEligibleCases(config, new Date());
 
+  const base = {
+    config,
+    storageRoot: rootCheck.root,
+    storageRootAvailable: rootCheck.available,
+    storageRootCode: rootCheck.code,
+  };
+
   if (eligible.length === 0) {
-    return { config, casesEligible: 0, filesEligible: 0, bytesEligible: 0 };
+    return {
+      ...base,
+      casesEligible: 0,
+      filesEligible: 0,
+      bytesEligible: 0,
+      filesSampled: 0,
+      filesFoundOnDisk: 0,
+    };
   }
 
-  const totals = await prisma.memo.aggregate({
-    where: { kycId: { in: eligible.map((e) => e.kycId) }, storageTier: 'PRIMARY' },
-    _count: { _all: true },
-    _sum: { size: true },
-  });
+  const kycIds = eligible.map((e) => e.kycId);
+  const [totals, sample] = await Promise.all([
+    prisma.memo.aggregate({
+      where: { kycId: { in: kycIds }, storageTier: 'PRIMARY' },
+      _count: { _all: true },
+      _sum: { size: true },
+    }),
+    prisma.memo.findMany({
+      where: { kycId: { in: kycIds }, storageTier: 'PRIMARY' },
+      select: { storageKey: true },
+      take: PRESENCE_SAMPLE_SIZE,
+    }),
+  ]);
+
+  // Physically look for a sample of the documents. This is what separates "the
+  // policy will free 685 MB" from "the database describes 685 MB that is not in
+  // this folder" — a distinction no row count can make.
+  let filesFoundOnDisk = 0;
+  if (rootCheck.available) {
+    for (const memo of sample) {
+      try {
+        if (await secureUploadedFileExists(memo.storageKey, false, 'PRIMARY')) filesFoundOnDisk++;
+      } catch {
+        // Unreadable storage key — counts as not found.
+      }
+    }
+  }
 
   return {
-    config,
+    ...base,
     casesEligible: eligible.length,
     filesEligible: totals._count._all || 0,
     bytesEligible: totals._sum.size || 0,
+    filesSampled: sample.length,
+    filesFoundOnDisk,
   };
 }
 
@@ -303,11 +358,19 @@ export async function runAutoRetentionPurge(options: RunAutoPurgeOptions): Promi
     const rootCheck = await secureUploadRootAvailable();
     const uploadRoot = rootCheck.root;
     if (!rootCheck.available) {
+      // This is the same folder uploads write to — it is created on first
+      // upload. Its absence means nothing has ever been stored there from this
+      // deployment, so there is no space to reclaim and the records must stay:
+      // the documents they describe are on some other machine or folder.
       console.error(
-        `[AutoRetention] Primary storage root unavailable: ${uploadRoot} (${rootCheck.code})`
+        `[AutoRetention] Document folder not found: ${uploadRoot} (${rootCheck.code}). ` +
+          `This is the same folder uploads write to, so nothing has been stored there yet. ` +
+          `No records were touched.`
       );
       return skeleton(
-        `Primary storage root is unavailable (${uploadRoot} — ${rootCheck.code}). No records were touched.`
+        `The document folder does not exist (${uploadRoot}). This is the same folder uploads are ` +
+          `written to, so nothing has been stored there from this server — there is no space to free, ` +
+          `and no records were touched.`
       );
     }
 

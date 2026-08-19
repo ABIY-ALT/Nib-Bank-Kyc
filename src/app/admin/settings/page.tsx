@@ -76,11 +76,17 @@ export default function SystemSettingsPage() {
     }
   });
 
-  // Live picture of what the automatic cleanup currently holds eligible.
+  // Live picture of what the automatic cleanup currently holds eligible, plus
+  // where the app is actually looking for the documents.
   const [autoPurgeStatus, setAutoPurgeStatus] = useState<{
     casesEligible: number;
     filesEligible: number;
     bytesEligible: number;
+    storageRoot: string;
+    storageRootAvailable: boolean;
+    storageRootCode?: string;
+    filesSampled: number;
+    filesFoundOnDisk: number;
   } | null>(null);
   const [autoPurgeBusy, setAutoPurgeBusy] = useState(false);
 
@@ -128,6 +134,11 @@ export default function SystemSettingsPage() {
           casesEligible: status.casesEligible,
           filesEligible: status.filesEligible,
           bytesEligible: status.bytesEligible,
+          storageRoot: status.storageRoot,
+          storageRootAvailable: status.storageRootAvailable,
+          storageRootCode: status.storageRootCode,
+          filesSampled: status.filesSampled,
+          filesFoundOnDisk: status.filesFoundOnDisk,
         });
       }
     } catch {
@@ -483,6 +494,33 @@ export default function SystemSettingsPage() {
                       />
                     </div>
                   </>
+                )}
+
+                {/* Where the app actually stores documents — the same folder uploads
+                    write to. Shown because eligibility counts come from the database
+                    and cannot reveal whether the files are really there. */}
+                {autoPurgeStatus && (
+                  <div className="pl-6 pt-3 border-t border-dashed space-y-1">
+                    <Label className="text-[10px] font-black uppercase text-slate-400">Document Folder</Label>
+                    <p className="text-[11px] font-mono break-all text-slate-700">{autoPurgeStatus.storageRoot}</p>
+                    {!autoPurgeStatus.storageRootAvailable ? (
+                      <p className="text-[11px] font-semibold text-red-700">
+                        This folder does not exist on this server ({autoPurgeStatus.storageRootCode}). It is the same
+                        folder uploads are written to, so nothing has been stored here — cleanup will free nothing and
+                        will not touch any record.
+                      </p>
+                    ) : autoPurgeStatus.filesSampled > 0 ? (
+                      <p className={cn(
+                        "text-[11px] font-semibold",
+                        autoPurgeStatus.filesFoundOnDisk === 0 ? "text-red-700" : "text-slate-600"
+                      )}>
+                        {autoPurgeStatus.filesFoundOnDisk} of {autoPurgeStatus.filesSampled} checked document(s) were
+                        found here.
+                        {autoPurgeStatus.filesFoundOnDisk === 0 &&
+                          ' The database describes documents that are not in this folder, so cleanup will keep every record instead of deleting them.'}
+                      </p>
+                    ) : null}
+                  </div>
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pl-6 pt-3 border-t border-dashed">
