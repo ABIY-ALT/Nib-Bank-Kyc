@@ -80,6 +80,7 @@ export default function SystemSettingsPage() {
   // where the app is actually looking for the documents.
   const [autoPurgeStatus, setAutoPurgeStatus] = useState<{
     casesEligible: number;
+    casesEligibleCapped: boolean;
     filesEligible: number;
     bytesEligible: number;
     storageRoot: string;
@@ -135,6 +136,7 @@ export default function SystemSettingsPage() {
       if (status.success) {
         setAutoPurgeStatus({
           casesEligible: status.casesEligible,
+          casesEligibleCapped: status.casesEligibleCapped,
           filesEligible: status.filesEligible,
           bytesEligible: status.bytesEligible,
           storageRoot: status.storageRoot,
@@ -557,7 +559,7 @@ export default function SystemSettingsPage() {
                     {autoPurgeStatus
                       ? autoPurgeStatus.casesEligible === 0
                         ? 'Nothing is currently past the limit.'
-                        : `Currently eligible: ${autoPurgeStatus.casesEligible} case(s), ${autoPurgeStatus.filesEligible} file(s), ${formatBytes(autoPurgeStatus.bytesEligible)}.`
+                        : `Currently eligible: ${autoPurgeStatus.casesEligible.toLocaleString()}${autoPurgeStatus.casesEligibleCapped ? '+' : ''} case(s), ${autoPurgeStatus.filesEligible.toLocaleString()} file(s), ${formatBytes(autoPurgeStatus.bytesEligible)}.`
                       : 'Eligibility figures unavailable.'}
                   </p>
                   {hasPermission('PURGE_VAULT_STORAGE') && (

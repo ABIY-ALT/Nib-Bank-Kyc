@@ -43,6 +43,17 @@ const globalRef = globalThis as typeof globalThis & {
   __nibRetentionTimer?: NodeJS.Timeout;
 };
 
+/**
+ * Gap between passes while a backlog drains. Lower drains a large queue faster
+ * at the cost of a higher sustained duty cycle; the default leaves the server
+ * idle for most of each minute.
+ */
+function resolveCatchupMs(): number {
+  const raw = Number(process.env.AUTO_PURGE_CATCHUP_SECONDS);
+  const seconds = Number.isFinite(raw) && raw >= 5 ? Math.floor(raw) : CATCHUP_DELAY_MS / 1000;
+  return seconds * 1000;
+}
+
 function resolveIntervalMs(): number {
   const raw = Number(process.env.AUTO_PURGE_INTERVAL_MINUTES);
   const minutes = Number.isFinite(raw) && raw >= 5 ? Math.floor(raw) : DEFAULT_INTERVAL_MINUTES;
@@ -106,12 +117,11 @@ async function tick(idleMs: number): Promise<number> {
     // Backlog still draining and this pass actually moved it — keep going now
     // rather than an hour from now.
     if (result.moreRemaining && cleared > 0) {
-      const remaining = result.casesEligible - result.casesProcessed;
+      const catchupMs = resolveCatchupMs();
       console.log(
-        `[AutoRetention] ${remaining} eligible case(s) still queued — next pass in ` +
-          `${Math.round(CATCHUP_DELAY_MS / 1000)}s.`
+        `[AutoRetention] More eligible cases queued — next pass in ${Math.round(catchupMs / 1000)}s.`
       );
-      return CATCHUP_DELAY_MS;
+      return catchupMs;
     }
 
     return idleMs;
@@ -135,7 +145,15 @@ export function startAutoRetentionScheduler() {
   // next one should happen, and a slow sweep can never overlap the following one.
   const arm = (delayMs: number) => {
     const timer = setTimeout(() => {
-      void tick(idleMs).then(arm);
+      // The .catch is the loop's survival guarantee: if scheduling the next pass
+      // ever throws, re-arm anyway. Without it a single failure would silently
+      // end automatic cleanup for the lifetime of the process.
+      void tick(idleMs)
+        .then(arm)
+        .catch((error: any) => {
+          console.error('[AutoRetention] Scheduler error, retrying later:', error?.message || error);
+          arm(idleMs);
+        });
     }, delayMs);
     timer.unref?.(); // must not hold the process open on shutdown
     globalRef.__nibRetentionTimer = timer;
