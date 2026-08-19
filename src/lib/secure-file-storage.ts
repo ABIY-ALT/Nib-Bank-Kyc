@@ -188,6 +188,60 @@ export function describeSecureUploadRootSource(): string {
   );
 }
 
+/**
+ * Searches the likely locations for documents the database knows about but the
+ * configured folder does not contain.
+ *
+ * The default folder is derived from the working directory, so starting the app
+ * from a different place silently repoints it and the documents appear to have
+ * vanished. Deducing the right folder by hand means knowing exactly how the
+ * service was launched. This does it directly: take storage keys the database
+ * says exist, look for those files in each candidate folder, and report where
+ * they actually are.
+ *
+ * Returns null when no candidate holds any of them — the files really are gone,
+ * rather than merely elsewhere.
+ */
+export async function locateDocumentsFolder(
+  storageKeys: string[],
+): Promise<{ folder: string; matched: number; checked: number } | null> {
+  const keys = storageKeys.filter((key) => /^[a-zA-Z0-9-]{16,64}$/.test(key)).slice(0, 25);
+  if (keys.length === 0) return null;
+
+  const cwd = process.cwd();
+  const driveRoot = path.parse(cwd).root;
+  const candidates = Array.from(
+    new Set([
+      getSecureUploadRoot(),
+      path.resolve(cwd, UPLOADS_DIR_NAME),
+      path.resolve(cwd, '..', UPLOADS_DIR_NAME),
+      path.resolve(cwd, '..', '..', UPLOADS_DIR_NAME),
+      path.resolve(driveRoot, UPLOADS_DIR_NAME),
+      path.resolve(cwd, 'uploads'),
+      path.resolve(cwd, '..', 'uploads'),
+    ].map((candidate) => path.normalize(candidate))),
+  );
+
+  let best: { folder: string; matched: number; checked: number } | null = null;
+
+  for (const folder of candidates) {
+    let matched = 0;
+    for (const key of keys) {
+      try {
+        const stats = await fs.stat(path.join(folder, key));
+        if (stats.isFile() && stats.size > 0) matched++;
+      } catch {
+        // Not here — try the next key.
+      }
+    }
+    if (matched > 0 && (!best || matched > best.matched)) {
+      best = { folder, matched, checked: keys.length };
+    }
+  }
+
+  return best;
+}
+
 export async function secureUploadedFileExists(
   storageKey: string,
   inQuarantine = false,

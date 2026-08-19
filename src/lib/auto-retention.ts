@@ -230,6 +230,9 @@ export interface AutoPurgePreview {
   /** How many eligible documents were checked against the folder, and how many were found. */
   filesSampled: number;
   filesFoundOnDisk: number;
+  /** Set when the documents were found in a DIFFERENT folder than the configured one. */
+  suggestedFolder?: string;
+  suggestedFolderMatches?: number;
 }
 
 /** How many documents to physically check when reporting status. */
@@ -237,9 +240,8 @@ const PRESENCE_SAMPLE_SIZE = 50;
 
 export async function previewAutoPurge(): Promise<AutoPurgePreview> {
   const config = await getAutoPurgeConfig();
-  const { secureUploadRootAvailable, secureUploadedFileExists } = await import(
-    '@/lib/secure-file-storage'
-  );
+  const { secureUploadRootAvailable, secureUploadedFileExists, locateDocumentsFolder } =
+    await import('@/lib/secure-file-storage');
   const rootCheck = await secureUploadRootAvailable();
   const eligible = await findEligibleCases(config, new Date());
 
@@ -290,6 +292,13 @@ export async function previewAutoPurge(): Promise<AutoPurgePreview> {
     }
   }
 
+  // Nothing found where we are looking? Then say where the documents actually
+  // are, instead of leaving the operator to work it out from the launch path.
+  let located: { folder: string; matched: number } | null = null;
+  if (filesFoundOnDisk === 0 && sample.length > 0) {
+    located = await locateDocumentsFolder(sample.map((m) => m.storageKey));
+  }
+
   return {
     ...base,
     casesEligible: eligible.length,
@@ -297,6 +306,8 @@ export async function previewAutoPurge(): Promise<AutoPurgePreview> {
     bytesEligible: totals._sum.size || 0,
     filesSampled: sample.length,
     filesFoundOnDisk,
+    suggestedFolder: located && located.folder !== rootCheck.root ? located.folder : undefined,
+    suggestedFolderMatches: located && located.folder !== rootCheck.root ? located.matched : undefined,
   };
 }
 

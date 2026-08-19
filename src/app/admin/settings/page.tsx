@@ -88,6 +88,8 @@ export default function SystemSettingsPage() {
     storageRootSource: string;
     filesSampled: number;
     filesFoundOnDisk: number;
+    suggestedFolder?: string;
+    suggestedFolderMatches?: number;
   } | null>(null);
   const [autoPurgeBusy, setAutoPurgeBusy] = useState(false);
 
@@ -141,6 +143,8 @@ export default function SystemSettingsPage() {
           storageRootSource: status.storageRootSource,
           filesSampled: status.filesSampled,
           filesFoundOnDisk: status.filesFoundOnDisk,
+          suggestedFolder: status.suggestedFolder,
+          suggestedFolderMatches: status.suggestedFolderMatches,
         });
       }
     } catch {
@@ -525,6 +529,26 @@ export default function SystemSettingsPage() {
                           ' The database describes documents that are not in this folder, so cleanup will keep every record instead of deleting them.'}
                       </p>
                     ) : null}
+
+                    {/* The documents were located elsewhere — name the folder so the
+                        path can be corrected without deducing it from the launch dir. */}
+                    {autoPurgeStatus.suggestedFolder && (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 mt-2 space-y-1">
+                        <p className="text-[11px] font-bold text-amber-900">
+                          Your documents were found in a different folder:
+                        </p>
+                        <p className="text-[11px] font-mono break-all text-amber-900">
+                          {autoPurgeStatus.suggestedFolder}
+                        </p>
+                        <p className="text-[11px] font-medium text-amber-800">
+                          {autoPurgeStatus.suggestedFolderMatches} of the checked documents are there. To use it, add
+                          this line to the server&apos;s .env file and restart:
+                        </p>
+                        <p className="text-[11px] font-mono break-all bg-white/70 rounded px-2 py-1 text-amber-900">
+                          UPLOAD_DIR_PATH={autoPurgeStatus.suggestedFolder}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
