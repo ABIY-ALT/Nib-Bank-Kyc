@@ -225,6 +225,8 @@ export interface AutoPurgePreview {
   /** False when that folder does not exist yet, with the errno in storageRootCode. */
   storageRootAvailable: boolean;
   storageRootCode?: string;
+  /** Why the app resolved that folder — which setting, or the default. */
+  storageRootSource: string;
   /** How many eligible documents were checked against the folder, and how many were found. */
   filesSampled: number;
   filesFoundOnDisk: number;
@@ -246,6 +248,7 @@ export async function previewAutoPurge(): Promise<AutoPurgePreview> {
     storageRoot: rootCheck.root,
     storageRootAvailable: rootCheck.available,
     storageRootCode: rootCheck.code,
+    storageRootSource: rootCheck.source,
   };
 
   if (eligible.length === 0) {
@@ -363,7 +366,7 @@ export async function runAutoRetentionPurge(options: RunAutoPurgeOptions): Promi
       // deployment, so there is no space to reclaim and the records must stay:
       // the documents they describe are on some other machine or folder.
       console.error(
-        `[AutoRetention] Document folder not found: ${uploadRoot} (${rootCheck.code}). ` +
+        `[AutoRetention] Document folder not found: ${uploadRoot} (${rootCheck.code}) — ${rootCheck.source}. ` +
           `This is the same folder uploads write to, so nothing has been stored there yet. ` +
           `No records were touched.`
       );

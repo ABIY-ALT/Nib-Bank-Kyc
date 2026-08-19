@@ -85,6 +85,7 @@ export default function SystemSettingsPage() {
     storageRoot: string;
     storageRootAvailable: boolean;
     storageRootCode?: string;
+    storageRootSource: string;
     filesSampled: number;
     filesFoundOnDisk: number;
   } | null>(null);
@@ -137,6 +138,7 @@ export default function SystemSettingsPage() {
           storageRoot: status.storageRoot,
           storageRootAvailable: status.storageRootAvailable,
           storageRootCode: status.storageRootCode,
+          storageRootSource: status.storageRootSource,
           filesSampled: status.filesSampled,
           filesFoundOnDisk: status.filesFoundOnDisk,
         });
@@ -503,6 +505,9 @@ export default function SystemSettingsPage() {
                   <div className="pl-6 pt-3 border-t border-dashed space-y-1">
                     <Label className="text-[10px] font-black uppercase text-slate-400">Document Folder</Label>
                     <p className="text-[11px] font-mono break-all text-slate-700">{autoPurgeStatus.storageRoot}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">
+                      Using this path because: {autoPurgeStatus.storageRootSource}.
+                    </p>
                     {!autoPurgeStatus.storageRootAvailable ? (
                       <p className="text-[11px] font-semibold text-red-700">
                         This folder does not exist on this server ({autoPurgeStatus.storageRootCode}). It is the same

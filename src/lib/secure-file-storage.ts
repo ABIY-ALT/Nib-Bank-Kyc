@@ -152,16 +152,40 @@ export async function secureUploadRootAvailable(): Promise<{
   available: boolean;
   root: string;
   code?: string;
+  source: string;
 }> {
   const root = getSecureUploadRoot();
+  const source = describeSecureUploadRootSource();
   try {
     const stats = await fs.stat(root);
     return stats.isDirectory()
-      ? { available: true, root }
-      : { available: false, root, code: 'ENOTDIR' };
+      ? { available: true, root, source }
+      : { available: false, root, code: 'ENOTDIR', source };
   } catch (error: any) {
-    return { available: false, root, code: error?.code || 'UNKNOWN' };
+    return { available: false, root, code: error?.code || 'UNKNOWN', source };
   }
+}
+
+/**
+ * Explains WHERE the resolved document folder came from. The path is assembled
+ * from two different environment variables plus a default that follows the
+ * working directory, so "why is it looking there?" is otherwise unanswerable
+ * without reading the server's .env by hand.
+ */
+export function describeSecureUploadRootSource(): string {
+  if (process.env.UPLOAD_DIR_PATH) {
+    return `UPLOAD_DIR_PATH is set to "${process.env.UPLOAD_DIR_PATH}"`;
+  }
+  if (process.env.UPLOAD_DIR) {
+    return `UPLOAD_DIR is set to "${process.env.UPLOAD_DIR}"`;
+  }
+  // No override: the path is derived from the working directory, so it changes
+  // with HOW the app was started. Name that directory explicitly — otherwise a
+  // wrong folder looks identical to a right one.
+  return (
+    `no UPLOAD_DIR_PATH or UPLOAD_DIR is set, so it defaults to the "${UPLOADS_DIR_NAME}" folder ` +
+    `beside the app's working directory, which is "${process.cwd()}"`
+  );
 }
 
 export async function secureUploadedFileExists(
