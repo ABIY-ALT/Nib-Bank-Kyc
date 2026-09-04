@@ -16,8 +16,8 @@ import {
   ensureSecureUploadRoot,
   getQuarantineRoot,
   resolveSecureUploadPath,
-  writeSecureUploadedFile,
 } from '@/lib/secure-file-storage';
+import { StagedUploadBatch } from '@/lib/upload-staging';
 
 export const config = {
   api: {
@@ -105,6 +105,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       error: 'Too many uploads. Please try again later.',
     });
   }
+
+  // Declared outside the try so the handler's catch can undo partial writes.
+  const staged = new StagedUploadBatch();
 
   try {
     await ensureSecureUploadRoot();
@@ -207,6 +210,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             `Validation failed for ${file.originalFilename}: ${validation.error || 'Unknown security policy violation'}`,
             submissionId
           );
+          // Files accepted earlier in this batch never reach a memo row.
+          await staged.discard('secure upload: file rejected mid-batch');
           return res.status(400).json({
             success: false,
             error: 'Upload rejected by security policy.',
@@ -215,7 +220,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const persistedBuffer = validation.sanitisedBuffer || buffer;
         const fileSize = persistedBuffer.length;
-        await writeSecureUploadedFile(validation.storageKey, persistedBuffer);
+        await staged.write(validation.storageKey, persistedBuffer);
 
         memoData.push({
           name: (file.originalFilename || 'file').split('.').slice(0, -1).join('.') || 'file',
@@ -245,6 +250,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     ];
 
+    // A rollback here throws to the handler's catch, which frees the bytes.
     await prisma.$transaction([
       prisma.memo.createMany({ data: memoData }),
       prisma.kYC.update({
@@ -252,6 +258,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         data: { commentHistory: newHistory },
       }),
     ]);
+    staged.commit();
 
     await auditUploadEvent(
       session,
@@ -262,6 +269,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ success: true });
   } catch (error) {
+    // Covers every throw after the first write, the rolled-back transaction
+    // included: no memo row exists, so the documents are unreachable.
+    await staged.discard('secure upload: handler failed');
+
     await auditUploadEvent(
       session,
       'UPLOAD_FAILURE',

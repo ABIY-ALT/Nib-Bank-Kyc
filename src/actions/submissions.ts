@@ -16,7 +16,7 @@ import {
 } from '@/lib/file-upload-validation';
 import { resolvePreviewMimeType } from '@/lib/documents';
 import { performCompleteFileValidation } from '@/lib/file-upload-security-integration';
-import { writeSecureUploadedFile } from '@/lib/secure-file-storage';
+import { StagedUploadBatch } from '@/lib/upload-staging';
 import { getExceptionalWorkflowStage, getExceptionalWorkflowAction, getActionsForCase } from '@/lib/exceptional-workflow';
 import { format, startOfMonth, endOfMonth, subDays, eachMonthOfInterval, eachDayOfInterval, differenceInDays, startOfDay, endOfDay } from 'date-fns';
 import { EXCEPTIONAL_RESTORE_SENTINEL } from '@/lib/kyc-data';
@@ -1239,6 +1239,9 @@ export async function createSubmission(formData: FormData) {
   const session = await getServerSession();
   if (!session) return { success: false as const, error: "Unauthenticated" };
 
+  // Declared outside the try so the catch can undo writes made before the throw.
+  const staged = new StagedUploadBatch();
+
   try {
     const validated = SubmissionSchema.parse({
       customerName: formData.get('customerName'),
@@ -1357,11 +1360,13 @@ export async function createSubmission(formData: FormData) {
           action: 'FILE_UPLOAD_REJECTED',
           details: `Threat Detected: ${file.name} - ${validation.error}`,
         });
+        // Files accepted earlier in this batch have no case to belong to now.
+        await staged.discard('createSubmission: file rejected mid-batch');
         return { success: false as const, error: toFriendlyUploadError(validation.error) };
       }
 
       const persistableBuffer = validation.sanitisedBuffer || buffer;
-      await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
+      await staged.write(validation.storageKey!, persistableBuffer);
 
       memoData.push({
         name: file.name.split('.').slice(0, -1).join('.'),
@@ -1418,6 +1423,9 @@ export async function createSubmission(formData: FormData) {
     if (!kyc) throw new Error('Failed to create KYC record');
     const createdKyc = kyc;
 
+    // The memo rows exist now — the documents belong to the case, not to us.
+    staged.commit();
+
     await createAuditLog({
       userId: session.id,
       userEmail: session.email,
@@ -1431,6 +1439,9 @@ export async function createSubmission(formData: FormData) {
     revalidatePath('/submissions/my');
     return { success: true as const, kyc: createdKyc };
   } catch (error: any) {
+    // The case was never created, so its documents have nothing to belong to.
+    await staged.discard('createSubmission: submission failed');
+
     if (error?.name === 'ZodError') {
       const msg = error.issues.map((i: any) => i.message).join(', ');
       return { success: false as const, error: msg };
@@ -1447,6 +1458,8 @@ export async function createSubmission(formData: FormData) {
 export async function resubmitSubmission(formData: FormData) {
   const session = await getServerSession();
   if (!session) return { success: false, error: "Unauthenticated" };
+
+  const staged = new StagedUploadBatch();
 
   try {
     const id = formData.get('id') as string;
@@ -1516,11 +1529,12 @@ export async function resubmitSubmission(formData: FormData) {
           details: `Threat Detected in Resubmission: ${file.name} - ${validation.error}`,
           kycId: id,
         });
+        await staged.discard('resubmitSubmission: file rejected mid-batch');
         return { success: false, error: toFriendlyUploadError(validation.error) };
       }
 
       const persistableBuffer = validation.sanitisedBuffer || buffer;
-      await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
+      await staged.write(validation.storageKey!, persistableBuffer);
 
       memoData.push({
         name: file.name.split('.').slice(0, -1).join('.'),
@@ -1576,6 +1590,7 @@ export async function resubmitSubmission(formData: FormData) {
     );
 
     await prisma.$transaction(operations);
+    staged.commit();
 
     await createAuditLog({
       userId: session.id,
@@ -1588,6 +1603,9 @@ export async function resubmitSubmission(formData: FormData) {
     revalidatePath(`/submissions/${id}`);
     return { success: true };
   } catch (error: any) {
+    // No memo rows were committed, so the written documents are unreachable.
+    await staged.discard('resubmitSubmission: resubmission failed');
+
     if (error?.name === 'ZodError') {
       const msg = error.issues.map((i: any) => i.message).join(', ');
       return { success: false, error: msg };
@@ -1879,6 +1897,8 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
   const session = await getServerSession();
   if (!session) return { success: false, error: "Unauthenticated" };
 
+  const staged = new StagedUploadBatch();
+
   try {
     const id = formData.get('id') as string;
     const reason = formData.get('reason') as string;
@@ -1937,7 +1957,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
 
     const storedKey = validation.storageKey!;
     const persistableBuffer = validation.sanitisedBuffer || buffer;
-    await writeSecureUploadedFile(storedKey, persistableBuffer);
+    await staged.write(storedKey, persistableBuffer);
 
     const history = Array.isArray(current.commentHistory) ? (current.commentHistory as any[]) : [];
     const newEntry = {
@@ -1973,6 +1993,7 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
         }
       })
     ]);
+    staged.commit();
 
     await createAuditLog({
       userId: session.id,
@@ -1985,6 +2006,9 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
     revalidatePath(`/submissions/${id}`);
     return { success: true };
   } catch (e: any) {
+    // The governance memo row was never created — free its bytes again.
+    await staged.discard('initiateExceptionalWorkflow: initiation failed');
+
     const { message } = logInstitutionalError(e, 'DB_INITIATE_EXCEPTIONAL');
     return { success: false, error: message };
   }
@@ -2149,6 +2173,8 @@ export async function processExceptionalStep(formData: FormData) {
   const session = await getServerSession();
   if (!session) return { success: false as const, error: "Your session has expired. Please sign in again." };
 
+  const staged = new StagedUploadBatch();
+
   try {
     const id = formData.get('id') as string;
     const nextStatus = formData.get('nextStatus') as string;
@@ -2231,7 +2257,7 @@ export async function processExceptionalStep(formData: FormData) {
 
       storedMemoKey = memoValidation.storageKey as string;
       const persistableBuffer = memoValidation.sanitisedBuffer || buffer;
-      await writeSecureUploadedFile(storedMemoKey, persistableBuffer);
+      await staged.write(storedMemoKey, persistableBuffer);
     }
 
     const historyEntry: any = {
@@ -2287,7 +2313,7 @@ export async function processExceptionalStep(formData: FormData) {
           throw new Error(toFriendlyUploadError(validation.error));
         }
         const persistableBuffer = validation.sanitisedBuffer || buffer;
-        await writeSecureUploadedFile(validation.storageKey!, persistableBuffer);
+        await staged.write(validation.storageKey!, persistableBuffer);
         resubmitMemoData.push({
           name: file.name.split('.').slice(0, -1).join('.'),
           originalName: file.name,
@@ -2327,6 +2353,7 @@ export async function processExceptionalStep(formData: FormData) {
     } else {
       await prisma.kYC.update({ where: { id }, data });
     }
+    staged.commit();
 
     await createAuditLog({
       userId: session.id,
@@ -2339,6 +2366,10 @@ export async function processExceptionalStep(formData: FormData) {
     revalidatePath(`/submissions/${id}`);
     return { success: true as const };
   } catch (error: any) {
+    // Covers a rejected attachment mid-batch as well as a failed transaction:
+    // in both cases no memo row exists for the documents written above.
+    await staged.discard('processExceptionalStep: workflow step failed');
+
     logInstitutionalError(error, 'DB_PROCESS_EXCEPTIONAL');
     // Map internal errors to clear, user-friendly messages without leaking internals.
     const raw = String(error?.message || '');
@@ -2382,6 +2413,8 @@ export async function logBundleDownload(data: any) {
 export async function uploadAdditionalDocuments(formData: FormData) {
   const session = await getServerSession();
   if (!session) return { success: false, error: "Unauthenticated" };
+
+  const staged = new StagedUploadBatch();
 
   try {
     const id = formData.get('id') as string;
@@ -2434,18 +2467,20 @@ export async function uploadAdditionalDocuments(formData: FormData) {
           details: `Additional document rejected: ${file.name} - ${validation.error}`,
           kycId: id
         }).catch(() => { });
+        await staged.discard('uploadAdditionalDocuments: file rejected mid-batch');
         return { success: false, error: toFriendlyUploadError(validation.error) };
       }
 
       const storedKey = validation.storageKey!;
       const persistableBuffer = validation.sanitisedBuffer || buffer;
-      await writeSecureUploadedFile(storedKey, persistableBuffer);
+      await staged.write(storedKey, persistableBuffer);
 
       memoData.push({
         name: file.name.split('.').slice(0, -1).join('.'),
         originalName: file.name,
         type: type,
         storageKey: storedKey,
+        fileHash: validation.fileHash,
         uploadedById: session.id,
         kycId: id,
         mimeType: validation.fileType || file.type,
@@ -2470,6 +2505,7 @@ export async function uploadAdditionalDocuments(formData: FormData) {
           data: { commentHistory: newHistory }
         })
       ]);
+      staged.commit();
 
       await createAuditLog({
         userId: session.id,
@@ -2483,6 +2519,8 @@ export async function uploadAdditionalDocuments(formData: FormData) {
     revalidatePath(`/submissions/${id}`);
     return { success: true };
   } catch (error: any) {
+    await staged.discard('uploadAdditionalDocuments: upload failed');
+
     const { message } = logInstitutionalError(error, 'DB_ADD_DOCUMENTS');
     return { success: false, error: message };
   }
