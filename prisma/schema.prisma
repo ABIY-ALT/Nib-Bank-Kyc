@@ -179,6 +179,13 @@ model KYC {
   memos             Memo[]
   followUps         FollowUpVerification[]
 
+  /// Where this case's documents physically live, derived from its memos and
+  /// kept in step by lib/case-storage-state.ts. It is a cache of a question the
+  /// documents could answer, and it exists for one reason: asking the documents
+  /// meant five sequential scans of the whole Memo table on every archive
+  /// screen. Never set this by hand — call syncCaseStorageState().
+  storageState      CaseStorageState @default(ACTIVE)
+
   @@index([status])
   @@index([submittedAt])
   @@index([updatedAt])
@@ -187,6 +194,21 @@ model KYC {
   @@index([assignedToId, status])
   @@index([createdById, submittedAt])
   @@index([branchName, districtName])
+  // The archive screens: filter by state (+ region), count, and page in
+  // (isUrgent, submittedAt) order.
+  @@index([storageState, status, isUrgent, submittedAt])
+  @@index([districtName, status, storageState])
+  @@index([branchName, status, storageState])
+}
+
+/// Whether a case's documents sit on primary storage, have been moved to the
+/// archive volume, or have been freed from it. A case counts as ARCHIVED or
+/// DELETED only when ALL of its documents are, because a move takes a case's
+/// documents together. A case holding no documents is ACTIVE.
+enum CaseStorageState {
+  ACTIVE
+  ARCHIVED
+  DELETED
 }
 
 model Memo {
@@ -220,6 +242,16 @@ model Memo {
 
   @@index([kycId, createdAt])
   @@index([createdAt])
+  // Serves the storage overview: the tier aggregates filter on
+  // (storageTier, archiveDeletedAt), the "oldest waiting" lookup orders by
+  // archivedAt within that, and carrying `size` lets SUM(size) be answered from
+  // the index alone. Without this, every overview read sequentially scanned the
+  // whole Memo table — three times, on every page load.
+  @@index([storageTier, archiveDeletedAt, archivedAt, size])
+  // Serves the vault's "sort by size / document count": group a tier's
+  // documents by case and order by the aggregate. Carrying kycId and size lets
+  // the grouping be answered from the index. Measured 554 ms -> 162 ms.
+  @@index([storageTier, kycId, size])
 }
 
 model GlobalSetting {
@@ -245,6 +277,10 @@ model AuditLog {
 
   @@index([userId, kycId])
   @@index([timestamp])
+  // "When did X last happen?" — without the action column leading, Postgres
+  // walked the whole log backwards on the timestamp index to find a rare
+  // action, or none at all.
+  @@index([action, timestamp])
 }
 
 model Finding {

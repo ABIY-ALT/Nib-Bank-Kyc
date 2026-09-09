@@ -1,14 +1,14 @@
 /**
  * @fileOverview Institutional HTTP Client using Native Fetch API.
  * Hardened with:
- * - Request size limits (30MB max)
+ * - Request size limits (20MB max)
  * - Timeout enforcement (30s)
  * - SSRF Prevention (Private IP blocking)
  * - Automatic Security Headers
  * - Resilient JSON Parsing (prevents Unexpected end of JSON input)
  */
 
-const MAX_CONTENT_LENGTH = 30 * 1024 * 1024; // 30MB
+const MAX_CONTENT_LENGTH = 20 * 1024 * 1024; // 20MB
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 export interface FetchOptions extends RequestInit {
@@ -76,7 +76,7 @@ export class InstitutionalHttpClient {
         statusText: 'Payload Too Large',
         headers: new Headers(),
         data: null as T,
-        error: 'Request payload exceeds institutional 30MB limit',
+        error: 'Request payload exceeds institutional 20MB limit',
       };
     }
 

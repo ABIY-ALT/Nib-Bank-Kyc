@@ -426,7 +426,14 @@ export default function VaultClient() {
     try {
       const res = await cutCasesToArchive(ids);
       if (res.success) {
-        toast({ title: 'Success', description: `${res.filesProcessed} files moved to archive tier.` });
+        const notFreed = res.filesNotFreed > 0
+          ? ` ${res.filesNotFreed} original(s) could not be deleted and still occupy primary storage.`
+          : '';
+        toast({
+          variant: res.filesNotFreed > 0 ? 'destructive' : 'default',
+          title: res.filesNotFreed > 0 ? 'Completed with warnings' : 'Success',
+          description: `${res.filesProcessed} files moved to archive tier.${notFreed}`,
+        });
         loadData();
         setSelectedCaseIds(new Set());
       } else {
@@ -443,7 +450,14 @@ export default function VaultClient() {
     try {
       const res = await restoreCasesFromArchive(ids);
       if (res.success) {
-        toast({ title: 'Success', description: `${res.filesProcessed} files restored to primary tier.` });
+        const notFreed = res.filesNotFreed > 0
+          ? ` ${res.filesNotFreed} archived copy/copies could not be deleted and still occupy archive space.`
+          : '';
+        toast({
+          variant: res.filesNotFreed > 0 ? 'destructive' : 'default',
+          title: res.filesNotFreed > 0 ? 'Completed with warnings' : 'Success',
+          description: `${res.filesProcessed} files restored to primary tier.${notFreed}`,
+        });
         loadData();
         setSelectedCaseIds(new Set());
       } else {

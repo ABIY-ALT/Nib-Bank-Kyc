@@ -7,6 +7,7 @@ import { getServerSession } from './auth-server';
 import { resolveRbacContext, requireRole, requirePermission, logPrivilegeChange } from './rbac';
 import { getSafeErrorMessage } from '@/lib/information-disclosure-prevention';
 import { purgeStoredFileOrThrow } from '@/lib/secure-file-storage';
+import { syncCaseStorageState } from '@/lib/case-storage-state';
 import { createAuditLog } from './audit';
 import { GLOBAL_SCOPE_PERMISSIONS } from '@/lib/jurisdiction';
 
@@ -151,6 +152,9 @@ export async function deleteInstitutionalFile(memoId: string) {
 
     // 2. Bytes confirmed freed — now it is safe to drop the record.
     await prisma.memo.delete({ where: { id: memoId } });
+    // Removing a document can change what the remaining ones say about the
+    // case: drop the last archived file and the case is no longer "archived".
+    await syncCaseStorageState([memo.kycId]);
 
     let caseDeleted = false;
     const remainingMemos = await prisma.memo.count({ where: { kycId: memo.kycId } });

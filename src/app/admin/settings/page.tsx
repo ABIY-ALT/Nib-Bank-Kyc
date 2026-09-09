@@ -24,7 +24,8 @@ import {
   Info,
   Building2,
   Layers,
-  Archive
+  Archive,
+  Eye
 } from "lucide-react";
 import { Textarea } from '@/components/ui/textarea';
 import { 
@@ -73,6 +74,11 @@ export default function SystemSettingsPage() {
       days: 6,
       keepStatuses: ['APPROVED'],
       dryRun: false
+    },
+    autoArchiveConfig: {
+      enabled: false,
+      days: 7,
+      dryRun: false
     }
   });
 
@@ -93,6 +99,73 @@ export default function SystemSettingsPage() {
     suggestedFolderMatches?: number;
   } | null>(null);
   const [autoPurgeBusy, setAutoPurgeBusy] = useState(false);
+
+  // Live picture of what automatic archiving would move, plus whether the
+  // archive volume is actually reachable — eligibility counts come from the
+  // database and cannot reveal a disconnected volume on their own.
+  const [autoArchiveStatus, setAutoArchiveStatus] = useState<{
+    eligibleCases: number;
+    eligibleFiles: number;
+    eligibleBytes: number;
+    archiveRoot: string;
+    archiveAvailable: boolean;
+    archiveFreeBytes: number;
+    archiveFreePercent: number | null;
+  } | null>(null);
+  const [autoArchiveBusy, setAutoArchiveBusy] = useState(false);
+
+  const refreshAutoArchiveStatus = async () => {
+    try {
+      const res = await fetch('/api/admin/archive/auto', { cache: 'no-store' });
+      if (!res.ok) throw new Error('unavailable');
+      const data = await res.json();
+      setAutoArchiveStatus({
+        eligibleCases: data.eligibleCases,
+        eligibleFiles: data.eligibleFiles,
+        eligibleBytes: data.eligibleBytes,
+        archiveRoot: data.archiveRoot,
+        archiveAvailable: data.archiveAvailable,
+        archiveFreeBytes: data.archiveFreeBytes,
+        archiveFreePercent: data.archiveFreePercent,
+      });
+    } catch {
+      setAutoArchiveStatus(null);
+    }
+  };
+
+  const handleRunArchivingNow = async (dryRun: boolean) => {
+    setAutoArchiveBusy(true);
+    try {
+      const res = await fetch('/api/admin/archive/auto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun }),
+      });
+      const result = await res.json();
+
+      if (!res.ok) {
+        toast({ variant: 'destructive', title: 'Archiving failed', description: result?.error || 'Could not run the pass.' });
+      } else if (!result.ran) {
+        toast({ variant: 'destructive', title: 'Nothing ran', description: result.reason || 'The pass did not run.' });
+      } else {
+        toast({
+          title: dryRun ? 'Simulation complete' : 'Archiving complete',
+          description:
+            `${result.filesMoved} file(s) across ${result.casesProcessed} case(s)` +
+            (dryRun
+              ? ' would be moved to the archive volume. Nothing was changed.'
+              : ` moved, freeing ${formatBytes(result.bytesFreed)}.`) +
+            (result.filesFailed > 0 ? ` ${result.filesFailed} failed.` : '') +
+            (result.filesNotFreed > 0 ? ` ${result.filesNotFreed} original(s) could not be deleted.` : ''),
+        });
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Archiving failed', description: 'Could not reach the server.' });
+    } finally {
+      setAutoArchiveBusy(false);
+      void refreshAutoArchiveStatus();
+    }
+  };
 
   const [newDocLabel, setNewDocLabel] = useState("");
   const [newEntityLabel, setNewEntityLabel] = useState("");
@@ -126,6 +199,7 @@ export default function SystemSettingsPage() {
       setAvailableStatuses(['SUBMITTED', 'RESUBMITTED', 'APPROVED', 'REJECTED', 'ACTION_REQUIRED']);
     }
     void refreshAutoPurgeStatus();
+    void refreshAutoArchiveStatus();
     setLoading(false);
   };
 
@@ -580,6 +654,159 @@ export default function SystemSettingsPage() {
                 <p className="text-[10px] text-muted-foreground font-medium pl-6">
                   Save first — “Run Cleanup Now” applies the saved policy, not unsaved edits. Otherwise changes take
                   effect on the next hourly pass.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <CardHeader className="bg-primary text-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <HardDrive className="w-5 h-5 text-white" /> Automatic Archive Tiering
+              </CardTitle>
+              <CardDescription className="text-white/80 text-xs">
+                Moves settled cases off the server onto the archive volume, on its own.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-6">
+              <div className="flex flex-col p-4 rounded-xl border bg-white shadow-sm gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Archive className="w-4 h-4 text-amber-600" />
+                      <Label className="text-base font-bold">Move Approved Cases To The Archive Volume</Label>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground font-medium uppercase px-6">
+                      Copies each document to the archive, verifies it, then frees the space here.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={localSettings.autoArchiveConfig?.enabled ?? false}
+                    onCheckedChange={(val) => setLocalSettings({
+                      ...localSettings,
+                      autoArchiveConfig: { ...localSettings.autoArchiveConfig, enabled: val }
+                    })}
+                  />
+                </div>
+
+                {/* The volume is a hand-off point, not a store: until IT copies it,
+                    it holds the only copy of everything moved there. */}
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] font-medium text-amber-900 leading-relaxed">
+                    Nothing is deleted — documents stay readable, served from the archive volume. This never clears
+                    the volume: once IT has copied it into the institutional backup, confirm that in Master Archive
+                    to free it for the next batch.
+                  </p>
+                </div>
+
+                {(localSettings.autoArchiveConfig?.enabled ?? false) && (
+                  <>
+                    <div className="flex items-center gap-3 pl-6 pt-2 border-t border-dashed">
+                      <Label className="text-[10px] font-black uppercase text-slate-400">Move After (Days From Approval)</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        className="w-24 h-9 font-bold"
+                        value={
+                          typeof localSettings.autoArchiveConfig?.days === 'number'
+                            ? String(localSettings.autoArchiveConfig.days)
+                            : (localSettings.autoArchiveConfig?.days || "")
+                        }
+                        onChange={(e) => {
+                          const rawValue = e.target.value;
+                          setLocalSettings({
+                            ...localSettings,
+                            autoArchiveConfig: {
+                              ...localSettings.autoArchiveConfig,
+                              days: rawValue === "" ? "" : (parseInt(rawValue, 10) || 7)
+                            }
+                          });
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pl-6 pt-2 border-t border-dashed">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-black uppercase text-slate-400">Simulation Mode</Label>
+                        <p className="text-[10px] text-muted-foreground font-medium">
+                          Log what would be moved without moving anything. Use this first.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={localSettings.autoArchiveConfig?.dryRun || false}
+                        onCheckedChange={(val) => setLocalSettings({
+                          ...localSettings,
+                          autoArchiveConfig: { ...localSettings.autoArchiveConfig, dryRun: val }
+                        })}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {autoArchiveStatus && (
+                  <div className="pl-6 pt-3 border-t border-dashed space-y-1">
+                    <Label className="text-[10px] font-black uppercase text-slate-400">Archive Volume</Label>
+                    <p className="text-[11px] font-mono break-all text-slate-700">{autoArchiveStatus.archiveRoot}</p>
+                    {autoArchiveStatus.archiveAvailable ? (
+                      <p className={cn(
+                        "text-[11px] font-semibold",
+                        (autoArchiveStatus.archiveFreePercent ?? 100) < 10 ? "text-red-700" : "text-slate-600"
+                      )}>
+                        {formatBytes(autoArchiveStatus.archiveFreeBytes)} free
+                        {autoArchiveStatus.archiveFreePercent !== null &&
+                          ` (${autoArchiveStatus.archiveFreePercent.toFixed(0)}% of the volume)`}
+                        {(autoArchiveStatus.archiveFreePercent ?? 100) < 5 &&
+                          ' — below the 5% minimum, so archiving is paused until the volume is cleared.'}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] font-semibold text-red-700">
+                        This volume is not reachable from this server. Archiving will not run until it is connected —
+                        no files are moved and no record is changed.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pl-6 pt-3 border-t border-dashed">
+                  <p className="text-[11px] font-semibold text-slate-600">
+                    {autoArchiveStatus
+                      ? autoArchiveStatus.eligibleCases === 0
+                        ? 'Nothing is currently old enough to move.'
+                        : `Currently eligible: ${autoArchiveStatus.eligibleCases.toLocaleString()} case(s), ${autoArchiveStatus.eligibleFiles.toLocaleString()} file(s), ${formatBytes(autoArchiveStatus.eligibleBytes)}.`
+                      : 'Eligibility figures unavailable.'}
+                  </p>
+                  {hasPermission('DOWNLOAD_MASTER_ARCHIVE') && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRunArchivingNow(true)}
+                        disabled={autoArchiveBusy}
+                      >
+                        {autoArchiveBusy
+                          ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          : <Eye className="w-4 h-4 mr-2" />}
+                        Simulate
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRunArchivingNow(false)}
+                        disabled={autoArchiveBusy}
+                        className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                      >
+                        {autoArchiveBusy
+                          ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          : <Archive className="w-4 h-4 mr-2" />}
+                        Archive Now
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground font-medium pl-6">
+                  Save first — these buttons apply the saved policy, not unsaved edits. Otherwise changes take effect
+                  on the next scheduled pass, with no restart needed.
                 </p>
               </div>
             </CardContent>

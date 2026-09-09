@@ -130,7 +130,7 @@ export const FileUploadSchema = z.object({
     .regex(/\.[a-z]{2,4}$/i, 'Invalid file extension'),
   fileSize: z
     .number()
-    .max(30 * 1024 * 1024, 'File exceeds 30MB limit'),
+    .max(20 * 1024 * 1024, 'File exceeds 20MB limit'),
   mimeType: z
     .string()
     .refine(
@@ -155,7 +155,7 @@ export function sanitizeInput(input: string): string {
  */
 export function validatePayloadSize(data: any): boolean {
   const size = JSON.stringify(data).length;
-  const maxSize = 30 * 1024 * 1024; // 30MB
+  const maxSize = 20 * 1024 * 1024; // 20MB
   return size <= maxSize;
 }
 

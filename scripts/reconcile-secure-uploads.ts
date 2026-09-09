@@ -37,6 +37,7 @@ import {
   describeSecureUploadRootSource,
   getSecureUploadRoot,
   secureUploadRootAvailable,
+  secureUploadedFileExists,
 } from '../src/lib/secure-file-storage';
 
 const prisma = new PrismaClient();
@@ -108,6 +109,81 @@ async function findReferenced(names: string[]): Promise<Set<string>> {
   }
 
   return referenced;
+}
+
+type StrandedReport = {
+  /** Archived documents whose primary original was never deleted. */
+  leftovers: number;
+  leftoverBytes: number;
+  removed: number;
+  /** Archived documents that exist ONLY on primary — the archive copy is gone. */
+  archiveMissing: { storageKey: string; document: string; kycId: string }[];
+};
+
+/**
+ * Finds primary-storage files left behind by an archive move.
+ *
+ * A CUT copies the file to the archive, records `storageTier = ARCHIVE`, then
+ * deletes the primary original. When that last delete fails, the row still says
+ * ARCHIVE, so the folder scan above counts the storage key as live and the file
+ * becomes invisible: no screen reads it, and re-running CUT skips the document
+ * because it is already on the target tier. Only a per-tier check can see it.
+ *
+ * Deleting one is safe ONLY when the archive copy is actually present, because
+ * then the archive holds the document and the primary file is a pure duplicate.
+ * When the archive copy is absent the primary file is the ONLY copy of that
+ * document while the database points everyone at the archive — that is a
+ * problem to report loudly, never to clean up.
+ */
+async function findStrandedArchivedOriginals(args: Args): Promise<StrandedReport> {
+  const report: StrandedReport = { leftovers: 0, leftoverBytes: 0, removed: 0, archiveMissing: [] };
+
+  const archived = await prisma.memo.findMany({
+    where: { storageTier: 'ARCHIVE' },
+    select: { storageKey: true, originalName: true, name: true, kycId: true },
+  });
+
+  for (const memo of archived) {
+    let onPrimary: boolean;
+    try {
+      onPrimary = await secureUploadedFileExists(memo.storageKey, false, 'PRIMARY');
+    } catch {
+      continue; // Unusable storage key — the folder scan already reports those.
+    }
+    if (!onPrimary) continue;
+
+    const onArchive = await secureUploadedFileExists(memo.storageKey, false, 'ARCHIVE').catch(() => false);
+    if (!onArchive) {
+      report.archiveMissing.push({
+        storageKey: memo.storageKey,
+        document: memo.originalName || memo.name || memo.storageKey,
+        kycId: memo.kycId,
+      });
+      continue;
+    }
+
+    const primaryPath = path.join(getSecureUploadRoot(), memo.storageKey);
+    let size = 0;
+    try {
+      size = (await fs.stat(primaryPath)).size;
+    } catch {
+      continue;
+    }
+
+    report.leftovers++;
+    report.leftoverBytes += size;
+
+    if (args.del) {
+      try {
+        await fs.unlink(primaryPath);
+        report.removed++;
+      } catch {
+        // Still locked — it will be reported again on the next run.
+      }
+    }
+  }
+
+  return report;
 }
 
 async function main() {
@@ -222,6 +298,8 @@ async function main() {
   }
   await processBatch();
 
+  const stranded = await findStrandedArchivedOriginals(args);
+
   const summary = {
     root,
     rootSource: describeSecureUploadRootSource(),
@@ -234,6 +312,10 @@ async function main() {
     unreferencedBytes: orphanBytes,
     deleted,
     deleteFailed,
+    strandedArchiveLeftovers: stranded.leftovers,
+    strandedArchiveLeftoverBytes: stranded.leftoverBytes,
+    strandedArchiveLeftoversRemoved: stranded.removed,
+    archivedButOnlyOnPrimary: stranded.archiveMissing.length,
     mode: args.del ? 'delete' : 'report',
     minAgeDays: args.minAgeDays,
   };
@@ -257,6 +339,31 @@ async function main() {
     console.log('');
     console.log('Examples of unreferenced files:');
     for (const name of samples) console.log(`  ${name}`);
+  }
+
+  // Leftovers from archive moves. These look "referenced" to the scan above,
+  // because the row exists — it just points at the other tier.
+  if (stranded.leftovers > 0) {
+    console.log('');
+    console.log(
+      `Archive leftovers  ${stranded.leftovers.toLocaleString()} file(s) still on primary storage though ` +
+      `their record says ARCHIVE  (${formatBytes(stranded.leftoverBytes)} recoverable)`,
+    );
+    if (args.del) {
+      console.log(`                   ${stranded.removed.toLocaleString()} removed (the archive copy was verified present first).`);
+    } else {
+      console.log('                   Re-run with --delete to free them.');
+    }
+  }
+
+  if (stranded.archiveMissing.length > 0) {
+    console.log('');
+    console.log(`!! ${stranded.archiveMissing.length} document(s) are recorded as ARCHIVED but exist ONLY on primary storage.`);
+    console.log('   Their archive copy is gone, so the app cannot open them — it reads from the archive.');
+    console.log('   These were NOT touched. Restore the archive copy, or set the record back to PRIMARY.');
+    for (const item of stranded.archiveMissing.slice(0, 10)) {
+      console.log(`   case ${item.kycId}  ${item.document}  (${item.storageKey})`);
+    }
   }
 
   console.log('');

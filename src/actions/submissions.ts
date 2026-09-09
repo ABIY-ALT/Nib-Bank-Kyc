@@ -1564,6 +1564,10 @@ export async function resubmitSubmission(formData: FormData) {
     // Allow comment-only resubmissions (no files attached) without throwing.
     if (memoData.length > 0) {
       operations.push(prisma.memo.createMany({ data: memoData }));
+      // A new document always lands on primary storage, so the case is Active
+      // again even if its earlier documents had been archived. Set in the same
+      // transaction as the insert, so the two can never disagree.
+      operations.push(prisma.kYC.update({ where: { id }, data: { storageState: 'ACTIVE' } }));
     }
 
     // Route resubmission to the branch's acting primary officer.
@@ -1989,7 +1993,9 @@ export async function initiateExceptionalWorkflow(formData: FormData) {
           exceptionalStatus: EXCEPTIONAL_STATUS.AWAITING_DISTRICT,
           commentHistory: [...history, newEntry],
           statusChangedAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          // The memo above lands on primary storage.
+          storageState: 'ACTIVE'
         }
       })
     ]);
@@ -2348,6 +2354,10 @@ export async function processExceptionalStep(formData: FormData) {
     if (resubmitMemoData.length > 0) {
       txOps.push(prisma.memo.createMany({ data: resubmitMemoData }));
     }
+    if (storedMemoKey || resubmitMemoData.length > 0) {
+      // New documents land on primary storage — the case is Active again.
+      txOps.push(prisma.kYC.update({ where: { id }, data: { storageState: 'ACTIVE' } }));
+    }
     if (txOps.length > 1) {
       await prisma.$transaction(txOps);
     } else {
@@ -2502,7 +2512,9 @@ export async function uploadAdditionalDocuments(formData: FormData) {
         prisma.memo.createMany({ data: memoData }),
         prisma.kYC.update({
           where: { id },
-          data: { commentHistory: newHistory }
+          // The new documents land on primary storage, so the case is Active
+          // again even if its earlier documents had been archived.
+          data: { commentHistory: newHistory, storageState: 'ACTIVE' }
         })
       ]);
       staged.commit();
@@ -2621,5 +2633,371 @@ export async function toggleSubmissionUrgentFlag(id: string, urgentRemark?: stri
   } catch (error: any) {
     logInstitutionalError(error, 'TOGGLE_URGENT_FLAG');
     return { success: false as const, error: toFriendlyActionError(error?.message) };
+  }
+}
+
+/**
+ * A case row for the Master Archive list — no documents attached.
+ *
+ * `getSubmissions` returns every document of every case and mints a signed
+ * download token for each one (see formatKYC). That is right for a case detail
+ * screen, and ruinous for a list of thousands: the Master Archive asks for 5,000
+ * approved cases, so the server builds and signs tens of thousands of tokens,
+ * hydrates the same number of document rows, and ships several megabytes — on
+ * every load, and again after every archive action. None of it is used, because
+ * the list renders case rows.
+ *
+ * This returns only what a row draws, plus the two document fields the archive
+ * state is derived from, and never signs anything. Exports still call
+ * getSubmissionById per case, which mints fresh tokens for that case alone.
+ */
+export interface ArchiveCaseRow {
+  id: string;
+  customerName: string;
+  entityType: string | null;
+  status: string;
+  remarks: string | null;
+  branchName: string;
+  districtName: string;
+  submittedAt: Date;
+  statusChangedAt: Date | null;
+  isUrgent: boolean;
+  isArchived: boolean;
+  isDeleted: boolean;
+  totalDocCount: number;
+  archivedDocCount: number;
+  deletedDocCount: number;
+  /** Total bytes the case's documents occupy — what archiving it would free. */
+  sizeBytes: number;
+}
+
+export type ArchiveCaseView = 'active' | 'archived' | 'deleted';
+
+export interface ArchiveCaseListFilters {
+  status?: string[];
+  district?: string;
+  branches?: string[];
+  startDate?: string;
+  endDate?: string;
+  /** Which storage state the case is in. Derived from its documents, in SQL. */
+  view?: ArchiveCaseView;
+  /** Matches case id, customer, branch, district or remarks. */
+  search?: string;
+  /**
+   * Only cases approved at least this many days ago.
+   *
+   * Uses the same clock as the automatic archiving job (lib/auto-archive.ts):
+   * the approval timestamp, falling back to the submission date. So the two can
+   * never disagree about whether a case is old enough. The sets are not
+   * identical — a case holding no documents at all is shown here (it is
+   * approved and not archived) but skipped by the job, which has nothing to
+   * move — and that is the only difference.
+   */
+  approvedDaysAgo?: number;
+  limit?: number;
+  offset?: number;
+}
+/**
+ * Storage-state condition for the archive views.
+ *
+ * The rule is unchanged — a case counts as archived or deleted only when ALL of
+ * its documents are, since a move takes a case's documents together — but the
+ * answer is now read from KYC.storageState instead of being re-derived from the
+ * documents on every query.
+ *
+ * It had to move. Expressed as relation filters (`memos: { every: … }`), Prisma
+ * compiled it into five `IN (SELECT "kycId" FROM "Memo" …)` subqueries, and
+ * Postgres answered each with a sequential scan of the whole Memo table. That
+ * is five scans of a table that grows with every uploaded file, for every
+ * archive query — the district summary, the branch summary, the case list, its
+ * count, the totals and "select all matching". Worse, those scans are hashed
+ * only while the hash fits in work_mem; past that the planner re-runs each
+ * subquery per row, which is a cliff rather than a slope.
+ *
+ * lib/case-storage-state.ts owns the column and is called by every path that
+ * creates, moves or removes a document.
+ */
+function buildViewWhere(view: ArchiveCaseView | undefined) {
+  if (view === 'archived') return { storageState: 'ARCHIVED' as const };
+  if (view === 'deleted') return { storageState: 'DELETED' as const };
+  // Active is everything else — including cases with no documents at all and
+  // cases mid-move whose documents span both volumes.
+  return { storageState: 'ACTIVE' as const };
+}
+/** Shared where-clause builder, so the list, the count and the id fetch agree. */
+async function buildArchiveCaseWhere(session: any, filters?: ArchiveCaseListFilters) {
+  const jurisdictionalFilter = await buildJurisdictionalFilter(
+    session,
+    filters?.district,
+    filters?.branches || [],
+  );
+
+  const dateFilter =
+    filters?.startDate || filters?.endDate
+      ? (() => {
+          const filter: any = {};
+          if (filters.startDate) filter.gte = new Date(filters.startDate);
+          if (filters.endDate) {
+            const endDate = new Date(filters.endDate);
+            endDate.setHours(23, 59, 59, 999);
+            filter.lte = endDate;
+          }
+          return filter;
+        })()
+      : undefined;
+
+  // Matches getSubmissions: for an approved-only query a date range means
+  // "approved in this window", which is the approval timestamp, not the day
+  // the branch first submitted the case.
+  const approvedOnly = filters?.status?.length === 1 && filters.status[0] === KYC_STATUS.APPROVED;
+
+  const search = filters?.search?.trim();
+  const searchWhere = search
+    ? {
+        OR: [
+          { id: { contains: search, mode: 'insensitive' as const } },
+          { customerName: { contains: search, mode: 'insensitive' as const } },
+          { branchName: { contains: search, mode: 'insensitive' as const } },
+          { districtName: { contains: search, mode: 'insensitive' as const } },
+          { remarks: { contains: search, mode: 'insensitive' as const } },
+        ],
+      }
+    : undefined;
+
+  // "Approved at least N days ago", matching lib/auto-archive.ts: the clock is
+  // the approval timestamp, falling back to the submission date for cases
+  // approved before that column was populated.
+  const ageWhere =
+    typeof filters?.approvedDaysAgo === 'number' && filters.approvedDaysAgo >= 0
+      ? (() => {
+          const cutoff = new Date(Date.now() - filters.approvedDaysAgo! * 24 * 60 * 60 * 1000);
+          return {
+            OR: [
+              { statusChangedAt: { lte: cutoff } },
+              { statusChangedAt: null, submittedAt: { lte: cutoff } },
+            ],
+          };
+        })()
+      : undefined;
+
+  return {
+    active: true,
+    ...(filters?.status ? { status: { in: filters.status } } : {}),
+    ...(dateFilter ? (approvedOnly ? { updatedAt: dateFilter } : { submittedAt: dateFilter }) : {}),
+    ...jurisdictionalFilter,
+    AND: [
+      buildViewWhere(filters?.view),
+      ...(searchWhere ? [searchWhere] : []),
+      ...(ageWhere ? [ageWhere] : []),
+    ],
+  } as any;
+}
+
+/**
+ * Ordering for the archive queues: urgent cases lead, then oldest first, so the
+ * cases that have waited longest are the ones offered for archiving. Ordered in
+ * SQL because with paging the database must sort the WHOLE result set before
+ * slicing a page — sorting in the browser could only rearrange one page.
+ */
+const ARCHIVE_CASE_ORDER = [
+  { isUrgent: 'desc' as const },
+  { submittedAt: 'asc' as const },
+  { id: 'asc' as const },
+];
+
+export async function getArchiveCaseList(
+  filters?: ArchiveCaseListFilters,
+): Promise<{ cases: ArchiveCaseRow[]; total: number }> {
+  const session = await getServerSession();
+  if (!session) return { cases: [], total: 0 };
+
+  try {
+    const where = await buildArchiveCaseWhere(session, filters);
+
+    const [rows, total] = await Promise.all([
+      prisma.kYC.findMany({
+        where,
+        select: {
+          id: true,
+          customerName: true,
+          entityType: true,
+          status: true,
+          remarks: true,
+          branchName: true,
+          districtName: true,
+          submittedAt: true,
+          statusChangedAt: true,
+          isUrgent: true,
+          // Two small fields per document instead of the whole row: enough to
+          // tell which volume a case's documents are on, nothing to sign.
+          memos: { select: { storageTier: true, archiveDeletedAt: true, size: true } },
+        },
+        orderBy: ARCHIVE_CASE_ORDER,
+        take: filters?.limit || 50,
+        skip: filters?.offset || 0,
+      }),
+      prisma.kYC.count({ where }),
+    ]);
+
+    const cases = rows.map((row: any) => {
+      const memos = Array.isArray(row.memos) ? row.memos : [];
+      const archivedDocCount = memos.filter((m: any) => m.storageTier === 'ARCHIVE').length;
+      const deletedDocCount = memos.filter((m: any) => !!m.archiveDeletedAt).length;
+      // Same rules as formatKYC: a case counts as archived or deleted only when
+      // ALL of its documents are, since a move takes a case's documents together.
+      const isDeleted = memos.length > 0 && deletedDocCount === memos.length;
+      const isArchived = memos.length > 0 && archivedDocCount === memos.length && !isDeleted;
+
+      const { memos: _omit, ...rest } = row;
+      return {
+        ...rest,
+        isArchived,
+        isDeleted,
+        totalDocCount: memos.length,
+        archivedDocCount,
+        deletedDocCount,
+        sizeBytes: memos.reduce((sum: number, m: any) => sum + (m.size || 0), 0),
+      } as ArchiveCaseRow;
+    });
+
+    return { cases, total };
+  } catch (error) {
+    logInstitutionalError(error, 'DB_QUERY_ARCHIVE_CASE_LIST');
+    return { cases: [], total: 0 };
+  }
+}
+
+/**
+ * The ids of every case matching the archive filters, in the same order the
+ * list shows them (urgent first, then oldest first).
+ *
+ * With server-side paging the browser only ever holds one page, so "select all"
+ * cannot enumerate the matches itself. Ids are the smallest thing that makes a
+ * whole-filter action possible — around 40 bytes per case rather than a full
+ * row — and the oldest-first order means a capped selection takes the cases
+ * that have waited longest, which is what archiving is for.
+ */
+export async function getArchiveCaseIds(
+  filters?: ArchiveCaseListFilters & { max?: number },
+): Promise<{ ids: string[]; total: number; capped: boolean }> {
+  const session = await getServerSession();
+  if (!session) return { ids: [], total: 0, capped: false };
+
+  try {
+    const where = await buildArchiveCaseWhere(session, filters);
+    // A ceiling so one click can never queue an unbounded amount of file
+    // movement; the remainder is picked up by selecting again after the batch.
+    const max = Math.min(Math.max(filters?.max ?? 2000, 1), 10000);
+
+    const [rows, total] = await Promise.all([
+      prisma.kYC.findMany({
+        where,
+        select: { id: true },
+        orderBy: ARCHIVE_CASE_ORDER,
+        take: max,
+      }),
+      prisma.kYC.count({ where }),
+    ]);
+
+    return { ids: rows.map((r) => r.id), total, capped: total > rows.length };
+  } catch (error) {
+    logInstitutionalError(error, 'DB_QUERY_ARCHIVE_CASE_IDS');
+    return { ids: [], total: 0, capped: false };
+  }
+}
+
+/**
+ * Case, document and byte totals for the current archive filters.
+ *
+ * Answers the question the list itself cannot once it only holds one page:
+ * "if I archive everything I am looking at, how much space does that free?"
+ * Two aggregate queries rather than loading rows, so the cost does not grow
+ * with the size of the result.
+ */
+export async function getArchiveCaseTotals(
+  filters?: ArchiveCaseListFilters,
+): Promise<{ cases: number; files: number; bytes: number }> {
+  const session = await getServerSession();
+  if (!session) return { cases: 0, files: 0, bytes: 0 };
+
+  try {
+    const where = await buildArchiveCaseWhere(session, filters);
+
+    const [cases, docs] = await Promise.all([
+      prisma.kYC.count({ where }),
+      prisma.memo.aggregate({ where: { kyc: where }, _count: true, _sum: { size: true } }),
+    ]);
+
+    return { cases, files: docs._count, bytes: docs._sum.size || 0 };
+  } catch (error) {
+    logInstitutionalError(error, 'DB_QUERY_ARCHIVE_TOTALS');
+    return { cases: 0, files: 0, bytes: 0 };
+  }
+}
+
+/** A district or branch in the archive browser, with how many cases it holds. */
+export interface ArchiveGroupRow {
+  name: string;
+  cases: number;
+}
+
+/**
+ * Districts holding cases that match the current filters, with a case count each.
+ *
+ * The archive browser drills down district -> branch -> case so that no screen
+ * ever lists more than it must: a bank with half a million documents has a few
+ * dozen districts, and counting cases per district is a grouped count over
+ * indexed columns (districtName, status) — it never touches a document row and
+ * never grows with the number of files.
+ */
+export async function getArchiveDistrictSummary(
+  filters?: ArchiveCaseListFilters,
+): Promise<ArchiveGroupRow[]> {
+  const session = await getServerSession();
+  if (!session) return [];
+
+  try {
+    // District is chosen by drilling in, so a district filter must not narrow
+    // the list of districts on offer.
+    const where = await buildArchiveCaseWhere(session, { ...filters, district: undefined, branches: undefined });
+
+    const groups = await prisma.kYC.groupBy({
+      by: ['districtName'],
+      where,
+      _count: { _all: true },
+    });
+
+    return groups
+      .map((g: any) => ({ name: g.districtName || 'UNASSIGNED', cases: g._count._all }))
+      .sort((a, b) => b.cases - a.cases);
+  } catch (error) {
+    logInstitutionalError(error, 'DB_QUERY_ARCHIVE_DISTRICTS');
+    return [];
+  }
+}
+
+/** Branches within one district, with a case count each. Same cost profile. */
+export async function getArchiveBranchSummary(
+  district: string,
+  filters?: ArchiveCaseListFilters,
+): Promise<ArchiveGroupRow[]> {
+  const session = await getServerSession();
+  if (!session) return [];
+
+  try {
+    const where = await buildArchiveCaseWhere(session, { ...filters, district, branches: undefined });
+
+    const groups = await prisma.kYC.groupBy({
+      by: ['branchName'],
+      where,
+      _count: { _all: true },
+    });
+
+    return groups
+      .map((g: any) => ({ name: g.branchName || 'UNASSIGNED', cases: g._count._all }))
+      .sort((a, b) => b.cases - a.cases);
+  } catch (error) {
+    logInstitutionalError(error, 'DB_QUERY_ARCHIVE_BRANCHES');
+    return [];
   }
 }

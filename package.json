@@ -14,6 +14,7 @@
     "test": "jest",
     "test:security": "jest src/__tests__/security.test.ts --detectOpenHandles",
     "storage:reconcile": "tsx scripts/reconcile-secure-uploads.ts",
+    "storage:backfill-state": "tsx scripts/backfill-case-storage-state.ts",
     "storage:reconcile:delete": "tsx scripts/reconcile-secure-uploads.ts --delete",
     "validate:env": "tsx scripts/validate-env.ts",
     "validate:startup": "tsx scripts/validate-startup.ts",

@@ -352,8 +352,13 @@ export function getAllowedExtensions(): string[] {
  * @returns Maximum size in bytes
  */
 export function getMaxTotalUploadSize(): number {
-  // Total maximum: 100 MB per submission
-  return 100 * 1024 * 1024;
+  // Total maximum: 20 MB per submission.
+  //
+  // Must not exceed the transport limit (next.config.ts proxyClientMaxBodySize
+  // and serverActions.bodySizeLimit, both 20mb). A larger value here would
+  // never be reached: the request would be cut off in transport first, and the
+  // officer would see a connection failure instead of "your upload is too big".
+  return 20 * 1024 * 1024;
 }
 
 /**

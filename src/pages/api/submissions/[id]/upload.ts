@@ -26,8 +26,8 @@ export const config = {
 };
 
 // Individual file size is not limited — only the cumulative total is enforced.
-// 100 MB total matches getMaxTotalUploadSize() in file-upload-validation.ts.
-const MAX_TOTAL_FILE_SIZE = 100 * 1024 * 1024;
+// 20 MB total matches getMaxTotalUploadSize() in file-upload-validation.ts.
+const MAX_TOTAL_FILE_SIZE = 20 * 1024 * 1024;
 
 function parseMultipartForm(
   req: NextApiRequest,
@@ -255,7 +255,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       prisma.memo.createMany({ data: memoData }),
       prisma.kYC.update({
         where: { id: submissionId },
-        data: { commentHistory: newHistory },
+        // The uploaded documents land on primary storage, so the case is Active
+        // again even if its earlier documents had been archived.
+        data: { commentHistory: newHistory, storageState: 'ACTIVE' },
       }),
     ]);
     staged.commit();

@@ -173,9 +173,25 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
   //   • Cases approved via the exceptional workflow (status: APPROVED, isExceptional: true)
   //   • Soft-deactivated cases (active: false) that still have memo records
   // Do NOT apply active: true or isExceptional: false here.
+  // "Ready for Cleanup" is a plain predicate on the case — status in the
+  // configured list, and old enough — so it belongs in the query. It used to be
+  // evaluated in JavaScript over a capped sample, which meant the filter (and
+  // the count beside it) described an arbitrary slice rather than the vault.
+  //
+  // Matches the daysSinceSubmission shown on each row, which is a ceiling:
+  // ceil(age / day) >= N is true once the age passes N-1 whole days.
+  const retentionFilter =
+    onlyRetentionEligible && retentionConfig.enabled
+      ? {
+          ...(retentionConfig.statuses.length > 0 ? { status: { in: retentionConfig.statuses } } : {}),
+          submittedAt: { lt: new Date(now.getTime() - Math.max(0, retentionConfig.days - 1) * 86_400_000) },
+        }
+      : {};
+
   const mergedKycFilter = {
     ...jurisdictionClause?.kyc,
     ...kycFilters,
+    ...retentionFilter,
   };
 
   const kycListSelect = {
@@ -193,17 +209,58 @@ export async function getVaultInventory(filters: VaultFilters = {}): Promise<Vau
     assignedToId: true,
   } as const;
 
-  const needsInMemorySort =
-    onlyRetentionEligible ||
-    category !== 'ALL' ||
-    ['docs', 'size'].includes(sortField);
+  /**
+   * Ordering by document count or total size, done by the database.
+   *
+   * Prisma can order a groupBy by an aggregate, so the largest cases across the
+   * WHOLE filtered set can be paged directly. Previously this loaded an
+   * unordered sample of 2,000 cases and sorted those in memory — so at 200,000
+   * cases "Sort Largest First" showed the largest of an arbitrary 1%, which is
+   * not the same thing and gave no sign it was wrong.
+   */
+  const sortsByAggregate = ['docs', 'size'].includes(sortField);
+
+  /**
+   * Only the category filter still needs post-processing: a file counts as an
+   * AMENDMENT when it arrived more than 30 minutes after the FIRST file of its
+   * own case, which is a per-case window rather than a predicate on a row.
+   */
+  const needsInMemorySort = category !== 'ALL';
 
   let totalCases = 0;
   let totalFilesResult = 0;
   let totalStorageBytes = 0;
   let paginatedIds: string[] = [];
 
-  if (!needsInMemorySort) {
+  if (!needsInMemorySort && sortsByAggregate) {
+    // Group the documents of every matching case, ordered by the aggregate and
+    // paged in the database. `_count` is documents; `_sum.size` is bytes.
+    const direction = sortDir === 'asc' ? 'asc' : 'desc';
+    const memoWhere = { kyc: mergedKycFilter, storageTier: 'PRIMARY' as const };
+
+    const [totalCasesCount, memoTotals, pageRows] = await Promise.all([
+      prisma.kYC.count({ where: mergedKycFilter }),
+      prisma.memo.aggregate({ where: memoWhere, _count: { _all: true }, _sum: { size: true } }),
+      prisma.memo.groupBy({
+        by: ['kycId'],
+        where: memoWhere,
+        _count: { _all: true },
+        _sum: { size: true },
+        orderBy: sortField === 'size'
+          ? { _sum: { size: direction } }
+          : { _count: { kycId: direction } },
+        take: pageSize,
+        skip: (Math.max(1, page) - 1) * pageSize,
+      }),
+    ]);
+
+    totalCases = totalCasesCount;
+    totalFilesResult = memoTotals._count._all;
+    totalStorageBytes = memoTotals._sum.size ?? 0;
+    // A case holding no documents has nothing to group, so it cannot appear in
+    // a list ordered by how much storage it uses. That is the right answer here.
+    paginatedIds = pageRows.map((g: { kycId: string }) => g.kycId);
+  } else if (!needsInMemorySort) {
     const isReverseField = sortField === 'daysSinceSubmission';
     const effectiveDir = isReverseField ? (sortDir === 'asc' ? 'desc' : 'asc') : sortDir;
     const dbSortMap: Record<string, string> = {

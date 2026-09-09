@@ -101,7 +101,7 @@ export const FileUploadSchema = z.object({
     .regex(/\.[a-z]{2,4}$/i, 'Invalid file extension'),
   fileSize: z
     .number()
-    .max(30 * 1024 * 1024, 'File exceeds 30MB limit'),
+    .max(20 * 1024 * 1024, 'File exceeds 20MB limit'),
   mimeType: z
     .enum([
       'application/pdf',
@@ -189,7 +189,7 @@ export function validatePassword(password: string): {
  */
 export function validateRequestSize(data: any): { valid: boolean; size: number } {
   const size = JSON.stringify(data).length;
-  const maxSize = 30 * 1024 * 1024; // 30MB
+  const maxSize = 20 * 1024 * 1024; // 20MB
   return {
     valid: size <= maxSize,
     size,

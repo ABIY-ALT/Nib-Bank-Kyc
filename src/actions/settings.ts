@@ -9,6 +9,12 @@ import {
   normalizeAutoPurgeConfig,
   type AutoPurgeConfig,
 } from '@/lib/auto-retention';
+import {
+  AUTO_ARCHIVE_GUIDELINE_ID,
+  AUTO_ARCHIVE_GUIDELINE_KIND,
+  normalizeAutoArchiveConfig,
+  type AutoArchiveConfig,
+} from '@/lib/auto-archive';
 
 /**
  * Institutional standard defaults for seeding.
@@ -115,8 +121,18 @@ function extractRetentionConfig(guidelines: any[] | undefined): DocumentRetentio
  * column (so no schema migration is needed for new policy blocks) but they are
  * never shown to admins as guideline text and must be stripped on every read.
  */
-const INTERNAL_GUIDELINE_KINDS = new Set(['storageQuota', 'documentRetention', AUTO_PURGE_GUIDELINE_KIND]);
-const INTERNAL_GUIDELINE_IDS = new Set(['__storage_quota__', '__document_retention__', AUTO_PURGE_GUIDELINE_ID]);
+const INTERNAL_GUIDELINE_KINDS = new Set([
+  'storageQuota',
+  'documentRetention',
+  AUTO_PURGE_GUIDELINE_KIND,
+  AUTO_ARCHIVE_GUIDELINE_KIND,
+]);
+const INTERNAL_GUIDELINE_IDS = new Set([
+  '__storage_quota__',
+  '__document_retention__',
+  AUTO_PURGE_GUIDELINE_ID,
+  AUTO_ARCHIVE_GUIDELINE_ID,
+]);
 
 function isInternalGuideline(entry: any) {
   return INTERNAL_GUIDELINE_KINDS.has(entry?.kind) || INTERNAL_GUIDELINE_IDS.has(entry?.id);
@@ -134,11 +150,20 @@ function extractAutoPurgeConfig(guidelines: any[] | undefined): AutoPurgeConfig 
   return normalizeAutoPurgeConfig(entry);
 }
 
+function extractAutoArchiveConfig(guidelines: any[] | undefined): AutoArchiveConfig {
+  const entry = Array.isArray(guidelines)
+    ? guidelines.find((g: any) => g?.kind === AUTO_ARCHIVE_GUIDELINE_KIND || g?.id === AUTO_ARCHIVE_GUIDELINE_ID)
+    : null;
+
+  return normalizeAutoArchiveConfig(entry);
+}
+
 function buildPersistedGuidelines(
   guidelines: any[] | undefined,
   storageQuotaGb: number,
   retentionConfig: DocumentRetentionConfig,
-  autoPurgeConfig: AutoPurgeConfig
+  autoPurgeConfig: AutoPurgeConfig,
+  autoArchiveConfig: AutoArchiveConfig
 ) {
   return [
     ...visibleGuidelinesOf(guidelines),
@@ -165,6 +190,16 @@ function buildPersistedGuidelines(
       days: autoPurgeConfig.days,
       keepStatuses: autoPurgeConfig.keepStatuses,
       dryRun: autoPurgeConfig.dryRun,
+      title: '',
+      description: '',
+      type: 'info'
+    },
+    {
+      id: AUTO_ARCHIVE_GUIDELINE_ID,
+      kind: AUTO_ARCHIVE_GUIDELINE_KIND,
+      enabled: autoArchiveConfig.enabled,
+      days: autoArchiveConfig.days,
+      dryRun: autoArchiveConfig.dryRun,
       title: '',
       description: '',
       type: 'info'
@@ -228,7 +263,13 @@ export async function getGlobalSettings() {
           id: 'global',
           entityTypes: INITIAL_ENTITY_TYPES,
           documentTypes: INITIAL_DOC_TYPES,
-          guidelines: buildPersistedGuidelines([], 50, defaultRetentionConfig, normalizeAutoPurgeConfig(undefined)),
+          guidelines: buildPersistedGuidelines(
+            [],
+            50,
+            defaultRetentionConfig,
+            normalizeAutoPurgeConfig(undefined),
+            normalizeAutoArchiveConfig(undefined)
+          ),
           lastUpdated: new Date()
         }
       });
@@ -250,13 +291,15 @@ export async function getGlobalSettings() {
     const storageQuotaGb = extractStorageQuotaGb(settings.guidelines as any[]);
     const retentionConfig = extractRetentionConfig(settings.guidelines as any[]);
     const autoPurgeConfig = extractAutoPurgeConfig(settings.guidelines as any[]);
+    const autoArchiveConfig = extractAutoArchiveConfig(settings.guidelines as any[]);
 
     return {
       ...settings,
       guidelines: visibleGuidelinesOf(settings.guidelines),
       storageQuotaGb,
       retentionConfig,
-      autoPurgeConfig
+      autoPurgeConfig,
+      autoArchiveConfig
     };
   } catch (error) {
     return null;
@@ -274,12 +317,22 @@ export async function updateGlobalSettings(data: any) {
     // Auto-purge deletes files permanently, so an absent/garbled block must never
     // silently widen the policy — normalize it back to the safe defaults.
     const autoPurgeConfig = normalizeAutoPurgeConfig(data.autoPurgeConfig);
+    // Automatic archiving moves files between volumes unattended, so a missing
+    // or malformed block normalizes back to "switched off" rather than being
+    // guessed at.
+    const autoArchiveConfig = normalizeAutoArchiveConfig(data.autoArchiveConfig);
     const settings = await prisma.globalSetting.update({
       where: { id: 'global' },
       data: {
         entityTypes: data.entityTypes,
         documentTypes: data.documentTypes,
-        guidelines: buildPersistedGuidelines(data.guidelines, storageQuotaGb, retentionConfig, autoPurgeConfig),
+        guidelines: buildPersistedGuidelines(
+          data.guidelines,
+          storageQuotaGb,
+          retentionConfig,
+          autoPurgeConfig,
+          autoArchiveConfig
+        ),
         autoEscalation: data.autoEscalation,
         escalationHours: data.escalationHours,
         lastUpdated: new Date()
@@ -293,7 +346,8 @@ export async function updateGlobalSettings(data: any) {
       guidelines: visibleGuidelinesOf(settings.guidelines),
       storageQuotaGb,
       retentionConfig,
-      autoPurgeConfig
+      autoPurgeConfig,
+      autoArchiveConfig
     };
   } catch (error: any) {
     throw new Error('Institutional database fault during configuration commit.');

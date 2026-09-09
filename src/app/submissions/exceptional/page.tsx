@@ -36,7 +36,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 const ITEMS_PER_PAGE = 10;
 
 export default function ExceptionalCasesPage() {
@@ -323,7 +323,7 @@ export default function ExceptionalCasesPage() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > MAX_FILE_SIZE) {
-        toast({ variant: "destructive", title: "File is too big", description: "The file exceeds the 30MB limit." });
+        toast({ variant: "destructive", title: "File is too big", description: "The file exceeds the 20MB limit." });
         return;
       }
       if (!ALLOWED_TYPES.includes(file.type)) {
@@ -852,7 +852,7 @@ export default function ExceptionalCasesPage() {
                   <Upload className="w-7 h-7 text-primary" />
                 </div>
                 <p className="text-sm font-black text-slate-900">{memoFile ? memoFile.name : "Select Signature-Authorized Memo"}</p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Maximum 30MB • Only PDF or Image</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Maximum 20MB • Only PDF or Image</p>
               </div>
               <input 
                 type="file" 

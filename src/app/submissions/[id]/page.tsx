@@ -129,9 +129,9 @@ const KYC_CHECKLIST_ITEMS = [
 
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-// Combined budget for the whole upload (matches the 30MB transport/body limit)
+// Combined budget for the whole upload (matches the 20MB transport/body limit)
 // — individual files are NOT size-capped, only the total is.
-const MAX_TOTAL_UPLOAD_SIZE = 30 * 1024 * 1024; // 30MB
+const MAX_TOTAL_UPLOAD_SIZE = 20 * 1024 * 1024; // 20MB
 
 interface ResubmitFile {
   id: string;

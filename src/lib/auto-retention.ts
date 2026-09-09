@@ -26,6 +26,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { syncCaseStorageState } from '@/lib/case-storage-state';
 
 export interface AutoPurgeConfig {
   /** Master switch. When false the sweep does nothing at all. */
@@ -604,6 +605,8 @@ export async function runAutoRetentionPurge(options: RunAutoPurgeOptions): Promi
       // keeps its row and is retried on the next sweep.
       if (!config.dryRun && purgedIds.length > 0) {
         await prisma.memo.deleteMany({ where: { id: { in: purgedIds } } });
+        // Fewer documents can mean a different storage state for the case.
+        await syncCaseStorageState([kyc.id]);
       }
       staleMemoIds.push(...missingIds);
 
@@ -681,7 +684,13 @@ export async function runAutoRetentionPurge(options: RunAutoPurgeOptions): Promi
           details: `[CRITICAL] Retention sweep (${options.trigger}) halted before removing any record. ${storageWarning}`,
         });
       } else {
+        // Which cases these rows belonged to, read before the rows are gone.
+        const staleOwners = await prisma.memo.findMany({
+          where: { id: { in: staleMemoIds } },
+          select: { kycId: true },
+        });
         await prisma.memo.deleteMany({ where: { id: { in: staleMemoIds } } });
+        await syncCaseStorageState(staleOwners.map(m => m.kycId));
         filesMissing = staleMemoIds.length;
       }
     }

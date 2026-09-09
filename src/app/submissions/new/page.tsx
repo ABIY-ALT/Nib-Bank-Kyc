@@ -71,9 +71,9 @@ interface UploadedFileRowProps {
 }
 
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
-// Combined budget for the whole submission (matches the 30MB transport/body
+// Combined budget for the whole submission (matches the 20MB transport/body
 // limit) — individual files are NOT size-capped, only the total is.
-const MAX_TOTAL_UPLOAD_SIZE = 30 * 1024 * 1024; // 30MB
+const MAX_TOTAL_UPLOAD_SIZE = 20 * 1024 * 1024; // 20MB
 
 const getFileStatusLabel = (file: UploadedFile) =>
   file.type ? "Ready for submission" : "Classification pending";
@@ -778,7 +778,7 @@ export default function NewSubmission() {
                   Drop customer files here
                 </p>
                 <p className="mt-1 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                  Only PDF or image files (max 30MB)
+                  Only PDF or image files (max 20MB)
                 </p>
                 <Button
                   variant="outline"

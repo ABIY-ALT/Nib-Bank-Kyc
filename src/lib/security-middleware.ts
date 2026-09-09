@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * @fileOverview Institutional Security Middleware Utilities.
- * - Request size validation (30MB Max)
+ * - Request size validation (20MB Max)
  * - Content-Type validation
  * - Rate limiting engine (IP-based)
  */
 
-const MAX_REQUEST_SIZE = 30 * 1024 * 1024; // 30MB
+const MAX_REQUEST_SIZE = 20 * 1024 * 1024; // 20MB
 
 /**
  * Appends standard institutional security headers to a response.

@@ -16,5 +16,11 @@ export async function register() {
     // not approved N days after their first upload (see lib/auto-retention.ts).
     const { startAutoRetentionScheduler } = await import('./lib/auto-retention-scheduler');
     startAutoRetentionScheduler();
+
+    // Frees disk automatically the other way: moves the documents of cases
+    // approved N days ago onto the archive volume (see lib/auto-archive.ts).
+    // Off unless AUTO_ARCHIVE_ENABLED is set.
+    const { startAutoArchiveScheduler } = await import('./lib/auto-archive-scheduler');
+    startAutoArchiveScheduler();
   }
 }
