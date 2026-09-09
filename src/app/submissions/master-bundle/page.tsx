@@ -143,15 +143,26 @@ export default function MasterBundleDownloadPage() {
     setOpenDistrict(name);
     setOpenBranch(null);
     setCurrentPage(1);
+    setFolderPage(1);
   };
   const openBranchFolder = (name: string) => {
     setOpenBranch(name);
     setCurrentPage(1);
   };
-  const goToDistricts = () => { setOpenDistrict(null); setOpenBranch(null); };
-  const goToBranches = () => { setOpenBranch(null); };
+  // Going back up lands on the first page of that level, not wherever the last
+  // visit left it.
+  const goToDistricts = () => { setOpenDistrict(null); setOpenBranch(null); setFolderPage(1); };
+  const goToBranches = () => { setOpenBranch(null); setFolderPage(1); };
   const [currentPage, setCurrentPage] = useState(1);
+  /** Page within the district/branch folder list, which pages in the browser. */
+  const [folderPage, setFolderPage] = useState(1);
   const PAGE_SIZE = 50;
+  /**
+   * Folder rows are compact, and a district holds roughly forty branches, so a
+   * 50-row page would never actually turn — the list would just be long. 25
+   * splits a typical district in two and keeps the whole level on one screen.
+   */
+  const FOLDER_PAGE_SIZE = 25;
   /** Ceiling on one export, so a whole-bank click cannot queue an unbounded ZIP. */
   const EXPORT_CASE_LIMIT = 2000;
   /** Cases per tier-action request, so a large move never rides on one call. */
@@ -280,6 +291,17 @@ export default function MasterBundleDownloadPage() {
   const safePage = Math.min(currentPage, totalPages);
   const pageStart = (safePage - 1) * PAGE_SIZE;
 
+  // Districts and branches arrive as one grouped count — a few hundred rows at
+  // most, already in memory — so this pages in the browser. Asking the server
+  // for a page of them would cost a query to save nothing.
+  const folderRows = drillLevel === 'district' ? districtRows : branchRows;
+  const folderTotalPages = Math.max(1, Math.ceil(folderRows.length / FOLDER_PAGE_SIZE));
+  const safeFolderPage = Math.min(folderPage, folderTotalPages);
+  const pagedFolderRows = folderRows.slice(
+    (safeFolderPage - 1) * FOLDER_PAGE_SIZE,
+    safeFolderPage * FOLDER_PAGE_SIZE,
+  );
+
   /** More cases match than one download can carry, so the export takes a slice. */
   const exportIsCapped = drillLevel === 'case' && totalRecords > EXPORT_CASE_LIMIT;
 
@@ -287,6 +309,7 @@ export default function MasterBundleDownloadPage() {
   // the query uses, so no filter can be added later and forgotten here.
   useEffect(() => {
     setCurrentPage(1);
+    setFolderPage(1);
   }, [listFilters]);
 
   const handleToggleStatus = (statusId: string) => {
@@ -1312,9 +1335,10 @@ Failed Documents:      ${failedDocs.length}
                 /* Folder levels: one row per district or branch, with the number
                    of cases inside. A grouped count over indexed columns, so this
                    costs the same whether the bank holds 5,000 files or 5,000,000. */
-                (drillLevel === 'district' ? districtRows : branchRows).length > 0 ? (
+                folderRows.length > 0 ? (
+                  <>
                   <div className="divide-y divide-slate-100">
-                    {(drillLevel === 'district' ? districtRows : branchRows).map(row => (
+                    {pagedFolderRows.map(row => (
                       <button
                         key={row.name}
                         type="button"
@@ -1336,6 +1360,37 @@ Failed Documents:      ${failedDocs.length}
                       </button>
                     ))}
                   </div>
+                  {/* Same control as the case list below, so moving between a
+                      folder level and the cases inside it feels like one list. */}
+                  {folderTotalPages > 1 && (
+                    <div className="flex items-center justify-between gap-4 border-t bg-slate-50/50 p-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={safeFolderPage <= 1}
+                        onClick={() => setFolderPage(p => Math.max(1, p - 1))}
+                        className="h-9 rounded-lg text-xs gap-1 font-bold border-slate-200"
+                      >
+                        <ChevronLeft className="h-4 w-4" /> Prev
+                      </Button>
+                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                        Page {safeFolderPage} of {folderTotalPages}
+                        <span className="ml-2 text-slate-400">
+                          ({folderRows.length.toLocaleString()} {drillLevel === 'district' ? 'regions' : 'branches'})
+                        </span>
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={safeFolderPage >= folderTotalPages}
+                        onClick={() => setFolderPage(p => Math.min(folderTotalPages, p + 1))}
+                        className="h-9 rounded-lg text-xs gap-1 font-bold border-slate-200"
+                      >
+                        Next <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  </>
                 ) : (
                   <div className="flex flex-col items-center justify-center gap-2 py-40">
                     <Folders className="h-10 w-10 text-slate-300" />
