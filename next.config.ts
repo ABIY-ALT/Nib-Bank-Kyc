@@ -1,10 +1,14 @@
 
+import path from 'path';
 import type { NextConfig } from 'next';
 
 /**
  * Institutional Security & Optimization Policy.
  */
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
   devIndicators: false, // Hides development overlays from UI
@@ -38,9 +42,9 @@ const nextConfig: NextConfig = {
     // which corrupts the form and throws "Unexpected end of form". Kept in step
     // with serverActions.bodySizeLimit so the two limits don't contradict.
     // (Renamed from the deprecated `middlewareClientMaxBodySize`.)
-    proxyClientMaxBodySize: '30mb',
+    proxyClientMaxBodySize: '20mb',
     serverActions: {
-      bodySizeLimit: '30mb',
+      bodySizeLimit: '20mb',
     },
   },
 };

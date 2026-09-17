@@ -20,12 +20,17 @@ export type StorageTier = 'PRIMARY' | 'ARCHIVE';
 
 export function getSecureUploadRoot(): string {
   // Store uploads outside app web root by default.
-  const root = process.env.UPLOAD_DIR_PATH || path.resolve(process.cwd(), '..', UPLOADS_DIR_NAME);
+  // turbopackIgnore: this is a runtime data folder outside the app, not a
+  // dependency. Without the hint the build's file tracer sees cwd + '..' and
+  // warns that it may have traced the whole project into the server bundle.
+  const root =
+    process.env.UPLOAD_DIR_PATH ||
+    path.resolve(/* turbopackIgnore: true */ process.cwd(), '..', UPLOADS_DIR_NAME);
   return path.normalize(root);
 }
 
 export function getQuarantineRoot(): string {
-  const root = path.resolve(getSecureUploadRoot(), '..', QUARANTINE_DIR_NAME);
+  const root = path.resolve(/* turbopackIgnore: true */ getSecureUploadRoot(), '..', QUARANTINE_DIR_NAME);
   return path.normalize(root);
 }
 
@@ -36,7 +41,7 @@ export function getQuarantineRoot(): string {
  * any data.
  */
 export function getArchiveRoot(): string {
-  const root = process.env.ARCHIVE_DIR_PATH || path.resolve(getSecureUploadRoot(), '..', ARCHIVE_DIR_NAME);
+  const root = process.env.ARCHIVE_DIR_PATH || path.resolve(/* turbopackIgnore: true */ getSecureUploadRoot(), '..', ARCHIVE_DIR_NAME);
   return path.normalize(root);
 }
 
@@ -208,17 +213,18 @@ export async function locateDocumentsFolder(
   const keys = storageKeys.filter((key) => /^[a-zA-Z0-9-]{16,64}$/.test(key)).slice(0, 25);
   if (keys.length === 0) return null;
 
-  const cwd = process.cwd();
+  // Runtime search of data folders, not dependencies — see getSecureUploadRoot.
+  const cwd = /* turbopackIgnore: true */ process.cwd();
   const driveRoot = path.parse(cwd).root;
   const candidates = Array.from(
     new Set([
       getSecureUploadRoot(),
-      path.resolve(cwd, UPLOADS_DIR_NAME),
-      path.resolve(cwd, '..', UPLOADS_DIR_NAME),
-      path.resolve(cwd, '..', '..', UPLOADS_DIR_NAME),
-      path.resolve(driveRoot, UPLOADS_DIR_NAME),
-      path.resolve(cwd, 'uploads'),
-      path.resolve(cwd, '..', 'uploads'),
+      path.resolve(/* turbopackIgnore: true */ cwd, UPLOADS_DIR_NAME),
+      path.resolve(/* turbopackIgnore: true */ cwd, '..', UPLOADS_DIR_NAME),
+      path.resolve(/* turbopackIgnore: true */ cwd, '..', '..', UPLOADS_DIR_NAME),
+      path.resolve(/* turbopackIgnore: true */ driveRoot, UPLOADS_DIR_NAME),
+      path.resolve(/* turbopackIgnore: true */ cwd, 'uploads'),
+      path.resolve(/* turbopackIgnore: true */ cwd, '..', 'uploads'),
     ].map((candidate) => path.normalize(candidate))),
   );
 
