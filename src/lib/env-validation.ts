@@ -33,13 +33,13 @@ const EnvSchema = z.object({
     .superRefine((secret, ctx) => {
       if (secret.length < 64) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: `JWT_SECRET must be at least 64 characters (got ${secret.length}). Generate with: openssl rand -base64 48`
         });
       }
       if (/^\$\{.+\}$/.test(secret)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: 'JWT_SECRET cannot be an environment variable placeholder - must be actual value or AWS secret'
         });
       }

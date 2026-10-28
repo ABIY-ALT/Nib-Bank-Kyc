@@ -84,7 +84,7 @@ export const CreateUserSchema = z.object({
 }).superRefine((data, ctx) => {
   if (data.role === 'DISTRICT_DIRECTOR' && !data.districtName) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['districtName'],
       message: 'District assignment required for District Director.',
     });
@@ -92,7 +92,7 @@ export const CreateUserSchema = z.object({
 
   if (['BRANCH_MANAGER', 'BRANCH_OFFICER'].includes(data.role?.toUpperCase()) && !data.branchId) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['branchId'],
       message: 'Branch assignment required for branch roles.',
     });

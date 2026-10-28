@@ -26,6 +26,12 @@ import { execSync, spawnSync } from 'child_process';
 import os from 'os';
 import logger from './logger';
 
+// Absolute executable paths (PATH-hijack safe). Built with join() so Turbopack's
+// file tracer does not treat them as bundle assets — a plain string literal passed
+// to spawnSync makes `next build` fail resolving a path outside the project root.
+const POWERSHELL_EXE = ['C:', 'Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'].join('\\');
+const CMD_EXE = ['C:', 'Windows', 'System32', 'cmd.exe'].join('\\');
+
 /**
  * SMB Security Status enumeration
  */
@@ -111,7 +117,7 @@ export function checkLocalWindowsSMBSigning(): SMBSecurityCheckResult {
     // SECURITY FIX #4: Use absolute path for powershell.exe
     // WHY: Relative command names are vulnerable to PATH hijacking attacks.
     // An attacker could place a malicious powershell.exe earlier in the PATH.
-    const result = spawnSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', ['-NoProfile', '-Command', psCommand], {
+    const result = spawnSync(POWERSHELL_EXE, ['-NoProfile', '-Command', psCommand], {
       encoding: 'utf-8',
       timeout: 10000,
       maxBuffer: 10 * 1024 * 1024,
@@ -239,7 +245,7 @@ export function checkRemoteSMBSigning(
     // SECURITY FIX #5: Use absolute path for cmd.exe
     // WHY: Relative command names are vulnerable to PATH hijacking attacks.
     // An attacker could place a malicious cmd.exe earlier in the PATH.
-    const result = spawnSync('C:\\Windows\\System32\\cmd.exe', ['/c', nmapCommand], {
+    const result = spawnSync(CMD_EXE, ['/c', nmapCommand], {
       encoding: 'utf-8',
       timeout: 30000,
       maxBuffer: 10 * 1024 * 1024,

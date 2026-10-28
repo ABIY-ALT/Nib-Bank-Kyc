@@ -4,11 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
-    "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "cross-env NODE_ENV=production next build",
     "start": "next start -p 4000",
-    "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma generate",
     "test": "jest",
@@ -57,7 +54,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
-    "dompurify": "^3.3.3",
+    "dompurify": "^3.4.17",
     "dotenv": "^16.5.0",
     "embla-carousel-react": "^8.6.0",
     "fast-xml-parser": "^5.3.4",
@@ -69,21 +66,20 @@
     "jszip": "^3.10.1",
     "libphonenumber-js": "^1.12.41",
     "lucide-react": "^0.475.0",
-    "next": "^16.2.6",
-    "next-auth": "^4.24.14",
+    "next": "^16.4.3",
     "next-themes": "^0.4.4",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.2.1",
     "patch-package": "^8.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.2",
     "react-zoom-pan-pinch": "^4.0.3",
     "recharts": "^2.15.1",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.5",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^14.0.0",
-    "zod": "^3.24.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
@@ -92,7 +88,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/jest": "^29.5.8",
     "@types/jsonwebtoken": "^9.0.8",
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "cross-env": "^10.0.0",
@@ -109,5 +105,17 @@
     "tar": "^7.5.7",
     "postcss": "^8.5.12",
     "uuid": "^14.0.0"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true,
+    "bcrypt@6.0.0": true,
+    "esbuild@0.28.2": true,
+    "sharp@0.35.5": true,
+    "core-js": false
+  },
+  "engines": {
+    "node": ">=24.22.0"
   }
 }
