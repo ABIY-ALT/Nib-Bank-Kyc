@@ -115,8 +115,10 @@ async function tick(idleMs: number): Promise<number> {
     }
 
     // Backlog still draining and this pass actually moved it — keep going now
-    // rather than an hour from now.
-    if (result.moreRemaining && cleared > 0) {
+    // rather than an hour from now. A dry run never moves it: nothing is
+    // deleted, so the next pass would re-scan the very same cases every 30s
+    // forever. Report once, then wait for the normal interval.
+    if (result.moreRemaining && cleared > 0 && !result.config.dryRun) {
       const catchupMs = resolveCatchupMs();
       console.log(
         `[AutoRetention] More eligible cases queued — next pass in ${Math.round(catchupMs / 1000)}s.`

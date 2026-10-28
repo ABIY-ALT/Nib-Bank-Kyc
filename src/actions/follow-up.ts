@@ -142,7 +142,7 @@ export async function getApprovedCasesForFollowUp(filters?: { startDate?: string
         createdBy: true
       },
       orderBy: { submittedAt: 'desc' },
-      take: filters?.limit || 100
+      take: filters?.limit || 1000
     });
   } catch (error) {
     return [];

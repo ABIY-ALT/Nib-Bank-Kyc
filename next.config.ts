@@ -33,8 +33,13 @@ const nextConfig: NextConfig = {
     // Use modern image formats for better compression (only these are configurable)
     // PNG/JPEG fallback is automatic for older browsers
     formats: ['image/webp', 'image/avif'],
-    // Keep Next.js image optimization enabled (avoids direct public-asset fetch issues)
-    unoptimized: false,
+    // Optimization OFF. The only <Image> source is the 5 KB /logo.png, so sharp
+    // re-encoding buys nothing, and in production the optimizer kept producing
+    // 0-byte outputs it could not cache ("LRUCache: calculateSize returned 0"),
+    // so every logo request re-ran sharp and burned CPU. The proxy already lets
+    // public image assets through (PUBLIC_IMAGE_ASSET in src/proxy.ts), so the
+    // logo is served straight from /public.
+    unoptimized: true,
   },
   experimental: {
     // Allow larger multipart bodies through the proxy/middleware buffer (default

@@ -68,7 +68,7 @@ export default function FollowUpDashboard() {
     setIsSampling(true);
 
     try {
-      const approved = await getApprovedCasesForFollowUp({ limit: 100 });
+      const approved = await getApprovedCasesForFollowUp({ limit: 1000 });
       const existingIds = new Set(verifications.map((verification: any) => verification.submissionId));
       const assignable = approved.filter((submission: any) => !existingIds.has(submission.id));
 
