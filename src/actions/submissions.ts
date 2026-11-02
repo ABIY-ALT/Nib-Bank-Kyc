@@ -10,6 +10,7 @@ import { SubmissionSchema } from '@/lib/validation';
 import { KYC_STATUS, EXCEPTIONAL_STATUS } from '@/lib/kyc-data';
 import { createAuditLog } from './audit';
 import { logInstitutionalError } from '@/lib/logger';
+import { cachedForSeconds, runLargeQuery } from '@/lib/query-throttle';
 import {
   validateFileCount,
   validateTotalUploadSize,
@@ -37,6 +38,47 @@ import {
   BRANCH_SCOPE_PERMISSIONS
 } from '@/lib/jurisdiction';
 
+
+// SECURITY: Case results are sent to the browser, so a related user must only ever
+// expose these fields. Loading the whole record would include the password and
+// refresh token hashes.
+const CASE_USER_SELECT = { select: { id: true, firstName: true, lastName: true } };
+
+// Every KYC column except the JSON ones, for screens and exports that only need
+// the case row. Those callers pass summaryOnly, which also skips the documents.
+// Measured on 72k cases: 283 MB -> 58 MB, and 21 s -> 5.5 s.
+const CASE_SUMMARY_SELECT = {
+  id: true,
+  customerName: true,
+  branchId: true,
+  branchName: true,
+  districtName: true,
+  createdById: true,
+  assignedToId: true,
+  status: true,
+  isExceptional: true,
+  exceptionalStatus: true,
+  entityType: true,
+  remarks: true,
+  isResubmitted: true,
+  amendCycles: true,
+  isUrgent: true,
+  urgentFlaggedById: true,
+  active: true,
+  submittedAt: true,
+  statusChangedAt: true,
+  updatedAt: true,
+  storageState: true,
+  createdBy: CASE_USER_SELECT,
+  assignedTo: CASE_USER_SELECT,
+  branch: { select: { name: true, district: { select: { name: true } } } },
+};
+
+// List fetches above this many rows queue behind runLargeQuery.
+const LARGE_LIST_ROWS = 5000;
+
+// How long identical dashboard totals are shared between requests.
+const COUNTS_CACHE_SECONDS = 30;
 
 // Permission slugs that indicate a user is authorized to perform KYC review/action.
 // Used to filter the "running" (IN_REVIEW) count so it only includes cases actively
@@ -358,6 +400,9 @@ export async function getSubmissions(filters?: {
   endDate?: string,
   limit?: number,
   offset?: number,
+  // Returns case rows without documents, comment history or checklist state.
+  // Use it for analytics, dropdowns and CSV exports that do not read them.
+  summaryOnly?: boolean,
   // Server-side search across the WHOLE dataset (case id, customer, branch,
   // district). With limit/offset pagination a client-side search can only ever
   // match rows on the currently loaded page — a case sitting on the last page
@@ -619,12 +664,12 @@ export async function getSubmissions(filters?: {
       ? [{ isUrgent: 'desc' }, sortColumn[filters.sortField] || { submittedAt: sortOrder }, { id: 'asc' }]
       : [{ submittedAt: 'desc' }];
 
-    const [data, total] = await Promise.all([
-      prisma.kYC.findMany({
-        where,
+    const rowShape: any = filters?.summaryOnly
+      ? { select: CASE_SUMMARY_SELECT }
+      : {
         include: {
-          createdBy: true,
-          assignedTo: true,
+          createdBy: CASE_USER_SELECT,
+          assignedTo: CASE_USER_SELECT,
           branch: { include: { district: true } },
           memos: {
             select: {
@@ -642,12 +687,21 @@ export async function getSubmissions(filters?: {
             },
           },
         },
+      };
+
+    const take = filters?.limit || 50;
+    const fetchPage = () => Promise.all([
+      prisma.kYC.findMany({
+        where,
+        ...rowShape,
         orderBy,
-        take: filters?.limit || 50,
+        take,
         skip: filters?.offset || 0,
       }),
       prisma.kYC.count({ where })
     ]);
+
+    const [data, total] = take > LARGE_LIST_ROWS ? await runLargeQuery(fetchPage) : await fetchPage();
 
     // Defense-in-depth branch validation (skipped for officers: their OR clause already
     // guarantees they only see assigned cases or portfolio-branch cases).
@@ -890,27 +944,33 @@ export async function getCaseMetrics(filters?: CaseMetricsFilter): Promise<CaseM
     // return for the same filters — same isExceptional default (false unless the
     // caller explicitly asked for exceptional cases) and no status restriction.
     const totalWhere = filters?.isExceptional !== undefined ? where : { ...where, isExceptional: false };
-    const [rawTotal, metricsRows, runningRows, exceptional] = await Promise.all([
-      prisma.kYC.count({ where: totalWhere }),
-      prisma.kYC.groupBy({
-        by: ['status', 'isResubmitted', 'isExceptional'],
-        where: totalWhere,
-        _count: { _all: true },
-      }),
-      prisma.kYC.groupBy({
-        by: ['status', 'isResubmitted', 'isExceptional'],
-        where: {
-          ...totalWhere,
-          status: KYC_STATUS.IN_REVIEW,
-          isResubmitted: false,
-          ...ACTIVE_REVIEW_ASSIGNEE_FILTER,
-        },
-        _count: { _all: true },
-      }),
-      prisma.kYC.count({ where: { ...where, isExceptional: true } }),
-    ]);
+    // The key holds the full where-clause, jurisdiction included, so only viewers
+    // with the same scope and filters can share a result.
+    const [rawTotal, metricsRows, runningRows, exceptional] = await cachedForSeconds(
+      `case-metrics:${JSON.stringify([where, totalWhere])}`,
+      COUNTS_CACHE_SECONDS,
+      () => Promise.all([
+        prisma.kYC.count({ where: totalWhere }),
+        prisma.kYC.groupBy({
+          by: ['status', 'isResubmitted', 'isExceptional'],
+          where: totalWhere,
+          _count: { _all: true },
+        }),
+        prisma.kYC.groupBy({
+          by: ['status', 'isResubmitted', 'isExceptional'],
+          where: {
+            ...totalWhere,
+            status: KYC_STATUS.IN_REVIEW,
+            isResubmitted: false,
+            ...ACTIVE_REVIEW_ASSIGNEE_FILTER,
+          },
+          _count: { _all: true },
+        }),
+        prisma.kYC.count({ where: { ...where, isExceptional: true } }),
+      ])
+    );
 
-    const countRows = (rows: Array<{ status: string; isResubmitted: boolean; isExceptional: boolean; _count: { _all: number } }>, status: string, isResubmitted?: boolean, isExceptional?: boolean) =>
+    const countRows =(rows: Array<{ status: string; isResubmitted: boolean; isExceptional: boolean; _count: { _all: number } }>, status: string, isResubmitted?: boolean, isExceptional?: boolean) =>
       rows.reduce((sum, row) => {
         const matchesStatus = row.status === status;
         const matchesResubmitted = isResubmitted === undefined || row.isResubmitted === isResubmitted;
@@ -1151,8 +1211,8 @@ export async function getSubmissionById(id: string) {
     const kyc = await prisma.kYC.findUnique({
       where: { id },
       include: {
-        createdBy: true,
-        assignedTo: true,
+        createdBy: CASE_USER_SELECT,
+        assignedTo: CASE_USER_SELECT,
         branch: { include: { district: true } },
         memos: {
           select: {
@@ -1629,7 +1689,7 @@ async function getActingPrimaryOfficerId(branchId: string | null): Promise<strin
 
   const mappings = await prisma.branchMapping.findMany({
     where: { branchId, active: true },
-    include: { officers: { where: { isPrimary: true }, include: { user: true } } },
+    include: { officers: { where: { isPrimary: true }, include: { user: { select: { status: true } } } } },
   });
 
   const withOfficers = mappings.filter((m: any) => m.officers.length > 0);
@@ -1781,7 +1841,7 @@ export async function returnEscalatedCaseToOfficer(id: string, remarks: string) 
         include: {
           mappings: {
             where: { active: true },
-            include: { officers: { where: { isPrimary: true }, include: { user: true } } },
+            include: { officers: { where: { isPrimary: true }, include: { user: { select: { status: true } } } } },
           },
         },
       },
@@ -2088,68 +2148,72 @@ export async function getWorkflowCounts() {
     // Strip the top-level isExceptional default so each count below can set its own.
     const { isExceptional: _unused, ...officerWhere } = baseWhere;
 
-    const [myCount, actionRequired, queueCounts, exceptionalCount, escalatedCount, resubmittedCount, activeInReview] = await Promise.all([
+    const [myCount, [actionRequired, queueCounts, exceptionalCount, escalatedCount, resubmittedCount, activeInReview]] = await Promise.all([
       prisma.kYC.count({ where: { createdById: session.id, active: true, isExceptional: false } }),
-      prisma.kYC.count({
-        where: {
-          ...officerWhere,
-          status: KYC_STATUS.ACTION_REQUIRED,
-          isExceptional: false,
-          active: true
-        }
-      }),
-      prisma.kYC.groupBy({
-        by: ['status'],
-        // Excludes resubmitted cases so the SUBMITTED bucket (consumed below as
-        // `reviewQueue`) only reflects fresh, never-seen submissions.
-        where: { ...officerWhere, active: true, isExceptional: false, isResubmitted: false },
-        _count: true
-      }),
-      prisma.kYC.count({
-        where: {
-          ...officerWhere,
-          isExceptional: true,
-          active: true,
-          NOT: {
-            status: { in: [KYC_STATUS.APPROVED, KYC_STATUS.REJECTED] }
+      // The key holds the full where-clause, jurisdiction included, so only viewers
+      // with the same scope can share a result. `myCount` above is per-user.
+      cachedForSeconds(`workflow-counts:${JSON.stringify(officerWhere)}`, COUNTS_CACHE_SECONDS, () => Promise.all([
+        prisma.kYC.count({
+          where: {
+            ...officerWhere,
+            status: KYC_STATUS.ACTION_REQUIRED,
+            isExceptional: false,
+            active: true
           }
-        }
-      }),
-      prisma.kYC.count({
-        where: {
-          ...officerWhere,
-          status: KYC_STATUS.ESCALATED,
-          isExceptional: false,
-          active: true
-        }
-      }),
-      // Amendment Review badge: only resubmitted cases still awaiting a verdict.
-      // `isResubmitted` is permanent, so without the status scope the badge (and
-      // the queue it points to) kept every historical resubmission forever.
-      prisma.kYC.count({
-        where: {
-          ...officerWhere,
-          isResubmitted: true,
-          isExceptional: false,
-          active: true,
-          status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED, KYC_STATUS.RESUBMITTED] }
-        }
-      }),
-      // In Review count restricted to cases actively assigned to a front-line
-      // reviewer (KYC Officer / Review & Action permission) — excludes Super Admin
-      // and other viewers, and drops to 0 once the case is actioned (status leaves
-      // IN_REVIEW on amendment / authorize / escalate). Also excludes resubmitted
-      // cases, which are a distinct workflow from a fresh case under first review.
-      prisma.kYC.count({
-        where: {
-          ...officerWhere,
-          status: KYC_STATUS.IN_REVIEW,
-          isExceptional: false,
-          isResubmitted: false,
-          active: true,
-          ...ACTIVE_REVIEW_ASSIGNEE_FILTER,
-        }
-      })
+        }),
+        prisma.kYC.groupBy({
+          by: ['status'],
+          // Excludes resubmitted cases so the SUBMITTED bucket (consumed below as
+          // `reviewQueue`) only reflects fresh, never-seen submissions.
+          where: { ...officerWhere, active: true, isExceptional: false, isResubmitted: false },
+          _count: true
+        }),
+        prisma.kYC.count({
+          where: {
+            ...officerWhere,
+            isExceptional: true,
+            active: true,
+            NOT: {
+              status: { in: [KYC_STATUS.APPROVED, KYC_STATUS.REJECTED] }
+            }
+          }
+        }),
+        prisma.kYC.count({
+          where: {
+            ...officerWhere,
+            status: KYC_STATUS.ESCALATED,
+            isExceptional: false,
+            active: true
+          }
+        }),
+        // Amendment Review badge: only resubmitted cases still awaiting a verdict.
+        // `isResubmitted` is permanent, so without the status scope the badge (and
+        // the queue it points to) kept every historical resubmission forever.
+        prisma.kYC.count({
+          where: {
+            ...officerWhere,
+            isResubmitted: true,
+            isExceptional: false,
+            active: true,
+            status: { in: [KYC_STATUS.SUBMITTED, KYC_STATUS.IN_REVIEW, KYC_STATUS.ESCALATED, KYC_STATUS.RESUBMITTED] }
+          }
+        }),
+        // In Review count restricted to cases actively assigned to a front-line
+        // reviewer (KYC Officer / Review & Action permission) — excludes Super Admin
+        // and other viewers, and drops to 0 once the case is actioned (status leaves
+        // IN_REVIEW on amendment / authorize / escalate). Also excludes resubmitted
+        // cases, which are a distinct workflow from a fresh case under first review.
+        prisma.kYC.count({
+          where: {
+            ...officerWhere,
+            status: KYC_STATUS.IN_REVIEW,
+            isExceptional: false,
+            isResubmitted: false,
+            active: true,
+            ...ACTIVE_REVIEW_ASSIGNEE_FILTER,
+          }
+        })
+      ]))
     ]);
 
     const statsMap: Record<string, number> = {};

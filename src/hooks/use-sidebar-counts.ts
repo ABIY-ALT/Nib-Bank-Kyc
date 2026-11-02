@@ -6,13 +6,17 @@ import { getWorkflowCounts } from '@/actions/submissions';
 import { usePermissions } from './use-permissions';
 
 const SIDEBAR_COUNTS_POLL_MS = 2 * 60 * 1000;
+const SIDEBAR_COUNTS_FOCUS_MIN_MS = 60 * 1000;
 
 /**
  * Optimized Sidebar Hook.
  * Calls a specialized SQL-level count action to avoid fetching full data payloads.
- * Polls every 2 minutes and refreshes when the tab becomes visible again.
+ * Polls every 2 minutes and refreshes when the tab becomes visible again, at most
+ * once a minute, so switching between applications does not re-run the counts.
  */
 export function useSidebarCounts(user: UserProfile | null) {
+  const userId = user?.id;
+
   const [counts, setCounts] = useState({
     mySubmissions: 0,
     actionRequired: 0,
@@ -25,10 +29,11 @@ export function useSidebarCounts(user: UserProfile | null) {
   });
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     let isActive = true;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let lastFetchedAt = 0;
 
     const scheduleNextPoll = () => {
       if (!isActive) return;
@@ -42,6 +47,8 @@ export function useSidebarCounts(user: UserProfile | null) {
         scheduleNextPoll();
         return;
       }
+
+      lastFetchedAt = Date.now();
 
       try {
         // SECURITY: No client-side privilege params — server derives all from session
@@ -59,7 +66,7 @@ export function useSidebarCounts(user: UserProfile | null) {
     fetchCounts();
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && Date.now() - lastFetchedAt >= SIDEBAR_COUNTS_FOCUS_MIN_MS) {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -76,7 +83,7 @@ export function useSidebarCounts(user: UserProfile | null) {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user]);
+  }, [userId]);
 
   return counts;
 }

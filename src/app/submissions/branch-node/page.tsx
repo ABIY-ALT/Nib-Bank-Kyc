@@ -131,6 +131,7 @@ export default function BranchMonitoringPage() {
           branch: isAdmin ? undefined : (user.branchName || undefined),
           branchId: isAdmin ? undefined : (user.branchId || undefined),
           limit: 1000,
+          summaryOnly: true,
           sortField: 'submittedAt',
           sortOrder: 'asc'
         };
@@ -357,7 +358,8 @@ export default function BranchMonitoringPage() {
       let filters: any = {
         branch: isAdmin ? undefined : (user?.branchName || undefined),
         branchId: isAdmin ? undefined : (user?.branchId || undefined),
-        limit: 100000
+        limit: 100000,
+        summaryOnly: true
       };
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();

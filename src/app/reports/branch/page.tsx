@@ -101,6 +101,7 @@ export default function BranchReportsPage() {
         // Audit compilation must include every matching record — a low cap made
         // the "N Records" badge and the CSV export silently incomplete.
         limit: 100000,
+        summaryOnly: true,
         // Chronological: the FIRST submitted case leads, newer ones follow.
         sortField: 'submittedAt',
         sortOrder: 'asc'

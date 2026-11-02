@@ -194,6 +194,10 @@ model KYC {
   @@index([assignedToId, status])
   @@index([createdById, submittedAt])
   @@index([branchName, districtName])
+  // Branch staff scope every sidebar and dashboard count by branchId. Without
+  // this, each count scanned the KYC table. Measured on 430k cases: one user's
+  // sidebar and home counts went from 714 ms to 9 ms of database time.
+  @@index([branchId, status, isExceptional, isResubmitted, active])
   // The archive screens: filter by state (+ region), count, and page in
   // (isUrgent, submittedAt) order.
   @@index([storageState, status, isUrgent, submittedAt])

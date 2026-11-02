@@ -28,6 +28,8 @@ export async function getFollowUpVerifications(filters?: {
   endDate?: string;
   limit?: number;
   offset?: number;
+  // Set false when the caller never reads the linked case, to skip loading it.
+  includeCase?: boolean;
   // Server-side narrowing/ordering for the paginated Follow-up Report: with
   // limit/offset pagination, search/result filters and sorting applied
   // client-side would only ever operate on the currently visible page.
@@ -83,11 +85,14 @@ export async function getFollowUpVerifications(filters?: {
       prisma.followUpVerification.findMany({
         where,
         include: {
-          kyc: {
-            include: {
-              assignedTo: true
+          kyc: filters?.includeCase === false
+            ? false
+            : {
+              include: {
+                // SECURITY: never send a user's password or token hashes to the browser.
+                assignedTo: { select: { id: true, firstName: true, lastName: true } }
+              }
             }
-          }
         },
         orderBy,
         take: filters?.limit || 100,
@@ -139,7 +144,8 @@ export async function getApprovedCasesForFollowUp(filters?: { startDate?: string
         active: true
       },
       include: {
-        createdBy: true
+        // SECURITY: never send a user's password or token hashes to the browser.
+        createdBy: { select: { id: true, firstName: true, lastName: true } }
       },
       orderBy: { submittedAt: 'desc' },
       take: filters?.limit || 1000

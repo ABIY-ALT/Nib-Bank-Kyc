@@ -194,11 +194,18 @@ export async function revokeAllUserSessions(
   reason: string = 'FORCED_LOGOUT'
 ): Promise<number> {
   try {
+    // Find the active sessions first. Filtering on the reason afterwards also
+    // matched every session ever revoked for the same reason, adding one more
+    // audit row for each of them on every logout.
+    const sessions = await prisma.session.findMany({
+      where: { userId, isActive: true },
+      select: { id: true },
+    });
+    if (sessions.length === 0) return 0;
+
+    const sessionIds = sessions.map((session) => session.id);
     const result = await prisma.session.updateMany({
-      where: {
-        userId,
-        isActive: true,
-      },
+      where: { id: { in: sessionIds } },
       data: {
         isActive: false,
         revokedAt: new Date(),
@@ -207,22 +214,13 @@ export async function revokeAllUserSessions(
     });
 
     // Log the mass revocation
-    if (result.count > 0) {
-      const sessions = await prisma.session.findMany({
-        where: { userId, revokeReason: reason },
-        select: { id: true },
-      });
-
-      for (const session of sessions) {
-        await prisma.sessionAuditLog.create({
-          data: {
-            sessionId: session.id,
-            event: 'SESSION_REVOKED',
-            details: `All user sessions revoked. Reason: ${reason}`,
-          },
-        });
-      }
-    }
+    await prisma.sessionAuditLog.createMany({
+      data: sessionIds.map((sessionId) => ({
+        sessionId,
+        event: 'SESSION_REVOKED',
+        details: `All user sessions revoked. Reason: ${reason}`,
+      })),
+    });
 
     return result.count;
   } catch (error) {

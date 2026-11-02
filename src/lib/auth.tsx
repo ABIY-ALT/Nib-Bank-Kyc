@@ -35,13 +35,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Returning to the tab re-checks the session at most this often. */
+const FOCUS_REFRESH_MIN_MS = 60 * 1000;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let lastHydratedAt = 0;
+
     const hydrateSession = async () => {
+      lastHydratedAt = Date.now();
       try {
         const res = await fetch("/api/auth/me");
         
@@ -63,7 +69,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const data = JSON.parse(text);
             if (data && data.user) {
-              setUser(data.user);
+              // Keep the same object when nothing changed. Pages reload their data
+              // whenever `user` changes, so a new object on every session check
+              // reloaded the current page and sidebar counts each time.
+              setUser((current) =>
+                JSON.stringify(current) === JSON.stringify(data.user) ? current : data.user
+              );
             } else {
               setUser(null);
             }
@@ -87,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const refreshInterval = setInterval(hydrateSession, 5 * 60 * 1000);
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && Date.now() - lastHydratedAt >= FOCUS_REFRESH_MIN_MS) {
         hydrateSession();
       }
     };

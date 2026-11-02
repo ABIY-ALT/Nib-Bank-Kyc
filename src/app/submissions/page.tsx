@@ -296,7 +296,7 @@ export default function CaseArchivePage() {
     try {
       // Fetch every record matching the active filters, not just the page
       // currently on screen (`submissions` here is limited to ITEMS_PER_PAGE).
-      const result = await getSubmissions({ ...buildActiveFilters(), limit: 100000 });
+      const result = await getSubmissions({ ...buildActiveFilters(), limit: 100000, summaryOnly: true });
       let exportRows = result.submissions || [];
       if (selectedDistricts.length > 1) {
         exportRows = exportRows.filter((s: any) => selectedDistricts.includes(s.districtName));

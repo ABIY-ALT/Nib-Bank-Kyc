@@ -227,7 +227,8 @@ export default function Dashboard() {
               <CardDescription>Live tracking for authorized institutional cases.</CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/5">
-              <Link href="/submissions" className="flex items-center gap-1">
+              {/* Many roles cannot open this page, so prefetching it logged a false "unauthorized access" row on every visit. */}
+              <Link href="/submissions" prefetch={false} className="flex items-center gap-1">
                 Case Archive <ChevronRight className="w-4 h-4" />
               </Link>
             </Button>

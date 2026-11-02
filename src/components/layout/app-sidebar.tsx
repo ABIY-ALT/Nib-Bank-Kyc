@@ -225,7 +225,7 @@ export function AppSidebar() {
                       {(hasPermission('VIEW_GOVERNANCE_QUEUE') || (hasPermission('CASE_VIEW_OWN') && counts.exceptional > 0)) && (
                         <SidebarMenuSubItem className="relative">
                           <SidebarMenuSubButton asChild isActive={pathname === '/submissions/exceptional'}>
-                            <Link href="/submissions/exceptional">
+                            <Link href="/submissions/exceptional" prefetch={false}>
                               <Zap className="w-4 h-4 mr-2 text-yellow-400" />
                               <span>Exceptional Cases</span>
                             </Link>

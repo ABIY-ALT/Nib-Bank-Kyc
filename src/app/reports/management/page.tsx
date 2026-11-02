@@ -161,7 +161,7 @@ export default function ManagementReportingPage() {
     if (!user) return;
     setLoading(true);
     try {
-      let filters: any = {};
+      let filters: any = { summaryOnly: true };
       if (dateRange?.from) {
         filters.startDate = dateRange.from.toISOString();
         if (dateRange.to) filters.endDate = dateRange.to.toISOString();
@@ -430,6 +430,7 @@ export default function ManagementReportingPage() {
         ...metricFilters,
         status: metricFilters.status ? [metricFilters.status] : undefined,
         limit: 100000,
+        summaryOnly: true,
       });
       let exportRows = result.submissions || [];
       if (searchTerm) {

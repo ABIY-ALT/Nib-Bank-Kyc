@@ -58,7 +58,7 @@ export default function ReportsPage() {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const filters: any = { limit: 1000 };
+      const filters: any = { limit: 1000, summaryOnly: true };
       
       // Non-superadmin users only see submissions from their assigned branches
       if (!isSuperAdmin && user) {

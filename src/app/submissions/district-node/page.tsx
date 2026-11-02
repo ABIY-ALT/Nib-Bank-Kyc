@@ -168,6 +168,7 @@ export default function DistrictMonitoringPage() {
         let filters: any = {
           district: isAdmin ? undefined : (districtName || undefined),
           limit: 1000,
+          summaryOnly: true,
           sortField: 'submittedAt',
           sortOrder: 'asc'
         };
@@ -445,7 +446,8 @@ export default function DistrictMonitoringPage() {
       let filters: any = {
         district: isAdmin ? undefined : (districtName || undefined),
         branch: matrixBranchFilter === 'all' ? undefined : matrixBranchFilter,
-        limit: 100000
+        limit: 100000,
+        summaryOnly: true
       };
       if (dateRange?.from) {
         filters.startDate = toLocalStartOfDayISO(dateRange.from);

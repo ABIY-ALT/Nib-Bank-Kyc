@@ -341,11 +341,16 @@ export class SessionManager {
     reason: string = 'security_incident'
   ): Promise<number> {
     try {
+      // Find the active sessions first, so only the ones revoked here are audited
+      // rather than every session the user has ever had.
+      const sessions = await db.session.findMany({
+        where: { userId, isActive: true },
+        select: { id: true },
+      });
+      const sessionIds: string[] = sessions.map((session: { id: string }) => session.id);
+
       const result = await db.session.updateMany({
-        where: {
-          userId,
-          isActive: true,
-        },
+        where: { id: { in: sessionIds } },
         data: {
           isActive: false,
           revokedAt: new Date(),
@@ -354,19 +359,13 @@ export class SessionManager {
       });
 
       // Create audit logs for all revoked sessions
-      const sessions = await db.session.findMany({
-        where: { userId },
+      await db.sessionAuditLog.createMany({
+        data: sessionIds.map((sessionId) => ({
+          sessionId,
+          event: 'force_logout',
+          details: JSON.stringify({ reason }),
+        })),
       });
-
-      for (const session of sessions) {
-        await db.sessionAuditLog.create({
-          data: {
-            sessionId: session.id,
-            event: 'force_logout',
-            details: JSON.stringify({ reason }),
-          },
-        });
-      }
 
       safeLog.warn('All user sessions revoked', {
         userId: userId.substring(0, 8),

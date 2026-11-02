@@ -84,7 +84,7 @@ export default function BranchPerformancePage() {
     // has more cases than the fetch cap. The submissions fetch remains only to
     // build the staff dropdown options.
     const [result, perfRows] = await Promise.all([
-      getSubmissions({ ...filters, limit: 1000 }),
+      getSubmissions({ ...filters, limit: 1000, summaryOnly: true }),
       getBranchPerformance({
         ...filters,
         staffId: selectedStaffFilter !== 'all' ? selectedStaffFilter : undefined,

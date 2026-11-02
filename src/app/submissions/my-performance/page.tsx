@@ -95,7 +95,8 @@ export default function MyCasesPerformancePage() {
     setLoading(true);
     try {
       let filters: any = {
-        limit: 1000
+        limit: 1000,
+        summaryOnly: true
       };
 
       // Jurisdiction: KYC Officers and Specialists see their mapped branches
