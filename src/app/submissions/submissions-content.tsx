@@ -60,8 +60,11 @@ export function SubmissionsPageContent({
   submissions,
   sort,
   onSortChange,
+  defaultSortOrder = 'asc',
 }: {
   submissions: any[];
+  // Initial submittedAt direction in local mode; 'desc' puts the newest case on top.
+  defaultSortOrder?: 'asc' | 'desc';
   // Controlled mode: when the host page paginates server-side it must own the
   // sort state and refetch on change — sorting client-side would only rearrange
   // the visible page. When omitted, sorting falls back to local (full-list) mode.
@@ -72,7 +75,7 @@ export function SubmissionsPageContent({
   const { user } = useAuth();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [localSortField, setLocalSortField] = useState<string>('submittedAt');
-  const [localSortOrder, setLocalSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [localSortOrder, setLocalSortOrder] = useState<'asc' | 'desc'>(defaultSortOrder);
 
   const isControlled = !!sort && !!onSortChange;
   const sortField = isControlled ? sort.field : localSortField;

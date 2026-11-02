@@ -124,16 +124,17 @@ export default function BranchMonitoringPage() {
       if (!user) return;
       setLoading(true);
       try {
-        // Oldest-first so the FIRST submitted case leads the list — fetching
-        // newest-first would also drop the oldest cases entirely once the
-        // dataset exceeds the fetch cap.
+        // Newest-first with a 500-row cap: the monitoring view shows the LATEST
+        // activity. Oldest-first silently dropped every case past the cap, so
+        // busy branches stopped seeing new cases. Summary cards use SQL counts
+        // (getCaseMetrics) and the CSV export refetches, so neither is capped.
         let filters: any = {
           branch: isAdmin ? undefined : (user.branchName || undefined),
           branchId: isAdmin ? undefined : (user.branchId || undefined),
-          limit: 1000,
+          limit: 500,
           summaryOnly: true,
           sortField: 'submittedAt',
-          sortOrder: 'asc'
+          sortOrder: 'desc'
         };
 
         if (dateRange?.from) {
@@ -266,7 +267,7 @@ export default function BranchMonitoringPage() {
   }, [submissions, searchTerm, isAdmin, user?.branchName, user?.branchId]);
 
   // Summary cards come from SQL counts over the WHOLE jurisdiction — the
-  // on-screen list is capped at 1000 rows, so counting it client-side
+  // on-screen list is capped at 500 rows, so counting it client-side
   // undercounted any branch larger than that. Falls back to client counts
   // until the metrics arrive.
   const [cardMetrics, setCardMetrics] = useState<any>(null);
@@ -353,7 +354,7 @@ export default function BranchMonitoringPage() {
     setIsExporting(true);
     try {
       // Refetch the FULL dataset with the active server filters — the on-screen
-      // list is capped at 1000 rows, so exporting it would silently drop
+      // list is capped at 500 rows, so exporting it would silently drop
       // everything past that (e.g. only part of the paginated records).
       let filters: any = {
         branch: isAdmin ? undefined : (user?.branchName || undefined),
@@ -543,7 +544,7 @@ export default function BranchMonitoringPage() {
             </TabsContent>
 
             <TabsContent value="all-cases">
-              <SubmissionsPageContent submissions={filteredSubmissions || []} />
+              <SubmissionsPageContent submissions={filteredSubmissions || []} defaultSortOrder="desc" />
             </TabsContent>
 
             <TabsContent value="officer-performance">
